@@ -40,6 +40,13 @@ git pull git://github.com/RobertCNelson/linux.git omap_cpufreq_v3.1-rc8
 
 }
 
+function am33x {
+echo "[git] am33x"
+git pull git://github.com/RobertCNelson/linux.git ti_am33x_v3.1-rc8
+
+}
+
+
 function dss2_next {
 echo "dss2 from for-next"
 
@@ -218,34 +225,14 @@ patch -s -p1 < "${DIR}/patches/sgx/0001-Revert-OMAP-DSS2-remove-update_mode-from
 bugs_trivial
 
 #patches in git
-cpufreq
-#igepv2
-#micrel
-beagle
+am33x
 
 #for_next tree's
-dss2_next
-omap_fixes
+#dss2_next
+#omap_fixes
 #dspbridge_next
-for_next
+#for_next
 
-#work in progress
-#
-
-#external tree's
-sakoman
-musb
-
-#random board patches
-devkit8000
-touchbook
-dspbridge
-
-#omap4/dvfs still needs more testing..
-omap4
-
-#no chance of being pushed ever tree's
-#sgx
 
 echo "patch.sh ran successful"
 
