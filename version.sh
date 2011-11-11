@@ -14,13 +14,9 @@ KERNEL_REL=3.1
 #RC_KERNEL=3.2
 #RC_PATCH=-rc1
 
-ABI=0.1
+ABI=0.2
 
-if [ "${NO_DEVTMPS}" ] ; then
-BUILD=dold${ABI}
-else
-BUILD=d${ABI}
-fi
+BUILD=psp${ABI}
 
 BUILDREV=1.0
 DISTRO=cross

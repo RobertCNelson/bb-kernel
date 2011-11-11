@@ -42,7 +42,7 @@ git pull git://github.com/RobertCNelson/linux.git omap_cpufreq_v3.1-rc8
 
 function am33x {
 echo "[git] am33x"
-git pull git://github.com/RobertCNelson/linux.git ti_am33x_v3.1-rc8
+git pull git://github.com/RobertCNelson/linux.git ti_am33x_v3.1
 
 }
 
