@@ -14,7 +14,7 @@ KERNEL_REL=3.1
 #RC_KERNEL=3.2
 #RC_PATCH=-rc1
 
-ABI=0.2
+ABI=0.3
 
 BUILD=psp${ABI}
 
