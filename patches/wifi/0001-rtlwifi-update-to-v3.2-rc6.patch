@@ -1,0 +1,2704 @@
+From 9d19d6e4790a8dbe2f3dd413f0e00e53f07660fd Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Wed, 21 Dec 2011 19:30:21 -0600
+Subject: [PATCH] rtlwifi: update to v3.2-rc6
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/net/wireless/rtlwifi/Kconfig               |    4 +-
+ drivers/net/wireless/rtlwifi/base.c                |  168 +++++++++++++++++++-
+ drivers/net/wireless/rtlwifi/base.h                |    2 +
+ drivers/net/wireless/rtlwifi/cam.c                 |    1 +
+ drivers/net/wireless/rtlwifi/core.c                |   11 +-
+ drivers/net/wireless/rtlwifi/debug.c               |    2 -
+ drivers/net/wireless/rtlwifi/efuse.c               |    1 +
+ drivers/net/wireless/rtlwifi/pci.c                 |   63 ++-----
+ drivers/net/wireless/rtlwifi/pci.h                 |   30 +----
+ drivers/net/wireless/rtlwifi/ps.c                  |   18 ++-
+ drivers/net/wireless/rtlwifi/rtl8192c/dm_common.c  |    1 +
+ drivers/net/wireless/rtlwifi/rtl8192c/fw_common.c  |    1 +
+ drivers/net/wireless/rtlwifi/rtl8192c/main.c       |    1 +
+ drivers/net/wireless/rtlwifi/rtl8192c/phy_common.c |    1 +
+ drivers/net/wireless/rtlwifi/rtl8192ce/def.h       |  153 ++----------------
+ drivers/net/wireless/rtlwifi/rtl8192ce/phy.c       |    2 +-
+ drivers/net/wireless/rtlwifi/rtl8192ce/sw.c        |   78 ++++++---
+ drivers/net/wireless/rtlwifi/rtl8192ce/trx.c       |  116 +-------------
+ drivers/net/wireless/rtlwifi/rtl8192ce/trx.h       |    6 -
+ drivers/net/wireless/rtlwifi/rtl8192cu/def.h       |    4 -
+ drivers/net/wireless/rtlwifi/rtl8192cu/mac.c       |    4 +-
+ drivers/net/wireless/rtlwifi/rtl8192cu/mac.h       |    6 -
+ drivers/net/wireless/rtlwifi/rtl8192cu/phy.c       |    2 +-
+ drivers/net/wireless/rtlwifi/rtl8192cu/rf.c        |    2 +-
+ drivers/net/wireless/rtlwifi/rtl8192cu/sw.c        |   36 +++--
+ drivers/net/wireless/rtlwifi/rtl8192cu/trx.c       |   23 ++--
+ drivers/net/wireless/rtlwifi/rtl8192de/def.h       |  170 ++++++++++----------
+ drivers/net/wireless/rtlwifi/rtl8192de/hw.c        |   15 +-
+ drivers/net/wireless/rtlwifi/rtl8192de/phy.c       |    2 +-
+ drivers/net/wireless/rtlwifi/rtl8192de/sw.c        |   64 +++++---
+ drivers/net/wireless/rtlwifi/rtl8192de/trx.c       |  121 ++------------
+ drivers/net/wireless/rtlwifi/rtl8192de/trx.h       |    6 -
+ drivers/net/wireless/rtlwifi/rtl8192se/def.h       |   41 +----
+ drivers/net/wireless/rtlwifi/rtl8192se/hw.c        |   22 ++--
+ drivers/net/wireless/rtlwifi/rtl8192se/phy.c       |    2 +-
+ drivers/net/wireless/rtlwifi/rtl8192se/reg.h       |    1 +
+ drivers/net/wireless/rtlwifi/rtl8192se/sw.c        |   65 +++++---
+ drivers/net/wireless/rtlwifi/rtl8192se/trx.c       |  169 +++++---------------
+ drivers/net/wireless/rtlwifi/usb.c                 |   41 +-----
+ drivers/net/wireless/rtlwifi/wifi.h                |   54 ++++++-
+ 40 files changed, 620 insertions(+), 889 deletions(-)
+
+diff --git a/drivers/net/wireless/rtlwifi/Kconfig b/drivers/net/wireless/rtlwifi/Kconfig
+index 45e1476..d6c42e6 100644
+--- a/drivers/net/wireless/rtlwifi/Kconfig
++++ b/drivers/net/wireless/rtlwifi/Kconfig
+@@ -12,7 +12,7 @@ config RTL8192CE
+ 
+ config RTL8192SE
+ 	tristate "Realtek RTL8192SE/RTL8191SE PCIe Wireless Network Adapter"
+-	depends on MAC80211 && EXPERIMENTAL
++	depends on MAC80211 && EXPERIMENTAL && PCI
+ 	select FW_LOADER
+ 	select RTLWIFI
+ 	---help---
+@@ -23,7 +23,7 @@ config RTL8192SE
+ 
+ config RTL8192DE
+ 	tristate "Realtek RTL8192DE/RTL8188DE PCIe Wireless Network Adapter"
+-	depends on MAC80211 && EXPERIMENTAL
++	depends on MAC80211 && EXPERIMENTAL && PCI
+ 	select FW_LOADER
+ 	select RTLWIFI
+ 	---help---
+diff --git a/drivers/net/wireless/rtlwifi/base.c b/drivers/net/wireless/rtlwifi/base.c
+index 0b598db..b4ce934 100644
+--- a/drivers/net/wireless/rtlwifi/base.c
++++ b/drivers/net/wireless/rtlwifi/base.c
+@@ -30,6 +30,7 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+ #include <linux/ip.h>
++#include <linux/module.h>
+ #include "wifi.h"
+ #include "rc.h"
+ #include "base.h"
+@@ -311,6 +312,8 @@ static void _rtl_init_mac80211(struct ieee80211_hw *hw)
+ 	    IEEE80211_HW_RX_INCLUDES_FCS |
+ 	    IEEE80211_HW_BEACON_FILTER |
+ 	    IEEE80211_HW_AMPDU_AGGREGATION |
++	    IEEE80211_HW_CONNECTION_MONITOR |
++	    /* IEEE80211_HW_SUPPORTS_CQM_RSSI | */
+ 	    IEEE80211_HW_REPORTS_TX_ACK_STATUS | 0;
+ 
+ 	/* swlps or hwlps has been set in diff chip in init_sw_vars */
+@@ -664,6 +667,167 @@ static u8 _rtl_get_highest_n_rate(struct ieee80211_hw *hw)
+ 	return hw_rate;
+ }
+ 
++/* mac80211's rate_idx is like this:
++ *
++ * 2.4G band:rx_status->band == IEEE80211_BAND_2GHZ
++ *
++ * B/G rate:
++ * (rx_status->flag & RX_FLAG_HT) = 0,
++ * DESC92_RATE1M-->DESC92_RATE54M ==> idx is 0-->11,
++ *
++ * N rate:
++ * (rx_status->flag & RX_FLAG_HT) = 1,
++ * DESC92_RATEMCS0-->DESC92_RATEMCS15 ==> idx is 0-->15
++ *
++ * 5G band:rx_status->band == IEEE80211_BAND_5GHZ
++ * A rate:
++ * (rx_status->flag & RX_FLAG_HT) = 0,
++ * DESC92_RATE6M-->DESC92_RATE54M ==> idx is 0-->7,
++ *
++ * N rate:
++ * (rx_status->flag & RX_FLAG_HT) = 1,
++ * DESC92_RATEMCS0-->DESC92_RATEMCS15 ==> idx is 0-->15
++ */
++int rtlwifi_rate_mapping(struct ieee80211_hw *hw,
++			 bool isht, u8 desc_rate, bool first_ampdu)
++{
++	int rate_idx;
++
++	if (false == isht) {
++		if (IEEE80211_BAND_2GHZ == hw->conf.channel->band) {
++			switch (desc_rate) {
++			case DESC92_RATE1M:
++				rate_idx = 0;
++				break;
++			case DESC92_RATE2M:
++				rate_idx = 1;
++				break;
++			case DESC92_RATE5_5M:
++				rate_idx = 2;
++				break;
++			case DESC92_RATE11M:
++				rate_idx = 3;
++				break;
++			case DESC92_RATE6M:
++				rate_idx = 4;
++				break;
++			case DESC92_RATE9M:
++				rate_idx = 5;
++				break;
++			case DESC92_RATE12M:
++				rate_idx = 6;
++				break;
++			case DESC92_RATE18M:
++				rate_idx = 7;
++				break;
++			case DESC92_RATE24M:
++				rate_idx = 8;
++				break;
++			case DESC92_RATE36M:
++				rate_idx = 9;
++				break;
++			case DESC92_RATE48M:
++				rate_idx = 10;
++				break;
++			case DESC92_RATE54M:
++				rate_idx = 11;
++				break;
++			default:
++				rate_idx = 0;
++				break;
++			}
++		} else {
++			switch (desc_rate) {
++			case DESC92_RATE6M:
++				rate_idx = 0;
++				break;
++			case DESC92_RATE9M:
++				rate_idx = 1;
++				break;
++			case DESC92_RATE12M:
++				rate_idx = 2;
++				break;
++			case DESC92_RATE18M:
++				rate_idx = 3;
++				break;
++			case DESC92_RATE24M:
++				rate_idx = 4;
++				break;
++			case DESC92_RATE36M:
++				rate_idx = 5;
++				break;
++			case DESC92_RATE48M:
++				rate_idx = 6;
++				break;
++			case DESC92_RATE54M:
++				rate_idx = 7;
++				break;
++			default:
++				rate_idx = 0;
++				break;
++			}
++		}
++
++	} else {
++
++		switch (desc_rate) {
++		case DESC92_RATEMCS0:
++			rate_idx = 0;
++			break;
++		case DESC92_RATEMCS1:
++			rate_idx = 1;
++			break;
++		case DESC92_RATEMCS2:
++			rate_idx = 2;
++			break;
++		case DESC92_RATEMCS3:
++			rate_idx = 3;
++			break;
++		case DESC92_RATEMCS4:
++			rate_idx = 4;
++			break;
++		case DESC92_RATEMCS5:
++			rate_idx = 5;
++			break;
++		case DESC92_RATEMCS6:
++			rate_idx = 6;
++			break;
++		case DESC92_RATEMCS7:
++			rate_idx = 7;
++			break;
++		case DESC92_RATEMCS8:
++			rate_idx = 8;
++			break;
++		case DESC92_RATEMCS9:
++			rate_idx = 9;
++			break;
++		case DESC92_RATEMCS10:
++			rate_idx = 10;
++			break;
++		case DESC92_RATEMCS11:
++			rate_idx = 11;
++			break;
++		case DESC92_RATEMCS12:
++			rate_idx = 12;
++			break;
++		case DESC92_RATEMCS13:
++			rate_idx = 13;
++			break;
++		case DESC92_RATEMCS14:
++			rate_idx = 14;
++			break;
++		case DESC92_RATEMCS15:
++			rate_idx = 15;
++			break;
++		default:
++			rate_idx = 0;
++			break;
++		}
++	}
++	return rate_idx;
++}
++EXPORT_SYMBOL(rtlwifi_rate_mapping);
++
+ void rtl_get_tcb_desc(struct ieee80211_hw *hw,
+ 		      struct ieee80211_tx_info *info,
+ 		      struct ieee80211_sta *sta,
+@@ -689,7 +853,7 @@ void rtl_get_tcb_desc(struct ieee80211_hw *hw,
+ 		 *So tcb_desc->hw_rate is just used for
+ 		 *special data and mgt frames
+ 		 */
+-		if (info->control.rates[0].idx == 0 &&
++		if (info->control.rates[0].idx == 0 ||
+ 				ieee80211_is_nullfunc(fc)) {
+ 			tcb_desc->use_driver_rate = true;
+ 			tcb_desc->ratr_index = RATR_INX_WIRELESS_MC;
+@@ -977,7 +1141,7 @@ void rtl_watchdog_wq_callback(void *data)
+ 	}
+ 
+ 	/*
+-	 *<3> to check if traffic busy, if
++	 *<2> to check if traffic busy, if
+ 	 * busytraffic we don't change channel
+ 	 */
+ 	if (mac->link_state >= MAC80211_LINKED) {
+diff --git a/drivers/net/wireless/rtlwifi/base.h b/drivers/net/wireless/rtlwifi/base.h
+index a91f3ee..4ae9059 100644
+--- a/drivers/net/wireless/rtlwifi/base.h
++++ b/drivers/net/wireless/rtlwifi/base.h
+@@ -140,4 +140,6 @@ u8 *rtl_find_ie(u8 *data, unsigned int len, u8 ie);
+ void rtl_recognize_peer(struct ieee80211_hw *hw, u8 *data, unsigned int len);
+ u8 rtl_tid_to_ac(struct ieee80211_hw *hw, u8 tid);
+ extern struct attribute_group rtl_attribute_group;
++int rtlwifi_rate_mapping(struct ieee80211_hw *hw,
++			 bool isht, u8 desc_rate, bool first_ampdu);
+ #endif
+diff --git a/drivers/net/wireless/rtlwifi/cam.c b/drivers/net/wireless/rtlwifi/cam.c
+index 7babb6a..dc36d74 100644
+--- a/drivers/net/wireless/rtlwifi/cam.c
++++ b/drivers/net/wireless/rtlwifi/cam.c
+@@ -29,6 +29,7 @@
+ 
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
++#include <linux/export.h>
+ #include "wifi.h"
+ #include "cam.h"
+ 
+diff --git a/drivers/net/wireless/rtlwifi/core.c b/drivers/net/wireless/rtlwifi/core.c
+index 04c4e9e..3f0f056 100644
+--- a/drivers/net/wireless/rtlwifi/core.c
++++ b/drivers/net/wireless/rtlwifi/core.c
+@@ -504,7 +504,8 @@ static int _rtl_get_hal_qnum(u16 queue)
+  *for mac80211 VO=0, VI=1, BE=2, BK=3
+  *for rtl819x  BE=0, BK=1, VI=2, VO=3
+  */
+-static int rtl_op_conf_tx(struct ieee80211_hw *hw, u16 queue,
++static int rtl_op_conf_tx(struct ieee80211_hw *hw,
++		   struct ieee80211_vif *vif, u16 queue,
+ 		   const struct ieee80211_tx_queue_params *param)
+ {
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+@@ -775,7 +776,7 @@ out:
+ 	mutex_unlock(&rtlpriv->locks.conf_mutex);
+ }
+ 
+-static u64 rtl_op_get_tsf(struct ieee80211_hw *hw)
++static u64 rtl_op_get_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
+ {
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+ 	u64 tsf;
+@@ -784,7 +785,8 @@ static u64 rtl_op_get_tsf(struct ieee80211_hw *hw)
+ 	return tsf;
+ }
+ 
+-static void rtl_op_set_tsf(struct ieee80211_hw *hw, u64 tsf)
++static void rtl_op_set_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
++			   u64 tsf)
+ {
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+ 	struct rtl_mac *mac = rtl_mac(rtl_priv(hw));
+@@ -794,7 +796,8 @@ static void rtl_op_set_tsf(struct ieee80211_hw *hw, u64 tsf)
+ 	rtlpriv->cfg->ops->set_hw_reg(hw, HW_VAR_CORRECT_TSF, (u8 *) (&bibss));
+ }
+ 
+-static void rtl_op_reset_tsf(struct ieee80211_hw *hw)
++static void rtl_op_reset_tsf(struct ieee80211_hw *hw,
++			     struct ieee80211_vif *vif)
+ {
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+ 	u8 tmp = 0;
+diff --git a/drivers/net/wireless/rtlwifi/debug.c b/drivers/net/wireless/rtlwifi/debug.c
+index 5fa7385..1b5cb71 100644
+--- a/drivers/net/wireless/rtlwifi/debug.c
++++ b/drivers/net/wireless/rtlwifi/debug.c
+@@ -33,8 +33,6 @@ void rtl_dbgp_flag_init(struct ieee80211_hw *hw)
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+ 	u8 i;
+ 
+-	rtlpriv->dbg.global_debuglevel = DBG_EMERG;
+-
+ 	rtlpriv->dbg.global_debugcomponents =
+ 	    COMP_ERR | COMP_FW | COMP_INIT | COMP_RECV | COMP_SEND |
+ 	    COMP_MLME | COMP_SCAN | COMP_INTR | COMP_LED | COMP_SEC |
+diff --git a/drivers/net/wireless/rtlwifi/efuse.c b/drivers/net/wireless/rtlwifi/efuse.c
+index 3fc21f6..ed1058b 100644
+--- a/drivers/net/wireless/rtlwifi/efuse.c
++++ b/drivers/net/wireless/rtlwifi/efuse.c
+@@ -27,6 +27,7 @@
+  *
+  *****************************************************************************/
+ 
++#include <linux/export.h>
+ #include "wifi.h"
+ #include "efuse.h"
+ 
+diff --git a/drivers/net/wireless/rtlwifi/pci.c b/drivers/net/wireless/rtlwifi/pci.c
+index 56f1235..eb61061 100644
+--- a/drivers/net/wireless/rtlwifi/pci.c
++++ b/drivers/net/wireless/rtlwifi/pci.c
+@@ -27,6 +27,7 @@
+  *
+  *****************************************************************************/
+ 
++#include <linux/export.h>
+ #include "core.h"
+ #include "wifi.h"
+ #include "pci.h"
+@@ -218,7 +219,6 @@ static void rtl_pci_disable_aspm(struct ieee80211_hw *hw)
+ 	struct rtl_ps_ctl *ppsc = rtl_psc(rtl_priv(hw));
+ 	struct rtl_pci *rtlpci = rtl_pcidev(rtl_pcipriv(hw));
+ 	u8 pcibridge_vendor = pcipriv->ndis_adapter.pcibridge_vendor;
+-	u32 pcicfg_addrport = pcipriv->ndis_adapter.pcicfg_addrport;
+ 	u8 num4bytes = pcipriv->ndis_adapter.num4bytes;
+ 	/*Retrieve original configuration settings. */
+ 	u8 linkctrl_reg = pcipriv->ndis_adapter.linkctrl_reg;
+@@ -254,9 +254,8 @@ static void rtl_pci_disable_aspm(struct ieee80211_hw *hw)
+ 	udelay(50);
+ 
+ 	/*4 Disable Pci Bridge ASPM */
+-	rtl_pci_raw_write_port_ulong(PCI_CONF_ADDRESS,
+-				     pcicfg_addrport + (num4bytes << 2));
+-	rtl_pci_raw_write_port_uchar(PCI_CONF_DATA, pcibridge_linkctrlreg);
++	pci_write_config_byte(rtlpci->pdev, (num4bytes << 2),
++			      pcibridge_linkctrlreg);
+ 
+ 	udelay(50);
+ }
+@@ -277,7 +276,6 @@ static void rtl_pci_enable_aspm(struct ieee80211_hw *hw)
+ 	u8 pcibridge_devnum = pcipriv->ndis_adapter.pcibridge_devnum;
+ 	u8 pcibridge_funcnum = pcipriv->ndis_adapter.pcibridge_funcnum;
+ 	u8 pcibridge_vendor = pcipriv->ndis_adapter.pcibridge_vendor;
+-	u32 pcicfg_addrport = pcipriv->ndis_adapter.pcicfg_addrport;
+ 	u8 num4bytes = pcipriv->ndis_adapter.num4bytes;
+ 	u16 aspmlevel;
+ 	u8 u_pcibridge_aspmsetting;
+@@ -293,8 +291,6 @@ static void rtl_pci_enable_aspm(struct ieee80211_hw *hw)
+ 	}
+ 
+ 	/*4 Enable Pci Bridge ASPM */
+-	rtl_pci_raw_write_port_ulong(PCI_CONF_ADDRESS,
+-				     pcicfg_addrport + (num4bytes << 2));
+ 
+ 	u_pcibridge_aspmsetting =
+ 	    pcipriv->ndis_adapter.pcibridge_linkctrlreg |
+@@ -303,7 +299,8 @@ static void rtl_pci_enable_aspm(struct ieee80211_hw *hw)
+ 	if (pcibridge_vendor == PCI_BRIDGE_VENDOR_INTEL)
+ 		u_pcibridge_aspmsetting &= ~BIT(0);
+ 
+-	rtl_pci_raw_write_port_uchar(PCI_CONF_DATA, u_pcibridge_aspmsetting);
++	pci_write_config_byte(rtlpci->pdev, (num4bytes << 2),
++			      u_pcibridge_aspmsetting);
+ 
+ 	RT_TRACE(rtlpriv, COMP_INIT, DBG_LOUD,
+ 		 ("PlatformEnableASPM():PciBridge busnumber[%x], "
+@@ -335,25 +332,18 @@ static void rtl_pci_enable_aspm(struct ieee80211_hw *hw)
+ 
+ static bool rtl_pci_get_amd_l1_patch(struct ieee80211_hw *hw)
+ {
+-	struct rtl_pci_priv *pcipriv = rtl_pcipriv(hw);
+-	u32 pcicfg_addrport = pcipriv->ndis_adapter.pcicfg_addrport;
++	struct rtl_pci *rtlpci = rtl_pcidev(rtl_pcipriv(hw));
+ 
+ 	bool status = false;
+ 	u8 offset_e0;
+ 	unsigned offset_e4;
+ 
+-	rtl_pci_raw_write_port_ulong(PCI_CONF_ADDRESS,
+-			pcicfg_addrport + 0xE0);
+-	rtl_pci_raw_write_port_uchar(PCI_CONF_DATA, 0xA0);
++	pci_write_config_byte(rtlpci->pdev, 0xe0, 0xa0);
+ 
+-	rtl_pci_raw_write_port_ulong(PCI_CONF_ADDRESS,
+-			pcicfg_addrport + 0xE0);
+-	rtl_pci_raw_read_port_uchar(PCI_CONF_DATA, &offset_e0);
++	pci_read_config_byte(rtlpci->pdev, 0xe0, &offset_e0);
+ 
+ 	if (offset_e0 == 0xA0) {
+-		rtl_pci_raw_write_port_ulong(PCI_CONF_ADDRESS,
+-					     pcicfg_addrport + 0xE4);
+-		rtl_pci_raw_read_port_ulong(PCI_CONF_DATA, &offset_e4);
++		pci_read_config_dword(rtlpci->pdev, 0xe4, &offset_e4);
+ 		if (offset_e4 & BIT(23))
+ 			status = true;
+ 	}
+@@ -364,17 +354,15 @@ static bool rtl_pci_get_amd_l1_patch(struct ieee80211_hw *hw)
+ static void rtl_pci_get_linkcontrol_field(struct ieee80211_hw *hw)
+ {
+ 	struct rtl_pci_priv *pcipriv = rtl_pcipriv(hw);
++	struct rtl_pci *rtlpci = rtl_pcidev(pcipriv);
+ 	u8 capabilityoffset = pcipriv->ndis_adapter.pcibridge_pciehdr_offset;
+-	u32 pcicfg_addrport = pcipriv->ndis_adapter.pcicfg_addrport;
+ 	u8 linkctrl_reg;
+ 	u8 num4bbytes;
+ 
+ 	num4bbytes = (capabilityoffset + 0x10) / 4;
+ 
+ 	/*Read  Link Control Register */
+-	rtl_pci_raw_write_port_ulong(PCI_CONF_ADDRESS,
+-				     pcicfg_addrport + (num4bbytes << 2));
+-	rtl_pci_raw_read_port_uchar(PCI_CONF_DATA, &linkctrl_reg);
++	pci_read_config_byte(rtlpci->pdev, (num4bbytes << 2), &linkctrl_reg);
+ 
+ 	pcipriv->ndis_adapter.pcibridge_linkctrlreg = linkctrl_reg;
+ }
+@@ -488,7 +476,7 @@ static void _rtl_pci_tx_chk_waitq(struct ieee80211_hw *hw)
+ 	struct rtl_pci *rtlpci = rtl_pcidev(rtl_pcipriv(hw));
+ 	struct sk_buff *skb = NULL;
+ 	struct ieee80211_tx_info *info = NULL;
+-	int tid; /* should be int */
++	int tid;
+ 
+ 	if (!rtlpriv->rtlhal.earlymode_enable)
+ 		return;
+@@ -1538,7 +1526,7 @@ static int rtl_pci_start(struct ieee80211_hw *hw)
+ 
+ 	rtl_init_rx_config(hw);
+ 
+-	/*should after adapter start and interrupt enable. */
++	/*should be after adapter start and interrupt enable. */
+ 	set_hal_start(rtlhal);
+ 
+ 	RT_CLEAR_PS_LEVEL(ppsc, RT_RF_OFF_LEVL_HALT_NIC);
+@@ -1559,7 +1547,7 @@ static void rtl_pci_stop(struct ieee80211_hw *hw)
+ 	u8 RFInProgressTimeOut = 0;
+ 
+ 	/*
+-	 *should before disable interrrupt&adapter
++	 *should be before disable interrupt&adapter
+ 	 *and will do it immediately.
+ 	 */
+ 	set_hal_stop(rtlhal);
+@@ -1718,10 +1706,6 @@ static bool _rtl_pci_find_adapter(struct pci_dev *pdev,
+ 		    PCI_SLOT(bridge_pdev->devfn);
+ 		pcipriv->ndis_adapter.pcibridge_funcnum =
+ 		    PCI_FUNC(bridge_pdev->devfn);
+-		pcipriv->ndis_adapter.pcicfg_addrport =
+-		    (pcipriv->ndis_adapter.pcibridge_busnum << 16) |
+-		    (pcipriv->ndis_adapter.pcibridge_devnum << 11) |
+-		    (pcipriv->ndis_adapter.pcibridge_funcnum << 8) | (1 << 31);
+ 		pcipriv->ndis_adapter.pcibridge_pciehdr_offset =
+ 		    pci_pcie_cap(bridge_pdev);
+ 		pcipriv->ndis_adapter.num4bytes =
+@@ -2010,36 +1994,25 @@ call rtl_mac_stop() from the mac80211
+ suspend function first, So there is
+ no need to call hw_disable here.
+ ****************************************/
+-int rtl_pci_suspend(struct pci_dev *pdev, pm_message_t state)
++int rtl_pci_suspend(struct device *dev)
+ {
++	struct pci_dev *pdev = to_pci_dev(dev);
+ 	struct ieee80211_hw *hw = pci_get_drvdata(pdev);
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+ 
+ 	rtlpriv->cfg->ops->hw_suspend(hw);
+ 	rtl_deinit_rfkill(hw);
+ 
+-	pci_save_state(pdev);
+-	pci_disable_device(pdev);
+-	pci_set_power_state(pdev, PCI_D3hot);
+ 	return 0;
+ }
+ EXPORT_SYMBOL(rtl_pci_suspend);
+ 
+-int rtl_pci_resume(struct pci_dev *pdev)
++int rtl_pci_resume(struct device *dev)
+ {
+-	int ret;
++	struct pci_dev *pdev = to_pci_dev(dev);
+ 	struct ieee80211_hw *hw = pci_get_drvdata(pdev);
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+ 
+-	pci_set_power_state(pdev, PCI_D0);
+-	ret = pci_enable_device(pdev);
+-	if (ret) {
+-		RT_ASSERT(false, ("ERR: <======\n"));
+-		return ret;
+-	}
+-
+-	pci_restore_state(pdev);
+-
+ 	rtlpriv->cfg->ops->hw_resume(hw);
+ 	rtl_init_rfkill(hw);
+ 	return 0;
+diff --git a/drivers/net/wireless/rtlwifi/pci.h b/drivers/net/wireless/rtlwifi/pci.h
+index c53c620..ebe0b42 100644
+--- a/drivers/net/wireless/rtlwifi/pci.h
++++ b/drivers/net/wireless/rtlwifi/pci.h
+@@ -212,7 +212,6 @@ struct mp_adapter {
+ 	u16 pcibridge_vendorid;
+ 	u16 pcibridge_deviceid;
+ 
+-	u32 pcicfg_addrport;
+ 	u8 num4bytes;
+ 
+ 	u8 pcibridge_pciehdr_offset;
+@@ -238,8 +237,8 @@ extern struct rtl_intf_ops rtl_pci_ops;
+ int __devinit rtl_pci_probe(struct pci_dev *pdev,
+ 			    const struct pci_device_id *id);
+ void rtl_pci_disconnect(struct pci_dev *pdev);
+-int rtl_pci_suspend(struct pci_dev *pdev, pm_message_t state);
+-int rtl_pci_resume(struct pci_dev *pdev);
++int rtl_pci_suspend(struct device *dev);
++int rtl_pci_resume(struct device *dev);
+ 
+ static inline u8 pci_read8_sync(struct rtl_priv *rtlpriv, u32 addr)
+ {
+@@ -273,29 +272,4 @@ static inline void pci_write32_async(struct rtl_priv *rtlpriv,
+ 	writel(val, (u8 __iomem *) rtlpriv->io.pci_mem_start + addr);
+ }
+ 
+-static inline void rtl_pci_raw_write_port_ulong(u32 port, u32 val)
+-{
+-	outl(val, port);
+-}
+-
+-static inline void rtl_pci_raw_write_port_uchar(u32 port, u8 val)
+-{
+-	outb(val, port);
+-}
+-
+-static inline void rtl_pci_raw_read_port_uchar(u32 port, u8 *pval)
+-{
+-	*pval = inb(port);
+-}
+-
+-static inline void rtl_pci_raw_read_port_ushort(u32 port, u16 *pval)
+-{
+-	*pval = inw(port);
+-}
+-
+-static inline void rtl_pci_raw_read_port_ulong(u32 port, u32 *pval)
+-{
+-	*pval = inl(port);
+-}
+-
+ #endif
+diff --git a/drivers/net/wireless/rtlwifi/ps.c b/drivers/net/wireless/rtlwifi/ps.c
+index a693fef..55c8e50 100644
+--- a/drivers/net/wireless/rtlwifi/ps.c
++++ b/drivers/net/wireless/rtlwifi/ps.c
+@@ -27,6 +27,7 @@
+  *
+  *****************************************************************************/
+ 
++#include <linux/export.h>
+ #include "wifi.h"
+ #include "base.h"
+ #include "ps.h"
+@@ -394,7 +395,7 @@ void rtl_lps_enter(struct ieee80211_hw *hw)
+ 	if (mac->link_state != MAC80211_LINKED)
+ 		return;
+ 
+-	spin_lock(&rtlpriv->locks.lps_lock);
++	spin_lock_irq(&rtlpriv->locks.lps_lock);
+ 
+ 	/* Idle for a while if we connect to AP a while ago. */
+ 	if (mac->cnt_after_linked >= 2) {
+@@ -406,7 +407,7 @@ void rtl_lps_enter(struct ieee80211_hw *hw)
+ 		}
+ 	}
+ 
+-	spin_unlock(&rtlpriv->locks.lps_lock);
++	spin_unlock_irq(&rtlpriv->locks.lps_lock);
+ }
+ 
+ /*Leave the leisure power save mode.*/
+@@ -415,8 +416,9 @@ void rtl_lps_leave(struct ieee80211_hw *hw)
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+ 	struct rtl_ps_ctl *ppsc = rtl_psc(rtl_priv(hw));
+ 	struct rtl_hal *rtlhal = rtl_hal(rtl_priv(hw));
++	unsigned long flags;
+ 
+-	spin_lock(&rtlpriv->locks.lps_lock);
++	spin_lock_irqsave(&rtlpriv->locks.lps_lock, flags);
+ 
+ 	if (ppsc->fwctrl_lps) {
+ 		if (ppsc->dot11_psmode != EACTIVE) {
+@@ -437,7 +439,7 @@ void rtl_lps_leave(struct ieee80211_hw *hw)
+ 			rtl_lps_set_psmode(hw, EACTIVE);
+ 		}
+ 	}
+-	spin_unlock(&rtlpriv->locks.lps_lock);
++	spin_unlock_irqrestore(&rtlpriv->locks.lps_lock, flags);
+ }
+ 
+ /* For sw LPS*/
+@@ -538,9 +540,9 @@ void rtl_swlps_rf_awake(struct ieee80211_hw *hw)
+ 		RT_CLEAR_PS_LEVEL(ppsc, RT_PS_LEVEL_ASPM);
+ 	}
+ 
+-	spin_lock(&rtlpriv->locks.lps_lock);
++	spin_lock_irq(&rtlpriv->locks.lps_lock);
+ 	rtl_ps_set_rf_state(hw, ERFON, RF_CHANGE_BY_PS);
+-	spin_unlock(&rtlpriv->locks.lps_lock);
++	spin_unlock_irq(&rtlpriv->locks.lps_lock);
+ }
+ 
+ void rtl_swlps_rfon_wq_callback(void *data)
+@@ -573,9 +575,9 @@ void rtl_swlps_rf_sleep(struct ieee80211_hw *hw)
+ 	if (rtlpriv->link_info.busytraffic)
+ 		return;
+ 
+-	spin_lock(&rtlpriv->locks.lps_lock);
++	spin_lock_irq(&rtlpriv->locks.lps_lock);
+ 	rtl_ps_set_rf_state(hw, ERFSLEEP, RF_CHANGE_BY_PS);
+-	spin_unlock(&rtlpriv->locks.lps_lock);
++	spin_unlock_irq(&rtlpriv->locks.lps_lock);
+ 
+ 	if (ppsc->reg_rfps_level & RT_RF_OFF_LEVL_ASPM &&
+ 		!RT_IN_PS_LEVEL(ppsc, RT_PS_LEVEL_ASPM)) {
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192c/dm_common.c b/drivers/net/wireless/rtlwifi/rtl8192c/dm_common.c
+index a00774e..72a98ca 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192c/dm_common.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192c/dm_common.c
+@@ -27,6 +27,7 @@
+  *
+  *****************************************************************************/
+ 
++#include <linux/export.h>
+ #include "dm_common.h"
+ #include "phy_common.h"
+ #include "../pci.h"
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192c/fw_common.c b/drivers/net/wireless/rtlwifi/rtl8192c/fw_common.c
+index 49a064b..950c65a 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192c/fw_common.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192c/fw_common.c
+@@ -30,6 +30,7 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+ #include <linux/firmware.h>
++#include <linux/export.h>
+ #include "../wifi.h"
+ #include "../pci.h"
+ #include "../base.h"
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192c/main.c b/drivers/net/wireless/rtlwifi/rtl8192c/main.c
+index 2f624fc..605ff19 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192c/main.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192c/main.c
+@@ -27,6 +27,7 @@
+  *
+  *****************************************************************************/
+ 
++#include <linux/module.h>
+ #include "../wifi.h"
+ 
+ 
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192c/phy_common.c b/drivers/net/wireless/rtlwifi/rtl8192c/phy_common.c
+index 3b11642..1f07558 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192c/phy_common.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192c/phy_common.c
+@@ -27,6 +27,7 @@
+  *
+  *****************************************************************************/
+ 
++#include <linux/export.h>
+ #include "../wifi.h"
+ #include "../rtl8192ce/reg.h"
+ #include "../rtl8192ce/def.h"
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192ce/def.h b/drivers/net/wireless/rtlwifi/rtl8192ce/def.h
+index 35ff7df..9fc804d 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192ce/def.h
++++ b/drivers/net/wireless/rtlwifi/rtl8192ce/def.h
+@@ -142,8 +142,22 @@ enum version_8192c {
+ 	VERSION_UNKNOWN = 0x88,
+ };
+ 
++#define CUT_VERSION_MASK		(BIT(6)|BIT(7))
++#define CHIP_VENDOR_UMC			BIT(5)
++#define CHIP_VENDOR_UMC_B_CUT		BIT(6) /* Chip version for ECO */
++#define IS_VENDOR_UMC_A_CUT(version)	((IS_CHIP_VENDOR_UMC(version)) ? \
++	((GET_CVID_CUT_VERSION(version)) ? false : true) : false)
+ #define IS_CHIP_VER_B(version)  ((version & CHIP_VER_B) ? true : false)
++#define IS_VENDOR_UMC_A_CUT(version)	((IS_CHIP_VENDOR_UMC(version)) ? \
++	((GET_CVID_CUT_VERSION(version)) ? false : true) : false)
+ #define IS_92C_SERIAL(version)  ((version & CHIP_92C_BITMASK) ? true : false)
++#define IS_CHIP_VENDOR_UMC(version)		\
++	((version & CHIP_VENDOR_UMC) ? true : false)
++#define GET_CVID_CUT_VERSION(version)	((version) & CUT_VERSION_MASK)
++#define IS_81xxC_VENDOR_UMC_B_CUT(version)		\
++	((IS_CHIP_VENDOR_UMC(version)) ? \
++	((GET_CVID_CUT_VERSION(version) == CHIP_VENDOR_UMC_B_CUT) ?	\
++	true : false) : false)
+ 
+ enum rtl819x_loopback_e {
+ 	RTL819X_NO_LOOPBACK = 0,
+@@ -220,41 +234,6 @@ enum rtl_desc_qsel {
+ 	QSLT_CMD = 0x13,
+ };
+ 
+-enum rtl_desc92c_rate {
+-	DESC92C_RATE1M = 0x00,
+-	DESC92C_RATE2M = 0x01,
+-	DESC92C_RATE5_5M = 0x02,
+-	DESC92C_RATE11M = 0x03,
+-
+-	DESC92C_RATE6M = 0x04,
+-	DESC92C_RATE9M = 0x05,
+-	DESC92C_RATE12M = 0x06,
+-	DESC92C_RATE18M = 0x07,
+-	DESC92C_RATE24M = 0x08,
+-	DESC92C_RATE36M = 0x09,
+-	DESC92C_RATE48M = 0x0a,
+-	DESC92C_RATE54M = 0x0b,
+-
+-	DESC92C_RATEMCS0 = 0x0c,
+-	DESC92C_RATEMCS1 = 0x0d,
+-	DESC92C_RATEMCS2 = 0x0e,
+-	DESC92C_RATEMCS3 = 0x0f,
+-	DESC92C_RATEMCS4 = 0x10,
+-	DESC92C_RATEMCS5 = 0x11,
+-	DESC92C_RATEMCS6 = 0x12,
+-	DESC92C_RATEMCS7 = 0x13,
+-	DESC92C_RATEMCS8 = 0x14,
+-	DESC92C_RATEMCS9 = 0x15,
+-	DESC92C_RATEMCS10 = 0x16,
+-	DESC92C_RATEMCS11 = 0x17,
+-	DESC92C_RATEMCS12 = 0x18,
+-	DESC92C_RATEMCS13 = 0x19,
+-	DESC92C_RATEMCS14 = 0x1a,
+-	DESC92C_RATEMCS15 = 0x1b,
+-	DESC92C_RATEMCS15_SG = 0x1c,
+-	DESC92C_RATEMCS32 = 0x20,
+-};
+-
+ struct phy_sts_cck_8192s_t {
+ 	u8 adc_pwdb_X[4];
+ 	u8 sq_rpt;
+@@ -267,108 +246,4 @@ struct h2c_cmd_8192c {
+ 	u8 *p_cmdbuffer;
+ };
+ 
+-/* NOTE: reference to rtl8192c_rates struct */
+-static inline int _rtl92c_rate_mapping(struct ieee80211_hw *hw, bool isHT,
+-				       u8 desc_rate, bool first_ampdu)
+-{
+-	struct rtl_priv *rtlpriv = rtl_priv(hw);
+-	int rate_idx = 0;
+-
+-	if (first_ampdu) {
+-		if (false == isHT) {
+-			switch (desc_rate) {
+-			case DESC92C_RATE1M:
+-				rate_idx = 0;
+-				break;
+-			case DESC92C_RATE2M:
+-				rate_idx = 1;
+-				break;
+-			case DESC92C_RATE5_5M:
+-				rate_idx = 2;
+-				break;
+-			case DESC92C_RATE11M:
+-				rate_idx = 3;
+-				break;
+-			case DESC92C_RATE6M:
+-				rate_idx = 4;
+-				break;
+-			case DESC92C_RATE9M:
+-				rate_idx = 5;
+-				break;
+-			case DESC92C_RATE12M:
+-				rate_idx = 6;
+-				break;
+-			case DESC92C_RATE18M:
+-				rate_idx = 7;
+-				break;
+-			case DESC92C_RATE24M:
+-				rate_idx = 8;
+-				break;
+-			case DESC92C_RATE36M:
+-				rate_idx = 9;
+-				break;
+-			case DESC92C_RATE48M:
+-				rate_idx = 10;
+-				break;
+-			case DESC92C_RATE54M:
+-				rate_idx = 11;
+-				break;
+-			default:
+-				RT_TRACE(rtlpriv, COMP_ERR, DBG_DMESG,
+-					 ("Rate %d is not support, set to "
+-					"1M rate.\n", desc_rate));
+-				rate_idx = 0;
+-				break;
+-			}
+-		} else {
+-			rate_idx = 11;
+-		}
+-		return rate_idx;
+-	}
+-	switch (desc_rate) {
+-	case DESC92C_RATE1M:
+-		rate_idx = 0;
+-		break;
+-	case DESC92C_RATE2M:
+-		rate_idx = 1;
+-		break;
+-	case DESC92C_RATE5_5M:
+-		rate_idx = 2;
+-		break;
+-	case DESC92C_RATE11M:
+-		rate_idx = 3;
+-		break;
+-	case DESC92C_RATE6M:
+-		rate_idx = 4;
+-		break;
+-	case DESC92C_RATE9M:
+-		rate_idx = 5;
+-		break;
+-	case DESC92C_RATE12M:
+-		rate_idx = 6;
+-		break;
+-	case DESC92C_RATE18M:
+-		rate_idx = 7;
+-		break;
+-	case DESC92C_RATE24M:
+-		rate_idx = 8;
+-		break;
+-	case DESC92C_RATE36M:
+-		rate_idx = 9;
+-		break;
+-	case DESC92C_RATE48M:
+-		rate_idx = 10;
+-		break;
+-	case DESC92C_RATE54M:
+-		rate_idx = 11;
+-		break;
+-	/* TODO: How to mapping MCS rate? */
+-	/*  NOTE: referenc to __ieee80211_rx */
+-	default:
+-		rate_idx = 11;
+-		break;
+-	}
+-	return rate_idx;
+-}
+-
+ #endif
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192ce/phy.c b/drivers/net/wireless/rtlwifi/rtl8192ce/phy.c
+index 592a10a..3b585aa 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192ce/phy.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192ce/phy.c
+@@ -569,7 +569,7 @@ static bool _rtl92ce_phy_set_rf_power_state(struct ieee80211_hw *hw,
+ 		}
+ 	case ERFSLEEP:{
+ 			if (ppsc->rfpwr_state == ERFOFF)
+-				break;
++				return false;
+ 			for (queue_id = 0, i = 0;
+ 			     queue_id < RTL_PCI_MAX_TX_QUEUE_COUNT;) {
+ 				ring = &pcipriv->dev.tx_ring[queue_id];
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192ce/sw.c b/drivers/net/wireless/rtlwifi/rtl8192ce/sw.c
+index 373dc78..f2aa33d 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192ce/sw.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192ce/sw.c
+@@ -28,6 +28,7 @@
+  *****************************************************************************/
+ 
+ #include <linux/vmalloc.h>
++#include <linux/module.h>
+ 
+ #include "../wifi.h"
+ #include "../core.h"
+@@ -92,6 +93,8 @@ int rtl92c_init_sw_vars(struct ieee80211_hw *hw)
+ 	struct rtl_priv *rtlpriv = rtl_priv(hw);
+ 	struct rtl_pci *rtlpci = rtl_pcidev(rtl_pcipriv(hw));
+ 	const struct firmware *firmware;
++	struct rtl_hal *rtlhal = rtl_hal(rtl_priv(hw));
++	char *fw_name = NULL;
+ 
+ 	rtl8192ce_bt_reg_init(hw);
+ 
+@@ -129,10 +132,16 @@ int rtl92c_init_sw_vars(struct ieee80211_hw *hw)
+ 
+ 	rtlpci->irq_mask[1] = (u32) (IMR_CPWM | IMR_C2HCMD | 0);
+ 
++	/* for debug level */
++	rtlpriv->dbg.global_debuglevel = rtlpriv->cfg->mod_params->debug;
+ 	/* for LPS & IPS */
+ 	rtlpriv->psc.inactiveps = rtlpriv->cfg->mod_params->inactiveps;
+ 	rtlpriv->psc.swctrl_lps = rtlpriv->cfg->mod_params->swctrl_lps;
+ 	rtlpriv->psc.fwctrl_lps = rtlpriv->cfg->mod_params->fwctrl_lps;
++	if (!rtlpriv->psc.inactiveps)
++		pr_info("rtl8192ce: Power Save off (module option)\n");
++	if (!rtlpriv->psc.fwctrl_lps)
++		pr_info("rtl8192ce: FW Power Save off (module option)\n");
+ 	rtlpriv->psc.reg_fwctrl_lps = 3;
+ 	rtlpriv->psc.reg_max_lps_awakeintvl = 5;
+ 	/* for ASPM, you can close aspm through
+@@ -155,8 +164,14 @@ int rtl92c_init_sw_vars(struct ieee80211_hw *hw)
+ 	}
+ 
+ 	/* request fw */
+-	err = request_firmware(&firmware, rtlpriv->cfg->fw_name,
+-			rtlpriv->io.dev);
++	if (IS_VENDOR_UMC_A_CUT(rtlhal->version) &&
++	    !IS_92C_SERIAL(rtlhal->version))
++		fw_name = "rtlwifi/rtl8192cfwU.bin";
++	else if (IS_81xxC_VENDOR_UMC_B_CUT(rtlhal->version))
++		fw_name = "rtlwifi/rtl8192cfwU_B.bin";
++	else
++		fw_name = rtlpriv->cfg->fw_name;
++	err = request_firmware(&firmware, fw_name, rtlpriv->io.dev);
+ 	if (err) {
+ 		RT_TRACE(rtlpriv, COMP_ERR, DBG_EMERG,
+ 			 ("Failed to request firmware!\n"));
+@@ -241,6 +256,7 @@ static struct rtl_mod_params rtl92ce_mod_params = {
+ 	.inactiveps = true,
+ 	.swctrl_lps = false,
+ 	.fwctrl_lps = true,
++	.debug = DBG_EMERG,
+ };
+ 
+ static struct rtl_hal_cfg rtl92ce_hal_cfg = {
+@@ -318,21 +334,21 @@ static struct rtl_hal_cfg rtl92ce_hal_cfg = {
+ 	.maps[RTL_IMR_ROK] = IMR_ROK,
+ 	.maps[RTL_IBSS_INT_MASKS] = (IMR_BCNINT | IMR_TBDOK | IMR_TBDER),
+ 
+-	.maps[RTL_RC_CCK_RATE1M] = DESC92C_RATE1M,
+-	.maps[RTL_RC_CCK_RATE2M] = DESC92C_RATE2M,
+-	.maps[RTL_RC_CCK_RATE5_5M] = DESC92C_RATE5_5M,
+-	.maps[RTL_RC_CCK_RATE11M] = DESC92C_RATE11M,
+-	.maps[RTL_RC_OFDM_RATE6M] = DESC92C_RATE6M,
+-	.maps[RTL_RC_OFDM_RATE9M] = DESC92C_RATE9M,
+-	.maps[RTL_RC_OFDM_RATE12M] = DESC92C_RATE12M,
+-	.maps[RTL_RC_OFDM_RATE18M] = DESC92C_RATE18M,
+-	.maps[RTL_RC_OFDM_RATE24M] = DESC92C_RATE24M,
+-	.maps[RTL_RC_OFDM_RATE36M] = DESC92C_RATE36M,
+-	.maps[RTL_RC_OFDM_RATE48M] = DESC92C_RATE48M,
+-	.maps[RTL_RC_OFDM_RATE54M] = DESC92C_RATE54M,
+-
+-	.maps[RTL_RC_HT_RATEMCS7] = DESC92C_RATEMCS7,
+-	.maps[RTL_RC_HT_RATEMCS15] = DESC92C_RATEMCS15,
++	.maps[RTL_RC_CCK_RATE1M] = DESC92_RATE1M,
++	.maps[RTL_RC_CCK_RATE2M] = DESC92_RATE2M,
++	.maps[RTL_RC_CCK_RATE5_5M] = DESC92_RATE5_5M,
++	.maps[RTL_RC_CCK_RATE11M] = DESC92_RATE11M,
++	.maps[RTL_RC_OFDM_RATE6M] = DESC92_RATE6M,
++	.maps[RTL_RC_OFDM_RATE9M] = DESC92_RATE9M,
++	.maps[RTL_RC_OFDM_RATE12M] = DESC92_RATE12M,
++	.maps[RTL_RC_OFDM_RATE18M] = DESC92_RATE18M,
++	.maps[RTL_RC_OFDM_RATE24M] = DESC92_RATE24M,
++	.maps[RTL_RC_OFDM_RATE36M] = DESC92_RATE36M,
++	.maps[RTL_RC_OFDM_RATE48M] = DESC92_RATE48M,
++	.maps[RTL_RC_OFDM_RATE54M] = DESC92_RATE54M,
++
++	.maps[RTL_RC_HT_RATEMCS7] = DESC92_RATEMCS7,
++	.maps[RTL_RC_HT_RATEMCS15] = DESC92_RATEMCS15,
+ };
+ 
+ DEFINE_PCI_DEVICE_TABLE(rtl92ce_pci_ids) = {
+@@ -351,27 +367,35 @@ MODULE_AUTHOR("Larry Finger	<Larry.Finger@lwfinger.net>");
+ MODULE_LICENSE("GPL");
+ MODULE_DESCRIPTION("Realtek 8192C/8188C 802.11n PCI wireless");
+ MODULE_FIRMWARE("rtlwifi/rtl8192cfw.bin");
++MODULE_FIRMWARE("rtlwifi/rtl8192cfwU.bin");
++MODULE_FIRMWARE("rtlwifi/rtl8192cfwU_B.bin");
+ 
+ module_param_named(swenc, rtl92ce_mod_params.sw_crypto, bool, 0444);
++module_param_named(debug, rtl92ce_mod_params.debug, int, 0444);
+ module_param_named(ips, rtl92ce_mod_params.inactiveps, bool, 0444);
+ module_param_named(swlps, rtl92ce_mod_params.swctrl_lps, bool, 0444);
+ module_param_named(fwlps, rtl92ce_mod_params.fwctrl_lps, bool, 0444);
+-MODULE_PARM_DESC(swenc, "using hardware crypto (default 0 [hardware])\n");
+-MODULE_PARM_DESC(ips, "using no link power save (default 1 is open)\n");
+-MODULE_PARM_DESC(fwlps, "using linked fw control power save "
+-		 "(default 1 is open)\n");
++MODULE_PARM_DESC(swenc, "Set to 1 for software crypto (default 0)\n");
++MODULE_PARM_DESC(ips, "Set to 0 to not use link power save (default 1)\n");
++MODULE_PARM_DESC(swlps, "Set to 1 to use SW control power save (default 0)\n");
++MODULE_PARM_DESC(fwlps, "Set to 1 to use FW control power save (default 1)\n");
++MODULE_PARM_DESC(debug, "Set debug level (0-5) (default 0)");
++
++static const struct dev_pm_ops rtlwifi_pm_ops = {
++	.suspend = rtl_pci_suspend,
++	.resume = rtl_pci_resume,
++	.freeze = rtl_pci_suspend,
++	.thaw = rtl_pci_resume,
++	.poweroff = rtl_pci_suspend,
++	.restore = rtl_pci_resume,
++};
+ 
+ static struct pci_driver rtl92ce_driver = {
+ 	.name = KBUILD_MODNAME,
+ 	.id_table = rtl92ce_pci_ids,
+ 	.probe = rtl_pci_probe,
+ 	.remove = rtl_pci_disconnect,
+-
+-#ifdef CONFIG_PM
+-	.suspend = rtl_pci_suspend,
+-	.resume = rtl_pci_resume,
+-#endif
+-
++	.driver.pm = &rtlwifi_pm_ops,
+ };
+ 
+ static int __init rtl92ce_module_init(void)
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192ce/trx.c b/drivers/net/wireless/rtlwifi/rtl8192ce/trx.c
+index 230bbe9..4fb5ae2 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192ce/trx.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192ce/trx.c
+@@ -48,104 +48,6 @@ static u8 _rtl92ce_map_hwqueue_to_fwqueue(struct sk_buff *skb, u8 hw_queue)
+ 	return skb->priority;
+ }
+ 
+-static int _rtl92ce_rate_mapping(bool isht, u8 desc_rate, bool first_ampdu)
+-{
+-	int rate_idx;
+-
+-	if (first_ampdu) {
+-		if (false == isht) {
+-			switch (desc_rate) {
+-			case DESC92C_RATE1M:
+-				rate_idx = 0;
+-				break;
+-			case DESC92C_RATE2M:
+-				rate_idx = 1;
+-				break;
+-			case DESC92C_RATE5_5M:
+-				rate_idx = 2;
+-				break;
+-			case DESC92C_RATE11M:
+-				rate_idx = 3;
+-				break;
+-			case DESC92C_RATE6M:
+-				rate_idx = 4;
+-				break;
+-			case DESC92C_RATE9M:
+-				rate_idx = 5;
+-				break;
+-			case DESC92C_RATE12M:
+-				rate_idx = 6;
+-				break;
+-			case DESC92C_RATE18M:
+-				rate_idx = 7;
+-				break;
+-			case DESC92C_RATE24M:
+-				rate_idx = 8;
+-				break;
+-			case DESC92C_RATE36M:
+-				rate_idx = 9;
+-				break;
+-			case DESC92C_RATE48M:
+-				rate_idx = 10;
+-				break;
+-			case DESC92C_RATE54M:
+-				rate_idx = 11;
+-				break;
+-			default:
+-				rate_idx = 0;
+-				break;
+-			}
+-		} else {
+-			rate_idx = 11;
+-		}
+-
+-		return rate_idx;
+-	}
+-
+-	switch (desc_rate) {
+-	case DESC92C_RATE1M:
+-		rate_idx = 0;
+-		break;
+-	case DESC92C_RATE2M:
+-		rate_idx = 1;
+-		break;
+-	case DESC92C_RATE5_5M:
+-		rate_idx = 2;
+-		break;
+-	case DESC92C_RATE11M:
+-		rate_idx = 3;
+-		break;
+-	case DESC92C_RATE6M:
+-		rate_idx = 4;
+-		break;
+-	case DESC92C_RATE9M:
+-		rate_idx = 5;
+-		break;
+-	case DESC92C_RATE12M:
+-		rate_idx = 6;
+-		break;
+-	case DESC92C_RATE18M:
+-		rate_idx = 7;
+-		break;
+-	case DESC92C_RATE24M:
+-		rate_idx = 8;
+-		break;
+-	case DESC92C_RATE36M:
+-		rate_idx = 9;
+-		break;
+-	case DESC92C_RATE48M:
+-		rate_idx = 10;
+-		break;
+-	case DESC92C_RATE54M:
+-		rate_idx = 11;
+-		break;
+-	default:
+-		rate_idx = 11;
+-		break;
+-	}
+-	return rate_idx;
+-}
+-
+ static u8 _rtl92c_query_rxpwrpercentage(char antpower)
+ {
+ 	if ((antpower <= -100) || (antpower >= 20))
+@@ -336,8 +238,8 @@ static void _rtl92ce_query_rxphystatus(struct ieee80211_hw *hw,
+ 		pstats->rxpower = rx_pwr_all;
+ 		pstats->recvsignalpower = rx_pwr_all;
+ 
+-		if (pdesc->rxht && pdesc->rxmcs >= DESC92C_RATEMCS8 &&
+-		    pdesc->rxmcs <= DESC92C_RATEMCS15)
++		if (pdesc->rxht && pdesc->rxmcs >= DESC92_RATEMCS8 &&
++		    pdesc->rxmcs <= DESC92_RATEMCS15)
+ 			max_spatial_stream = 2;
+ 		else
+ 			max_spatial_stream = 1;
+@@ -670,12 +572,10 @@ bool rtl92ce_rx_query_desc(struct ieee80211_hw *hw,
+ 	if (stats->decrypted)
+ 		rx_status->flag |= RX_FLAG_DECRYPTED;
+ 
+-	rx_status->rate_idx = _rtl92ce_rate_mapping((bool)
+-						    GET_RX_DESC_RXHT(pdesc),
+-						    (u8)
+-						    GET_RX_DESC_RXMCS(pdesc),
+-						    (bool)
+-						    GET_RX_DESC_PAGGR(pdesc));
++	rx_status->rate_idx = rtlwifi_rate_mapping(hw,
++				(bool)GET_RX_DESC_RXHT(pdesc),
++				(u8)GET_RX_DESC_RXMCS(pdesc),
++				(bool)GET_RX_DESC_PAGGR(pdesc));
+ 
+ 	rx_status->mactime = GET_RX_DESC_TSFL(pdesc);
+ 	if (phystatus) {
+@@ -768,7 +668,7 @@ void rtl92ce_tx_fill_desc(struct ieee80211_hw *hw,
+ 		SET_TX_DESC_RTS_BW(pdesc, 0);
+ 		SET_TX_DESC_RTS_SC(pdesc, tcb_desc->rts_sc);
+ 		SET_TX_DESC_RTS_SHORT(pdesc,
+-				      ((tcb_desc->rts_rate <= DESC92C_RATE54M) ?
++				      ((tcb_desc->rts_rate <= DESC92_RATE54M) ?
+ 				       (tcb_desc->rts_use_shortpreamble ? 1 : 0)
+ 				       : (tcb_desc->rts_use_shortgi ? 1 : 0)));
+ 
+@@ -886,7 +786,7 @@ void rtl92ce_tx_fill_cmddesc(struct ieee80211_hw *hw,
+ 	if (firstseg)
+ 		SET_TX_DESC_OFFSET(pdesc, USB_HWDESC_HEADER_LEN);
+ 
+-	SET_TX_DESC_TX_RATE(pdesc, DESC92C_RATE1M);
++	SET_TX_DESC_TX_RATE(pdesc, DESC92_RATE1M);
+ 
+ 	SET_TX_DESC_SEQ(pdesc, 0);
+ 
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192ce/trx.h b/drivers/net/wireless/rtlwifi/rtl8192ce/trx.h
+index 0f11771..c8977a5 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192ce/trx.h
++++ b/drivers/net/wireless/rtlwifi/rtl8192ce/trx.h
+@@ -537,12 +537,6 @@ do {							\
+ 		memset(__pdesc, 0, _size);	\
+ } while (0);
+ 
+-#define RX_HAL_IS_CCK_RATE(_pdesc)\
+-	(_pdesc->rxmcs == DESC92C_RATE1M ||		\
+-	 _pdesc->rxmcs == DESC92C_RATE2M ||		\
+-	 _pdesc->rxmcs == DESC92C_RATE5_5M ||		\
+-	 _pdesc->rxmcs == DESC92C_RATE11M)
+-
+ struct rx_fwinfo_92c {
+ 	u8 gain_trsw[4];
+ 	u8 pwdb_all;
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192cu/def.h b/drivers/net/wireless/rtlwifi/rtl8192cu/def.h
+index c54940e..d097efb 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192cu/def.h
++++ b/drivers/net/wireless/rtlwifi/rtl8192cu/def.h
+@@ -50,10 +50,6 @@
+ #define IS_VENDOR_UMC(version)		\
+ 	(((version) & CHIP_VENDOR_UMC) ? true : false)
+ 
+-#define IS_VENDOR_UMC_A_CUT(version)	\
+-	(((version) & CHIP_VENDOR_UMC) ? (((version) & (BIT(6) | BIT(7))) ? \
+-	false : true) : false)
+-
+ #define IS_VENDOR_8723_A_CUT(version)	\
+ 	(((version) & CHIP_VENDOR_UMC) ? (((version) & (BIT(6))) ? \
+ 	false : true) : false)
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192cu/mac.c b/drivers/net/wireless/rtlwifi/rtl8192cu/mac.c
+index 194fc69..060a06f 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192cu/mac.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192cu/mac.c
+@@ -892,8 +892,8 @@ static void _rtl92c_query_rxphystatus(struct ieee80211_hw *hw,
+ 		pstats->rxpower = rx_pwr_all;
+ 		pstats->recvsignalpower = rx_pwr_all;
+ 		if (GET_RX_DESC_RX_MCS(pdesc) &&
+-		    GET_RX_DESC_RX_MCS(pdesc) >= DESC92C_RATEMCS8 &&
+-		    GET_RX_DESC_RX_MCS(pdesc) <= DESC92C_RATEMCS15)
++		    GET_RX_DESC_RX_MCS(pdesc) >= DESC92_RATEMCS8 &&
++		    GET_RX_DESC_RX_MCS(pdesc) <= DESC92_RATEMCS15)
+ 			max_spatial_stream = 2;
+ 		else
+ 			max_spatial_stream = 1;
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192cu/mac.h b/drivers/net/wireless/rtlwifi/rtl8192cu/mac.h
+index 298fdb7..626d88e 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192cu/mac.h
++++ b/drivers/net/wireless/rtlwifi/rtl8192cu/mac.h
+@@ -87,12 +87,6 @@ void rtl92c_set_data_filter(struct ieee80211_hw *hw, u16 filter);
+ 
+ u32 rtl92c_get_txdma_status(struct ieee80211_hw *hw);
+ 
+-#define RX_HAL_IS_CCK_RATE(_pdesc)\
+-	(GET_RX_DESC_RX_MCS(_pdesc) == DESC92C_RATE1M ||\
+-	 GET_RX_DESC_RX_MCS(_pdesc) == DESC92C_RATE2M ||\
+-	 GET_RX_DESC_RX_MCS(_pdesc) == DESC92C_RATE5_5M ||\
+-	 GET_RX_DESC_RX_MCS(_pdesc) == DESC92C_RATE11M)
+-
+ struct rx_fwinfo_92c {
+ 	u8 gain_trsw[4];
+ 	u8 pwdb_all;
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192cu/phy.c b/drivers/net/wireless/rtlwifi/rtl8192cu/phy.c
+index 7285290..e49cf22 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192cu/phy.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192cu/phy.c
+@@ -548,7 +548,7 @@ static bool _rtl92cu_phy_set_rf_power_state(struct ieee80211_hw *hw,
+ 		break;
+ 	case ERFSLEEP:
+ 		if (ppsc->rfpwr_state == ERFOFF)
+-			break;
++			return false;
+ 		for (queue_id = 0, i = 0;
+ 		     queue_id < RTL_PCI_MAX_TX_QUEUE_COUNT;) {
+ 			ring = &pcipriv->dev.tx_ring[queue_id];
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192cu/rf.c b/drivers/net/wireless/rtlwifi/rtl8192cu/rf.c
+index 17a8e96..1e851aa 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192cu/rf.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192cu/rf.c
+@@ -104,7 +104,7 @@ void rtl92cu_phy_rf6052_set_cck_txpower(struct ieee80211_hw *hw,
+ 			tx_agc[RF90_PATH_A] = 0x10101010;
+ 			tx_agc[RF90_PATH_B] = 0x10101010;
+ 		} else if (rtlpriv->dm.dynamic_txhighpower_lvl ==
+-			   TXHIGHPWRLEVEL_LEVEL2) {
++			   TXHIGHPWRLEVEL_LEVEL1) {
+ 			tx_agc[RF90_PATH_A] = 0x00000000;
+ 			tx_agc[RF90_PATH_B] = 0x00000000;
+ 		} else{
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192cu/sw.c b/drivers/net/wireless/rtlwifi/rtl8192cu/sw.c
+index ef63c0d..c244f2f 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192cu/sw.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192cu/sw.c
+@@ -42,6 +42,7 @@
+ #include "led.h"
+ #include "hw.h"
+ #include <linux/vmalloc.h>
++#include <linux/module.h>
+ 
+ MODULE_AUTHOR("Georgia		<georgia@realtek.com>");
+ MODULE_AUTHOR("Ziv Huang	<ziv_huang@realtek.com>");
+@@ -60,6 +61,7 @@ static int rtl92cu_init_sw_vars(struct ieee80211_hw *hw)
+ 	rtlpriv->dm.dm_flag = 0;
+ 	rtlpriv->dm.disable_framebursting = 0;
+ 	rtlpriv->dm.thermalvalue = 0;
++	rtlpriv->dbg.global_debuglevel = rtlpriv->cfg->mod_params->debug;
+ 	rtlpriv->rtlhal.pfirmware = vmalloc(0x4000);
+ 	if (!rtlpriv->rtlhal.pfirmware) {
+ 		RT_TRACE(rtlpriv, COMP_ERR, DBG_EMERG,
+@@ -149,8 +151,14 @@ static struct rtl_hal_ops rtl8192cu_hal_ops = {
+ 
+ static struct rtl_mod_params rtl92cu_mod_params = {
+ 	.sw_crypto = 0,
++	.debug = DBG_EMERG,
+ };
+ 
++module_param_named(swenc, rtl92cu_mod_params.sw_crypto, bool, 0444);
++module_param_named(debug, rtl92cu_mod_params.debug, int, 0444);
++MODULE_PARM_DESC(swenc, "Set to 1 for software crypto (default 0)\n");
++MODULE_PARM_DESC(debug, "Set debug level (0-5) (default 0)");
++
+ static struct rtl_hal_usbint_cfg rtl92cu_interface_cfg = {
+ 	/* rx */
+ 	.in_ep_num = RTL92C_USB_BULK_IN_NUM,
+@@ -241,20 +249,20 @@ static struct rtl_hal_cfg rtl92cu_hal_cfg = {
+ 	.maps[RTL_IMR_ROK] = IMR_ROK,
+ 	.maps[RTL_IBSS_INT_MASKS] = (IMR_BCNINT | IMR_TBDOK | IMR_TBDER),
+ 
+-	.maps[RTL_RC_CCK_RATE1M] = DESC92C_RATE1M,
+-	.maps[RTL_RC_CCK_RATE2M] = DESC92C_RATE2M,
+-	.maps[RTL_RC_CCK_RATE5_5M] = DESC92C_RATE5_5M,
+-	.maps[RTL_RC_CCK_RATE11M] = DESC92C_RATE11M,
+-	.maps[RTL_RC_OFDM_RATE6M] = DESC92C_RATE6M,
+-	.maps[RTL_RC_OFDM_RATE9M] = DESC92C_RATE9M,
+-	.maps[RTL_RC_OFDM_RATE12M] = DESC92C_RATE12M,
+-	.maps[RTL_RC_OFDM_RATE18M] = DESC92C_RATE18M,
+-	.maps[RTL_RC_OFDM_RATE24M] = DESC92C_RATE24M,
+-	.maps[RTL_RC_OFDM_RATE36M] = DESC92C_RATE36M,
+-	.maps[RTL_RC_OFDM_RATE48M] = DESC92C_RATE48M,
+-	.maps[RTL_RC_OFDM_RATE54M] = DESC92C_RATE54M,
+-	.maps[RTL_RC_HT_RATEMCS7] = DESC92C_RATEMCS7,
+-	.maps[RTL_RC_HT_RATEMCS15] = DESC92C_RATEMCS15,
++	.maps[RTL_RC_CCK_RATE1M] = DESC92_RATE1M,
++	.maps[RTL_RC_CCK_RATE2M] = DESC92_RATE2M,
++	.maps[RTL_RC_CCK_RATE5_5M] = DESC92_RATE5_5M,
++	.maps[RTL_RC_CCK_RATE11M] = DESC92_RATE11M,
++	.maps[RTL_RC_OFDM_RATE6M] = DESC92_RATE6M,
++	.maps[RTL_RC_OFDM_RATE9M] = DESC92_RATE9M,
++	.maps[RTL_RC_OFDM_RATE12M] = DESC92_RATE12M,
++	.maps[RTL_RC_OFDM_RATE18M] = DESC92_RATE18M,
++	.maps[RTL_RC_OFDM_RATE24M] = DESC92_RATE24M,
++	.maps[RTL_RC_OFDM_RATE36M] = DESC92_RATE36M,
++	.maps[RTL_RC_OFDM_RATE48M] = DESC92_RATE48M,
++	.maps[RTL_RC_OFDM_RATE54M] = DESC92_RATE54M,
++	.maps[RTL_RC_HT_RATEMCS7] = DESC92_RATEMCS7,
++	.maps[RTL_RC_HT_RATEMCS15] = DESC92_RATEMCS15,
+ };
+ 
+ #define USB_VENDER_ID_REALTEK		0x0bda
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192cu/trx.c b/drivers/net/wireless/rtlwifi/rtl8192cu/trx.c
+index 3e52a54..bc33b14 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192cu/trx.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192cu/trx.c
+@@ -337,10 +337,10 @@ bool rtl92cu_rx_query_desc(struct ieee80211_hw *hw,
+ 	rx_status->flag |= RX_FLAG_MACTIME_MPDU;
+ 	if (stats->decrypted)
+ 		rx_status->flag |= RX_FLAG_DECRYPTED;
+-	rx_status->rate_idx = _rtl92c_rate_mapping(hw,
+-						(bool)GET_RX_DESC_RX_HT(pdesc),
+-						(u8)GET_RX_DESC_RX_MCS(pdesc),
+-						(bool)GET_RX_DESC_PAGGR(pdesc));
++	rx_status->rate_idx = rtlwifi_rate_mapping(hw,
++					(bool)GET_RX_DESC_RX_HT(pdesc),
++					(u8)GET_RX_DESC_RX_MCS(pdesc),
++					(bool)GET_RX_DESC_PAGGR(pdesc));
+ 	rx_status->mactime = GET_RX_DESC_TSFL(pdesc);
+ 	if (phystatus) {
+ 		p_drvinfo = (struct rx_fwinfo_92c *)(pdesc + RTL_RX_DESC_SIZE);
+@@ -406,11 +406,10 @@ static void _rtl_rx_process(struct ieee80211_hw *hw, struct sk_buff *skb)
+ 	if (GET_RX_DESC_RX_HT(rxdesc))
+ 		rx_status->flag |= RX_FLAG_HT;
+ 	/* Data rate */
+-	rx_status->rate_idx = _rtl92c_rate_mapping(hw,
+-						(bool)GET_RX_DESC_RX_HT(rxdesc),
+-						(u8)GET_RX_DESC_RX_MCS(rxdesc),
+-						(bool)GET_RX_DESC_PAGGR(rxdesc)
+-						);
++	rx_status->rate_idx = rtlwifi_rate_mapping(hw,
++					(bool)GET_RX_DESC_RX_HT(rxdesc),
++					(u8)GET_RX_DESC_RX_MCS(rxdesc),
++					(bool)GET_RX_DESC_PAGGR(rxdesc));
+ 	/*  There is a phy status after this rx descriptor. */
+ 	if (GET_RX_DESC_PHY_STATUS(rxdesc)) {
+ 		p_drvinfo = (struct rx_fwinfo_92c *)(rxdesc + RTL_RX_DESC_SIZE);
+@@ -545,7 +544,7 @@ void rtl92cu_tx_fill_desc(struct ieee80211_hw *hw,
+ 	SET_TX_DESC_RTS_BW(txdesc, 0);
+ 	SET_TX_DESC_RTS_SC(txdesc, tcb_desc->rts_sc);
+ 	SET_TX_DESC_RTS_SHORT(txdesc,
+-			      ((tcb_desc->rts_rate <= DESC92C_RATE54M) ?
++			      ((tcb_desc->rts_rate <= DESC92_RATE54M) ?
+ 			       (tcb_desc->rts_use_shortpreamble ? 1 : 0)
+ 			       : (tcb_desc->rts_use_shortgi ? 1 : 0)));
+ 	if (mac->bw_40) {
+@@ -644,7 +643,7 @@ void rtl92cu_fill_fake_txdesc(struct ieee80211_hw *hw, u8 * pDesc,
+ 	}
+ 	SET_TX_DESC_USE_RATE(pDesc, 1); /* use data rate which is set by Sw */
+ 	SET_TX_DESC_OWN(pDesc, 1);
+-	SET_TX_DESC_TX_RATE(pDesc, DESC92C_RATE1M);
++	SET_TX_DESC_TX_RATE(pDesc, DESC92_RATE1M);
+ 	_rtl_tx_desc_checksum(pDesc);
+ }
+ 
+@@ -660,7 +659,7 @@ void rtl92cu_tx_fill_cmddesc(struct ieee80211_hw *hw,
+ 	memset((void *)pdesc, 0, RTL_TX_HEADER_SIZE);
+ 	if (firstseg)
+ 		SET_TX_DESC_OFFSET(pdesc, RTL_TX_HEADER_SIZE);
+-	SET_TX_DESC_TX_RATE(pdesc, DESC92C_RATE1M);
++	SET_TX_DESC_TX_RATE(pdesc, DESC92_RATE1M);
+ 	SET_TX_DESC_SEQ(pdesc, 0);
+ 	SET_TX_DESC_LINIP(pdesc, 0);
+ 	SET_TX_DESC_QUEUE_SEL(pdesc, fw_queue);
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192de/def.h b/drivers/net/wireless/rtlwifi/rtl8192de/def.h
+index f0f5f9b..9463047 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192de/def.h
++++ b/drivers/net/wireless/rtlwifi/rtl8192de/def.h
+@@ -122,60 +122,99 @@
+ #define	GET_C2H_CMD_FEEDBACK_CCX_SEQ(__pcmdfbhdr)	\
+ 	LE_BITS_TO_4BYTE(((__pcmdfbhdr) + 4), 20, 12)
+ 
+-/*
+- * 92D chip ver:
+- * BIT8: IS 92D
+- * BIT9: single phy
+- * BIT10: C-cut
+- * BIT11: D-cut
+- */
+-
+-/* Chip specific */
+-#define CHIP_92C			BIT(0)
+-#define CHIP_92C_1T2R			BIT(1)
+-#define CHIP_8723			BIT(2) /* RTL8723 With BT feature */
+-#define CHIP_8723_DRV_REV		BIT(3) /* RTL8723 Driver Revised */
+-#define NORMAL_CHIP			BIT(4)
+-#define CHIP_VENDOR_UMC			BIT(5)
+-#define CHIP_VENDOR_UMC_B_CUT		BIT(6) /* Chip version for ECO */
++enum version_8192d {
++	VERSION_TEST_CHIP_88C = 0x0000,
++	VERSION_TEST_CHIP_92C = 0x0020,
++	VERSION_TEST_UMC_CHIP_8723 = 0x0081,
++	VERSION_NORMAL_TSMC_CHIP_88C = 0x0008,
++	VERSION_NORMAL_TSMC_CHIP_92C = 0x0028,
++	VERSION_NORMAL_TSMC_CHIP_92C_1T2R = 0x0018,
++	VERSION_NORMAL_UMC_CHIP_88C_A_CUT = 0x0088,
++	VERSION_NORMAL_UMC_CHIP_92C_A_CUT = 0x00a8,
++	VERSION_NORMAL_UMC_CHIP_92C_1T2R_A_CUT = 0x0098,
++	VERSION_NORMAL_UMC_CHIP_8723_1T1R_A_CUT = 0x0089,
++	VERSION_NORMAL_UMC_CHIP_8723_1T1R_B_CUT = 0x1089,
++	VERSION_NORMAL_UMC_CHIP_88C_B_CUT = 0x1088,
++	VERSION_NORMAL_UMC_CHIP_92C_B_CUT = 0x10a8,
++	VERSION_NORMAL_UMC_CHIP_92C_1T2R_B_CUT = 0x1090,
++	VERSION_TEST_CHIP_92D_SINGLEPHY = 0x0022,
++	VERSION_TEST_CHIP_92D_DUALPHY = 0x0002,
++	VERSION_NORMAL_CHIP_92D_SINGLEPHY = 0x002a,
++	VERSION_NORMAL_CHIP_92D_DUALPHY = 0x000a,
++	VERSION_NORMAL_CHIP_92D_C_CUT_SINGLEPHY = 0x202a,
++	VERSION_NORMAL_CHIP_92D_C_CUT_DUALPHY = 0x200a,
++	VERSION_NORMAL_CHIP_92D_D_CUT_SINGLEPHY = 0x302a,
++	VERSION_NORMAL_CHIP_92D_D_CUT_DUALPHY = 0x300a,
++	VERSION_NORMAL_CHIP_92D_E_CUT_SINGLEPHY = 0x402a,
++	VERSION_NORMAL_CHIP_92D_E_CUT_DUALPHY = 0x400a,
++};
+ 
+ /* for 92D */
+-#define CHIP_92D			BIT(8)
+ #define CHIP_92D_SINGLEPHY		BIT(9)
++#define C_CUT_VERSION			BIT(13)
++#define D_CUT_VERSION			((BIT(12)|BIT(13)))
++#define E_CUT_VERSION			BIT(14)
++
++/* Chip specific */
++#define CHIP_BONDING_IDENTIFIER(_value)	(((_value)>>22)&0x3)
++#define CHIP_BONDING_92C_1T2R			0x1
++#define CHIP_BONDING_88C_USB_MCARD		0x2
++#define CHIP_BONDING_88C_USB_HP			0x1
++
++/* [15:12] IC version(CUT): A-cut=0, B-cut=1, C-cut=2, D-cut=3 */
++/* [7] Manufacturer: TSMC=0, UMC=1 */
++/* [6:4] RF type: 1T1R=0, 1T2R=1, 2T2R=2 */
++/* [3] Chip type: TEST=0, NORMAL=1 */
++/* [2:0] IC type: 81xxC=0, 8723=1, 92D=2 */
++#define CHIP_8723			BIT(0)
++#define CHIP_92D			BIT(1)
++#define NORMAL_CHIP			BIT(3)
++#define RF_TYPE_1T1R			(~(BIT(4)|BIT(5)|BIT(6)))
++#define RF_TYPE_1T2R			BIT(4)
++#define RF_TYPE_2T2R			BIT(5)
++#define CHIP_VENDOR_UMC			BIT(7)
++#define B_CUT_VERSION			BIT(12)
++
++/* MASK */
++#define IC_TYPE_MASK			(BIT(0)|BIT(1)|BIT(2))
++#define CHIP_TYPE_MASK			BIT(3)
++#define RF_TYPE_MASK			(BIT(4)|BIT(5)|BIT(6))
++#define MANUFACTUER_MASK		BIT(7)
++#define ROM_VERSION_MASK		(BIT(11)|BIT(10)|BIT(9)|BIT(8))
++#define CUT_VERSION_MASK		(BIT(15)|BIT(14)|BIT(13)|BIT(12))
++
++
++/* Get element */
++#define GET_CVID_IC_TYPE(version)	((version) & IC_TYPE_MASK)
++#define GET_CVID_CHIP_TYPE(version)	((version) & CHIP_TYPE_MASK)
++#define GET_CVID_RF_TYPE(version)	((version) & RF_TYPE_MASK)
++#define GET_CVID_MANUFACTUER(version)	((version) & MANUFACTUER_MASK)
++#define GET_CVID_ROM_VERSION(version)	((version) & ROM_VERSION_MASK)
++#define GET_CVID_CUT_VERSION(version)	((version) & CUT_VERSION_MASK)
++
++#define IS_1T1R(version)		((GET_CVID_RF_TYPE(version)) ?	\
++					 false : true)
++#define IS_1T2R(version)		((GET_CVID_RF_TYPE(version) ==	\
++					 RF_TYPE_1T2R) ? true : false)
++#define IS_2T2R(version)		((GET_CVID_RF_TYPE(version) ==	\
++					 RF_TYPE_2T2R) ? true : false)
++
++#define IS_92D_SINGLEPHY(version)	((IS_92D(version)) ?		\
++				 (IS_2T2R(version) ? true : false) : false)
++#define IS_92D(version)			((GET_CVID_IC_TYPE(version) ==	\
++					 CHIP_92D) ? true : false)
++#define IS_92D_C_CUT(version)		((IS_92D(version)) ?		\
++				 ((GET_CVID_CUT_VERSION(version) ==	\
++				 0x2000) ? true : false) : false)
++#define IS_92D_D_CUT(version)			((IS_92D(version)) ?	\
++				 ((GET_CVID_CUT_VERSION(version) ==	\
++				 0x3000) ? true : false) : false)
++#define IS_92D_E_CUT(version)		((IS_92D(version)) ?		\
++				 ((GET_CVID_CUT_VERSION(version) ==	\
++				 0x4000) ? true : false) : false)
+ #define CHIP_92D_C_CUT			BIT(10)
+ #define CHIP_92D_D_CUT			BIT(11)
+ 
+-enum version_8192d {
+-	VERSION_TEST_CHIP_88C = 0x00,
+-	VERSION_TEST_CHIP_92C = 0x01,
+-	VERSION_NORMAL_TSMC_CHIP_88C = 0x10,
+-	VERSION_NORMAL_TSMC_CHIP_92C = 0x11,
+-	VERSION_NORMAL_TSMC_CHIP_92C_1T2R = 0x13,
+-	VERSION_NORMAL_UMC_CHIP_88C_A_CUT = 0x30,
+-	VERSION_NORMAL_UMC_CHIP_92C_A_CUT = 0x31,
+-	VERSION_NORMAL_UMC_CHIP_92C_1T2R_A_CUT = 0x33,
+-	VERSION_NORMA_UMC_CHIP_8723_1T1R_A_CUT = 0x34,
+-	VERSION_NORMA_UMC_CHIP_8723_1T1R_B_CUT = 0x3c,
+-	VERSION_NORMAL_UMC_CHIP_88C_B_CUT = 0x70,
+-	VERSION_NORMAL_UMC_CHIP_92C_B_CUT = 0x71,
+-	VERSION_NORMAL_UMC_CHIP_92C_1T2R_B_CUT = 0x73,
+-	VERSION_TEST_CHIP_92D_SINGLEPHY = 0x300,
+-	VERSION_TEST_CHIP_92D_DUALPHY = 0x100,
+-	VERSION_NORMAL_CHIP_92D_SINGLEPHY = 0x310,
+-	VERSION_NORMAL_CHIP_92D_DUALPHY = 0x110,
+-	VERSION_NORMAL_CHIP_92D_C_CUT_SINGLEPHY = 0x710,
+-	VERSION_NORMAL_CHIP_92D_C_CUT_DUALPHY = 0x510,
+-	VERSION_NORMAL_CHIP_92D_D_CUT_SINGLEPHY = 0xB10,
+-	VERSION_NORMAL_CHIP_92D_D_CUT_DUALPHY = 0x910,
+-};
+-
+-#define IS_92D_SINGLEPHY(version)		\
+-	((version & CHIP_92D_SINGLEPHY) ? true : false)
+-#define IS_92D_C_CUT(version)			\
+-	((version & CHIP_92D_C_CUT) ? true : false)
+-#define IS_92D_D_CUT(version)			\
+-	((version & CHIP_92D_D_CUT) ? true : false)
+-
+ enum rf_optype {
+ 	RF_OP_BY_SW_3WIRE = 0,
+ 	RF_OP_BY_FW,
+@@ -193,41 +232,6 @@ enum rtl_desc_qsel {
+ 	QSLT_CMD = 0x13,
+ };
+ 
+-enum rtl_desc92d_rate {
+-	DESC92D_RATE1M = 0x00,
+-	DESC92D_RATE2M = 0x01,
+-	DESC92D_RATE5_5M = 0x02,
+-	DESC92D_RATE11M = 0x03,
+-
+-	DESC92D_RATE6M = 0x04,
+-	DESC92D_RATE9M = 0x05,
+-	DESC92D_RATE12M = 0x06,
+-	DESC92D_RATE18M = 0x07,
+-	DESC92D_RATE24M = 0x08,
+-	DESC92D_RATE36M = 0x09,
+-	DESC92D_RATE48M = 0x0a,
+-	DESC92D_RATE54M = 0x0b,
+-
+-	DESC92D_RATEMCS0 = 0x0c,
+-	DESC92D_RATEMCS1 = 0x0d,
+-	DESC92D_RATEMCS2 = 0x0e,
+-	DESC92D_RATEMCS3 = 0x0f,
+-	DESC92D_RATEMCS4 = 0x10,
+-	DESC92D_RATEMCS5 = 0x11,
+-	DESC92D_RATEMCS6 = 0x12,
+-	DESC92D_RATEMCS7 = 0x13,
+-	DESC92D_RATEMCS8 = 0x14,
+-	DESC92D_RATEMCS9 = 0x15,
+-	DESC92D_RATEMCS10 = 0x16,
+-	DESC92D_RATEMCS11 = 0x17,
+-	DESC92D_RATEMCS12 = 0x18,
+-	DESC92D_RATEMCS13 = 0x19,
+-	DESC92D_RATEMCS14 = 0x1a,
+-	DESC92D_RATEMCS15 = 0x1b,
+-	DESC92D_RATEMCS15_SG = 0x1c,
+-	DESC92D_RATEMCS32 = 0x20,
+-};
+-
+ enum channel_plan {
+ 	CHPL_FCC	= 0,
+ 	CHPL_IC		= 1,
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192de/hw.c b/drivers/net/wireless/rtlwifi/rtl8192de/hw.c
+index 0073cf1..f5bd3a3 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192de/hw.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192de/hw.c
+@@ -1608,17 +1608,16 @@ static void _rtl92de_read_txpower_info(struct ieee80211_hw *hw,
+ 		tempval[0] = hwinfo[EEPROM_IQK_DELTA] & 0x03;
+ 		tempval[1] = (hwinfo[EEPROM_LCK_DELTA] & 0x0C) >> 2;
+ 		rtlefuse->txpwr_fromeprom = true;
+-		if (IS_92D_D_CUT(rtlpriv->rtlhal.version)) {
++		if (IS_92D_D_CUT(rtlpriv->rtlhal.version) ||
++		    IS_92D_E_CUT(rtlpriv->rtlhal.version)) {
+ 			rtlefuse->internal_pa_5g[0] =
+-				 !((hwinfo[EEPROM_TSSI_A_5G] &
+-				 BIT(6)) >> 6);
++				!((hwinfo[EEPROM_TSSI_A_5G] & BIT(6)) >> 6);
+ 			rtlefuse->internal_pa_5g[1] =
+-				 !((hwinfo[EEPROM_TSSI_B_5G] &
+-				 BIT(6)) >> 6);
+-			RT_TRACE(rtlpriv, COMP_INIT, DBG_LOUD,
++				!((hwinfo[EEPROM_TSSI_B_5G] & BIT(6)) >> 6);
++			RT_TRACE(rtlpriv, COMP_INIT, DBG_DMESG,
+ 				 ("Is D cut,Internal PA0 %d Internal PA1 %d\n",
+-				  rtlefuse->internal_pa_5g[0],
+-				  rtlefuse->internal_pa_5g[1]))
++				 rtlefuse->internal_pa_5g[0],
++				 rtlefuse->internal_pa_5g[1]))
+ 		}
+ 		rtlefuse->eeprom_c9 = hwinfo[EEPROM_RF_OPT6];
+ 		rtlefuse->eeprom_cc = hwinfo[EEPROM_RF_OPT7];
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192de/phy.c b/drivers/net/wireless/rtlwifi/rtl8192de/phy.c
+index 3ac7af1..0883349 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192de/phy.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192de/phy.c
+@@ -3374,7 +3374,7 @@ bool rtl92d_phy_set_rf_power_state(struct ieee80211_hw *hw,
+ 		break;
+ 	case ERFSLEEP:
+ 		if (ppsc->rfpwr_state == ERFOFF)
+-			break;
++			return false;
+ 
+ 		for (queue_id = 0, i = 0;
+ 		     queue_id < RTL_PCI_MAX_TX_QUEUE_COUNT;) {
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192de/sw.c b/drivers/net/wireless/rtlwifi/rtl8192de/sw.c
+index 351765d..149493f 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192de/sw.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192de/sw.c
+@@ -30,6 +30,7 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+ #include <linux/vmalloc.h>
++#include <linux/module.h>
+ 
+ #include "../wifi.h"
+ #include "../core.h"
+@@ -146,10 +147,16 @@ static int rtl92d_init_sw_vars(struct ieee80211_hw *hw)
+ 
+ 	rtlpci->irq_mask[1] = (u32) (IMR_CPWM | IMR_C2HCMD);
+ 
++	/* for debug level */
++	rtlpriv->dbg.global_debuglevel = rtlpriv->cfg->mod_params->debug;
+ 	/* for LPS & IPS */
+ 	rtlpriv->psc.inactiveps = rtlpriv->cfg->mod_params->inactiveps;
+ 	rtlpriv->psc.swctrl_lps = rtlpriv->cfg->mod_params->swctrl_lps;
+ 	rtlpriv->psc.fwctrl_lps = rtlpriv->cfg->mod_params->fwctrl_lps;
++	if (!rtlpriv->psc.inactiveps)
++		pr_info("rtl8192ce: Power Save off (module option)\n");
++	if (!rtlpriv->psc.fwctrl_lps)
++		pr_info("rtl8192ce: FW Power Save off (module option)\n");
+ 	rtlpriv->psc.reg_fwctrl_lps = 3;
+ 	rtlpriv->psc.reg_max_lps_awakeintvl = 5;
+ 	/* for ASPM, you can close aspm through
+@@ -263,6 +270,7 @@ static struct rtl_mod_params rtl92de_mod_params = {
+ 	.inactiveps = true,
+ 	.swctrl_lps = true,
+ 	.fwctrl_lps = false,
++	.debug = DBG_EMERG,
+ };
+ 
+ static struct rtl_hal_cfg rtl92de_hal_cfg = {
+@@ -340,21 +348,21 @@ static struct rtl_hal_cfg rtl92de_hal_cfg = {
+ 	.maps[RTL_IMR_ROK] = IMR_ROK,
+ 	.maps[RTL_IBSS_INT_MASKS] = (IMR_BcnInt | IMR_TBDOK | IMR_TBDER),
+ 
+-	.maps[RTL_RC_CCK_RATE1M] = DESC92D_RATE1M,
+-	.maps[RTL_RC_CCK_RATE2M] = DESC92D_RATE2M,
+-	.maps[RTL_RC_CCK_RATE5_5M] = DESC92D_RATE5_5M,
+-	.maps[RTL_RC_CCK_RATE11M] = DESC92D_RATE11M,
+-	.maps[RTL_RC_OFDM_RATE6M] = DESC92D_RATE6M,
+-	.maps[RTL_RC_OFDM_RATE9M] = DESC92D_RATE9M,
+-	.maps[RTL_RC_OFDM_RATE12M] = DESC92D_RATE12M,
+-	.maps[RTL_RC_OFDM_RATE18M] = DESC92D_RATE18M,
+-	.maps[RTL_RC_OFDM_RATE24M] = DESC92D_RATE24M,
+-	.maps[RTL_RC_OFDM_RATE36M] = DESC92D_RATE36M,
+-	.maps[RTL_RC_OFDM_RATE48M] = DESC92D_RATE48M,
+-	.maps[RTL_RC_OFDM_RATE54M] = DESC92D_RATE54M,
+-
+-	.maps[RTL_RC_HT_RATEMCS7] = DESC92D_RATEMCS7,
+-	.maps[RTL_RC_HT_RATEMCS15] = DESC92D_RATEMCS15,
++	.maps[RTL_RC_CCK_RATE1M] = DESC92_RATE1M,
++	.maps[RTL_RC_CCK_RATE2M] = DESC92_RATE2M,
++	.maps[RTL_RC_CCK_RATE5_5M] = DESC92_RATE5_5M,
++	.maps[RTL_RC_CCK_RATE11M] = DESC92_RATE11M,
++	.maps[RTL_RC_OFDM_RATE6M] = DESC92_RATE6M,
++	.maps[RTL_RC_OFDM_RATE9M] = DESC92_RATE9M,
++	.maps[RTL_RC_OFDM_RATE12M] = DESC92_RATE12M,
++	.maps[RTL_RC_OFDM_RATE18M] = DESC92_RATE18M,
++	.maps[RTL_RC_OFDM_RATE24M] = DESC92_RATE24M,
++	.maps[RTL_RC_OFDM_RATE36M] = DESC92_RATE36M,
++	.maps[RTL_RC_OFDM_RATE48M] = DESC92_RATE48M,
++	.maps[RTL_RC_OFDM_RATE54M] = DESC92_RATE54M,
++
++	.maps[RTL_RC_HT_RATEMCS7] = DESC92_RATEMCS7,
++	.maps[RTL_RC_HT_RATEMCS15] = DESC92_RATEMCS15,
+ };
+ 
+ static struct pci_device_id rtl92de_pci_ids[] __devinitdata = {
+@@ -373,25 +381,31 @@ MODULE_DESCRIPTION("Realtek 8192DE 802.11n Dual Mac PCI wireless");
+ MODULE_FIRMWARE("rtlwifi/rtl8192defw.bin");
+ 
+ module_param_named(swenc, rtl92de_mod_params.sw_crypto, bool, 0444);
++module_param_named(debug, rtl92de_mod_params.debug, int, 0444);
+ module_param_named(ips, rtl92de_mod_params.inactiveps, bool, 0444);
+ module_param_named(swlps, rtl92de_mod_params.swctrl_lps, bool, 0444);
+ module_param_named(fwlps, rtl92de_mod_params.fwctrl_lps, bool, 0444);
+-MODULE_PARM_DESC(swenc, "using hardware crypto (default 0 [hardware])\n");
+-MODULE_PARM_DESC(ips, "using no link power save (default 1 is open)\n");
+-MODULE_PARM_DESC(swlps, "using linked sw control power save (default 1"
+-		 " is open)\n");
++MODULE_PARM_DESC(swenc, "Set to 1 for software crypto (default 0)\n");
++MODULE_PARM_DESC(ips, "Set to 0 to not use link power save (default 1)\n");
++MODULE_PARM_DESC(swlps, "Set to 1 to use SW control power save (default 0)\n");
++MODULE_PARM_DESC(fwlps, "Set to 1 to use FW control power save (default 1)\n");
++MODULE_PARM_DESC(debug, "Set debug level (0-5) (default 0)");
++
++static const struct dev_pm_ops rtlwifi_pm_ops = {
++	.suspend = rtl_pci_suspend,
++	.resume = rtl_pci_resume,
++	.freeze = rtl_pci_suspend,
++	.thaw = rtl_pci_resume,
++	.poweroff = rtl_pci_suspend,
++	.restore = rtl_pci_resume,
++};
+ 
+ static struct pci_driver rtl92de_driver = {
+ 	.name = KBUILD_MODNAME,
+ 	.id_table = rtl92de_pci_ids,
+ 	.probe = rtl_pci_probe,
+ 	.remove = rtl_pci_disconnect,
+-
+-#ifdef CONFIG_PM
+-	.suspend = rtl_pci_suspend,
+-	.resume = rtl_pci_resume,
+-#endif
+-
++	.driver.pm = &rtlwifi_pm_ops,
+ };
+ 
+ /* add global spin lock to solve the problem that
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192de/trx.c b/drivers/net/wireless/rtlwifi/rtl8192de/trx.c
+index dc86fcb..3637c0c 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192de/trx.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192de/trx.c
+@@ -48,99 +48,6 @@ static u8 _rtl92de_map_hwqueue_to_fwqueue(struct sk_buff *skb, u8 hw_queue)
+ 	return skb->priority;
+ }
+ 
+-static int _rtl92de_rate_mapping(bool isht, u8 desc_rate)
+-{
+-	int rate_idx;
+-
+-	if (false == isht) {
+-		switch (desc_rate) {
+-		case DESC92D_RATE1M:
+-			rate_idx = 0;
+-			break;
+-		case DESC92D_RATE2M:
+-			rate_idx = 1;
+-			break;
+-		case DESC92D_RATE5_5M:
+-			rate_idx = 2;
+-			break;
+-		case DESC92D_RATE11M:
+-			rate_idx = 3;
+-			break;
+-		case DESC92D_RATE6M:
+-			rate_idx = 4;
+-			break;
+-		case DESC92D_RATE9M:
+-			rate_idx = 5;
+-			break;
+-		case DESC92D_RATE12M:
+-			rate_idx = 6;
+-			break;
+-		case DESC92D_RATE18M:
+-			rate_idx = 7;
+-			break;
+-		case DESC92D_RATE24M:
+-			rate_idx = 8;
+-			break;
+-		case DESC92D_RATE36M:
+-			rate_idx = 9;
+-			break;
+-		case DESC92D_RATE48M:
+-			rate_idx = 10;
+-			break;
+-		case DESC92D_RATE54M:
+-			rate_idx = 11;
+-			break;
+-		default:
+-			rate_idx = 0;
+-			break;
+-		}
+-		return rate_idx;
+-	} else {
+-		switch (desc_rate) {
+-		case DESC92D_RATE1M:
+-			rate_idx = 0;
+-			break;
+-		case DESC92D_RATE2M:
+-			rate_idx = 1;
+-			break;
+-		case DESC92D_RATE5_5M:
+-			rate_idx = 2;
+-			break;
+-		case DESC92D_RATE11M:
+-			rate_idx = 3;
+-			break;
+-		case DESC92D_RATE6M:
+-			rate_idx = 4;
+-			break;
+-		case DESC92D_RATE9M:
+-			rate_idx = 5;
+-			break;
+-		case DESC92D_RATE12M:
+-			rate_idx = 6;
+-			break;
+-		case DESC92D_RATE18M:
+-			rate_idx = 7;
+-			break;
+-		case DESC92D_RATE24M:
+-			rate_idx = 8;
+-			break;
+-		case DESC92D_RATE36M:
+-			rate_idx = 9;
+-			break;
+-		case DESC92D_RATE48M:
+-			rate_idx = 10;
+-			break;
+-		case DESC92D_RATE54M:
+-			rate_idx = 11;
+-			break;
+-		default:
+-			rate_idx = 11;
+-			break;
+-		}
+-		return rate_idx;
+-	}
+-}
+-
+ static u8 _rtl92d_query_rxpwrpercentage(char antpower)
+ {
+ 	if ((antpower <= -100) || (antpower >= 20))
+@@ -328,8 +235,8 @@ static void _rtl92de_query_rxphystatus(struct ieee80211_hw *hw,
+ 		pstats->rx_pwdb_all = pwdb_all;
+ 		pstats->rxpower = rx_pwr_all;
+ 		pstats->recvsignalpower = rx_pwr_all;
+-		if (pdesc->rxht && pdesc->rxmcs >= DESC92D_RATEMCS8 &&
+-		    pdesc->rxmcs <= DESC92D_RATEMCS15)
++		if (pdesc->rxht && pdesc->rxmcs >= DESC92_RATEMCS8 &&
++		    pdesc->rxmcs <= DESC92_RATEMCS15)
+ 			max_spatial_stream = 2;
+ 		else
+ 			max_spatial_stream = 1;
+@@ -609,10 +516,10 @@ bool rtl92de_rx_query_desc(struct ieee80211_hw *hw,	struct rtl_stats *stats,
+ 	rx_status->flag |= RX_FLAG_MACTIME_MPDU;
+ 	if (stats->decrypted)
+ 		rx_status->flag |= RX_FLAG_DECRYPTED;
+-	rx_status->rate_idx = _rtl92de_rate_mapping((bool)
+-						    GET_RX_DESC_RXHT(pdesc),
+-						    (u8)
+-						    GET_RX_DESC_RXMCS(pdesc));
++	rx_status->rate_idx = rtlwifi_rate_mapping(hw,
++					(bool)GET_RX_DESC_RXHT(pdesc),
++					(u8)GET_RX_DESC_RXMCS(pdesc),
++					(bool)GET_RX_DESC_PAGGR(pdesc));
+ 	rx_status->mactime = GET_RX_DESC_TSFL(pdesc);
+ 	if (phystatus) {
+ 		p_drvinfo = (struct rx_fwinfo_92d *)(skb->data +
+@@ -705,14 +612,14 @@ void rtl92de_tx_fill_desc(struct ieee80211_hw *hw,
+ 		}
+ 		/* 5G have no CCK rate */
+ 		if (rtlhal->current_bandtype == BAND_ON_5G)
+-			if (ptcb_desc->hw_rate < DESC92D_RATE6M)
+-				ptcb_desc->hw_rate = DESC92D_RATE6M;
++			if (ptcb_desc->hw_rate < DESC92_RATE6M)
++				ptcb_desc->hw_rate = DESC92_RATE6M;
+ 		SET_TX_DESC_TX_RATE(pdesc, ptcb_desc->hw_rate);
+ 		if (ptcb_desc->use_shortgi || ptcb_desc->use_shortpreamble)
+ 			SET_TX_DESC_DATA_SHORTGI(pdesc, 1);
+ 
+ 		if (rtlhal->macphymode == DUALMAC_DUALPHY &&
+-			ptcb_desc->hw_rate == DESC92D_RATEMCS7)
++			ptcb_desc->hw_rate == DESC92_RATEMCS7)
+ 			SET_TX_DESC_DATA_SHORTGI(pdesc, 1);
+ 
+ 		if (info->flags & IEEE80211_TX_CTL_AMPDU) {
+@@ -728,13 +635,13 @@ void rtl92de_tx_fill_desc(struct ieee80211_hw *hw,
+ 		SET_TX_DESC_RTS_STBC(pdesc, ((ptcb_desc->rts_stbc) ? 1 : 0));
+ 		/* 5G have no CCK rate */
+ 		if (rtlhal->current_bandtype == BAND_ON_5G)
+-			if (ptcb_desc->rts_rate < DESC92D_RATE6M)
+-				ptcb_desc->rts_rate = DESC92D_RATE6M;
++			if (ptcb_desc->rts_rate < DESC92_RATE6M)
++				ptcb_desc->rts_rate = DESC92_RATE6M;
+ 		SET_TX_DESC_RTS_RATE(pdesc, ptcb_desc->rts_rate);
+ 		SET_TX_DESC_RTS_BW(pdesc, 0);
+ 		SET_TX_DESC_RTS_SC(pdesc, ptcb_desc->rts_sc);
+ 		SET_TX_DESC_RTS_SHORT(pdesc, ((ptcb_desc->rts_rate <=
+-			DESC92D_RATE54M) ?
++			DESC92_RATE54M) ?
+ 			(ptcb_desc->rts_use_shortpreamble ? 1 : 0) :
+ 			(ptcb_desc->rts_use_shortgi ? 1 : 0)));
+ 		if (bw_40) {
+@@ -844,9 +751,9 @@ void rtl92de_tx_fill_cmddesc(struct ieee80211_hw *hw,
+ 	 * The braces are needed no matter what checkpatch says
+ 	 */
+ 	if (rtlhal->current_bandtype == BAND_ON_5G) {
+-		SET_TX_DESC_TX_RATE(pdesc, DESC92D_RATE6M);
++		SET_TX_DESC_TX_RATE(pdesc, DESC92_RATE6M);
+ 	} else {
+-		SET_TX_DESC_TX_RATE(pdesc, DESC92D_RATE1M);
++		SET_TX_DESC_TX_RATE(pdesc, DESC92_RATE1M);
+ 	}
+ 	SET_TX_DESC_SEQ(pdesc, 0);
+ 	SET_TX_DESC_LINIP(pdesc, 0);
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192de/trx.h b/drivers/net/wireless/rtlwifi/rtl8192de/trx.h
+index 992d676..4d55d0b 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192de/trx.h
++++ b/drivers/net/wireless/rtlwifi/rtl8192de/trx.h
+@@ -537,12 +537,6 @@ do {							\
+ 		memset((void *)__pdesc, 0, _size);	\
+ } while (0);
+ 
+-#define RX_HAL_IS_CCK_RATE(_pdesc)\
+-	(_pdesc->rxmcs == DESC92D_RATE1M ||		\
+-	 _pdesc->rxmcs == DESC92D_RATE2M ||		\
+-	 _pdesc->rxmcs == DESC92D_RATE5_5M ||		\
+-	 _pdesc->rxmcs == DESC92D_RATE11M)
+-
+ /* For 92D early mode */
+ #define SET_EARLYMODE_PKTNUM(__paddr, __value)		\
+ 	SET_BITS_OFFSET_LE(__paddr, 0, 3, __value)
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192se/def.h b/drivers/net/wireless/rtlwifi/rtl8192se/def.h
+index 69828f2..c6c0448 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192se/def.h
++++ b/drivers/net/wireless/rtlwifi/rtl8192se/def.h
+@@ -33,37 +33,6 @@
+ #define RX_CMD_QUEUE				1
+ #define RX_MAX_QUEUE				2
+ 
+-#define DESC92S_RATE1M				0x00
+-#define DESC92S_RATE2M				0x01
+-#define DESC92S_RATE5_5M			0x02
+-#define DESC92S_RATE11M				0x03
+-#define DESC92S_RATE6M				0x04
+-#define DESC92S_RATE9M				0x05
+-#define DESC92S_RATE12M				0x06
+-#define DESC92S_RATE18M				0x07
+-#define DESC92S_RATE24M				0x08
+-#define DESC92S_RATE36M				0x09
+-#define DESC92S_RATE48M				0x0a
+-#define DESC92S_RATE54M				0x0b
+-#define DESC92S_RATEMCS0			0x0c
+-#define DESC92S_RATEMCS1			0x0d
+-#define DESC92S_RATEMCS2			0x0e
+-#define DESC92S_RATEMCS3			0x0f
+-#define DESC92S_RATEMCS4			0x10
+-#define DESC92S_RATEMCS5			0x11
+-#define DESC92S_RATEMCS6			0x12
+-#define DESC92S_RATEMCS7			0x13
+-#define DESC92S_RATEMCS8			0x14
+-#define DESC92S_RATEMCS9			0x15
+-#define DESC92S_RATEMCS10			0x16
+-#define DESC92S_RATEMCS11			0x17
+-#define DESC92S_RATEMCS12			0x18
+-#define DESC92S_RATEMCS13			0x19
+-#define DESC92S_RATEMCS14			0x1a
+-#define DESC92S_RATEMCS15			0x1b
+-#define DESC92S_RATEMCS15_SG			0x1c
+-#define DESC92S_RATEMCS32			0x20
+-
+ #define SHORT_SLOT_TIME				9
+ #define NON_SHORT_SLOT_TIME			20
+ 
+@@ -490,11 +459,11 @@ do {								\
+ #define SET_RX_STATUS__DESC_BUFF_ADDR(__pdesc, __val)	\
+ 	SET_BITS_OFFSET_LE(__pdesc + 24, 0, 32, __val)
+ 
+-#define RX_HAL_IS_CCK_RATE(_pdesc)\
+-	(GET_RX_STATUS_DESC_RX_MCS(_pdesc) == DESC92S_RATE1M ||	\
+-	 GET_RX_STATUS_DESC_RX_MCS(_pdesc) == DESC92S_RATE2M ||	\
+-	 GET_RX_STATUS_DESC_RX_MCS(_pdesc) == DESC92S_RATE5_5M ||\
+-	 GET_RX_STATUS_DESC_RX_MCS(_pdesc) == DESC92S_RATE11M)
++#define SE_RX_HAL_IS_CCK_RATE(_pdesc)\
++	(GET_RX_STATUS_DESC_RX_MCS(_pdesc) == DESC92_RATE1M ||	\
++	 GET_RX_STATUS_DESC_RX_MCS(_pdesc) == DESC92_RATE2M ||	\
++	 GET_RX_STATUS_DESC_RX_MCS(_pdesc) == DESC92_RATE5_5M ||\
++	 GET_RX_STATUS_DESC_RX_MCS(_pdesc) == DESC92_RATE11M)
+ 
+ enum rf_optype {
+ 	RF_OP_BY_SW_3WIRE = 0,
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192se/hw.c b/drivers/net/wireless/rtlwifi/rtl8192se/hw.c
+index d59f66c..c474486 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192se/hw.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192se/hw.c
+@@ -1382,7 +1382,7 @@ static void _rtl92se_power_domain_init(struct ieee80211_hw *hw)
+ 	rtl_write_byte(rtlpriv, LDOA15_CTRL, 0x34);
+ 
+ 	/* Reset MAC-IO and CPU and Core Digital BIT10/11/15 */
+-	tmpu1b = rtl_read_byte(rtlpriv, SYS_FUNC_EN + 1);
++	tmpu1b = rtl_read_byte(rtlpriv, REG_SYS_FUNC_EN + 1);
+ 
+ 	/* If IPS we need to turn LED on. So we not
+ 	 * not disable BIT 3/7 of reg3. */
+@@ -1391,7 +1391,7 @@ static void _rtl92se_power_domain_init(struct ieee80211_hw *hw)
+ 	else
+ 		tmpu1b &= 0x73;
+ 
+-	rtl_write_byte(rtlpriv, SYS_FUNC_EN + 1, tmpu1b);
++	rtl_write_byte(rtlpriv, REG_SYS_FUNC_EN + 1, tmpu1b);
+ 	/* wait for BIT 10/11/15 to pull high automatically!! */
+ 	mdelay(1);
+ 
+@@ -1428,15 +1428,15 @@ static void _rtl92se_power_domain_init(struct ieee80211_hw *hw)
+ 	rtl_write_byte(rtlpriv, LDOA15_CTRL, (tmpu1b | BIT(0)));
+ 
+ 	/* Set Digital Vdd to Retention isolation Path. */
+-	tmpu2b = rtl_read_word(rtlpriv, SYS_ISO_CTRL);
+-	rtl_write_word(rtlpriv, SYS_ISO_CTRL, (tmpu2b | BIT(11)));
++	tmpu2b = rtl_read_word(rtlpriv, REG_SYS_ISO_CTRL);
++	rtl_write_word(rtlpriv, REG_SYS_ISO_CTRL, (tmpu2b | BIT(11)));
+ 
+ 
+ 	/* For warm reboot NIC disappera bug. */
+-	tmpu2b = rtl_read_word(rtlpriv, SYS_FUNC_EN);
+-	rtl_write_word(rtlpriv, SYS_FUNC_EN, (tmpu2b | BIT(13)));
++	tmpu2b = rtl_read_word(rtlpriv, REG_SYS_FUNC_EN);
++	rtl_write_word(rtlpriv, REG_SYS_FUNC_EN, (tmpu2b | BIT(13)));
+ 
+-	rtl_write_byte(rtlpriv, SYS_ISO_CTRL + 1, 0x68);
++	rtl_write_byte(rtlpriv, REG_SYS_ISO_CTRL + 1, 0x68);
+ 
+ 	/* Enable AFE PLL Macro Block */
+ 	tmpu1b = rtl_read_byte(rtlpriv, AFE_PLL_CTRL);
+@@ -1447,17 +1447,17 @@ static void _rtl92se_power_domain_init(struct ieee80211_hw *hw)
+ 	mdelay(1);
+ 
+ 	/* Release isolation AFE PLL & MD */
+-	rtl_write_byte(rtlpriv, SYS_ISO_CTRL, 0xA6);
++	rtl_write_byte(rtlpriv, REG_SYS_ISO_CTRL, 0xA6);
+ 
+ 	/* Enable MAC clock */
+ 	tmpu2b = rtl_read_word(rtlpriv, SYS_CLKR);
+ 	rtl_write_word(rtlpriv, SYS_CLKR, (tmpu2b | BIT(12) | BIT(11)));
+ 
+ 	/* Enable Core digital and enable IOREG R/W */
+-	tmpu2b = rtl_read_word(rtlpriv, SYS_FUNC_EN);
+-	rtl_write_word(rtlpriv, SYS_FUNC_EN, (tmpu2b | BIT(11)));
++	tmpu2b = rtl_read_word(rtlpriv, REG_SYS_FUNC_EN);
++	rtl_write_word(rtlpriv, REG_SYS_FUNC_EN, (tmpu2b | BIT(11)));
+ 	/* enable REG_EN */
+-	rtl_write_word(rtlpriv, SYS_FUNC_EN, (tmpu2b | BIT(11) | BIT(15)));
++	rtl_write_word(rtlpriv, REG_SYS_FUNC_EN, (tmpu2b | BIT(11) | BIT(15)));
+ 
+ 	/* Switch the control path. */
+ 	tmpu2b = rtl_read_word(rtlpriv, SYS_CLKR);
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192se/phy.c b/drivers/net/wireless/rtlwifi/rtl8192se/phy.c
+index f27171a..f10ac1a 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192se/phy.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192se/phy.c
+@@ -602,7 +602,7 @@ bool rtl92s_phy_set_rf_power_state(struct ieee80211_hw *hw,
+ 		}
+ 	case ERFSLEEP:
+ 			if (ppsc->rfpwr_state == ERFOFF)
+-				break;
++				return false;
+ 
+ 			for (queue_id = 0, i = 0;
+ 			     queue_id < RTL_PCI_MAX_TX_QUEUE_COUNT;) {
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192se/reg.h b/drivers/net/wireless/rtlwifi/rtl8192se/reg.h
+index ea32ef2..11f125c 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192se/reg.h
++++ b/drivers/net/wireless/rtlwifi/rtl8192se/reg.h
+@@ -735,6 +735,7 @@
+ #define	HWSET_MAX_SIZE_92S			128
+ #define EFUSE_MAX_SECTION			16
+ #define EFUSE_REAL_CONTENT_LEN			512
++#define EFUSE_OOB_PROTECT_BYTES			15
+ 
+ #define RTL8190_EEPROM_ID			0x8129
+ #define EEPROM_HPON				0x02
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192se/sw.c b/drivers/net/wireless/rtlwifi/rtl8192se/sw.c
+index 3876078..92f49d5 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192se/sw.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192se/sw.c
+@@ -30,6 +30,7 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+ #include <linux/vmalloc.h>
++#include <linux/module.h>
+ 
+ #include "../wifi.h"
+ #include "../core.h"
+@@ -160,10 +161,16 @@ static int rtl92s_init_sw_vars(struct ieee80211_hw *hw)
+ 
+ 	rtlpci->first_init = true;
+ 
++	/* for debug level */
++	rtlpriv->dbg.global_debuglevel = rtlpriv->cfg->mod_params->debug;
+ 	/* for LPS & IPS */
+ 	rtlpriv->psc.inactiveps = rtlpriv->cfg->mod_params->inactiveps;
+ 	rtlpriv->psc.swctrl_lps = rtlpriv->cfg->mod_params->swctrl_lps;
+ 	rtlpriv->psc.fwctrl_lps = rtlpriv->cfg->mod_params->fwctrl_lps;
++	if (!rtlpriv->psc.inactiveps)
++		pr_info("rtl8192ce: Power Save off (module option)\n");
++	if (!rtlpriv->psc.fwctrl_lps)
++		pr_info("rtl8192ce: FW Power Save off (module option)\n");
+ 	rtlpriv->psc.reg_fwctrl_lps = 3;
+ 	rtlpriv->psc.reg_max_lps_awakeintvl = 5;
+ 	/* for ASPM, you can close aspm through
+@@ -268,6 +275,7 @@ static struct rtl_mod_params rtl92se_mod_params = {
+ 	.inactiveps = true,
+ 	.swctrl_lps = true,
+ 	.fwctrl_lps = false,
++	.debug = DBG_EMERG,
+ };
+ 
+ /* Because memory R/W bursting will cause system hang/crash
+@@ -300,6 +308,7 @@ static struct rtl_hal_cfg rtl92se_hal_cfg = {
+ 	.maps[EFUSE_HWSET_MAX_SIZE] = HWSET_MAX_SIZE_92S,
+ 	.maps[EFUSE_MAX_SECTION_MAP] = EFUSE_MAX_SECTION,
+ 	.maps[EFUSE_REAL_CONTENT_SIZE] = EFUSE_REAL_CONTENT_LEN,
++	.maps[EFUSE_OOB_PROTECT_BYTES_LEN] = EFUSE_OOB_PROTECT_BYTES,
+ 
+ 	.maps[RWCAM] = REG_RWCAM,
+ 	.maps[WCAMI] = REG_WCAMI,
+@@ -348,21 +357,21 @@ static struct rtl_hal_cfg rtl92se_hal_cfg = {
+ 	.maps[RTL_IMR_ROK] = IMR_ROK,
+ 	.maps[RTL_IBSS_INT_MASKS] = (IMR_BCNINT | IMR_TBDOK | IMR_TBDER),
+ 
+-	.maps[RTL_RC_CCK_RATE1M] = DESC92S_RATE1M,
+-	.maps[RTL_RC_CCK_RATE2M] = DESC92S_RATE2M,
+-	.maps[RTL_RC_CCK_RATE5_5M] = DESC92S_RATE5_5M,
+-	.maps[RTL_RC_CCK_RATE11M] = DESC92S_RATE11M,
+-	.maps[RTL_RC_OFDM_RATE6M] = DESC92S_RATE6M,
+-	.maps[RTL_RC_OFDM_RATE9M] = DESC92S_RATE9M,
+-	.maps[RTL_RC_OFDM_RATE12M] = DESC92S_RATE12M,
+-	.maps[RTL_RC_OFDM_RATE18M] = DESC92S_RATE18M,
+-	.maps[RTL_RC_OFDM_RATE24M] = DESC92S_RATE24M,
+-	.maps[RTL_RC_OFDM_RATE36M] = DESC92S_RATE36M,
+-	.maps[RTL_RC_OFDM_RATE48M] = DESC92S_RATE48M,
+-	.maps[RTL_RC_OFDM_RATE54M] = DESC92S_RATE54M,
+-
+-	.maps[RTL_RC_HT_RATEMCS7] = DESC92S_RATEMCS7,
+-	.maps[RTL_RC_HT_RATEMCS15] = DESC92S_RATEMCS15,
++	.maps[RTL_RC_CCK_RATE1M] = DESC92_RATE1M,
++	.maps[RTL_RC_CCK_RATE2M] = DESC92_RATE2M,
++	.maps[RTL_RC_CCK_RATE5_5M] = DESC92_RATE5_5M,
++	.maps[RTL_RC_CCK_RATE11M] = DESC92_RATE11M,
++	.maps[RTL_RC_OFDM_RATE6M] = DESC92_RATE6M,
++	.maps[RTL_RC_OFDM_RATE9M] = DESC92_RATE9M,
++	.maps[RTL_RC_OFDM_RATE12M] = DESC92_RATE12M,
++	.maps[RTL_RC_OFDM_RATE18M] = DESC92_RATE18M,
++	.maps[RTL_RC_OFDM_RATE24M] = DESC92_RATE24M,
++	.maps[RTL_RC_OFDM_RATE36M] = DESC92_RATE36M,
++	.maps[RTL_RC_OFDM_RATE48M] = DESC92_RATE48M,
++	.maps[RTL_RC_OFDM_RATE54M] = DESC92_RATE54M,
++
++	.maps[RTL_RC_HT_RATEMCS7] = DESC92_RATEMCS7,
++	.maps[RTL_RC_HT_RATEMCS15] = DESC92_RATEMCS15,
+ };
+ 
+ static struct pci_device_id rtl92se_pci_ids[] __devinitdata = {
+@@ -378,31 +387,37 @@ MODULE_DEVICE_TABLE(pci, rtl92se_pci_ids);
+ 
+ MODULE_AUTHOR("lizhaoming	<chaoming_li@realsil.com.cn>");
+ MODULE_AUTHOR("Realtek WlanFAE	<wlanfae@realtek.com>");
++MODULE_AUTHOR("Larry Finger	<Larry.Finger@lwfinger.net>");
+ MODULE_LICENSE("GPL");
+ MODULE_DESCRIPTION("Realtek 8192S/8191S 802.11n PCI wireless");
+ MODULE_FIRMWARE("rtlwifi/rtl8192sefw.bin");
+ 
+ module_param_named(swenc, rtl92se_mod_params.sw_crypto, bool, 0444);
++module_param_named(debug, rtl92se_mod_params.debug, int, 0444);
+ module_param_named(ips, rtl92se_mod_params.inactiveps, bool, 0444);
+ module_param_named(swlps, rtl92se_mod_params.swctrl_lps, bool, 0444);
+ module_param_named(fwlps, rtl92se_mod_params.fwctrl_lps, bool, 0444);
+-MODULE_PARM_DESC(swenc, "using hardware crypto (default 0 [hardware])\n");
+-MODULE_PARM_DESC(ips, "using no link power save (default 1 is open)\n");
+-MODULE_PARM_DESC(swlps, "using linked sw control power save (default 1 is "
+-		 "open)\n");
++MODULE_PARM_DESC(swenc, "Set to 1 for software crypto (default 0)\n");
++MODULE_PARM_DESC(ips, "Set to 0 to not use link power save (default 1)\n");
++MODULE_PARM_DESC(swlps, "Set to 1 to use SW control power save (default 0)\n");
++MODULE_PARM_DESC(fwlps, "Set to 1 to use FW control power save (default 1)\n");
++MODULE_PARM_DESC(debug, "Set debug level (0-5) (default 0)");
+ 
++static const struct dev_pm_ops rtlwifi_pm_ops = {
++	.suspend = rtl_pci_suspend,
++	.resume = rtl_pci_resume,
++	.freeze = rtl_pci_suspend,
++	.thaw = rtl_pci_resume,
++	.poweroff = rtl_pci_suspend,
++	.restore = rtl_pci_resume,
++};
+ 
+ static struct pci_driver rtl92se_driver = {
+ 	.name = KBUILD_MODNAME,
+ 	.id_table = rtl92se_pci_ids,
+ 	.probe = rtl_pci_probe,
+ 	.remove = rtl_pci_disconnect,
+-
+-#ifdef CONFIG_PM
+-	.suspend = rtl_pci_suspend,
+-	.resume = rtl_pci_resume,
+-#endif
+-
++	.driver.pm = &rtlwifi_pm_ops,
+ };
+ 
+ static int __init rtl92se_module_init(void)
+diff --git a/drivers/net/wireless/rtlwifi/rtl8192se/trx.c b/drivers/net/wireless/rtlwifi/rtl8192se/trx.c
+index cffe308..fbebe3e 100644
+--- a/drivers/net/wireless/rtlwifi/rtl8192se/trx.c
++++ b/drivers/net/wireless/rtlwifi/rtl8192se/trx.c
+@@ -51,104 +51,6 @@ static u8 _rtl92se_map_hwqueue_to_fwqueue(struct sk_buff *skb,	u8 skb_queue)
+ 	return skb->priority;
+ }
+ 
+-static int _rtl92se_rate_mapping(bool isht, u8 desc_rate, bool first_ampdu)
+-{
+-	int rate_idx = 0;
+-
+-	if (first_ampdu) {
+-		if (false == isht) {
+-			switch (desc_rate) {
+-			case DESC92S_RATE1M:
+-				rate_idx = 0;
+-				break;
+-			case DESC92S_RATE2M:
+-				rate_idx = 1;
+-				break;
+-			case DESC92S_RATE5_5M:
+-				rate_idx = 2;
+-				break;
+-			case DESC92S_RATE11M:
+-				rate_idx = 3;
+-				break;
+-			case DESC92S_RATE6M:
+-				rate_idx = 4;
+-				break;
+-			case DESC92S_RATE9M:
+-				rate_idx = 5;
+-				break;
+-			case DESC92S_RATE12M:
+-				rate_idx = 6;
+-				break;
+-			case DESC92S_RATE18M:
+-				rate_idx = 7;
+-				break;
+-			case DESC92S_RATE24M:
+-				rate_idx = 8;
+-				break;
+-			case DESC92S_RATE36M:
+-				rate_idx = 9;
+-				break;
+-			case DESC92S_RATE48M:
+-				rate_idx = 10;
+-				break;
+-			case DESC92S_RATE54M:
+-				rate_idx = 11;
+-				break;
+-			default:
+-				rate_idx = 0;
+-				break;
+-			}
+-		} else {
+-			rate_idx = 11;
+-		}
+-
+-		return rate_idx;
+-	}
+-
+-	switch (desc_rate) {
+-	case DESC92S_RATE1M:
+-		rate_idx = 0;
+-		break;
+-	case DESC92S_RATE2M:
+-		rate_idx = 1;
+-		break;
+-	case DESC92S_RATE5_5M:
+-		rate_idx = 2;
+-		break;
+-	case DESC92S_RATE11M:
+-		rate_idx = 3;
+-		break;
+-	case DESC92S_RATE6M:
+-		rate_idx = 4;
+-		break;
+-	case DESC92S_RATE9M:
+-		rate_idx = 5;
+-		break;
+-	case DESC92S_RATE12M:
+-		rate_idx = 6;
+-		break;
+-	case DESC92S_RATE18M:
+-		rate_idx = 7;
+-		break;
+-	case DESC92S_RATE24M:
+-		rate_idx = 8;
+-		break;
+-	case DESC92S_RATE36M:
+-		rate_idx = 9;
+-		break;
+-	case DESC92S_RATE48M:
+-		rate_idx = 10;
+-		break;
+-	case DESC92S_RATE54M:
+-		rate_idx = 11;
+-		break;
+-	default:
+-		rate_idx = 11;
+-		break;
+-	}
+-	return rate_idx;
+-}
+-
+ static u8 _rtl92s_query_rxpwrpercentage(char antpower)
+ {
+ 	if ((antpower <= -100) || (antpower >= 20))
+@@ -222,18 +124,15 @@ static void _rtl92se_query_rxphystatus(struct ieee80211_hw *hw,
+ 	u8 i, max_spatial_stream;
+ 	u32 rssi, total_rssi = 0;
+ 	bool in_powersavemode = false;
+-	bool is_cck_rate;
++	bool is_cck = pstats->is_cck;
+ 
+-	is_cck_rate = RX_HAL_IS_CCK_RATE(pdesc);
+ 	pstats->packet_matchbssid = packet_match_bssid;
+ 	pstats->packet_toself = packet_toself;
+-	pstats->is_cck = is_cck_rate;
+ 	pstats->packet_beacon = packet_beacon;
+-	pstats->is_cck = is_cck_rate;
+ 	pstats->rx_mimo_signalquality[0] = -1;
+ 	pstats->rx_mimo_signalquality[1] = -1;
+ 
+-	if (is_cck_rate) {
++	if (is_cck) {
+ 		u8 report, cck_highpwr;
+ 		cck_buf = (struct phy_sts_cck_8192s_t *)p_drvinfo;
+ 
+@@ -344,9 +243,8 @@ static void _rtl92se_query_rxphystatus(struct ieee80211_hw *hw,
+ 		pstats->rxpower = rx_pwr_all;
+ 		pstats->recvsignalpower = rx_pwr_all;
+ 
+-		if (GET_RX_STATUS_DESC_RX_HT(pdesc) &&
+-			GET_RX_STATUS_DESC_RX_MCS(pdesc) >= DESC92S_RATEMCS8 &&
+-		    GET_RX_STATUS_DESC_RX_MCS(pdesc) <= DESC92S_RATEMCS15)
++		if (pstats->is_ht && pstats->rate >= DESC92_RATEMCS8 &&
++		    pstats->rate <= DESC92_RATEMCS15)
+ 			max_spatial_stream = 2;
+ 		else
+ 			max_spatial_stream = 1;
+@@ -364,7 +262,7 @@ static void _rtl92se_query_rxphystatus(struct ieee80211_hw *hw,
+ 		}
+ 	}
+ 
+-	if (is_cck_rate)
++	if (is_cck)
+ 		pstats->signalstrength = (u8)(_rtl92se_signal_scale_mapping(hw,
+ 					 pwdb_all));
+ 	else if (rf_rx_num != 0)
+@@ -616,6 +514,8 @@ bool rtl92se_rx_query_desc(struct ieee80211_hw *hw, struct rtl_stats *stats,
+ {
+ 	struct rx_fwinfo *p_drvinfo;
+ 	u32 phystatus = (u32)GET_RX_STATUS_DESC_PHY_STATUS(pdesc);
++	struct ieee80211_hdr *hdr;
++	bool first_ampdu = false;
+ 
+ 	stats->length = (u16)GET_RX_STATUS_DESC_PKT_LEN(pdesc);
+ 	stats->rx_drvinfo_size = (u8)GET_RX_STATUS_DESC_DRVINFO_SIZE(pdesc) * 8;
+@@ -628,8 +528,12 @@ bool rtl92se_rx_query_desc(struct ieee80211_hw *hw, struct rtl_stats *stats,
+ 	stats->rate = (u8)GET_RX_STATUS_DESC_RX_MCS(pdesc);
+ 	stats->shortpreamble = (u16)GET_RX_STATUS_DESC_SPLCP(pdesc);
+ 	stats->isampdu = (bool)(GET_RX_STATUS_DESC_PAGGR(pdesc) == 1);
++	stats->isfirst_ampdu = (bool) ((GET_RX_STATUS_DESC_PAGGR(pdesc) == 1)
++			       && (GET_RX_STATUS_DESC_FAGGR(pdesc) == 1));
+ 	stats->timestamp_low = GET_RX_STATUS_DESC_TSFL(pdesc);
+ 	stats->rx_is40Mhzpacket = (bool)GET_RX_STATUS_DESC_BW(pdesc);
++	stats->is_ht = (bool)GET_RX_STATUS_DESC_RX_HT(pdesc);
++	stats->is_cck = SE_RX_HAL_IS_CCK_RATE(pdesc);
+ 
+ 	if (stats->hwerror)
+ 		return false;
+@@ -637,30 +541,39 @@ bool rtl92se_rx_query_desc(struct ieee80211_hw *hw, struct rtl_stats *stats,
+ 	rx_status->freq = hw->conf.channel->center_freq;
+ 	rx_status->band = hw->conf.channel->band;
+ 
+-	if (GET_RX_STATUS_DESC_CRC32(pdesc))
+-		rx_status->flag |= RX_FLAG_FAILED_FCS_CRC;
++	hdr = (struct ieee80211_hdr *)(skb->data + stats->rx_drvinfo_size
++	      + stats->rx_bufshift);
+ 
+-	if (!GET_RX_STATUS_DESC_SWDEC(pdesc))
+-		rx_status->flag |= RX_FLAG_DECRYPTED;
++	if (stats->crc)
++		rx_status->flag |= RX_FLAG_FAILED_FCS_CRC;
+ 
+-	if (GET_RX_STATUS_DESC_BW(pdesc))
++	if (stats->rx_is40Mhzpacket)
+ 		rx_status->flag |= RX_FLAG_40MHZ;
+ 
+-	if (GET_RX_STATUS_DESC_RX_HT(pdesc))
++	if (stats->is_ht)
+ 		rx_status->flag |= RX_FLAG_HT;
+ 
+ 	rx_status->flag |= RX_FLAG_MACTIME_MPDU;
+ 
+-	if (stats->decrypted)
+-		rx_status->flag |= RX_FLAG_DECRYPTED;
+-
+-	rx_status->rate_idx = _rtl92se_rate_mapping((bool)
+-			GET_RX_STATUS_DESC_RX_HT(pdesc),
+-			(u8)GET_RX_STATUS_DESC_RX_MCS(pdesc),
+-			(bool)GET_RX_STATUS_DESC_PAGGR(pdesc));
++	/* hw will set stats->decrypted true, if it finds the
++	 * frame is open data frame or mgmt frame,
++	 * hw will not decrypt robust managment frame
++	 * for IEEE80211w but still set stats->decrypted
++	 * true, so here we should set it back to undecrypted
++	 * for IEEE80211w frame, and mac80211 sw will help
++	 * to decrypt it */
++	if (stats->decrypted) {
++		if ((ieee80211_is_robust_mgmt_frame(hdr)) &&
++			(ieee80211_has_protected(hdr->frame_control)))
++			rx_status->flag &= ~RX_FLAG_DECRYPTED;
++		else
++			rx_status->flag |= RX_FLAG_DECRYPTED;
++	}
+ 
++	rx_status->rate_idx = rtlwifi_rate_mapping(hw,
++			      stats->is_ht, stats->rate, first_ampdu);
+ 
+-	rx_status->mactime = GET_RX_STATUS_DESC_TSFL(pdesc);
++	rx_status->mactime = stats->timestamp_low;
+ 	if (phystatus) {
+ 		p_drvinfo = (struct rx_fwinfo *)(skb->data +
+ 						 stats->rx_bufshift);
+@@ -723,14 +636,14 @@ void rtl92se_tx_fill_desc(struct ieee80211_hw *hw,
+ 		SET_TX_DESC_RSVD_MACID(pdesc, reserved_macid);
+ 
+ 		SET_TX_DESC_TXHT(pdesc, ((ptcb_desc->hw_rate >=
+-				 DESC92S_RATEMCS0) ? 1 : 0));
++				 DESC92_RATEMCS0) ? 1 : 0));
+ 
+ 		if (rtlhal->version == VERSION_8192S_ACUT) {
+-			if (ptcb_desc->hw_rate == DESC92S_RATE1M ||
+-				ptcb_desc->hw_rate  == DESC92S_RATE2M ||
+-				ptcb_desc->hw_rate == DESC92S_RATE5_5M ||
+-				ptcb_desc->hw_rate == DESC92S_RATE11M) {
+-				ptcb_desc->hw_rate = DESC92S_RATE12M;
++			if (ptcb_desc->hw_rate == DESC92_RATE1M ||
++				ptcb_desc->hw_rate  == DESC92_RATE2M ||
++				ptcb_desc->hw_rate == DESC92_RATE5_5M ||
++				ptcb_desc->hw_rate == DESC92_RATE11M) {
++				ptcb_desc->hw_rate = DESC92_RATE12M;
+ 			}
+ 		}
+ 
+@@ -759,7 +672,7 @@ void rtl92se_tx_fill_desc(struct ieee80211_hw *hw,
+ 		SET_TX_DESC_RTS_BANDWIDTH(pdesc, 0);
+ 		SET_TX_DESC_RTS_SUB_CARRIER(pdesc, ptcb_desc->rts_sc);
+ 		SET_TX_DESC_RTS_SHORT(pdesc, ((ptcb_desc->rts_rate <=
+-		       DESC92S_RATE54M) ?
++		       DESC92_RATE54M) ?
+ 		       (ptcb_desc->rts_use_shortpreamble ? 1 : 0)
+ 		       : (ptcb_desc->rts_use_shortgi ? 1 : 0)));
+ 
+diff --git a/drivers/net/wireless/rtlwifi/usb.c b/drivers/net/wireless/rtlwifi/usb.c
+index 4bf3cf4..54cb8a6 100644
+--- a/drivers/net/wireless/rtlwifi/usb.c
++++ b/drivers/net/wireless/rtlwifi/usb.c
+@@ -28,6 +28,7 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+ #include <linux/usb.h>
++#include <linux/export.h>
+ #include "core.h"
+ #include "wifi.h"
+ #include "usb.h"
+@@ -191,44 +192,6 @@ static void _usb_write32_async(struct rtl_priv *rtlpriv, u32 addr, u32 val)
+ 	_usb_write_async(to_usb_device(dev), addr, val, 4);
+ }
+ 
+-static int _usb_nbytes_read_write(struct usb_device *udev, bool read, u32 addr,
+-				  u16 len, u8 *pdata)
+-{
+-	int status;
+-	u8 request;
+-	u16 wvalue;
+-	u16 index;
+-
+-	request = REALTEK_USB_VENQT_CMD_REQ;
+-	index = REALTEK_USB_VENQT_CMD_IDX; /* n/a */
+-	wvalue = (u16)addr;
+-	if (read)
+-		status = _usbctrl_vendorreq_sync_read(udev, request, wvalue,
+-						      index, pdata, len);
+-	else
+-		status = _usbctrl_vendorreq_async_write(udev, request, wvalue,
+-							index, pdata, len);
+-	return status;
+-}
+-
+-static int _usb_readN_sync(struct rtl_priv *rtlpriv, u32 addr, u16 len,
+-			   u8 *pdata)
+-{
+-	struct device *dev = rtlpriv->io.dev;
+-
+-	return _usb_nbytes_read_write(to_usb_device(dev), true, addr, len,
+-				       pdata);
+-}
+-
+-static int _usb_writeN_async(struct rtl_priv *rtlpriv, u32 addr, u16 len,
+-			     u8 *pdata)
+-{
+-	struct device *dev = rtlpriv->io.dev;
+-
+-	return _usb_nbytes_read_write(to_usb_device(dev), false, addr, len,
+-				      pdata);
+-}
+-
+ static void _rtl_usb_io_handler_init(struct device *dev,
+ 				     struct ieee80211_hw *hw)
+ {
+@@ -239,11 +202,9 @@ static void _rtl_usb_io_handler_init(struct device *dev,
+ 	rtlpriv->io.write8_async	= _usb_write8_async;
+ 	rtlpriv->io.write16_async	= _usb_write16_async;
+ 	rtlpriv->io.write32_async	= _usb_write32_async;
+-	rtlpriv->io.writeN_async	= _usb_writeN_async;
+ 	rtlpriv->io.read8_sync		= _usb_read8_sync;
+ 	rtlpriv->io.read16_sync		= _usb_read16_sync;
+ 	rtlpriv->io.read32_sync		= _usb_read32_sync;
+-	rtlpriv->io.readN_sync		= _usb_readN_sync;
+ }
+ 
+ static void _rtl_usb_io_handler_release(struct ieee80211_hw *hw)
+diff --git a/drivers/net/wireless/rtlwifi/wifi.h b/drivers/net/wireless/rtlwifi/wifi.h
+index d3c3ffd..713c7dd 100644
+--- a/drivers/net/wireless/rtlwifi/wifi.h
++++ b/drivers/net/wireless/rtlwifi/wifi.h
+@@ -165,6 +165,12 @@ enum hardware_type {
+ #define IS_HARDWARE_TYPE_8723U(rtlhal)			\
+ 	(rtlhal->hw_type == HARDWARE_TYPE_RTL8723U)
+ 
++#define RX_HAL_IS_CCK_RATE(_pdesc)\
++	(_pdesc->rxmcs == DESC92_RATE1M ||		\
++	 _pdesc->rxmcs == DESC92_RATE2M ||		\
++	 _pdesc->rxmcs == DESC92_RATE5_5M ||		\
++	 _pdesc->rxmcs == DESC92_RATE11M)
++
+ enum scan_operation_backup_opt {
+ 	SCAN_OPT_BACKUP = 0,
+ 	SCAN_OPT_RESTORE,
+@@ -386,6 +392,41 @@ enum rtl_hal_state {
+ 	_HAL_STATE_START = 1,
+ };
+ 
++enum rtl_desc92_rate {
++	DESC92_RATE1M = 0x00,
++	DESC92_RATE2M = 0x01,
++	DESC92_RATE5_5M = 0x02,
++	DESC92_RATE11M = 0x03,
++
++	DESC92_RATE6M = 0x04,
++	DESC92_RATE9M = 0x05,
++	DESC92_RATE12M = 0x06,
++	DESC92_RATE18M = 0x07,
++	DESC92_RATE24M = 0x08,
++	DESC92_RATE36M = 0x09,
++	DESC92_RATE48M = 0x0a,
++	DESC92_RATE54M = 0x0b,
++
++	DESC92_RATEMCS0 = 0x0c,
++	DESC92_RATEMCS1 = 0x0d,
++	DESC92_RATEMCS2 = 0x0e,
++	DESC92_RATEMCS3 = 0x0f,
++	DESC92_RATEMCS4 = 0x10,
++	DESC92_RATEMCS5 = 0x11,
++	DESC92_RATEMCS6 = 0x12,
++	DESC92_RATEMCS7 = 0x13,
++	DESC92_RATEMCS8 = 0x14,
++	DESC92_RATEMCS9 = 0x15,
++	DESC92_RATEMCS10 = 0x16,
++	DESC92_RATEMCS11 = 0x17,
++	DESC92_RATEMCS12 = 0x18,
++	DESC92_RATEMCS13 = 0x19,
++	DESC92_RATEMCS14 = 0x1a,
++	DESC92_RATEMCS15 = 0x1b,
++	DESC92_RATEMCS15_SG = 0x1c,
++	DESC92_RATEMCS32 = 0x20,
++};
++
+ enum rtl_var_map {
+ 	/*reg map */
+ 	SYS_ISO_CTRL = 0,
+@@ -409,6 +450,7 @@ enum rtl_var_map {
+ 	EFUSE_HWSET_MAX_SIZE,
+ 	EFUSE_MAX_SECTION_MAP,
+ 	EFUSE_REAL_CONTENT_SIZE,
++	EFUSE_OOB_PROTECT_BYTES_LEN,
+ 
+ 	/*CAM map */
+ 	RWCAM,
+@@ -901,16 +943,12 @@ struct rtl_io {
+ 	unsigned long pci_base_addr;	/*device I/O address */
+ 
+ 	void (*write8_async) (struct rtl_priv *rtlpriv, u32 addr, u8 val);
+-	void (*write16_async) (struct rtl_priv *rtlpriv, u32 addr, u16 val);
+-	void (*write32_async) (struct rtl_priv *rtlpriv, u32 addr, u32 val);
+-	int (*writeN_async) (struct rtl_priv *rtlpriv, u32 addr, u16 len,
+-			     u8 *pdata);
++	void (*write16_async) (struct rtl_priv *rtlpriv, u32 addr, __le16 val);
++	void (*write32_async) (struct rtl_priv *rtlpriv, u32 addr, __le32 val);
+ 
+ 	u8(*read8_sync) (struct rtl_priv *rtlpriv, u32 addr);
+ 	u16(*read16_sync) (struct rtl_priv *rtlpriv, u32 addr);
+ 	u32(*read32_sync) (struct rtl_priv *rtlpriv, u32 addr);
+-	int (*readN_sync) (struct rtl_priv *rtlpriv, u32 addr, u16 len,
+-			    u8 *pdata);
+ 
+ };
+ 
+@@ -1287,6 +1325,7 @@ struct rtl_stats {
+ 	s8 rx_mimo_signalquality[2];
+ 	bool packet_matchbssid;
+ 	bool is_cck;
++	bool is_ht;
+ 	bool packet_toself;
+ 	bool packet_beacon;	/*for rssi */
+ 	char cck_adc_pwdb[4];	/*for rx path selection */
+@@ -1448,6 +1487,9 @@ struct rtl_mod_params {
+ 	/* default: 0 = using hardware encryption */
+ 	int sw_crypto;
+ 
++	/* default: 0 = DBG_EMERG (0)*/
++	int debug;
++
+ 	/* default: 1 = using no linked power save */
+ 	bool inactiveps;
+ 
+-- 
+1.7.7.3
+

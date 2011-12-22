@@ -222,6 +222,12 @@ patch -s -p1 < "${DIR}/patches/sgx/0001-Revert-OMAP-DSS2-remove-update_mode-from
 
 }
 
+function wifi {
+echo "wifi: update a few drivers to the latest"
+patch -s -p1 < "${DIR}/patches/wifi/0001-rtlwifi-update-to-v3.2-rc6.patch"
+patch -s -p1 < "${DIR}/patches/wifi/0001-wifi-changes-needed-from-v3.2-rc6.patch"
+}
+
 bugs_trivial
 
 #patches in git
@@ -235,6 +241,8 @@ am33x
 
 #external tree's
 sakoman
+
+wifi
 
 echo "patch.sh ran successful"
 
