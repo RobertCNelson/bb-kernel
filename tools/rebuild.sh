@@ -60,11 +60,10 @@ function make_menuconfig {
 	cd ${DIR}/
 }
 
-function make_deb {
+function make_kernel {
 	cd ${DIR}/KERNEL/
-	echo "make -j${CORES} ARCH=arm KBUILD_DEBARCH=${DEBARCH} LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" KDEB_PKGVERSION=${BUILDREV}${DISTRO} ${CONFIG_DEBUG_SECTION} deb-pkg"
-	time fakeroot make -j${CORES} ARCH=arm KBUILD_DEBARCH=${DEBARCH} LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" KDEB_PKGVERSION=${BUILDREV}${DISTRO} ${CONFIG_DEBUG_SECTION} deb-pkg
-	mv ${DIR}/*.deb ${DIR}/deploy/
+	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" ${CONFIG_DEBUG_SECTION} zImage modules"
+	time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" ${CONFIG_DEBUG_SECTION} zImage modules
 
 	unset DTBS
 	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" &> /dev/null && DTBS=1
@@ -75,7 +74,43 @@ function make_deb {
 	fi
 
 	KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
+	if [ -f ./arch/arm/boot/zImage ] ; then
+		cp arch/arm/boot/zImage ${DIR}/deploy/${KERNEL_UTS}.zImage
+		cp .config ${DIR}/deploy/${KERNEL_UTS}.config
+	else
+		echo "Error: make zImage modules failed"
+		exit
+	fi
+	cd ${DIR}/
+}
 
+function make_uImage {
+	cd ${DIR}/KERNEL/
+	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" ${CONFIG_DEBUG_SECTION} uImage"
+	time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" ${CONFIG_DEBUG_SECTION} uImage
+	KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
+	if [ -f ./arch/arm/boot/uImage ] ; then
+		cp arch/arm/boot/uImage ${DIR}/deploy/${KERNEL_UTS}.uImage
+	else
+		echo "Error: make uImage failed"
+		exit
+	fi
+	cd ${DIR}/
+}
+
+function make_modules_pkg {
+	cd ${DIR}/KERNEL/
+
+	echo ""
+	echo "Building Module Archive"
+	echo ""
+
+	rm -rf ${DIR}/deploy/mod &> /dev/null || true
+	mkdir -p ${DIR}/deploy/mod
+	make ARCH=arm CROSS_COMPILE=${CC} modules_install INSTALL_MOD_PATH=${DIR}/deploy/mod
+	echo "Building ${KERNEL_UTS}-modules.tar.gz"
+	cd ${DIR}/deploy/mod
+	tar czf ../${KERNEL_UTS}-modules.tar.gz *
 	cd ${DIR}/
 }
 
@@ -93,6 +128,22 @@ function make_dtbs_pkg {
 	echo "Building ${KERNEL_UTS}-dtbs.tar.gz"
 	tar czf ../${KERNEL_UTS}-dtbs.tar.gz *
 
+	cd ${DIR}/
+}
+
+function make_headers_pkg {
+	cd ${DIR}/KERNEL/
+
+	echo ""
+	echo "Building Header Archive"
+	echo ""
+
+	rm -rf ${DIR}/deploy/headers &> /dev/null || true
+	mkdir -p ${DIR}/deploy/headers/usr
+	make ARCH=arm CROSS_COMPILE=${CC} headers_install INSTALL_HDR_PATH=${DIR}/deploy/headers/usr
+	cd ${DIR}/deploy/headers
+	echo "Building ${KERNEL_UTS}-headers.tar.gz"
+	tar czf ../${KERNEL_UTS}-headers.tar.gz *
 	cd ${DIR}/
 }
 
@@ -125,20 +176,23 @@ if [ "${DEBUG_SECTION}" ] ; then
 	CONFIG_DEBUG_SECTION="CONFIG_DEBUG_SECTION_MISMATCH=y"
 fi
 
-/bin/bash -e "${DIR}/scripts/git.sh" || { exit 1 ; }
+#/bin/bash -e "${DIR}/scripts/git.sh" || { exit 1 ; }
 
-patch_kernel
-copy_defconfig
-if [ ! ${AUTO_BUILD} ] ; then
-	make_menuconfig
-fi
+#patch_kernel
+#copy_defconfig
+make_menuconfig
 if [ "x${GCC_OVERRIDE}" != "x" ] ; then
 	sed -i -e 's:CROSS_COMPILE)gcc:CROSS_COMPILE)'$GCC_OVERRIDE':g' ${DIR}/KERNEL/Makefile
 fi
-make_deb
+make_kernel
+if [ "${BUILD_UIMAGE}" ] ; then
+	make_uImage
+fi
+make_modules_pkg
 if [ "x${DTBS}" != "x" ] ; then
 	make_dtbs_pkg
 fi
+#make_headers_pkg
 if [ "x${GCC_OVERRIDE}" != "x" ] ; then
 	sed -i -e 's:CROSS_COMPILE)'$GCC_OVERRIDE':CROSS_COMPILE)gcc:g' ${DIR}/KERNEL/Makefile
 fi

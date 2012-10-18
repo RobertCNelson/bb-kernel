@@ -125,13 +125,11 @@ if [ "${DEBUG_SECTION}" ] ; then
 	CONFIG_DEBUG_SECTION="CONFIG_DEBUG_SECTION_MISMATCH=y"
 fi
 
-/bin/bash -e "${DIR}/scripts/git.sh" || { exit 1 ; }
+#/bin/bash -e "${DIR}/scripts/git.sh" || { exit 1 ; }
 
-patch_kernel
-copy_defconfig
-if [ ! ${AUTO_BUILD} ] ; then
-	make_menuconfig
-fi
+#patch_kernel
+#copy_defconfig
+make_menuconfig
 if [ "x${GCC_OVERRIDE}" != "x" ] ; then
 	sed -i -e 's:CROSS_COMPILE)gcc:CROSS_COMPILE)'$GCC_OVERRIDE':g' ${DIR}/KERNEL/Makefile
 fi

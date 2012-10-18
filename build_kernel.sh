@@ -1,228 +1,207 @@
 #!/bin/bash -e
-
-unset KERNEL_REL
-unset STABLE_PATCH
-unset RC_KERNEL
-unset RC_PATCH
-unset PRE_RC
-unset BUILD
-unset CC
-unset LINUX_GIT
-unset LATEST_GIT
-
-unset LOCAL_PATCH_DIR
-
-ARCH=$(uname -m)
-CCACHE=ccache
+#
+# Copyright (c) 2009-2012 Robert Nelson <robertcnelson@gmail.com>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
 
 DIR=$PWD
 
-CORES=1
-if test "-$ARCH-" = "-x86_64-" || test "-$ARCH-" = "-i686-"
-then
- CORES=$(cat /proc/cpuinfo | grep processor | wc -l)
- let CORES=$CORES+1
-fi
-
 mkdir -p ${DIR}/deploy/
 
-function git_kernel_torvalds {
-  echo "pulling from torvalds kernel.org tree"
-  git pull git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags || true
-}
-
-function git_kernel_stable {
-  echo "fetching from stable kernel.org tree"
-  git pull git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags || true
-}
-
-function git_kernel {
-if [ "-${LINUX_GIT}-" != "--" ]; then
-
-  if [[ ! -a ${LINUX_GIT}/.git/config ]]; then
-    echo "Double check: LINUX_GIT variable in system.sh, i'm not finding a git tree"
-    exit
-  fi
-
-  cd ${LINUX_GIT}/
-    echo "Updating LINUX_GIT tree via: git fetch"
-    git fetch
-  cd -
-
-  if [[ ! -a ${DIR}/KERNEL/.git/config ]]; then
-	rm -rf ${DIR}/KERNEL/ || true
-    git clone --shared ${LINUX_GIT} ${DIR}/KERNEL
-  fi
-
-  cd ${DIR}/KERNEL/
-
-  git reset --hard
-  git checkout master -f
-  git pull
-
-  if [ "${PRE_RC}" ]; then
-    git branch -D v${PRE_RC}-${BUILD} || true
-    if [ ! "${LATEST_GIT}" ] ; then
-      wget -c --directory-prefix=${DIR}/patches/ http://www.kernel.org/pub/linux/kernel/${PRE_SNAP}/snapshots/patch-${PRE_RC}.bz2
-      git checkout v${KERNEL_REL} -b v${PRE_RC}-${BUILD}
-    else
-      git checkout origin/master -b v${PRE_RC}-${BUILD}
-    fi
-  elif [ "${RC_PATCH}" ]; then
-    git tag | grep v${RC_KERNEL}${RC_PATCH} || git_kernel_torvalds
-    git branch -D v${RC_KERNEL}${RC_PATCH}-${BUILD} || true
-    if [ ! "${LATEST_GIT}" ] ; then
-      git checkout v${RC_KERNEL}${RC_PATCH} -b v${RC_KERNEL}${RC_PATCH}-${BUILD}
-    else
-      git checkout origin/master -b v${RC_KERNEL}${RC_PATCH}-${BUILD}
-    fi
-  elif [ "${STABLE_PATCH}" ] ; then
-    git tag | grep v${KERNEL_REL}.${STABLE_PATCH} || git_kernel_stable
-    git branch -D v${KERNEL_REL}.${STABLE_PATCH}-${BUILD} || true
-    if [ ! "${LATEST_GIT}" ] ; then
-      git checkout v${KERNEL_REL}.${STABLE_PATCH} -b v${KERNEL_REL}.${STABLE_PATCH}-${BUILD}
-    else
-      git checkout origin/master -b v${KERNEL_REL}.${STABLE_PATCH}-${BUILD}
-    fi
-  else
-    git tag | grep v${KERNEL_REL} || git_kernel_torvalds
-    git branch -D v${KERNEL_REL}-${BUILD} || true
-    if [ ! "${LATEST_GIT}" ] ; then
-      git checkout v${KERNEL_REL} -b v${KERNEL_REL}-${BUILD}
-    else
-      git checkout origin/master -b v${KERNEL_REL}-${BUILD}
-    fi
-  fi
-
-  git describe
-
-  cd ${DIR}/
-
-else
-  echo "The LINUX_GIT variable is not definted in system.sh"
-  echo "Follow the git clone directions in system.sh.sample"
-  echo "and make sure to remove the comment # from LINUX_GIT"
-  echo "gedit system.sh"
-  exit
-fi
-}
-
 function patch_kernel {
-  cd ${DIR}/KERNEL
+	cd ${DIR}/KERNEL
 
-  if [ ! "${LATEST_GIT}" ] ; then
-    if [ "${PRE_RC}" ]; then
-      bzip2 -dc ${DIR}/patches/patch-${PRE_RC}.bz2 | patch -p1 -s
-      git add .
-      git commit -a -m ''$PRE_RC' patchset'
-    fi
-  fi
+	export DIR GIT_OPTS
+	/bin/bash -e ${DIR}/patch.sh || { git add . ; exit 1 ; }
 
-  export DIR BISECT
-  /bin/bash -e ${DIR}/patch.sh || { git add . ; exit 1 ; }
-
-  git add .
-  if [ "${PRE_RC}" ]; then
-    git commit -a -m ''$PRE_RC'-'$BUILD' patchset'
-  elif [ "${RC_PATCH}" ]; then
-    git commit -a -m ''$RC_KERNEL''$RC_PATCH'-'$BUILD' patchset'
-  elif [ "${STABLE_PATCH}" ] ; then
-    git commit -a -m ''$KERNEL_REL'.'$STABLE_PATCH'-'$BUILD' patchset'
-  else
-    git commit -a -m ''$KERNEL_REL'-'$BUILD' patchset'
-  fi
+	if [ ! "${RUN_BISECT}" ] ; then
+		git add .
+		git commit --allow-empty -a -m "${KERNEL_TAG}-${BUILD} patchset"
+	fi
 
 #Test Patches:
 #exit
 
-  if [ "${LOCAL_PATCH_DIR}" ]; then
-    for i in ${LOCAL_PATCH_DIR}/*.patch ; do patch  -s -p1 < $i ; done
-    BUILD+='+'
-  fi
+	if [ "${LOCAL_PATCH_DIR}" ] ; then
+		for i in ${LOCAL_PATCH_DIR}/*.patch ; do patch  -s -p1 < $i ; done
+		BUILD+='+'
+	fi
 
-  cd ${DIR}/
+	cd ${DIR}/
 }
 
 function copy_defconfig {
-  cd ${DIR}/KERNEL/
-  make ARCH=arm CROSS_COMPILE=${CC} distclean
-  make ARCH=arm CROSS_COMPILE=${CC} omap2plus_defconfig
-  cp .config -v ${DIR}/patches/ref_omap2plus_defconfig
-  cp ${DIR}/patches/defconfig -v .config
-  cd ${DIR}/
+	cd ${DIR}/KERNEL/
+	make ARCH=arm CROSS_COMPILE=${CC} distclean
+	make ARCH=arm CROSS_COMPILE=${CC} ${config}
+	cp -v .config ${DIR}/patches/ref_${config}
+	cp -v ${DIR}/patches/defconfig .config
+	cd ${DIR}/
 }
 
 function make_menuconfig {
-  cd ${DIR}/KERNEL/
-  make ARCH=arm CROSS_COMPILE=${CC} menuconfig
-  cp .config -v ${DIR}/patches/defconfig
-  cd ${DIR}/
+	cd ${DIR}/KERNEL/
+	make ARCH=arm CROSS_COMPILE=${CC} menuconfig
+	cp -v .config ${DIR}/patches/defconfig
+	cd ${DIR}/
 }
 
-function make_zImage {
-  cd ${DIR}/KERNEL/
-  echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" CONFIG_DEBUG_SECTION_MISMATCH=y zImage"
-  time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" CONFIG_DEBUG_SECTION_MISMATCH=y zImage
-  KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
-  cp arch/arm/boot/zImage ${DIR}/deploy/${KERNEL_UTS}.zImage
-  cd ${DIR}/
+function make_kernel {
+	cd ${DIR}/KERNEL/
+	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" ${CONFIG_DEBUG_SECTION} zImage modules"
+	time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" ${CONFIG_DEBUG_SECTION} zImage modules
+
+	unset DTBS
+	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" &> /dev/null && DTBS=1
+	if [ "x${DTBS}" != "x" ] ; then
+		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" ${CONFIG_DEBUG_SECTION} dtbs"
+		time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" ${CONFIG_DEBUG_SECTION} dtbs
+		ls arch/arm/boot/* | grep dtb || unset DTBS
+	fi
+
+	KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
+	if [ -f ./arch/arm/boot/zImage ] ; then
+		cp arch/arm/boot/zImage ${DIR}/deploy/${KERNEL_UTS}.zImage
+		cp .config ${DIR}/deploy/${KERNEL_UTS}.config
+	else
+		echo "Error: make zImage modules failed"
+		exit
+	fi
+	cd ${DIR}/
 }
 
-function make_modules {
-  cd ${DIR}/KERNEL/
-  time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" CONFIG_DEBUG_SECTION_MISMATCH=y modules
-
-  echo ""
-  echo "Building Module Archive"
-  echo ""
-
-  rm -rf ${DIR}/deploy/mod &> /dev/null || true
-  mkdir -p ${DIR}/deploy/mod
-  make ARCH=arm CROSS_COMPILE=${CC} modules_install INSTALL_MOD_PATH=${DIR}/deploy/mod
-  echo "Building ${KERNEL_UTS}-modules.tar.gz"
-  cd ${DIR}/deploy/mod
-  tar czf ../${KERNEL_UTS}-modules.tar.gz *
-  cd ${DIR}/
+function make_uImage {
+	cd ${DIR}/KERNEL/
+	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" ${CONFIG_DEBUG_SECTION} uImage"
+	time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" ${CONFIG_DEBUG_SECTION} uImage
+	KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
+	if [ -f ./arch/arm/boot/uImage ] ; then
+		cp arch/arm/boot/uImage ${DIR}/deploy/${KERNEL_UTS}.uImage
+	else
+		echo "Error: make uImage failed"
+		exit
+	fi
+	cd ${DIR}/
 }
 
-function make_headers {
-  cd ${DIR}/KERNEL/
+function make_modules_pkg {
+	cd ${DIR}/KERNEL/
 
-  echo ""
-  echo "Building Header Archive"
-  echo ""
+	echo ""
+	echo "Building Module Archive"
+	echo ""
 
-  rm -rf ${DIR}/deploy/headers &> /dev/null || true
-  mkdir -p ${DIR}/deploy/headers/usr
-  make ARCH=arm CROSS_COMPILE=${CC} headers_install INSTALL_HDR_PATH=${DIR}/deploy/headers/usr
-  cd ${DIR}/deploy/headers
-  echo "Building ${KERNEL_UTS}-headers.tar.gz"
-  tar czf ../${KERNEL_UTS}-headers.tar.gz *
-  cd ${DIR}/
+	rm -rf ${DIR}/deploy/mod &> /dev/null || true
+	mkdir -p ${DIR}/deploy/mod
+	make ARCH=arm CROSS_COMPILE=${CC} modules_install INSTALL_MOD_PATH=${DIR}/deploy/mod
+	echo "Building ${KERNEL_UTS}-modules.tar.gz"
+	cd ${DIR}/deploy/mod
+	tar czf ../${KERNEL_UTS}-modules.tar.gz *
+	cd ${DIR}/
 }
 
-  /bin/bash -e ${DIR}/tools/host_det.sh || { exit 1 ; }
+function make_dtbs_pkg {
+	cd ${DIR}/KERNEL/
 
-if [ -e ${DIR}/system.sh ]; then
-  . system.sh
-  . version.sh
+	echo ""
+	echo "Building DTBS Archive"
+	echo ""
+
+	rm -rf ${DIR}/deploy/dtbs &> /dev/null || true
+	mkdir -p ${DIR}/deploy/dtbs
+	cp -v arch/arm/boot/*.dtb ${DIR}/deploy/dtbs
+	cd ${DIR}/deploy/dtbs
+	echo "Building ${KERNEL_UTS}-dtbs.tar.gz"
+	tar czf ../${KERNEL_UTS}-dtbs.tar.gz *
+
+	cd ${DIR}/
+}
+
+function make_headers_pkg {
+	cd ${DIR}/KERNEL/
+
+	echo ""
+	echo "Building Header Archive"
+	echo ""
+
+	rm -rf ${DIR}/deploy/headers &> /dev/null || true
+	mkdir -p ${DIR}/deploy/headers/usr
+	make ARCH=arm CROSS_COMPILE=${CC} headers_install INSTALL_HDR_PATH=${DIR}/deploy/headers/usr
+	cd ${DIR}/deploy/headers
+	echo "Building ${KERNEL_UTS}-headers.tar.gz"
+	tar czf ../${KERNEL_UTS}-headers.tar.gz *
+	cd ${DIR}/
+}
+
+/bin/bash -e ${DIR}/tools/host_det.sh || { exit 1 ; }
+
+if [ ! -f ${DIR}/system.sh ] ; then
+	cp ${DIR}/system.sh.sample ${DIR}/system.sh
+fi
+
+unset CC
+unset DEBUG_SECTION
+unset LATEST_GIT
+unset LINUX_GIT
+unset LOCAL_PATCH_DIR
+source ${DIR}/system.sh
+/bin/bash -e "${DIR}/scripts/gcc.sh" || { exit 1 ; }
+
+source ${DIR}/version.sh
+export LINUX_GIT
+export LATEST_GIT
 
 if [ "${LATEST_GIT}" ] ; then
 	echo ""
-	echo "Warning LATEST_GIT is enabled from system.sh i hope you know what your doing.."
+	echo "Warning LATEST_GIT is enabled from system.sh I hope you know what your doing.."
 	echo ""
 fi
 
-  git_kernel
-  patch_kernel
-  copy_defconfig
-  make_menuconfig
-  make_zImage
-  make_modules
-  make_headers
-else
-  echo "Missing system.sh, please copy system.sh.sample to system.sh and edit as needed"
-  echo "cp system.sh.sample system.sh"
-  echo "gedit system.sh"
+unset CONFIG_DEBUG_SECTION
+if [ "${DEBUG_SECTION}" ] ; then
+	CONFIG_DEBUG_SECTION="CONFIG_DEBUG_SECTION_MISMATCH=y"
+fi
+
+/bin/bash -e "${DIR}/scripts/git.sh" || { exit 1 ; }
+
+if [ "${RUN_BISECT}" ] ; then
+	/bin/bash -e "${DIR}/scripts/bisect.sh" || { exit 1 ; }
+fi
+
+patch_kernel
+copy_defconfig
+if [ ! ${AUTO_BUILD} ] ; then
+	make_menuconfig
+fi
+if [ "x${GCC_OVERRIDE}" != "x" ] ; then
+	sed -i -e 's:CROSS_COMPILE)gcc:CROSS_COMPILE)'$GCC_OVERRIDE':g' ${DIR}/KERNEL/Makefile
+fi
+make_kernel
+if [ "${BUILD_UIMAGE}" ] ; then
+	make_uImage
+fi
+make_modules_pkg
+if [ "x${DTBS}" != "x" ] ; then
+	make_dtbs_pkg
+fi
+make_headers_pkg
+if [ "x${GCC_OVERRIDE}" != "x" ] ; then
+	sed -i -e 's:CROSS_COMPILE)'$GCC_OVERRIDE':CROSS_COMPILE)gcc:g' ${DIR}/KERNEL/Makefile
 fi
 

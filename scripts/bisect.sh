@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2012 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2012 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,18 +20,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-#yeah, i'm getting lazy..
-
 DIR=$PWD
 
-if [ -e ${DIR}/version.sh ]; then
-	unset BRANCH
-	source ${DIR}/version.sh
-
-	git commit -a -m "${KERNEL_TAG}-${BUILD} release" -s
-	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}"
-
-	git push origin ${BRANCH}
-	git push origin ${BRANCH} --tags
+if [ ! -f ${DIR}/patches/bisect_defconfig ] ; then
+	cp ${DIR}/patches/defconfig ${DIR}/patches/bisect_defconfig
 fi
 
+cp -v ${DIR}/patches/bisect_defconfig ${DIR}/patches/defconfig
+
+cd ${DIR}/KERNEL/
+git bisect start
+#git bisect good v3.4
+#git bisect bad v3.5-rc1
+
+
+git describe
+cd ${DIR}/

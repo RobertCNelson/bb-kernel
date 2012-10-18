@@ -1,5 +1,37 @@
 #!/bin/bash
+#
+# Copyright (c) 2009-2012 Robert Nelson <robertcnelson@gmail.com>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 # Split out, so build_kernel.sh and build_deb.sh can share..
+
+git="git am"
+#git="git am --whitespace=fix"
+
+if [ -f ${DIR}/system.sh ] ; then
+	source ${DIR}/system.sh
+fi
+
+if [ "${RUN_BISECT}" ] ; then
+	git="git apply"
+fi
 
 echo "Starting patch.sh"
 
@@ -36,13 +68,13 @@ patch -s -p1 < "${DIR}/patches/trivial/0001-USB-ehci-use-packed-aligned-4-instea
 
 function cpufreq {
 echo "[git] omap-cpufreq"
-git pull git://github.com/RobertCNelson/linux.git omap_cpufreq_v3.1-rc8
+git pull ${GIT_OPTS} git://github.com/RobertCNelson/linux.git omap_cpufreq_v3.1-rc8
 
 }
 
 function am33x {
 echo "[git] am33x"
-git pull git://github.com/RobertCNelson/linux.git ti_am33x_v3.1
+git pull ${GIT_OPTS} git://github.com/RobertCNelson/linux.git ti_am33x_v3.1
 
 }
 
@@ -91,7 +123,7 @@ echo "[git] Micrel KZ8851 patches for: zippy2"
 #original from:
 #ftp://www.micrel.com/ethernet/8851/beagle_zippy_patches.tar.gz 137 KB 04/10/2010 12:26:00 AM
 
-git pull git://github.com/RobertCNelson/linux.git micrel_ks8851_v3.1-rc8
+git pull ${GIT_OPTS} git://github.com/RobertCNelson/linux.git micrel_ks8851_v3.1-rc8
 
 }
 
@@ -110,7 +142,7 @@ echo "[git] Board Patches for: igepv2"
 #pulled from: http://git.igep.es/?p=pub/scm/linux-omap-2.6.git;a=summary
 #git pull git://git.igep.es/pub/scm/linux-omap-2.6.git master
 
-git pull git://github.com/RobertCNelson/linux.git omap_igepv_v3.1-rc7
+git pull ${GIT_OPTS} git://github.com/RobertCNelson/linux.git omap_igepv_v3.1-rc7
 
 }
 

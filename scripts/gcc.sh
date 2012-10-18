@@ -20,18 +20,41 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-#yeah, i'm getting lazy..
-
 DIR=$PWD
 
-if [ -e ${DIR}/version.sh ]; then
-	unset BRANCH
-	source ${DIR}/version.sh
+source ${DIR}/system.sh
 
-	git commit -a -m "${KERNEL_TAG}-${BUILD} release" -s
-	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}"
+ARCH=$(uname -m)
+if [ "x${CC}" == "x" ] && [ "x${ARCH}" != "xarmv7l" ] ; then
+	echo "-----------------------------"
+	echo "Error: You haven't setup the Cross Compiler (CC variable) in system.sh"
+	echo ""
+	echo "with a (sane editor) open system.sh and modify the commented Line 18: #CC=arm-linux-gnueabi-"
+	echo ""
+	echo "If you need hints on installing an ARM GCC Cross ToolChain, view README file"
+	echo "-----------------------------"
+	exit 1
+fi
 
-	git push origin ${BRANCH}
-	git push origin ${BRANCH} --tags
+GCC="gcc"
+if [ "x${GCC_OVERRIDE}" != "x" ] ; then
+	GCC="${GCC_OVERRIDE}"
+fi
+
+GCC_TEST=$(LC_ALL=C ${CC}${GCC} -v 2>&1 | grep "Target:" | grep arm || true)
+GCC_REPORT=$(LC_ALL=C ${CC}${GCC} -v 2>&1 || true)
+
+if [ "x${GCC_TEST}" == "x" ] ; then
+	echo ""
+	echo "Error: The GCC ARM Cross Compiler you setup in system.sh (CC variable)."
+	echo "Doesn't seem to be valid for ARM, double check it's location, or that"
+	echo "you chose the correct GCC Cross Compiler."
+	echo ""
+	echo "Output of: LC_ALL=C ${CC}${GCC} --version"
+	echo "${GCC_REPORT}"
+	echo ""
+	exit 1
+else
+	echo "Debug Using: `LC_ALL=C ${CC}${GCC} --version`"
 fi
 
