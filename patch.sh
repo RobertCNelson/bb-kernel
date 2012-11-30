@@ -398,6 +398,12 @@ omap3isp () {
 	${git} "${DIR}/patches/omap3isp/0004-Revert-media-omap3isp-Introduce-isp_video_check_exte.patch"
 }
 
+rt_patchset () {
+	#Unsupported: enable at your own peril
+	#From: http://www.kernel.org/pub/linux/kernel/projects/rt/
+	${git} "${DIR}/patches/rt/0001-rt-patch-3.6.7-rt18.patch"
+}
+
 devel_dt
 vaibhav
 net_next_am335x
@@ -434,5 +440,6 @@ mainline_fixes
 #debug
 omap3isp
 
-echo "patch.sh ran successful"
+#rt_patchset
 
+echo "patch.sh ran successful"
