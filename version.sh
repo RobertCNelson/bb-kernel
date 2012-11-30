@@ -24,7 +24,7 @@ config="omap2plus_defconfig"
 #Kernel/Build
 KERNEL_REL=3.6
 KERNEL_TAG=${KERNEL_REL}.2
-BUILD=bone0
+BUILD=bone0.1
 
 #git branch
 BRANCH="am33x-v3.6"
