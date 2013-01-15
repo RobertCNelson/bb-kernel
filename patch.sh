@@ -401,7 +401,7 @@ omap3isp () {
 rt_patchset () {
 	#Unsupported: enable at your own peril
 	#From: http://www.kernel.org/pub/linux/kernel/projects/rt/
-	${git} "${DIR}/patches/rt/0001-rt-patch-3.6.7-rt18.patch"
+	${git} "${DIR}/patches/rt/0001-rt-patch-3.6.11-rt25.patch"
 }
 
 devel_dt
