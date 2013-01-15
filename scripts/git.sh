@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2012 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -119,12 +119,20 @@ git_kernel () {
 
 	git pull ${GIT_OPTS} || true
 
+	git tag | grep v${KERNEL_TAG} | grep -v rc &>/dev/null || git_kernel_torvalds
+
+	if [ "${KERNEL_SHA}" ] ; then
+		git_kernel_torvalds
+	fi
+
 	if [ ! "${LATEST_GIT}" ] ; then
-		git tag | grep v${KERNEL_TAG} | grep -v rc &>/dev/null || git_kernel_torvalds
 		git branch -D v${KERNEL_TAG}-${BUILD} &>/dev/null || true
-		git checkout v${KERNEL_TAG} -b v${KERNEL_TAG}-${BUILD}
+		if [ ! "${KERNEL_SHA}" ] ; then
+			git checkout v${KERNEL_TAG} -b v${KERNEL_TAG}-${BUILD}
+		else
+			git checkout ${KERNEL_SHA} -b v${KERNEL_TAG}-${BUILD}
+		fi
 	else
-		git tag | grep v${KERNEL_TAG} | grep -v rc &>/dev/null || git_kernel_torvalds
 		git branch -D top-of-tree &>/dev/null || true
 		git checkout v${KERNEL_TAG} -b top-of-tree
 		git describe
@@ -134,6 +142,29 @@ git_kernel () {
 	git describe
 
 	cd ${DIR}/
+
+	if [ "${IMX_BOOTLETS}" ] ; then
+		if [ ! -f "${DIR}"/ignore/imx-bootlets/.git/config ] ; then
+			rm -rf "${DIR}"/ignore/imx-bootlets || true
+			mkdir -p "${DIR}"/ignore/imx-bootlets
+			git clone ${imx_bootlets_repo} "${DIR}"/ignore/imx-bootlets
+		fi
+
+		if [ "${imx_bootlets_tag}" ] ; then
+			cd "${DIR}"/ignore/imx-bootlets/
+			git checkout origin/master -b tmp-master
+			git branch -D master &>/dev/null || true
+			git branch -D tmp &>/dev/null || true
+
+			git checkout origin/master -b master
+			git branch -D tmp-master &>/dev/null || true
+
+			git pull ${GIT_OPTS} || true
+			git checkout origin/${imx_bootlets_tag} -b tmp
+			cd ${DIR}/
+		fi
+	fi
+
 }
 
 source ${DIR}/version.sh
@@ -142,9 +173,11 @@ source ${DIR}/system.sh
 if [ "${GIT_OVER_HTTP}" ] ; then
 	torvalds_linux="http://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 	linux_stable="http://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+	imx_bootlets_repo="https://github.com/RobertCNelson/imx-bootlets.git"
 else
 	torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 	linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+	imx_bootlets_repo="git://github.com/RobertCNelson/imx-bootlets.git"
 fi
 
 unset ON_MASTER

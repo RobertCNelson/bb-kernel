@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2009-2012 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -51,6 +51,20 @@ mmc_write_modules () {
 	fi
 
 	sudo tar xf "${DIR}/deploy/${KERNEL_UTS}-modules.tar.gz" -C "${DIR}/deploy/disk"
+
+	echo "Installing ${KERNEL_UTS}-firmware.tar.gz to rootfs partition"
+	echo "-----------------------------"
+	sudo mkdir -p "${DIR}/deploy/disk/tmp/fir"
+	sudo tar xf "${DIR}/deploy/${KERNEL_UTS}-firmware.tar.gz" -C "${DIR}/deploy/disk/tmp/fir/"
+
+	if [ -d "${DIR}/deploy/disk/tmp/fir/lib/firmware/capes/" ] ; then
+		if [ ! -d "${DIR}/deploy/disk/lib/firmware/capes/" ] ; then
+			sudo mkdir -p "${DIR}/deploy/disk/lib/firmware/capes/"
+		fi
+
+		sudo cp -v "${DIR}"/deploy/disk/tmp/fir/lib/firmware/capes/* "${DIR}/deploy/disk/lib/firmware/capes/"
+	fi
+	sudo rm -rf "${DIR}/deploy/disk/tmp/fir/"
 }
 
 mmc_write_image () {
@@ -171,6 +185,18 @@ mmc_write_boot () {
 	mmc_find_rootfs
 }
 
+mmc_write_imx_bootlets () {
+	echo "Installing ${KERNEL_UTS}.sd_mmc_bootstream.raw to boot partition"
+	echo "-----------------------------"
+
+	if [ -f "${DIR}/deploy/${KERNEL_UTS}.sd_mmc_bootstream.raw" ] ; then
+		sudo dd if="${DIR}/deploy/${KERNEL_UTS}.sd_mmc_bootstream.raw" of=${MMC}${PARTITION_PREFIX}${BOOT_PARITION}
+	fi
+	sync
+	sync
+	mmc_find_rootfs
+}
+
 mmc_mount_boot () {
 	if [ ! -d "${DIR}/deploy/disk/" ] ; then
 		mkdir -p "${DIR}/deploy/disk/"
@@ -207,7 +233,19 @@ unmount_partitions () {
 	done
 
 	mkdir -p "${DIR}/deploy/disk/"
-	mmc_mount_boot
+	if [ "${imx_bootlets_target}" ] ; then
+		mmc_write_imx_bootlets
+	else
+		mmc_mount_boot
+	fi
+}
+
+debug_display_partitions () {
+	echo ""
+	echo "Debug: Existing Partition on drive:"
+	echo "-----------------------------"
+	LC_ALL=C sudo fdisk -l ${MMC}
+	unmount_partitions
 }
 
 check_mmc () {
@@ -223,7 +261,7 @@ check_mmc () {
 		mount | grep -v none | grep "/dev/" --color=never
 		echo ""
 		read -p "Are you 100% sure, on selecting [${MMC}] (y/n)? "
-		[ "${REPLY}" == "y" ] && unmount_partitions
+		[ "${REPLY}" == "y" ] && debug_display_partitions
 		echo ""
 	else
 		echo ""
