@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/sh
 #
-# Copyright (c) 2009-2012 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +27,7 @@ git="git am"
 
 am33x_linux="git://github.com/RobertCNelson/linux.git"
 if [ -f ${DIR}/system.sh ] ; then
-	source ${DIR}/system.sh
+	. ${DIR}/system.sh
 	if [ "${GIT_OVER_HTTP}" ] ; then
 		am33x_linux="https://github.com/RobertCNelson/linux.git"
 	fi
@@ -49,13 +49,13 @@ cleanup () {
 	exit
 }
 
-function bugs_trivial {
+bugs_trivial () {
 	echo "bugs and trivial stuff"
 	${git} "${DIR}/patches/trivial/0001-kbuild-deb-pkg-set-host-machine-after-dpkg-gencontro.patch"
 	${git} "${DIR}/patches/trivial/0001-kbuild-Fix-link-to-headers-in-make-deb-pkg.patch"
 }
 
-function am33x-cleanup {
+am33x-cleanup () {
 	echo "[git] am33x-cleanup"
 	echo "pulling ti_am33x_v3.2-staging_8"
 	git pull ${GIT_OPTS} ${am33x_linux} ti_am33x_v3.2-staging_8
