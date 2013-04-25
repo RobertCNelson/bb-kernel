@@ -55,7 +55,7 @@ bugs_trivial () {
 	${git} "${DIR}/patches/trivial/0001-kbuild-Fix-link-to-headers-in-make-deb-pkg.patch"
 }
 
-am33x-cleanup () {
+am33x_cleanup () {
 	echo "[git] am33x-cleanup"
 	echo "pulling ti_am33x_v3.2-staging_8"
 	git pull ${GIT_OPTS} ${am33x_linux} ti_am33x_v3.2-staging_8
@@ -1378,10 +1378,11 @@ am33x-cleanup () {
 rt_patchset () {
 	#Unsupported: enable at your own peril
 	#From: http://www.kernel.org/pub/linux/kernel/projects/rt/
-	${git} "${DIR}/patches/rt/0001-rt-patch-3.2.32-rt49.patch"
+#	${git} "${DIR}/patches/rt/0001-rt-patch-3.2.32-rt49.patch"
+	${git} "${DIR}/patches/rt/0001-rt-patch-3.2.42-rt62.patch"
 }
 
-am33x-cleanup
+am33x_cleanup
 bugs_trivial
 
 #rt_patchset
