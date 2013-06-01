@@ -1,44 +1,39 @@
-#!/bin/bash -e
+#!/bin/sh -e
 
 #opensuse support added by: Antonio Cavallo
 #https://launchpad.net/~a.cavallo
 
-function warning { echo "! $@" >&2; }
-function error { echo "* $@" >&2; exit 1; }
-function info { echo "+ $@" >&2; }
-function ltrim { echo "$1" | awk '{ gsub(/^[ \t]+/,"", $0); print $0}'; }
-function rtrim { echo "$1" | awk '{ gsub(/[ \t]+$/,"", $0); print $0}'; }
-function trim { local x="$( ltrim "$1")"; x="$( rtrim "$x")"; echo "$x"; }
+warning () { echo "! $@" >&2; }
+error () { echo "* $@" >&2; exit 1; }
+info () { echo "+ $@" >&2; }
+ltrim () { echo "$1" | awk '{ gsub(/^[ \t]+/,"", $0); print $0}'; }
+rtrim () { echo "$1" | awk '{ gsub(/[ \t]+$/,"", $0); print $0}'; }
+trim () { local x="$( ltrim "$1")"; x="$( rtrim "$x")"; echo "$x"; }
 
+detect_host () {
+	local REV DIST PSEUDONAME
 
-
-function detect_host {
-local REV DIST PSEUDONAME
-
-if [ -f /etc/redhat-release ] ; then
-	DIST='RedHat'
-	PSEUDONAME=$(cat /etc/redhat-release | sed s/.*\(// | sed s/\)//)
-	REV=$(cat /etc/redhat-release | sed s/.*release\ // | sed s/\ .*//)
-    echo "redhat-$REV"
-elif [ -f /etc/SuSE-release ] ; then
-	DIST=$(cat /etc/SuSE-release | tr "\n" ' '| sed s/VERSION.*//)
-	REV=$(cat /etc/SuSE-release | tr "\n" ' ' | sed s/.*=\ //)
-    trim "suse-$REV"
-elif [ -f /etc/debian_version ] ; then
-	DIST="Debian Based"
-	REV=""
-    echo "debian-$REV"
-fi
-
+	if [ -f /etc/redhat-release ] ; then
+		DIST='RedHat'
+		PSEUDONAME=$(cat /etc/redhat-release | sed s/.*\(// | sed s/\)//)
+		REV=$(cat /etc/redhat-release | sed s/.*release\ // | sed s/\ .*//)
+		echo "redhat-$REV"
+	elif [ -f /etc/SuSE-release ] ; then
+		DIST=$(cat /etc/SuSE-release | tr "\n" ' '| sed s/VERSION.*//)
+		REV=$(cat /etc/SuSE-release | tr "\n" ' ' | sed s/.*=\ //)
+		trim "suse-$REV"
+	elif [ -f /etc/debian_version ] ; then
+		DIST="Debian Based"
+		debian="debian"
+		echo "${debian}"
+	fi
 }
 
-function redhat_reqs
-{
+redhat_reqs () {
 	echo "RH Not implemented yet"
 }
 
-function suse_regs
-{
+suse_regs () {
     local BUILD_HOST="$1"   
 # --- SuSE-release ---
     if [ ! -f /etc/SuSE-release ]
@@ -87,84 +82,127 @@ Missing mkimage command.
         return 1
     fi
     
-
 }
 
-function debian_regs
-{
-	unset APT
-	unset UPACKAGE
-	unset DPACKAGE
+debian_regs () {
+	unset deb_pkgs
+	dpkg -l | grep bc >/dev/null || deb_pkgs"${deb_pkgs}bc "
+	dpkg -l | grep build-essential >/dev/null || deb_pkgs="${deb_pkgs}build-essential "
+	dpkg -l | grep device-tree-compiler >/dev/null || deb_pkgs="${deb_pkgs}device-tree-compiler "
+	dpkg -l | grep lsb-release >/dev/null || deb_pkgs="${deb_pkgs}lsb-release "
+	dpkg -l | grep lzma >/dev/null || deb_pkgs="${deb_pkgs}lzma "
+	dpkg -l | grep lzop >/dev/null || deb_pkgs="${deb_pkgs}lzop "
+	dpkg -l | grep fakeroot >/dev/null || deb_pkgs="${deb_pkgs}fakeroot "
 
-	if [ ! $(dpkg -l | grep build-essential | awk '{print $2}') ] ; then
-		echo "Missing build-essential"
-		UPACKAGE+="build-essential "
-		DPACKAGE+="build-essential "
-		APT=1
-	fi
+	#Libraires: (make sure we atleast get the native arch one)
+	#ii  libncurses5-dev:amd64                 5.9+20130504-1                     amd64        developer's libraries for ncurses
+	deb_arch=$(dpkg --print-architecture)
+	dpkg -l | grep libncurses5-dev | grep ${deb_arch} >/dev/null || deb_pkgs="${deb_pkgs}libncurses5-dev "
 
-	if [ ! $(which mkimage) ];then
-		echo "Missing uboot-mkimage"
-		UPACKAGE+="u-boot-tools "
-		DPACKAGE+="uboot-mkimage "
-		APT=1
-	fi
+	unset warn_dpkg_ia32
+	unset warn_eol_distro
+	#lsb_release might not be installed...
+	if [ $(which lsb_release) ] ; then
+		deb_distro=$(lsb_release -cs)
 
-	if [ ! $(which ccache) ];then
-		echo "Missing ccache"
-		UPACKAGE+="ccache "
-		DPACKAGE+="ccache "
-		APT=1
-	fi
+		#Linux Mint: Compatibility Matrix
+		#http://www.linuxmint.com/oldreleases.php
+		case "${deb_distro}" in
+		debian)
+			deb_distro="jessie"
+			;;
+		maya)
+			deb_distro="precise"
+			;;
+		nadia)
+			deb_distro="quantal"
+			;;
+		olivia)
+			deb_distro="raring"
+			;;
+		esac
 
-	if [ ! $(which fakeroot) ];then
-		echo "Missing fakeroot"
-		UPACKAGE+="fakeroot "
-		DPACKAGE+="fakeroot "
-		APT=1
-	fi
+		unset error_unknown_deb_distro
+		#mkimage
+		case "${deb_distro}" in
+		squeeze|lucid)
+			dpkg -l | grep uboot-mkimage >/dev/null || deb_pkgs="${deb_pkgs}uboot-mkimage"
+			;;
+		wheezy|jessie|precise|quantal|raring|saucy)
+			dpkg -l | grep u-boot-tools >/dev/null || deb_pkgs="${deb_pkgs}u-boot-tools"
+			;;
+		natty|oneiric)
+			#Remove when no longer listed here:
+			#http://us.archive.ubuntu.com/ubuntu/dists/
+			warn_eol_distro=1
+			;;
+		*)
+			error_unknown_deb_distro=1
+			;;
+		esac
 
-	if [ ! $(which dtc) ];then
-		echo "Missing device-tree-compiler"
-		UPACKAGE+="device-tree-compiler "
-		DPACKAGE+="device-tree-compiler "
-		APT=1
-	fi
+		cpu_arch=$(uname -m)
+		if [ "x${cpu_arch}" = "xx86_64" ] ; then
+			unset dpkg_multiarch
+			case "${deb_distro}" in
+			squeeze|lucid|natty|oneiric|precise)
+				dpkg -l | grep ia32-libs >/dev/null || deb_pkgs="${deb_pkgs}ia32-libs "
+				;;
+			wheezy|jessie|quantal|raring|saucy)
+				dpkg -l | grep ia32-libs >/dev/null || deb_pkgs="${deb_pkgs}ia32-libs "
+				dpkg -l | grep ia32-libs >/dev/null || dpkg_multiarch=1
+				;;
+			esac
 
-	#Just temp, as with 3.4, switching to xz
-	if [ ! $(which lzma) ];then
-		echo "Missing lzma"
-		UPACKAGE+="lzma "
-		DPACKAGE+="lzma "
-		APT=1
-	fi
-
-	#Lucid -> Oneiric
-	if [ ! -f "/usr/lib/libncurses.so" ] ; then
-		#Precise ->
-		if [ ! -f "/usr/lib/`dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null`/libncurses.so" ] ; then
-			echo "Missing: libncurses.so"
-			UPACKAGE+="libncurses5-dev "
-			DPACKAGE+="libncurses5-dev "
-			APT=1
-		else
-			echo "Debug: found libncurses.so: /usr/lib/`dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null`/libncurses.so"
+			if [ "${dpkg_multiarch}" ] ; then
+				unset check_foreign
+				check_foreign=$(LC_ALL=C dpkg --print-foreign-architectures)
+				if [ "x" = "x${check_foreign}" ] ; then
+					warn_dpkg_ia32=1
+				fi
+			fi
 		fi
-	else
-		echo "Debug: found libncurses.so: /usr/lib/libncurses.so"
 	fi
 
-	if [ "${APT}" ];then
-		echo "Missing Dependicies"
-		echo "Ubuntu: please install: sudo aptitude install ${UPACKAGE}"
-		echo "Debian: please install: sudo aptitude install ${DPACKAGE}"
-		echo "---------------------------------------------------------"
+	if [ "${warn_eol_distro}" ] ; then
+		echo "End Of Life (EOL) deb based distro detected."
+		echo "Dependency check skipped, you are on your own."
+		echo "-----------------------------"
+		unset deb_pkgs
+	fi
+
+	if [ "${error_unknown_deb_distro}" ] ; then
+		echo "Unrecognized deb based system:"
+		echo "-----------------------------"
+		echo "Please cut, paste and email to: bugs@rcn-ee.com"
+		echo "-----------------------------"
+		echo "uname -m"
+		uname -m
+		echo "lsb_release -a"
+		lsb_release -a
+		echo "-----------------------------"
+		return 1
+	fi
+
+	if [ "${deb_pkgs}" ] ; then
+		echo "Debian/Ubuntu/Mint: missing dependicies, please install:"
+		echo "-----------------------------"
+		if [ "${warn_dpkg_ia32}" ] ; then
+			echo "sudo dpkg --add-architecture i386"
+		fi
+		echo "sudo apt-get update"
+		echo "sudo apt-get install ${deb_pkgs}"
+		echo "-----------------------------"
 		return 1
 	fi
 }
 
 BUILD_HOST=${BUILD_HOST:="$( detect_host )"}
-info "Detected build host [$BUILD_HOST]"
+if [ $(which lsb_release) ] ; then
+	info "Detected build host [`lsb_release -sd`]"
+else
+	info "Detected build host [$BUILD_HOST]"
+fi
 case "$BUILD_HOST" in
     redhat*)
 	    redhat_reqs
