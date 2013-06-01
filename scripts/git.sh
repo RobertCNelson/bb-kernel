@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 #
 # Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
 #
@@ -32,22 +32,30 @@ git_kernel_torvalds () {
 	echo "-----------------------------"
 	echo "scripts/git: pulling from: ${torvalds_linux}"
 	git pull ${GIT_OPTS} ${torvalds_linux} master --tags || true
-	git tag | grep v${KERNEL_TAG} &>/dev/null || git_kernel_stable
+	git tag | grep v${KERNEL_TAG} >/dev/null 2>&1 || git_kernel_stable
 }
 
 check_and_or_clone () {
-	if [ ! "${LINUX_GIT}" ] ; then
-		if [ -f "${HOME}/linux-src/.git/config" ] ; then
+	#For Legacy: moving to "${DIR}/ignore/linux-src/" for all new installs
+	if [ ! "${LINUX_GIT}" ] && [ -f "${HOME}/linux-src/.git/config" ] ; then
+		echo "-----------------------------"
+		echo "scripts/git: Warning: LINUX_GIT not defined in system.sh"
+		echo "using legacy location: ${HOME}/linux-src"
+		LINUX_GIT="${HOME}/linux-src"
+	fi
+
+	if [ ! "${LINUX_GIT}" ]; then
+		if [ -f "${DIR}/ignore/linux-src/.git/config" ] ; then
 			echo "-----------------------------"
-			echo "scripts/git: Warning: LINUX_GIT not defined in system.sh"
-			echo "using default location: ${HOME}/linux-src"
+			echo "scripts/git: LINUX_GIT not defined in system.sh"
+			echo "using default location: ${DIR}/ignore/linux-src/"
 		else
 			echo "-----------------------------"
-			echo "scripts/git: Warning: LINUX_GIT not defined in system.sh"
-			echo "cloning ${torvalds_linux} to default location: ${HOME}/linux-src"
-			git clone ${torvalds_linux} ${HOME}/linux-src
+			echo "scripts/git: LINUX_GIT not defined in system.sh"
+			echo "cloning ${torvalds_linux} into default location: ${DIR}/ignore/linux-src"
+			git clone ${torvalds_linux} ${DIR}/ignore/linux-src
 		fi
-		LINUX_GIT="${HOME}/linux-src"
+		LINUX_GIT="${DIR}/ignore/linux-src"
 	fi
 }
 
@@ -112,86 +120,64 @@ git_kernel () {
 	git commit --allow-empty -a -m 'empty cleanup commit'
 
 	git checkout origin/master -b tmp-master
-	git branch -D master &>/dev/null || true
+	git branch -D master >/dev/null 2>&1 || true
 
 	git checkout origin/master -b master
-	git branch -D tmp-master &>/dev/null || true
+	git branch -D tmp-master >/dev/null 2>&1 || true
 
 	git pull ${GIT_OPTS} || true
 
-	git tag | grep v${KERNEL_TAG} | grep -v rc &>/dev/null || git_kernel_torvalds
+	git tag | grep v${KERNEL_TAG} | grep -v rc >/dev/null 2>&1 || git_kernel_torvalds
 
 	if [ "${KERNEL_SHA}" ] ; then
 		git_kernel_torvalds
 	fi
 
-	if [ ! "${LATEST_GIT}" ] ; then
-		git branch -D v${KERNEL_TAG}-${BUILD} &>/dev/null || true
-		if [ ! "${KERNEL_SHA}" ] ; then
-			git checkout v${KERNEL_TAG} -b v${KERNEL_TAG}-${BUILD}
-		else
-			git checkout ${KERNEL_SHA} -b v${KERNEL_TAG}-${BUILD}
-		fi
+	git branch -D v${KERNEL_TAG}-${BUILD} >/dev/null 2>&1 || true
+	if [ ! "${KERNEL_SHA}" ] ; then
+		git checkout v${KERNEL_TAG} -b v${KERNEL_TAG}-${BUILD}
 	else
-		git branch -D top-of-tree &>/dev/null || true
-		git checkout v${KERNEL_TAG} -b top-of-tree
-		git describe
+		git checkout ${KERNEL_SHA} -b v${KERNEL_TAG}-${BUILD}
+	fi
+
+	if [ "${TOPOFTREE}" ] ; then
 		git pull ${GIT_OPTS} ${torvalds_linux} master || true
+		git pull ${GIT_OPTS} ${torvalds_linux} master --tags || true
 	fi
 
 	git describe
 
 	cd ${DIR}/
-
-	if [ "${IMX_BOOTLETS}" ] ; then
-		if [ ! -f "${DIR}"/ignore/imx-bootlets/.git/config ] ; then
-			rm -rf "${DIR}"/ignore/imx-bootlets || true
-			mkdir -p "${DIR}"/ignore/imx-bootlets
-			git clone ${imx_bootlets_repo} "${DIR}"/ignore/imx-bootlets
-		fi
-
-		if [ "${imx_bootlets_tag}" ] ; then
-			cd "${DIR}"/ignore/imx-bootlets/
-			git checkout origin/master -b tmp-master
-			git branch -D master &>/dev/null || true
-			git branch -D tmp &>/dev/null || true
-
-			git checkout origin/master -b master
-			git branch -D tmp-master &>/dev/null || true
-
-			git pull ${GIT_OPTS} || true
-			git checkout origin/${imx_bootlets_tag} -b tmp
-			cd ${DIR}/
-		fi
-	fi
-
 }
 
-source ${DIR}/version.sh
-source ${DIR}/system.sh
+. ${DIR}/version.sh
+. ${DIR}/system.sh
+
+unset git_config_user_email
+git_config_user_email=$(git config -l | grep user.email || true)
+
+unset git_config_user_name
+git_config_user_name=$(git config -l | grep user.name || true)
+
+if [ ! "${git_config_user_email}" ] || [ ! "${git_config_user_name}" ] ; then
+	echo "-----------------------------"
+	echo "This script relies heavily on git, and will fail if user.email/user.name are not defined."
+	echo "-----------------------------"
+	echo "See: https://help.github.com/articles/setting-your-email-in-git"
+	echo "git config --global user.email \"me@here.com\""
+	echo "-----------------------------"
+	echo "See: https://help.github.com/articles/setting-your-username-in-git"
+	echo "git config --global user.name \"Billy Everyteen\""
+	echo "-----------------------------"
+	exit 1
+fi
 
 if [ "${GIT_OVER_HTTP}" ] ; then
 	torvalds_linux="http://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 	linux_stable="http://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
-	imx_bootlets_repo="https://github.com/RobertCNelson/imx-bootlets.git"
 else
 	torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 	linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
-	imx_bootlets_repo="git://github.com/RobertCNelson/imx-bootlets.git"
 fi
 
-unset ON_MASTER
-if [ "${DISABLE_MASTER_BRANCH}" ] ; then
-	git branch | grep "*" | grep master &>/dev/null && ON_MASTER=1
-fi
-
-if [ ! "${ON_MASTER}" ] ; then
-	git_kernel
-else
-	echo "-----------------------------"
-	echo "Please checkout one of the active branches, building from the master branch has been disabled..."
-	echo "-----------------------------"
-	cat ${DIR}/branches.list | grep -v INACTIVE
-	echo "-----------------------------"
-	exit 1
-fi
+git_kernel

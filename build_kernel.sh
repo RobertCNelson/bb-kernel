@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 #
 # Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
 #
@@ -24,11 +24,11 @@ DIR=$PWD
 
 mkdir -p ${DIR}/deploy/
 
-function patch_kernel {
+patch_kernel () {
 	cd ${DIR}/KERNEL
 
 	export DIR GIT_OPTS
-	/bin/bash -e ${DIR}/patch.sh || { git add . ; exit 1 ; }
+	/bin/sh -e ${DIR}/patch.sh || { git add . ; exit 1 ; }
 
 	if [ ! "${RUN_BISECT}" ] ; then
 		git add .
@@ -40,13 +40,13 @@ function patch_kernel {
 
 	if [ "${LOCAL_PATCH_DIR}" ] ; then
 		for i in ${LOCAL_PATCH_DIR}/*.patch ; do patch  -s -p1 < $i ; done
-		BUILD+='+'
+		BUILD="${BUILD}+"
 	fi
 
 	cd ${DIR}/
 }
 
-function copy_defconfig {
+copy_defconfig () {
 	cd ${DIR}/KERNEL/
 	make ARCH=arm CROSS_COMPILE=${CC} distclean
 	make ARCH=arm CROSS_COMPILE=${CC} ${config}
@@ -55,176 +55,202 @@ function copy_defconfig {
 	cd ${DIR}/
 }
 
-function make_menuconfig {
+make_menuconfig () {
 	cd ${DIR}/KERNEL/
 	make ARCH=arm CROSS_COMPILE=${CC} menuconfig
 	cp -v .config ${DIR}/patches/defconfig
 	cd ${DIR}/
 }
 
-function make_kernel {
+make_kernel () {
 	cd ${DIR}/KERNEL/
 	echo "-----------------------------"
-	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" ${CONFIG_DEBUG_SECTION} zImage modules"
+	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CC}\" ${CONFIG_DEBUG_SECTION} zImage modules"
 	echo "-----------------------------"
-	time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" ${CONFIG_DEBUG_SECTION} zImage modules
+	make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" ${CONFIG_DEBUG_SECTION} zImage modules
 
 	unset DTBS
-	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" &> /dev/null && DTBS=1
+	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" >/dev/null 2>&1 && DTBS=1
 	if [ "x${DTBS}" != "x" ] ; then
-		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" ${CONFIG_DEBUG_SECTION} dtbs"
-		time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" ${CONFIG_DEBUG_SECTION} dtbs
-		ls arch/arm/boot/* | grep dtb || unset DTBS
+		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CC}\" ${CONFIG_DEBUG_SECTION} dtbs"
+		make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" ${CONFIG_DEBUG_SECTION} dtbs
+		ls arch/arm/boot/* | grep dtb >/dev/null 2>&1 || unset DTBS
 	fi
 
 	KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
+
+	deployfile=".zImage"
+	if [ -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
+		rm -rf "${DIR}/deploy/${KERNEL_UTS}${deployfile}" || true
+		rm -rf "${DIR}/deploy/${KERNEL_UTS}.config" || true
+	fi
+
 	if [ -f ./arch/arm/boot/zImage ] ; then
-		cp arch/arm/boot/zImage ${DIR}/deploy/${KERNEL_UTS}.zImage
-		cp .config ${DIR}/deploy/${KERNEL_UTS}.config
-	else
 		echo "-----------------------------"
-		echo "Error: make zImage modules failed"
-		exit
-	fi
-	cd ${DIR}/
-}
-
-function make_uImage {
-	cd ${DIR}/KERNEL/
-	echo "-----------------------------"
-	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CCACHE} ${CC}\" ${CONFIG_DEBUG_SECTION} uImage"
-	echo "-----------------------------"
-	time make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CCACHE} ${CC}" ${CONFIG_DEBUG_SECTION} uImage
-	KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
-	if [ -f ./arch/arm/boot/uImage ] ; then
-		cp arch/arm/boot/uImage ${DIR}/deploy/${KERNEL_UTS}.uImage
-	else
-		echo "-----------------------------"
-		echo "Error: make uImage failed"
-		exit
-	fi
-	cd ${DIR}/
-}
-
-function make_bootlets {
-	cd ${DIR}/ignore/imx-bootlets/
-
-	echo "-----------------------------"
-	echo "Building IMX BOOTLETS"
-	echo "-----------------------------"
-
-	make CROSS_COMPILE=${ARM_NONE_CC} clean 2>/dev/null
-	cat ${DIR}/KERNEL/arch/arm/boot/zImage ${DIR}/KERNEL/arch/arm/boot/${imx_bootlets_target}.dtb > ${DIR}/ignore/imx-bootlets/zImage
-	make CROSS_COMPILE=${ARM_NONE_CC} 2>/dev/null
-
-	if [ -f ${DIR}/ignore/imx-bootlets/sd_mmc_bootstream.raw ] ; then
-		cp ${DIR}/ignore/imx-bootlets/sd_mmc_bootstream.raw ${DIR}/deploy/${KERNEL_UTS}.sd_mmc_bootstream.raw
-	else
-		echo "-----------------------------"
-		echo "Error: make_bootlets failed"
-		exit
+		cp -v arch/arm/boot/zImage "${DIR}/deploy/${KERNEL_UTS}.zImage"
+		cp -v .config "${DIR}/deploy/${KERNEL_UTS}.config"
 	fi
 
 	cd ${DIR}/
+
+	if [ ! -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
+		export ERROR_MSG="File Generation Failure: [${KERNEL_UTS}${deployfile}]"
+		/bin/sh -e "${DIR}/scripts/error.sh" && { exit 1 ; }
+	else
+		ls -lh "${DIR}/deploy/${KERNEL_UTS}${deployfile}"
+	fi
 }
 
-function make_modules_pkg {
+make_modules_pkg () {
 	cd ${DIR}/KERNEL/
 
 	echo "-----------------------------"
 	echo "Building Module Archive"
 	echo "-----------------------------"
 
-	rm -rf ${DIR}/deploy/mod &> /dev/null || true
-	mkdir -p ${DIR}/deploy/mod
-	make ARCH=arm CROSS_COMPILE=${CC} modules_install INSTALL_MOD_PATH=${DIR}/deploy/mod
+	deployfile="-modules.tar.gz"
+	if [ -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
+		rm -rf "${DIR}/deploy/${KERNEL_UTS}${deployfile}" || true
+	fi
+
+	if [ -d ${DIR}/deploy/tmp ] ; then
+		rm -rf ${DIR}/deploy/tmp || true
+	fi
+	mkdir -p ${DIR}/deploy/tmp
+
+	make ARCH=arm CROSS_COMPILE=${CC} modules_install INSTALL_MOD_PATH=${DIR}/deploy/tmp
+
+	cd ${DIR}/deploy/tmp
 	echo "-----------------------------"
-	echo "Building ${KERNEL_UTS}-modules.tar.gz"
-	cd ${DIR}/deploy/mod
-	tar czf ../${KERNEL_UTS}-modules.tar.gz *
+	echo "Building ${KERNEL_UTS}${deployfile}"
+	tar czf ../${KERNEL_UTS}${deployfile} *
 	echo "-----------------------------"
+
 	cd ${DIR}/
+	rm -rf ${DIR}/deploy/tmp || true
+
+	if [ ! -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
+		export ERROR_MSG="File Generation Failure: [${KERNEL_UTS}${deployfile}]"
+		/bin/sh -e "${DIR}/scripts/error.sh" && { exit 1 ; }
+	else
+		ls -lh "${DIR}/deploy/${KERNEL_UTS}${deployfile}"
+	fi
 }
 
-function make_firmware_pkg {
+make_firmware_pkg () {
 	cd ${DIR}/KERNEL/
 
 	echo "-----------------------------"
 	echo "Building Firmware Archive"
 	echo "-----------------------------"
 
-	rm -rf ${DIR}/deploy/fir &> /dev/null || true
-	mkdir -p ${DIR}/deploy/fir
-	make ARCH=arm CROSS_COMPILE=${CC} firmware_install INSTALL_FW_PATH=${DIR}/deploy/fir
+	deployfile="-firmware.tar.gz"
+	if [ -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
+		rm -rf "${DIR}/deploy/${KERNEL_UTS}${deployfile}" || true
+	fi
+
+	if [ -d ${DIR}/deploy/tmp ] ; then
+		rm -rf ${DIR}/deploy/tmp || true
+	fi
+	mkdir -p ${DIR}/deploy/tmp
+
+	make ARCH=arm CROSS_COMPILE=${CC} firmware_install INSTALL_FW_PATH=${DIR}/deploy/tmp
+
+	cd ${DIR}/deploy/tmp
 	echo "-----------------------------"
-	echo "Building ${KERNEL_UTS}-firmware.tar.gz"
-	cd ${DIR}/deploy/fir
-	tar czf ../${KERNEL_UTS}-firmware.tar.gz *
+	echo "Building ${KERNEL_UTS}${deployfile}"
+	tar czf ../${KERNEL_UTS}${deployfile} *
 	echo "-----------------------------"
+
 	cd ${DIR}/
+	rm -rf ${DIR}/deploy/tmp || true
+
+	if [ ! -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
+		export ERROR_MSG="File Generation Failure: [${KERNEL_UTS}${deployfile}]"
+		/bin/sh -e "${DIR}/scripts/error.sh" && { exit 1 ; }
+	else
+		ls -lh "${DIR}/deploy/${KERNEL_UTS}${deployfile}"
+	fi
 }
 
-function make_dtbs_pkg {
+make_dtbs_pkg () {
 	cd ${DIR}/KERNEL/
 
 	echo "-----------------------------"
 	echo "Building DTBS Archive"
 	echo "-----------------------------"
 
-	rm -rf ${DIR}/deploy/dtbs &> /dev/null || true
-	mkdir -p ${DIR}/deploy/dtbs
-	find ./arch/arm/boot/ -iname "*.dtb" -exec cp -v '{}' ${DIR}/deploy/dtbs/ \;
-	cd ${DIR}/deploy/dtbs
+	deployfile="-dtbs.tar.gz"
+	if [ -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
+		rm -rf "${DIR}/deploy/${KERNEL_UTS}${deployfile}" || true
+	fi
+
+	if [ -d ${DIR}/deploy/tmp ] ; then
+		rm -rf ${DIR}/deploy/tmp || true
+	fi
+	mkdir -p ${DIR}/deploy/tmp
+
+	find ./arch/arm/boot/ -iname "*.dtb" -exec cp -v '{}' ${DIR}/deploy/tmp/ \;
+
+	cd ${DIR}/deploy/tmp
 	echo "-----------------------------"
-	echo "Building ${KERNEL_UTS}-dtbs.tar.gz"
-	tar czf ../${KERNEL_UTS}-dtbs.tar.gz *
+	echo "Building ${KERNEL_UTS}${deployfile}"
+	tar czf ../${KERNEL_UTS}${deployfile} *
 	echo "-----------------------------"
+
 	cd ${DIR}/
+	rm -rf ${DIR}/deploy/tmp || true
+
+	if [ ! -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
+		export ERROR_MSG="File Generation Failure: [${KERNEL_UTS}${deployfile}]"
+		/bin/sh -e "${DIR}/scripts/error.sh" && { exit 1 ; }
+	else
+		ls -lh "${DIR}/deploy/${KERNEL_UTS}${deployfile}"
+	fi
 }
 
-function make_headers_pkg {
-	cd ${DIR}/KERNEL/
-
-	echo "-----------------------------"
-	echo "Building Header Archive"
-	echo "-----------------------------"
-
-	rm -rf ${DIR}/deploy/headers &> /dev/null || true
-	mkdir -p ${DIR}/deploy/headers/usr
-	make ARCH=arm CROSS_COMPILE=${CC} headers_install INSTALL_HDR_PATH=${DIR}/deploy/headers/usr
-	cd ${DIR}/deploy/headers
-	echo "-----------------------------"	
-	echo "Building ${KERNEL_UTS}-headers.tar.gz"
-	tar czf ../${KERNEL_UTS}-headers.tar.gz *
-	echo "-----------------------------"	
-	cd ${DIR}/
-}
-
-/bin/bash -e ${DIR}/tools/host_det.sh || { exit 1 ; }
+/bin/sh -e ${DIR}/tools/host_det.sh || { exit 1 ; }
 
 if [ ! -f ${DIR}/system.sh ] ; then
 	cp ${DIR}/system.sh.sample ${DIR}/system.sh
+else
+	#fixes for bash -> sh conversion...
+	sed -i 's/bash/sh/g' ${DIR}/system.sh
+	sed -i 's/==/=/g' ${DIR}/system.sh
+fi
+
+if [ -f "${DIR}/branches.list" ] ; then
+	echo "-----------------------------"
+	echo "Please checkout one of the active branches:"
+	echo "-----------------------------"
+	cat ${DIR}/branches.list | grep -v INACTIVE
+	echo "-----------------------------"
+	exit
+fi
+
+if [ -f "${DIR}/branch.expired" ] ; then
+	echo "-----------------------------"
+	echo "Support for this branch has expired."
+	unset response
+	echo -n "Do you wish to bypass this warning and support your self: (y/n)? "
+	read response
+	if [ "x${response}" != "xy" ] ; then
+		exit
+	fi
+	echo "-----------------------------"
 fi
 
 unset CC
 unset DEBUG_SECTION
-unset LATEST_GIT
 unset LINUX_GIT
 unset LOCAL_PATCH_DIR
-source ${DIR}/system.sh
-/bin/bash -e "${DIR}/scripts/gcc.sh" || { exit 1 ; }
-source ${DIR}/.CC
+. ${DIR}/system.sh
+/bin/sh -e "${DIR}/scripts/gcc.sh" || { exit 1 ; }
+. ${DIR}/.CC
 echo "debug: CC=${CC}"
 
-source ${DIR}/version.sh
+. ${DIR}/version.sh
 export LINUX_GIT
-export LATEST_GIT
-
-if [ "${LATEST_GIT}" ] ; then
-	echo "-----------------------------"
-	echo "Warning LATEST_GIT is enabled from system.sh I hope you know what your doing.."
-	echo "-----------------------------"
-fi
 
 unset CONFIG_DEBUG_SECTION
 if [ "${DEBUG_SECTION}" ] ; then
@@ -234,10 +260,10 @@ fi
 #unset FULL_REBUILD
 FULL_REBUILD=1
 if [ "${FULL_REBUILD}" ] ; then
-	/bin/bash -e "${DIR}/scripts/git.sh" || { exit 1 ; }
+	/bin/sh -e "${DIR}/scripts/git.sh" || { exit 1 ; }
 
 	if [ "${RUN_BISECT}" ] ; then
-		/bin/bash -e "${DIR}/scripts/bisect.sh" || { exit 1 ; }
+		/bin/sh -e "${DIR}/scripts/bisect.sh" || { exit 1 ; }
 	fi
 
 	patch_kernel
@@ -246,24 +272,13 @@ fi
 if [ ! ${AUTO_BUILD} ] ; then
 	make_menuconfig
 fi
-if [ "x${GCC_OVERRIDE}" != "x" ] ; then
-	sed -i -e 's:CROSS_COMPILE)gcc:CROSS_COMPILE)'$GCC_OVERRIDE':g' ${DIR}/KERNEL/Makefile
-fi
 make_kernel
-if [ "${BUILD_UIMAGE}" ] ; then
-	make_uImage
-fi
-if [ "${IMX_BOOTLETS}" ] ; then
-	make_bootlets
-fi
 make_modules_pkg
 make_firmware_pkg
 if [ "x${DTBS}" != "x" ] ; then
 	make_dtbs_pkg
 fi
-if [ "${FULL_REBUILD}" ] ; then
-	make_headers_pkg
-fi
-if [ "x${GCC_OVERRIDE}" != "x" ] ; then
-	sed -i -e 's:CROSS_COMPILE)'$GCC_OVERRIDE':CROSS_COMPILE)gcc:g' ${DIR}/KERNEL/Makefile
-fi
+echo "-----------------------------"
+echo "Script Complete"
+echo "eewiki.net: [user@localhost:~$ export kernel_version=${KERNEL_UTS}]"
+echo "-----------------------------"
