@@ -23,7 +23,6 @@
 # Split out, so build_kernel.sh and build_deb.sh can share..
 
 git="git am"
-#git="git am --whitespace=fix"
 
 am33x_linux="git://github.com/RobertCNelson/linux.git"
 if [ -f ${DIR}/system.sh ] ; then
@@ -42,6 +41,10 @@ echo "Starting patch.sh"
 git_add () {
 	git add .
 	git commit -a -m 'testing patchset'
+}
+
+start_cleanup () {
+	git="git am --whitespace=fix"
 }
 
 cleanup () {
