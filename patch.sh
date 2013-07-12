@@ -48,7 +48,9 @@ start_cleanup () {
 }
 
 cleanup () {
-	git format-patch -${number} -o ${DIR}/patches/
+	if [ "${number}" ] ; then
+		git format-patch -${number} -o ${DIR}/patches/
+	fi
 	exit
 }
 
