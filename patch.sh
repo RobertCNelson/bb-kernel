@@ -761,7 +761,9 @@ am33x_after () {
 	#cp -v ../am33x-cm3/bin/am335x-pm-firmware.bin ./firmware/
 	#git add ./firmware/am335x-pm-firmware.bin
 	${git} "${DIR}/patches/firmware/0001-firmware-add-for-beaglebone.patch"
+}
 
+xenomai () {
 	echo "dir: xenomai"
         ${git} "${DIR}/patches/xenomai/0001-xenomai-apply-Stephan-Kappertz-ipipe-kernel-3.8.11.p.patch"
 	${git} "${DIR}/patches/xenomai/0002-xenomai-apply-Stephan-Kappertz-s-post.patch.patch"
@@ -779,6 +781,7 @@ am33x
 arm
 omap
 am33x_after
+xenomai
 saucy
 
 echo "patch.sh ran successful"
