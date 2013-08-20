@@ -835,6 +835,14 @@ am33x_after () {
 	${git} "${DIR}/patches/firmware/0001-firmware-add-for-beaglebone.patch"
 }
 
+xenomai () {
+	echo "dir: xenomai"
+        ${git} "${DIR}/patches/xenomai/0001-xenomai-apply-Stephan-Kappertz-ipipe-kernel-3.8.11.p.patch"
+	${git} "${DIR}/patches/xenomai/0002-xenomai-apply-Stephan-Kappertz-s-post.patch.patch"
+	${git} "${DIR}/patches/xenomai/0003-xenomai-apply-Xenomai-kernel-patch.patch"
+
+}
+
 saucy () {
 	echo "dir: saucy"
 	${git} "${DIR}/patches/saucy/0001-saucy-disable-Werror-pointer-sign.patch"
@@ -845,6 +853,7 @@ am33x
 arm
 omap
 am33x_after
+xenomai
 saucy
 
 echo "patch.sh ran successful"
