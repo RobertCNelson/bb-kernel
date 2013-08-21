@@ -150,6 +150,65 @@ git_kernel () {
 	cd ${DIR}/
 }
 
+git_xenomai () {
+	IPIPE_GIT="${DIR}/ignore/ipipe"
+	XENO_GIT="${DIR}/ignore/xenomai"
+
+	# Check/clone/update local ipipe repository
+	if [ ! -f "${DIR}/ignore/ipipe/.git/config" ] ; then
+		rm -rf ${DIR}/ignore/ipipe/ || true
+		git clone --shared ${IPIPE_GIT} ${DIR}/ignore/ipipe
+	fi
+
+	#Automaticly, just recover the git repo from a git crash
+	if [ -f "${DIR}/ignore/ipipe/.git/index.lock" ] ; then
+		rm -rf ${DIR}/ignore/ipipe/ || true
+		git clone --shared ${IPIPE_GIT} ${DIR}/ignore/ipipe
+	fi
+
+	cd "${DIR}/ignore/ipipe"
+	git am --abort || echo "git tree is clean..."
+	git add --all
+	git commit --allow-empty -a -m 'empty cleanup commit'
+
+	git reset --hard HEAD
+	git clean -dXf
+	git checkout master
+
+	test_for_branch=$(git branch --list ipipe-3.8)
+	if [ "x${test_for_branch}" != "x" ] ; then
+		git branch ipipe-3.8 -D
+	fi
+	git checkout --track origin/ipipe-3.8 -f
+
+	git pull ${GIT_OPTS} || true
+
+
+	# Check/clone/update local xenomai repository
+	if [ ! -f "${DIR}/ignore/xenomai/.git/config" ] ; then
+		rm -rf ${DIR}/ignore/xenomai/ || true
+		git clone --shared ${XENO_GIT} ${DIR}/ignore/xenomai
+	fi
+
+	#Automaticly, just recover the git repo from a git crash
+	if [ -f "${DIR}/ignore/xenomai/.git/index.lock" ] ; then
+		rm -rf ${DIR}/ignore/xenomai/ || true
+		git clone --shared ${XENO_GIT} ${DIR}/ignore/xenomai
+	fi
+
+	cd "${DIR}/ignore/xenomai"
+	git am --abort || echo "git tree is clean..."
+	git add --all
+	git commit --allow-empty -a -m 'empty cleanup commit'
+
+	git reset --hard HEAD
+	git checkout master -f
+
+	git pull ${GIT_OPTS} || true
+
+}
+
+
 . ${DIR}/version.sh
 . ${DIR}/system.sh
 
@@ -179,9 +238,14 @@ fi
 if [ "${GIT_OVER_HTTP}" ] ; then
 	torvalds_linux="http://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 	linux_stable="http://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+	xenomai_ipipe="http://git.xenomai.org/ipipe.git"
+	xenomai_2_6="http://git.xenomai.org/xenomai-2.6.git"
 else
 	torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 	linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+	xenomai_ipipe="git://git.xenomai.org/ipipe.git"
+	xenomai_2_6="git://git.xenomai.org/xenomai-2.6.git"
 fi
 
 git_kernel
+git_xenomai

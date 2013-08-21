@@ -836,11 +836,25 @@ am33x_after () {
 }
 
 xenomai () {
-	echo "dir: xenomai"
-        ${git} "${DIR}/patches/xenomai/0001-xenomai-apply-Stephan-Kappertz-ipipe-kernel-3.8.11.p.patch"
-	${git} "${DIR}/patches/xenomai/0002-xenomai-apply-Stephan-Kappertz-s-post.patch.patch"
-	${git} "${DIR}/patches/xenomai/0003-xenomai-apply-Xenomai-kernel-patch.patch"
+	echo "dir: xenomai - ipipe"
+	KDIR="$(pwd)"
 
+	# Build ipipe patch from git source
+	cd ${DIR}/ignore/ipipe/
+	./scripts/ipipe/genpatches.sh
+	cd ${KDIR}
+
+	# FIXME: 
+	# gpmc.c patch does not apply cleanly due to extensive changes in the BeagleBone patch set
+	# for now, just exclude it and apply a manually tweaked version
+	git apply "${DIR}/ignore/ipipe/ipipe-core-3.8.13-arm-1.patch" --exclude=arch/arm/mach-omap2/gpmc.c 
+
+	# Manually created fixup for the gpmc patch that doesn't apply
+	git apply "${DIR}/patches/xenomai/0001-ipipe-core-3.8.13-arm-1.gpmc.patch"
+
+	echo "dir: xenomai - prepare_kernel"
+	# Add the rest of xenomai to the kernel
+	${DIR}/ignore/xenomai/scripts/prepare-kernel.sh --linux=./ --arch=arm
 }
 
 saucy () {
