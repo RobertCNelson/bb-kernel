@@ -154,19 +154,25 @@ git_xenomai () {
 	IPIPE_GIT="${DIR}/ignore/ipipe"
 	XENO_GIT="${DIR}/ignore/xenomai"
 
+	echo "-----------------------------"
+	echo "scripts/git: Xenomai ipipe repository"
+
 	# Check/clone/update local ipipe repository
-	if [ ! -f "${DIR}/ignore/ipipe/.git/config" ] ; then
-		rm -rf ${DIR}/ignore/ipipe/ || true
-		git clone --shared ${IPIPE_GIT} ${DIR}/ignore/ipipe
+	if [ ! -f "${IPIPE_GIT}/.git/config" ] ; then
+		rm -rf ${IPIPE_GIT} || true
+		echo "scripts/git: Cloning ${xenomai_ipipe} into ${IPIPE_GIT}"
+		git clone ${xenomai_ipipe} ${IPIPE_GIT}
 	fi
 
 	#Automaticly, just recover the git repo from a git crash
-	if [ -f "${DIR}/ignore/ipipe/.git/index.lock" ] ; then
-		rm -rf ${DIR}/ignore/ipipe/ || true
-		git clone --shared ${IPIPE_GIT} ${DIR}/ignore/ipipe
+	if [ -f "${IPIPE_GIT}/.git/index.lock" ] ; then
+		rm -rf ${IPIPE_GIT} || true
+		echo "scripts/git: ipipe repository ${IPIPE_GIT} wedged"
+		echo "Recloning..."
+		git clone ${xenomai_ipipe} ${IPIPE_GIT}
 	fi
 
-	cd "${DIR}/ignore/ipipe"
+	cd "${IPIPE_GIT}"
 	git am --abort || echo "git tree is clean..."
 	git add --all
 	git commit --allow-empty -a -m 'empty cleanup commit'
@@ -184,19 +190,25 @@ git_xenomai () {
 	git pull ${GIT_OPTS} || true
 
 
+	echo "-----------------------------"
+	echo "scripts/git: Xenomai 2.6 repository"
+
 	# Check/clone/update local xenomai repository
-	if [ ! -f "${DIR}/ignore/xenomai/.git/config" ] ; then
-		rm -rf ${DIR}/ignore/xenomai/ || true
-		git clone --shared ${XENO_GIT} ${DIR}/ignore/xenomai
+	if [ ! -f "${XENO_GIT}/.git/config" ] ; then
+		rm -rf ${XENO_GIT} || true
+		echo "scripts/git: Cloning ${xenomai_2_6} into ${XENO_GIT}"
+		git clone ${xenomai_2_6} ${XENO_GIT}
 	fi
 
 	#Automaticly, just recover the git repo from a git crash
-	if [ -f "${DIR}/ignore/xenomai/.git/index.lock" ] ; then
-		rm -rf ${DIR}/ignore/xenomai/ || true
-		git clone --shared ${XENO_GIT} ${DIR}/ignore/xenomai
+	if [ -f "${XENO_GIT}/ignore/xenomai/.git/index.lock" ] ; then
+		rm -rf ${XENO_GIT}/ignore/xenomai/ || true
+		echo "scripts/git: xenomai repository ${XENO_GIT} wedged"
+		echo "Recloning..."
+		git clone ${xenomai_2_6} ${XENO_GIT}
 	fi
 
-	cd "${DIR}/ignore/xenomai"
+	cd "${XENO_GIT}"
 	git am --abort || echo "git tree is clean..."
 	git add --all
 	git commit --allow-empty -a -m 'empty cleanup commit'
