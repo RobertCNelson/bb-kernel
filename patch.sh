@@ -835,6 +835,28 @@ am33x_after () {
 	${git} "${DIR}/patches/firmware/0001-firmware-add-for-beaglebone.patch"
 }
 
+xenomai () {
+	echo "dir: xenomai - ipipe"
+	KDIR="$(pwd)"
+
+	# Build ipipe patch from git source
+	cd ${DIR}/ignore/ipipe/
+	./scripts/ipipe/genpatches.sh
+	cd ${KDIR}
+
+	# FIXME: 
+	# gpmc.c patch does not apply cleanly due to extensive changes in the BeagleBone patch set
+	# for now, just exclude it and apply a manually tweaked version
+	git apply "${DIR}/ignore/ipipe/ipipe-core-3.8.13-arm-1.patch" --exclude=arch/arm/mach-omap2/gpmc.c 
+
+	# Manually created fixup for the gpmc patch that doesn't apply
+	git apply "${DIR}/patches/xenomai/0001-ipipe-core-3.8.13-arm-1.gpmc.patch"
+
+	echo "dir: xenomai - prepare_kernel"
+	# Add the rest of xenomai to the kernel
+	${DIR}/ignore/xenomai/scripts/prepare-kernel.sh --linux=./ --arch=arm
+}
+
 saucy () {
 	echo "dir: saucy"
 	${git} "${DIR}/patches/saucy/0001-saucy-disable-Werror-pointer-sign.patch"
@@ -845,6 +867,7 @@ am33x
 arm
 omap
 am33x_after
+xenomai
 saucy
 
 echo "patch.sh ran successful"
