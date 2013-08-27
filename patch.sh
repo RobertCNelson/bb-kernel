@@ -844,13 +844,14 @@ xenomai () {
 	./scripts/ipipe/genpatches.sh
 	cd ${KDIR}
 
-	# FIXME: 
-	# gpmc.c patch does not apply cleanly due to extensive changes in the BeagleBone patch set
-	# for now, just exclude it and apply a manually tweaked version
-	git apply "${DIR}/ignore/ipipe/ipipe-core-3.8.13-arm-1.patch" --exclude=arch/arm/mach-omap2/gpmc.c 
+	# Apply pre patch so xenomai ipipe patch applies cleanly
+	git apply "${DIR}/patches/xenomai/ipipe-core-3.8.13-beaglebone-pre.patch"
 
-	# Manually created fixup for the gpmc patch that doesn't apply
-	git apply "${DIR}/patches/xenomai/0001-ipipe-core-3.8.13-arm-1.gpmc.patch"
+	# Apply ipipe patch
+	git apply "${DIR}/ignore/ipipe/ipipe-core-3.8.13-arm-1.patch"
+
+	# Apply post patch
+	git apply "${DIR}/patches/xenomai/ipipe-core-3.8.13-beaglebone-post.patch"
 
 	echo "dir: xenomai - prepare_kernel"
 	# Add the rest of xenomai to the kernel
