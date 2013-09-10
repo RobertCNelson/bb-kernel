@@ -835,6 +835,11 @@ am33x_after () {
 	${git} "${DIR}/patches/firmware/0001-firmware-add-for-beaglebone.patch"
 }
 
+machinekit () {
+	echo "dir: machinekit"
+	${git} "${DIR}/patches/machinekit/0001-ADS1115.patch"
+}
+
 xenomai () {
 	echo "dir: xenomai - ipipe"
 	KDIR="$(pwd)"
@@ -868,6 +873,7 @@ am33x
 arm
 omap
 am33x_after
+machinekit
 xenomai
 saucy
 
