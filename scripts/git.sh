@@ -162,40 +162,42 @@ git_xenomai () {
 	IPIPE_GIT="${DIR}/ignore/ipipe"
 	XENO_GIT="${DIR}/ignore/xenomai"
 
-	echo "-----------------------------"
-	echo "scripts/git: Xenomai ipipe repository"
-
-	# Check/clone/update local ipipe repository
-	if [ ! -f "${IPIPE_GIT}/.git/config" ] ; then
-		rm -rf ${IPIPE_GIT} || true
-		echo "scripts/git: Cloning ${xenomai_ipipe} into ${IPIPE_GIT}"
-		git clone ${xenomai_ipipe} ${IPIPE_GIT}
-	fi
-
-	#Automaticly, just recover the git repo from a git crash
-	if [ -f "${IPIPE_GIT}/.git/index.lock" ] ; then
-		rm -rf ${IPIPE_GIT} || true
-		echo "scripts/git: ipipe repository ${IPIPE_GIT} wedged"
-		echo "Recloning..."
-		git clone ${xenomai_ipipe} ${IPIPE_GIT}
-	fi
-
-	cd "${IPIPE_GIT}"
-	git am --abort || echo "git tree is clean..."
-	git add --all
-	git commit --allow-empty -a -m 'empty cleanup commit'
-
-	git reset --hard HEAD
-	git clean -dXf
-	git checkout master
-
-	test_for_branch=$(git branch --list ipipe-3.8)
-	if [ "x${test_for_branch}" != "x" ] ; then
-		git branch ipipe-3.8 -D
-	fi
-	git checkout --track origin/ipipe-3.8 -f
-
-	git pull ${GIT_OPTS} || true
+# xenomai 2.6.3 now includes ipipe patches for arm 3.8.13, it is no longer
+# necessary to pull them in from the ipipe repository
+#	echo "-----------------------------"
+#	echo "scripts/git: Xenomai ipipe repository"
+#
+#	# Check/clone/update local ipipe repository
+#	if [ ! -f "${IPIPE_GIT}/.git/config" ] ; then
+#		rm -rf ${IPIPE_GIT} || true
+#		echo "scripts/git: Cloning ${xenomai_ipipe} into ${IPIPE_GIT}"
+#		git clone ${xenomai_ipipe} ${IPIPE_GIT}
+#	fi
+#
+#	#Automaticly, just recover the git repo from a git crash
+#	if [ -f "${IPIPE_GIT}/.git/index.lock" ] ; then
+#		rm -rf ${IPIPE_GIT} || true
+#		echo "scripts/git: ipipe repository ${IPIPE_GIT} wedged"
+#		echo "Recloning..."
+#		git clone ${xenomai_ipipe} ${IPIPE_GIT}
+#	fi
+#
+#	cd "${IPIPE_GIT}"
+#	git am --abort || echo "git tree is clean..."
+#	git add --all
+#	git commit --allow-empty -a -m 'empty cleanup commit'
+#
+#	git reset --hard HEAD
+#	git clean -dXf
+#	git checkout master
+#
+#	test_for_branch=$(git branch --list ipipe-3.8)
+#	if [ "x${test_for_branch}" != "x" ] ; then
+#		git branch ipipe-3.8 -D
+#	fi
+#	git checkout --track origin/ipipe-3.8 -f
+#
+#	git pull ${GIT_OPTS} || true
 
 
 	echo "-----------------------------"
@@ -222,7 +224,7 @@ git_xenomai () {
 	git commit --allow-empty -a -m 'empty cleanup commit'
 
 	git reset --hard HEAD
-	git checkout master -f
+	git checkout v2.6.3 -f
 
 	git pull ${GIT_OPTS} || true
 

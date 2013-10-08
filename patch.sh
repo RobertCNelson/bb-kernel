@@ -851,19 +851,21 @@ xenomai () {
 	echo "dir: xenomai - ipipe"
 	KDIR="$(pwd)"
 
-	# Build ipipe patch from git source
-	cd ${DIR}/ignore/ipipe/
-	./scripts/ipipe/genpatches.sh
+# Not needed now that working ipipe patch is in official xenomai 2.6.3 release
+#	# Build ipipe patch from git source
+#	cd ${DIR}/ignore/ipipe/
+#	./scripts/ipipe/genpatches.sh
+
 	cd ${KDIR}
 
 	# Apply pre patch so xenomai ipipe patch applies cleanly
-	git apply "${DIR}/patches/xenomai/ipipe-core-3.8.13-beaglebone-pre.patch"
+	git apply "${DIR}/ignore/xenomai/ksrc/arch/arm/patches/beaglebone/ipipe-core-3.8.13-beaglebone-pre.patch"
 
 	# Apply ipipe patch
-	git apply "${DIR}/ignore/ipipe/ipipe-core-3.8.13-arm-1.patch"
+	git apply "${DIR}/ignore/xenomai/ksrc/arch/arm/patches/ipipe-core-3.8.13-arm-3.patch"
 
 	# Apply post patch
-	git apply "${DIR}/patches/xenomai/ipipe-core-3.8.13-beaglebone-post.patch"
+	git apply "${DIR}/ignore/xenomai/ksrc/arch/arm/patches/beaglebone/ipipe-core-3.8.13-beaglebone-post.patch"
 
 	echo "dir: xenomai - prepare_kernel"
 	# Add the rest of xenomai to the kernel
