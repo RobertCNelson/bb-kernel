@@ -842,6 +842,34 @@ am33x_after () {
 	${git} "${DIR}/patches/firmware/0001-firmware-add-for-beaglebone.patch"
 }
 
+machinekit () {
+	echo "dir: machinekit"
+	${git} "${DIR}/patches/machinekit/0001-ADS1115.patch"
+}
+
+xenomai () {
+	echo "dir: xenomai - ipipe"
+	KDIR="$(pwd)"
+
+	# Build ipipe patch from git source
+	cd ${DIR}/ignore/ipipe/
+	./scripts/ipipe/genpatches.sh
+	cd ${KDIR}
+
+	# Apply pre patch so xenomai ipipe patch applies cleanly
+	git apply "${DIR}/patches/xenomai/ipipe-core-3.8.13-beaglebone-pre.patch"
+
+	# Apply ipipe patch
+	git apply "${DIR}/ignore/ipipe/ipipe-core-3.8.13-arm-1.patch"
+
+	# Apply post patch
+	git apply "${DIR}/patches/xenomai/ipipe-core-3.8.13-beaglebone-post.patch"
+
+	echo "dir: xenomai - prepare_kernel"
+	# Add the rest of xenomai to the kernel
+	${DIR}/ignore/xenomai/scripts/prepare-kernel.sh --linux=./ --arch=arm
+}
+
 saucy () {
 	echo "dir: saucy"
 	${git} "${DIR}/patches/saucy/0001-saucy-disable-Werror-pointer-sign.patch"
@@ -852,6 +880,8 @@ am33x
 arm
 omap
 am33x_after
+machinekit
+xenomai
 saucy
 
 echo "patch.sh ran successful"
