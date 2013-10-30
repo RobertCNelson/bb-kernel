@@ -845,6 +845,7 @@ am33x_after () {
 machinekit () {
 	echo "dir: machinekit"
 	${git} "${DIR}/patches/machinekit/0001-ADS1115.patch"
+	${git} "${DIR}/patches/machinekit/0002-omap_hsmmc-clear-status-flags-before-starting-a-new-command.patch"
 }
 
 xenomai () {
