@@ -37,6 +37,7 @@ check_rpm () {
 }
 
 redhat_reqs () {
+	#https://fedoraproject.org/wiki/Releases
 	unset rpm_pkgs
 	pkg="redhat-lsb-core"
 	check_rpm
@@ -55,6 +56,29 @@ redhat_reqs () {
 		check_rpm
 		pkg="zlib.i686"
 		check_rpm
+	fi
+
+	if [ $(which lsb_release) ] ; then
+		rpm_distro=$(lsb_release -rs)
+		echo "RPM distro version: [${rpm_distro}]"
+
+		case "${rpm_distro}" in
+		6.4|6.5)
+			echo "Warning: RHEL/CentOS [${rpm_distro}] has no [uboot-tools] pkg"
+			;;
+		17|18|19|20)
+			pkg="uboot-tools"
+			check_rpm
+			;;
+		*)
+			echo "Warning: [uboot-tools] package check still in development"
+			echo "Please email to: bugs@rcn-ee.com"
+			echo "Success/Failure of [yum install uboot-tools]"
+			echo "RPM distro version: [${rpm_distro}]"
+			pkg="uboot-tools"
+			check_rpm
+			;;
+		esac
 	fi
 
 	if [ "${rpm_pkgs}" ] ; then
@@ -173,8 +197,25 @@ debian_regs () {
 			fi
 		fi
 
+		if [ "x${deb_distro}" = "xtesting" ] ; then
+			echo "+ Warning: [lsb_release -cs] just returned [testing], so now testing [lsb_release -ds] instead..."
+			deb_lsb_ds=$(lsb_release -ds | awk '{print $1}')
+
+			#http://solydxk.com/about/solydxk/
+			#lsb_release -a
+			#No LSB modules are available.
+			#Distributor ID: SolydXK
+			#Description:    SolydXK
+			#Release:        1
+			#Codename:       testing
+			if [ "x${deb_lsb_ds}" = "xSolydXK" ] ; then
+				deb_distro="jessie"
+			fi
+		fi
+
 		#Linux Mint: Compatibility Matrix
 		#http://www.linuxmint.com/oldreleases.php
+		#http://packages.linuxmint.com/index.php
 		case "${deb_distro}" in
 		debian)
 			deb_distro="jessie"
@@ -200,6 +241,9 @@ debian_regs () {
 		olivia)
 			deb_distro="raring"
 			;;
+		petra)
+			deb_distro="saucy"
+			;;
 		esac
 
 		case "${deb_distro}" in
@@ -208,7 +252,7 @@ debian_regs () {
 			unset error_unknown_deb_distro
 			unset warn_eol_distro
 			;;
-		lucid|precise|quantal|raring|saucy)
+		lucid|precise|quantal|raring|saucy|trusty)
 			#Supported Ubuntu:
 			unset error_unknown_deb_distro
 			unset warn_eol_distro
@@ -259,7 +303,7 @@ debian_regs () {
 
 		#Libs; starting with jessie/sid/saucy, lib<pkg_name>-dev:<arch>
 		case "${deb_distro}" in
-		jessie|sid|saucy)
+		jessie|sid|saucy|trusty)
 			pkg="libncurses5-dev:${deb_arch}"
 			check_dpkg
 			;;
@@ -277,7 +321,7 @@ debian_regs () {
 				pkg="ia32-libs"
 				check_dpkg
 				;;
-			wheezy|jessie|sid|quantal|raring|saucy)
+			wheezy|jessie|sid|quantal|raring|saucy|trusty)
 				pkg="libc6:i386"
 				check_dpkg
 				pkg="libncurses5:i386"
