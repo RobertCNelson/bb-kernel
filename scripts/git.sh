@@ -158,6 +158,81 @@ git_kernel () {
 	cd ${DIR}/
 }
 
+git_xenomai () {
+	IPIPE_GIT="${DIR}/ignore/ipipe"
+	XENO_GIT="${DIR}/ignore/xenomai"
+
+# xenomai 2.6.3 now includes ipipe patches for arm 3.8.13, it is no longer
+# necessary to pull them in from the ipipe repository
+#	echo "-----------------------------"
+#	echo "scripts/git: Xenomai ipipe repository"
+#
+#	# Check/clone/update local ipipe repository
+#	if [ ! -f "${IPIPE_GIT}/.git/config" ] ; then
+#		rm -rf ${IPIPE_GIT} || true
+#		echo "scripts/git: Cloning ${xenomai_ipipe} into ${IPIPE_GIT}"
+#		git clone ${xenomai_ipipe} ${IPIPE_GIT}
+#	fi
+#
+#	#Automaticly, just recover the git repo from a git crash
+#	if [ -f "${IPIPE_GIT}/.git/index.lock" ] ; then
+#		rm -rf ${IPIPE_GIT} || true
+#		echo "scripts/git: ipipe repository ${IPIPE_GIT} wedged"
+#		echo "Recloning..."
+#		git clone ${xenomai_ipipe} ${IPIPE_GIT}
+#	fi
+#
+#	cd "${IPIPE_GIT}"
+#	git am --abort || echo "git tree is clean..."
+#	git add --all
+#	git commit --allow-empty -a -m 'empty cleanup commit'
+#
+#	git reset --hard HEAD
+#	git clean -dXf
+#	git checkout master
+#
+#	test_for_branch=$(git branch --list ipipe-3.8)
+#	if [ "x${test_for_branch}" != "x" ] ; then
+#		git branch ipipe-3.8 -D
+#	fi
+#	git checkout --track origin/ipipe-3.8 -f
+#
+#	git pull ${GIT_OPTS} || true
+
+
+	echo "-----------------------------"
+	echo "scripts/git: Xenomai 2.6 repository"
+
+	# Check/clone/update local xenomai repository
+	if [ ! -f "${XENO_GIT}/.git/config" ] ; then
+		rm -rf ${XENO_GIT} || true
+		echo "scripts/git: Cloning ${xenomai_2_6} into ${XENO_GIT}"
+		git clone ${xenomai_2_6} ${XENO_GIT}
+	fi
+
+	#Automaticly, just recover the git repo from a git crash
+	if [ -f "${XENO_GIT}/ignore/xenomai/.git/index.lock" ] ; then
+		rm -rf ${XENO_GIT}/ignore/xenomai/ || true
+		echo "scripts/git: xenomai repository ${XENO_GIT} wedged"
+		echo "Recloning..."
+		git clone ${xenomai_2_6} ${XENO_GIT}
+	fi
+
+	cd "${XENO_GIT}"
+	git am --abort || echo "git tree is clean..."
+	git add --all
+	git commit --allow-empty -a -m 'empty cleanup commit'
+
+	git reset --hard HEAD
+	git checkout v2.6.3 -f
+
+	# No need to pull latest git now that the officially released and tagged
+	# version of xenomai works with the BeagleBone
+	#git pull ${GIT_OPTS} || true
+
+}
+
+
 . ${DIR}/version.sh
 . ${DIR}/system.sh
 
@@ -187,9 +262,14 @@ fi
 if [ "${GIT_OVER_HTTP}" ] ; then
 	torvalds_linux="http://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 	linux_stable="http://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+	xenomai_ipipe="http://git.xenomai.org/ipipe.git"
+	xenomai_2_6="http://git.xenomai.org/xenomai-2.6.git"
 else
 	torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 	linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+	xenomai_ipipe="git://git.xenomai.org/ipipe.git"
+	xenomai_2_6="git://git.xenomai.org/xenomai-2.6.git"
 fi
 
 git_kernel
+git_xenomai
