@@ -859,10 +859,47 @@ saucy () {
 	${git} "${DIR}/patches/saucy/0002-saucy-disable-stack-protector.patch"
 }
 
+machinekit () {
+	echo "dir: machinekit"
+	${git} "${DIR}/patches/machinekit/0001-ADS1115.patch"
+	# Fix now applied by upstream (see dir: fixes, above)
+	#${git} "${DIR}/patches/machinekit/0002-omap_hsmmc-clear-status-flags-before-starting-a-new-command.patch"
+}
+
+xenomai () {
+	echo "dir: xenomai - ipipe"
+	KDIR="$(pwd)"
+
+# Not needed now that working ipipe patch is in official xenomai 2.6.3 release
+#	# Build ipipe patch from git source
+#	cd ${DIR}/ignore/ipipe/
+#	./scripts/ipipe/genpatches.sh
+
+	cd ${KDIR}
+
+	# Apply pre patch so xenomai ipipe patch applies cleanly
+	git apply "${DIR}/ignore/xenomai/ksrc/arch/arm/patches/beaglebone/ipipe-core-3.8.13-beaglebone-pre.patch"
+
+	# Apply ipipe patch
+	git apply "${DIR}/ignore/xenomai/ksrc/arch/arm/patches/ipipe-core-3.8.13-arm-3.patch"
+
+	# Apply post patch
+	git apply "${DIR}/ignore/xenomai/ksrc/arch/arm/patches/beaglebone/ipipe-core-3.8.13-beaglebone-post.patch"
+
+	# Apply THUMB2 fix
+	${git} "${DIR}/patches/xenomai/0001-Fix-relocation-truncated-to-fit-R_ARM_THM_JUMP19-err.patch"
+
+	echo "dir: xenomai - prepare_kernel"
+	# Add the rest of xenomai to the kernel
+	${DIR}/ignore/xenomai/scripts/prepare-kernel.sh --linux=./ --arch=arm
+}
+
 am33x
 arm
 omap
 am33x_after
 saucy
+machinekit
+xenomai
 
 echo "patch.sh ran successful"
