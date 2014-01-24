@@ -885,6 +885,9 @@ xenomai () {
 	# Apply post patch
 	git apply "${DIR}/ignore/xenomai/ksrc/arch/arm/patches/beaglebone/ipipe-core-3.8.13-beaglebone-post.patch"
 
+	# Apply THUMB2 fix
+	${git} "${DIR}/patches/xenomai/0001-Fix-relocation-truncated-to-fit-R_ARM_THM_JUMP19-err.patch"
+
 	echo "dir: xenomai - prepare_kernel"
 	# Add the rest of xenomai to the kernel
 	${DIR}/ignore/xenomai/scripts/prepare-kernel.sh --linux=./ --arch=arm
