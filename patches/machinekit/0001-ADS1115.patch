@@ -1,0 +1,273 @@
+From 3887d36f1da13b245b7ebc4d56ad0fb612384c98 Mon Sep 17 00:00:00 2001
+From: Bas Laarhoven <sjml@xs4all.nl>
+Date: Thu, 18 Jul 2013 11:15:24 +0200
+Subject: [PATCH] Added ADS1115 support and (optional) 3 decimals
+
+
+Signed-off-by: Bas Laarhoven <sjml@xs4all.nl>
+---
+ Documentation/hwmon/ads1015 |   25 +++++++----
+ drivers/hwmon/ads1015.c     |  100 +++++++++++++++++++++++++++++++++++++++----
+ 2 files changed, 107 insertions(+), 18 deletions(-)
+
+diff --git a/Documentation/hwmon/ads1015 b/Documentation/hwmon/ads1015
+index f6fe9c2..0910313 100644
+--- a/Documentation/hwmon/ads1015
++++ b/Documentation/hwmon/ads1015
+@@ -3,19 +3,21 @@ Kernel driver ads1015
+ 
+ Supported chips:
+   * Texas Instruments ADS1015
++  * Texas Instruments ADS1115
+     Prefix: 'ads1015'
+     Datasheet: Publicly available at the Texas Instruments website :
+                http://focus.ti.com/lit/ds/symlink/ads1015.pdf
+ 
+ Authors:
+         Dirk Eibach, Guntermann & Drunck GmbH <eibach@gdsys.de>
++        Bas Laarhoven, AES allround embedded services <sjl@xs4all.nl>
+ 
+ Description
+ -----------
+ 
+-This driver implements support for the Texas Instruments ADS1015.
++This driver implements support for the Texas Instruments ADS1x15.
+ 
+-This device is a 12-bit A-D converter with 4 inputs.
++This device is a 12-bit (or 16-bit for the ADS1115) A-D converter with 4 inputs.
+ 
+ The inputs can be used single ended or in certain differential combinations.
+ 
+@@ -46,13 +48,15 @@ configuration data for the used input combinations:
+   4: +/- 0.512 V
+   5: +/- 0.256 V
+ - data_rate in samples per second
+-  0: 128
+-  1: 250
+-  2: 490
+-  3: 920
+-  4: 1600
+-  5: 2400
+-  6: 3300
++    ADS1015  ADS1115
++  0: 128      8    
++  1: 250      16
++  2: 490      32
++  3: 920      64
++  4: 1600     128
++  5: 2400     250
++  6: 3300     475
++  7: 3300     860
+ 
+ Example:
+ struct ads1015_platform_data data = {
+@@ -70,3 +74,6 @@ Devicetree
+ 
+ Configuration is also possible via devicetree:
+ Documentation/devicetree/bindings/hwmon/ads1015.txt
++
++Setting the hi_res option to <1> via the devicetree configuration
++will add 3 decimals to the values read via sysfs.
+\ No newline at end of file
+diff --git a/drivers/hwmon/ads1015.c b/drivers/hwmon/ads1015.c
+index 2798246..a94d0d2 100644
+--- a/drivers/hwmon/ads1015.c
++++ b/drivers/hwmon/ads1015.c
+@@ -20,6 +20,13 @@
+  * You should have received a copy of the GNU General Public License
+  * along with this program; if not, write to the Free Software
+  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ *
++ * History: 2013-07-16 by Bas Laarhoven
++ *
++ *          Added support for the ADS1115 (16-bit version) converter.
++ *          The ADC type (ADS1015 or ADS1115) is detected automagically.
++ *          Added DT 'hi_res' configuration setting to add 3 decimal
++ *          digits to the returned value. Fixed scaling for ADS1015.
+  */
+ 
+ #include <linux/module.h>
+@@ -46,17 +53,24 @@ static const unsigned int fullscale_table[8] = {
+ 	6144, 4096, 2048, 1024, 512, 256, 256, 256 };
+ 
+ /* Data rates in samples per second */
+-static const unsigned int data_rate_table[8] = {
++static const unsigned int ads1015_data_rate_table[8] = {
+ 	128, 250, 490, 920, 1600, 2400, 3300, 3300 };
+ 
++/* Data rates in samples per second */
++static const unsigned int ads1115_data_rate_table[8] = {
++	8, 16, 32, 64, 128, 250, 475, 860 };
++
+ #define ADS1015_DEFAULT_CHANNELS 0xff
+ #define ADS1015_DEFAULT_PGA 2
+ #define ADS1015_DEFAULT_DATA_RATE 4
++#define ADS1015_DEFAULT_RESOLUTION 0
+ 
+ struct ads1015_data {
+ 	struct device *hwmon_dev;
+ 	struct mutex update_lock; /* mutex protect updates */
+ 	struct ads1015_channel_data channel_data[ADS1015_CHANNELS];
++	enum { eADS1X15 = 0, eADS1015, eADS1115 } ads1x15_type;
++	enum { eNORMAL = 0, eHI_RES } hi_res;
+ };
+ 
+ static int ads1015_read_adc(struct i2c_client *client, unsigned int channel)
+@@ -75,7 +89,11 @@ static int ads1015_read_adc(struct i2c_client *client, unsigned int channel)
+ 	if (res < 0)
+ 		goto err_unlock;
+ 	config = res;
+-	conversion_time_ms = DIV_ROUND_UP(1000, data_rate_table[data_rate]);
++	if (data->ads1x15_type == eADS1115) {
++		conversion_time_ms = DIV_ROUND_UP(1000, ads1115_data_rate_table[data_rate]);
++	} else {
++		conversion_time_ms = DIV_ROUND_UP(1000, ads1015_data_rate_table[data_rate]);
++	}
+ 
+ 	/* setup and start single conversion */
+ 	config &= 0x001f;
+@@ -94,7 +112,23 @@ static int ads1015_read_adc(struct i2c_client *client, unsigned int channel)
+ 	if (res < 0)
+ 		goto err_unlock;
+ 	config = res;
++	if (data->ads1x15_type == eADS1X15) {
++		if (config & (1 << 15)) {
++			data->ads1x15_type = eADS1015;
++		} else {
++			/* this still could be a ADS1115, that one's slower than the 1015! */
++			conversion_time_ms = DIV_ROUND_UP(1000,
++			        ads1115_data_rate_table[data_rate]) - conversion_time_ms;
++			msleep( conversion_time_ms);
++			res = i2c_smbus_read_word_swapped(client, ADS1015_CONFIG);
++			if (res < 0)
++				goto err_unlock;
++			data->ads1x15_type = eADS1115;
++			config = res;
++		}
++	}
+ 	if (!(config & (1 << 15))) {
++		data->ads1x15_type = eADS1X15;
+ 		/* conversion not finished in time */
+ 		res = -EIO;
+ 		goto err_unlock;
+@@ -107,14 +141,37 @@ err_unlock:
+ 	return res;
+ }
+ 
+-static int ads1015_reg_to_mv(struct i2c_client *client, unsigned int channel,
+-			     s16 reg)
++static int ads1015_reg_to_muv(struct i2c_client *client, unsigned int channel,
++			s16 reg, u16* mv, u16* uv, bool* sign)
+ {
+ 	struct ads1015_data *data = i2c_get_clientdata(client);
+ 	unsigned int pga = data->channel_data[channel].pga;
+ 	int fullscale = fullscale_table[pga];
+-
+-	return DIV_ROUND_CLOSEST(reg * fullscale, 0x7ff0);
++	u32 alt_uv;
++
++	/*
++	 *  Scale to 1/1024 mV units, these units make it easy
++	 *  to convert to mV and uV values on low performance systems.
++	 *
++	 *  formula: muv = 1024 * fullscale * reg / 0x8000
++	 */
++	if (reg & (0x8000)) {
++		alt_uv = DIV_ROUND_CLOSEST( fullscale * -reg, 32);
++		*sign = true;
++	} else {
++		alt_uv = DIV_ROUND_CLOSEST( fullscale * reg, 32);
++		*sign = false;
++	}
++	if (data->hi_res) {
++		/*  Use hi_res calculation with fraction */
++		*uv = ((alt_uv % 1024) * 1000) / 1024;
++		*mv = alt_uv / 1024;
++		return 1;
++	} else {
++		/*  Use original calculation and output format */
++		*mv = DIV_ROUND_CLOSEST( alt_uv, 1024);
++		return 0;
++	}
+ }
+ 
+ /* sysfs callback function */
+@@ -125,12 +182,21 @@ static ssize_t show_in(struct device *dev, struct device_attribute *da,
+ 	struct i2c_client *client = to_i2c_client(dev);
+ 	int res;
+ 	int index = attr->index;
++	u16 mv;
++	u16 uv;
++	bool sign;
+ 
+ 	res = ads1015_read_adc(client, index);
+ 	if (res < 0)
+ 		return res;
+ 
+-	return sprintf(buf, "%d\n", ads1015_reg_to_mv(client, index, res));
++	if (ads1015_reg_to_muv( client, index, res, &mv, &uv, &sign)) {
++		/* Show milli-Volts with decimal point (sorry, no comma) */
++		/* TODO: Decide whether to show micro-Volts ??? */
++		return sprintf(buf, "%s%d.%03u\n", (sign) ? "-" : "", mv, uv);
++	} else {
++		return sprintf(buf, (sign) ? "-%u\n" : "%u\n", mv);
++	}
+ }
+ 
+ static const struct sensor_device_attribute ads1015_in[] = {
+@@ -164,14 +230,27 @@ static int ads1015_get_channels_config_of(struct i2c_client *client)
+ {
+ 	struct ads1015_data *data = i2c_get_clientdata(client);
+ 	struct device_node *node;
++	unsigned int hi_res = ADS1015_DEFAULT_RESOLUTION;
++	const __be32 *property;
++	int len;
+ 
+ 	if (!client->dev.of_node
+ 	    || !of_get_next_child(client->dev.of_node, NULL))
+ 		return -EINVAL;
+ 
++	property = of_get_property(client->dev.of_node, "hi_res", &len);
++	if (property && len == sizeof(int)) {
++		hi_res = be32_to_cpup(property);
++		if (hi_res > 1) {
++			dev_err(&client->dev,
++				"invalid hi_res setting on %s\n",
++				client->dev.of_node->full_name);
++			hi_res = 0;
++		}
++	}
++	data->hi_res = (hi_res) ? eHI_RES : eNORMAL;
++
+ 	for_each_child_of_node(client->dev.of_node, node) {
+-		const __be32 *property;
+-		int len;
+ 		unsigned int channel;
+ 		unsigned int pga = ADS1015_DEFAULT_PGA;
+ 		unsigned int data_rate = ADS1015_DEFAULT_DATA_RATE;
+@@ -199,6 +278,7 @@ static int ads1015_get_channels_config_of(struct i2c_client *client)
+ 					"invalid gain on %s\n",
+ 					node->full_name);
+ 			}
++			pga = 0;
+ 		}
+ 
+ 		property = of_get_property(node, "ti,datarate", &len);
+@@ -209,6 +289,7 @@ static int ads1015_get_channels_config_of(struct i2c_client *client)
+ 					"invalid data_rate on %s\n",
+ 					node->full_name);
+ 			}
++			data_rate = 0;
+ 		}
+ 
+ 		data->channel_data[channel].enabled = true;
+@@ -262,6 +343,7 @@ static int ads1015_probe(struct i2c_client *client,
+ 	mutex_init(&data->update_lock);
+ 
+ 	/* build sysfs attribute group */
++	data->ads1x15_type = eADS1X15;	// 12 or 16 bits ADC is unknown yet
+ 	ads1015_get_channels_config(client);
+ 	for (k = 0; k < ADS1015_CHANNELS; ++k) {
+ 		if (!data->channel_data[k].enabled)
+-- 
+1.7.2.5
