@@ -833,6 +833,7 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0019-Added-camera-cape-support-for-Beaglebone-Black.patch"
 	${git} "${DIR}/patches/capes/0020-add-argus-ups-cape-support.patch"
 	${git} "${DIR}/patches/capes/0021-Fix-aspect-ratio-issue-of-720p-in-MT9M114-camera-cap.patch"
+	${git} "${DIR}/patches/capes/0022-beaglebone-capes-Added-overlays-for-CBB-Serial-cape.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
@@ -865,10 +866,15 @@ saucy () {
 
 machinekit () {
 	echo "dir: machinekit"
-	${git} "${DIR}/patches/machinekit/0001-ADS1115.patch"
-	# Fix now applied by upstream (see dir: fixes, above)
-	#${git} "${DIR}/patches/machinekit/0002-omap_hsmmc-clear-status-flags-before-starting-a-new-command.patch"
-	${git} "${DIR}/patches/machinekit/0003-Add-dir-changeable-property-to-gpio-of-helper.patch"
+	${git} "${DIR}/patches/machinekit/0001-Add-dir-changeable-property-to-gpio-of-helper.patch"
+	${git} "${DIR}/patches/machinekit/0002-ADS1115.patch"
+}
+
+sgx () {
+	echo "dir: sgx"
+	${git} "${DIR}/patches/sgx/0001-OpenGl-added-SGX-device-to-device-tree.patch"
+	${git} "${DIR}/patches/sgx/0002-OpenGL-apply-SGX-patch-from-TI-forum-FIXES-crash-aft.patch"
+	${git} "${DIR}/patches/sgx/0003-OpenGL-fixed-IRQ-offset.patch"
 }
 
 xenomai () {
@@ -905,6 +911,7 @@ omap
 am33x_after
 saucy
 machinekit
+sgx
 xenomai
 
 echo "patch.sh ran successful"
