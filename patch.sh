@@ -902,7 +902,7 @@ xenomai () {
 
 	echo "dir: xenomai - prepare_kernel"
 	# Add the rest of xenomai to the kernel
-	OUTPATCH=$(mktemp /tmp/xenomai-patch.XXXXXXXXXX) || { echo "Failed to create temp file"; exit 1; }
+	OUTPATCH=$(mktemp "${DIR}/ignore/xenomai-patch.XXXXXXXXXX") || { echo "Failed to create temp file"; exit 1; }
 
 	# generate the xenomai patch
 	# doing it this way fixes the dangling symlinks problem under /usr/src/linux-headers-*
