@@ -834,6 +834,9 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0020-add-argus-ups-cape-support.patch"
 	${git} "${DIR}/patches/capes/0021-Fix-aspect-ratio-issue-of-720p-in-MT9M114-camera-cap.patch"
 	${git} "${DIR}/patches/capes/0022-beaglebone-capes-Added-overlays-for-CBB-Serial-cape.patch"
+	${git} "${DIR}/patches/capes/0023-apply-htu21-patch.patch"
+	${git} "${DIR}/patches/capes/0024-add-support-for-weather-cape-rev-b.patch"
+	${git} "${DIR}/patches/capes/0025-capes-Add-cape-universal-overlay-files-More-details-.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
