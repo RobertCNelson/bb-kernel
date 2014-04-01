@@ -915,6 +915,9 @@ xenomai () {
 	git apply "${OUTPATCH}"
 
 	# rm -f "${OUTPATCH}"
+
+	# remove broken reference to mach/timex.h
+	${git} "${DIR}/patches/xenomai/0002-arm-remove-reference-to-mach-timex.h-in-arch-arm-inc.patch"
 }
 
 am33x
