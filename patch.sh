@@ -837,6 +837,9 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0023-apply-htu21-patch.patch"
 	${git} "${DIR}/patches/capes/0024-add-support-for-weather-cape-rev-b.patch"
 	${git} "${DIR}/patches/capes/0025-capes-Add-cape-universal-overlay-files-More-details-.patch"
+	${git} "${DIR}/patches/capes/0026-remove-1-wire-gpio-in-weather-cape-rev-B.patch"
+	${git} "${DIR}/patches/capes/0027-cape-add-cape-bone-ibb-00A0.dts.patch"
+	${git} "${DIR}/patches/capes/0028-adds-DTS-for-CryptoCape.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
@@ -849,6 +852,7 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0005-uvcvideo-Fix-data-type-for-pan-tilt-control.patch"
 	${git} "${DIR}/patches/fixes/0006-ti_am335x_tsc-touchscreen-jitter-fix.patch"
 	${git} "${DIR}/patches/fixes/0007-omap-RS485-support-by-Michael-Musset.patch"
+	${git} "${DIR}/patches/fixes/0008-deb-pkg-sync-with-v3.14.patch"
 
 	echo "dir: firmware"
 	#http://arago-project.org/git/projects/?p=am33x-cm3.git;a=summary
@@ -878,6 +882,11 @@ sgx () {
 	${git} "${DIR}/patches/sgx/0001-OpenGl-added-SGX-device-to-device-tree.patch"
 	${git} "${DIR}/patches/sgx/0002-OpenGL-apply-SGX-patch-from-TI-forum-FIXES-crash-aft.patch"
 	${git} "${DIR}/patches/sgx/0003-OpenGL-fixed-IRQ-offset.patch"
+}
+
+backports () {
+	echo "dir: backports"
+	${git} "${DIR}/patches/backports/0001-backport-v3.13.7-tpm_i2c_atmel.c.patch"
 }
 
 xenomai () {
@@ -927,6 +936,7 @@ am33x_after
 saucy
 machinekit
 sgx
+backports
 xenomai
 
 echo "patch.sh ran successful"
