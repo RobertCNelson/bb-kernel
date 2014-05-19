@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,7 +26,7 @@ DIR=$PWD
 . ${DIR}/system.sh
 
 #For:
-#linaro_toolchain
+#toolchain
 . ${DIR}/version.sh
 
 dl_gcc_generic () {
@@ -34,11 +34,11 @@ dl_gcc_generic () {
 	if [ ! -f ${DIR}/dl/${directory}/${datestamp} ] ; then
 		echo "Installing: ${toolchain_name}"
 		echo "-----------------------------"
-		${WGET} ${site}/${version}/+download/${filename}
+		${WGET} ${site}/${version}/${filename}
 		if [ -d ${DIR}/dl/${directory} ] ; then
 			rm -rf ${DIR}/dl/${directory} || true
 		fi
-		${untar} ${DIR}/dl/${filename} -C ${DIR}/dl/
+		tar -xf ${DIR}/dl/${filename} -C ${DIR}/dl/
 		if [ -f ${DIR}/dl/${directory}/${binary}gcc ] ; then
 			touch ${DIR}/dl/${directory}/${datestamp}
 		fi
@@ -52,75 +52,64 @@ dl_gcc_generic () {
 	fi
 }
 
-gcc_linaro_toolchain () {
-	case "${linaro_toolchain}" in
-	arm9_gcc_4_7)
-		#https://launchpad.net/gcc-arm-embedded/+download
-		#https://launchpad.net/gcc-arm-embedded/4.7/4.7-2013-q3-update/+download/gcc-arm-none-eabi-4_7-2013q3-20130916-linux.tar.bz2
-
-		toolchain_name="gcc-arm-none-eabi"
-		site="https://launchpad.net/gcc-arm-embedded"
-		version="4.7/4.7-2013-q3-update"
-		version_date="20130916"
-		directory="${toolchain_name}-4_7-2013q3"
-		filename="${directory}-${version_date}-linux.tar.bz2"
-		datestamp="${version_date}-${toolchain_name}"
-		untar="tar -xjf"
+gcc_toolchain () {
+	case "${toolchain}" in
+	gcc_linaro_eabi_4_8)
+		#https://releases.linaro.org/14.04/components/toolchain/binaries/gcc-linaro-arm-none-eabi-4.8-2014.04_linux.tar.xz
+		gcc_version="4.8"
+		release="2014.04"
+		toolchain_name="gcc-linaro-arm-none-eabi"
+		site="https://releases.linaro.org"
+		version="14.04/components/toolchain/binaries"
+		directory="${toolchain_name}-${gcc_version}-${release}_linux"
+		filename="${directory}.tar.xz"
+		datestamp="${release}-${toolchain_name}"
 
 		binary="bin/arm-none-eabi-"
 		;;
-	cortex_gcc_4_6)
-		#https://launchpad.net/linaro-toolchain-binaries/+download
-		#https://launchpad.net/linaro-toolchain-binaries/trunk/2012.03/+download/gcc-linaro-arm-linux-gnueabi-2012.03-20120326_linux.tar.bz2
-
+	gcc_linaro_gnueabi_4_6)
+		#https://releases.linaro.org/12.03/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabi-2012.03-20120326_linux.tar.bz2
 		release="2012.03"
 		toolchain_name="gcc-linaro-arm-linux-gnueabi"
-		site="https://launchpad.net/linaro-toolchain-binaries"
-		version="trunk/${release}"
+		site="https://releases.linaro.org"
+		version="12.03/components/toolchain/binaries"
 		version_date="20120326"
 		directory="${toolchain_name}-${release}-${version_date}_linux"
 		filename="${directory}.tar.bz2"
 		datestamp="${version_date}-${toolchain_name}"
-		untar="tar -xjf"
 
 		binary="bin/arm-linux-gnueabi-"
 		;;
-	cortex_gcc_4_7)
-		#https://launchpad.net/linaro-toolchain-binaries/+download
-		#https://launchpad.net/linaro-toolchain-binaries/trunk/2013.04/+download/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
-
+	gcc_linaro_gnueabihf_4_7)
+		#https://releases.linaro.org/13.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
 		gcc_version="4.7"
 		release="2013.04"
 		toolchain_name="gcc-linaro-arm-linux-gnueabihf"
-		site="https://launchpad.net/linaro-toolchain-binaries"
-		version="trunk/${release}"
+		site="https://releases.linaro.org"
+		version="13.04/components/toolchain/binaries"
 		version_date="20130415"
 		directory="${toolchain_name}-${gcc_version}-${release}-${version_date}_linux"
 		filename="${directory}.tar.xz"
 		datestamp="${version_date}-${toolchain_name}"
-		untar="tar -xJf"
 
 		binary="bin/arm-linux-gnueabihf-"
 		;;
-	cortex_gcc_4_8)
-		#https://launchpad.net/linaro-toolchain-binaries/+download
-		#https://launchpad.net/linaro-toolchain-binaries/trunk/2013.10/+download/gcc-linaro-arm-linux-gnueabihf-4.8-2013.10_linux.tar.xz
-
+	gcc_linaro_gnueabihf_4_8)
+		#https://releases.linaro.org/14.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux.tar.xz
 		gcc_version="4.8"
-		release="2013.10"
+		release="2014.04"
 		toolchain_name="gcc-linaro-arm-linux-gnueabihf"
-		site="https://launchpad.net/linaro-toolchain-binaries"
-		version="trunk/${release}"
+		site="https://releases.linaro.org"
+		version="14.04/components/toolchain/binaries"
 		directory="${toolchain_name}-${gcc_version}-${release}_linux"
 		filename="${directory}.tar.xz"
 		datestamp="${release}-${toolchain_name}"
-		untar="tar -xJf"
 
 		binary="bin/arm-linux-gnueabihf-"
 		;;
 	*)
 		echo "bug: maintainer forgot to set:"
-		echo "linaro_toolchain=\"xzy\" in version.sh"
+		echo "toolchain=\"xzy\" in version.sh"
 		exit 1
 		;;
 	esac
@@ -129,7 +118,7 @@ gcc_linaro_toolchain () {
 }
 
 if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] ; then
-	gcc_linaro_toolchain
+	gcc_toolchain
 fi
 
 GCC_TEST=$(LC_ALL=C ${CC}gcc -v 2>&1 | grep "Target:" | grep arm || true)
@@ -138,7 +127,7 @@ if [ "x${GCC_TEST}" = "x" ] ; then
 	echo "-----------------------------"
 	echo "scripts/gcc: Error: The GCC ARM Cross Compiler you setup in system.sh (CC variable) is invalid."
 	echo "-----------------------------"
-	gcc_linaro_toolchain
+	gcc_toolchain
 fi
 
 echo "-----------------------------"

@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -69,8 +69,18 @@ make_kernel () {
 	make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=${CC} ${address} ${image} modules
 
 	unset DTBS
-	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" >/dev/null 2>&1 && DTBS=1
-	if [ "x${DTBS}" != "x" ] ; then
+	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" >/dev/null 2>&1 && DTBS=enable
+
+	#FIXME: Starting with v3.15-rc0
+	unset has_dtbs_install
+	if [ "x${DTBS}" = "x" ] ; then
+		cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs dtbs_install:" >/dev/null 2>&1 && DTBS=enable
+		if [ "x${DTBS}" = "xenable" ] ; then
+			has_dtbs_install=enable
+		fi
+	fi
+
+	if [ "x${DTBS}" = "xenable" ] ; then
 		echo "-----------------------------"
 		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=${CC} dtbs"
 		echo "-----------------------------"
@@ -82,12 +92,12 @@ make_kernel () {
 
 	if [ -f "${DIR}/deploy/${KERNEL_UTS}.${image}" ] ; then
 		rm -rf "${DIR}/deploy/${KERNEL_UTS}.${image}" || true
-		rm -rf "${DIR}/deploy/${KERNEL_UTS}.config" || true
+		rm -rf "${DIR}/deploy/config-${KERNEL_UTS}" || true
 	fi
 
 	if [ -f ./arch/arm/boot/${image} ] ; then
 		cp -v arch/arm/boot/${image} "${DIR}/deploy/${KERNEL_UTS}.${image}"
-		cp -v .config "${DIR}/deploy/${KERNEL_UTS}.config"
+		cp -v .config "${DIR}/deploy/config-${KERNEL_UTS}"
 	fi
 
 	cd ${DIR}/
@@ -106,7 +116,7 @@ make_pkg () {
 	deployfile="-${pkg}.tar.gz"
 	tar_options="--create --gzip --file"
 
-	if [ "${AUTO_BUILD}" ] ; then
+	if [ "${AUTO_TESTER}" ] ; then
 		#FIXME: xz might not be available everywhere...
 		#FIXME: ./tools/install_kernel.sh needs update...
 		deployfile="-${pkg}.tar.xz"
@@ -133,7 +143,11 @@ make_pkg () {
 		make -s ARCH=arm CROSS_COMPILE=${CC} firmware_install INSTALL_FW_PATH=${DIR}/deploy/tmp
 		;;
 	dtbs)
-		find ./arch/arm/boot/ -iname "*.dtb" -exec cp -v '{}' ${DIR}/deploy/tmp/ \;
+		if [ "x${has_dtbs_install}" = "xenable" ] ; then
+			make -s ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=${CC} dtbs_install INSTALL_DTBS_PATH=${DIR}/deploy/tmp
+		else
+			find ./arch/arm/boot/ -iname "*.dtb" -exec cp -v '{}' ${DIR}/deploy/tmp/ \;
+		fi
 		;;
 	esac
 
@@ -205,7 +219,7 @@ fi
 make_kernel
 make_modules_pkg
 make_firmware_pkg
-if [ "x${DTBS}" != "x" ] ; then
+if [ "x${DTBS}" = "xenable" ] ; then
 	make_dtbs_pkg
 fi
 echo "-----------------------------"

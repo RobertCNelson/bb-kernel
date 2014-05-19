@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -110,6 +110,10 @@ git_kernel () {
 
 	cd ${DIR}/KERNEL/
 
+	#Debian Jessie: git version 2.0.0.rc0
+	#Disable git's default setting of running `git gc --auto` in the background as the patch.sh script can fail.
+	git config --local --list | grep gc.autodetach >/dev/null 2>&1 || git config --local gc.autodetach 0
+
 	if [ "${RUN_BISECT}" ] ; then
 		git bisect reset || true
 	fi
@@ -184,12 +188,7 @@ if [ ! "${git_config_user_email}" ] || [ ! "${git_config_user_name}" ] ; then
 	exit 1
 fi
 
-if [ "${GIT_OVER_HTTP}" ] ; then
-	torvalds_linux="http://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-	linux_stable="http://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
-else
-	torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-	linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
-fi
+torvalds_linux="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
 
 git_kernel
