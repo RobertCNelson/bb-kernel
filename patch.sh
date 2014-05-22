@@ -329,6 +329,7 @@ am33x_after () {
 	${git} "${DIR}/patches/net/0005-add-proper-db.txt-for-CRDA.patch"
 	${git} "${DIR}/patches/net/0006-mcp251x-add-device-tree-support.patch"
 	${git} "${DIR}/patches/net/0007-net-cpsw-fix-irq_disable-with-threaded-interrupts.patch"
+	${git} "${DIR}/patches/net/0008-wireless-rtl8192cu-v4.0.2_9000.20130911.patch"
 
 	echo "dir: drm"
 	${git} "${DIR}/patches/drm/0001-am33xx-Add-clock-for-the-lcdc-DRM-driver.patch"
