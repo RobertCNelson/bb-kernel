@@ -554,6 +554,7 @@ am33x_after () {
 	${git} "${DIR}/patches/pru/0017-rproc-PRU-Add-downcall-RPC-capability.patch"
 	${git} "${DIR}/patches/pru/0018-rproc-pru-Implement-a-software-defined-PWM-channel-s.patch"
 	${git} "${DIR}/patches/pru/0019-capes-PRU-PWM-channels-information.patch"
+	${git} "${DIR}/patches/pru/0020-PRU-2.0.0-compiler-changes-for-pru_rpoc.patch"
 
 	echo "dir: usb"
 	${git} "${DIR}/patches/usb/0001-drivers-usb-phy-add-a-new-driver-for-usb-part-of-con.patch"
