@@ -1,0 +1,163 @@
+From 0a2ed7da9f6ef12e8f59cea372dca8bf8c0f048a Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Fri, 13 Jun 2014 10:06:16 -0500
+Subject: [PATCH] sgx: wip
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ arch/arm/boot/dts/am33xx.dtsi       |  9 +++++++
+ arch/arm/kernel/setup.c             |  9 +++++++
+ arch/arm/mach-omap2/Makefile        |  2 +-
+ arch/arm/mach-omap2/board-generic.c |  4 ++++
+ arch/arm/mach-omap2/common.h        |  1 +
+ arch/arm/mach-omap2/gpu.c           | 47 +++++++++++++++++++++++++++++++++++++
+ 6 files changed, 71 insertions(+), 1 deletion(-)
+ create mode 100644 arch/arm/mach-omap2/gpu.c
+
+diff --git a/arch/arm/boot/dts/am33xx.dtsi b/arch/arm/boot/dts/am33xx.dtsi
+index 7f73147..581813c 100644
+--- a/arch/arm/boot/dts/am33xx.dtsi
++++ b/arch/arm/boot/dts/am33xx.dtsi
+@@ -109,6 +109,7 @@
+ 		prcm: prcm@44e00000 {
+ 			compatible = "ti,am3-prcm";
+ 			reg = <0x44e00000 0x4000>;
++			#reset-cells = <1>;
+ 
+ 			prcm_clocks: clocks {
+ 				#address-cells = <1>;
+@@ -835,6 +836,14 @@
+ 			reg = <0x48310000 0x2000>;
+ 			interrupts = <111>;
+ 		};
++
++		sgx: sgx@56000000 {
++			compatible = "ti,sgx";
++			ti,hwmods = "gfx";
++			reg = <0x56000000 0x1000000>;
++			interrupts = <37>;
++			resets = <&prcm 0>;
++		};
+ 	};
+ };
+ 
+diff --git a/arch/arm/kernel/setup.c b/arch/arm/kernel/setup.c
+index 50e198c..4f03782 100644
+--- a/arch/arm/kernel/setup.c
++++ b/arch/arm/kernel/setup.c
+@@ -1096,3 +1096,12 @@ const struct seq_operations cpuinfo_op = {
+ 	.stop	= c_stop,
+ 	.show	= c_show
+ };
++
++/* export the cache management functions */
++#ifndef MULTI_CACHE
++
++EXPORT_SYMBOL(__glue(_CACHE,_dma_map_area));
++EXPORT_SYMBOL(__glue(_CACHE,_dma_unmap_area));
++EXPORT_SYMBOL(__glue(_CACHE,_dma_flush_range));
++
++#endif
+diff --git a/arch/arm/mach-omap2/Makefile b/arch/arm/mach-omap2/Makefile
+index 8421f38..9a895ab 100644
+--- a/arch/arm/mach-omap2/Makefile
++++ b/arch/arm/mach-omap2/Makefile
+@@ -8,7 +8,7 @@ ccflags-$(CONFIG_ARCH_MULTIPLATFORM) := -I$(srctree)/$(src)/include \
+ # Common support
+ obj-y := id.o io.o control.o mux.o devices.o fb.o serial.o gpmc.o timer.o pm.o \
+ 	 common.o gpio.o dma.o wd_timer.o display.o i2c.o hdq1w.o omap_hwmod.o \
+-	 omap_device.o sram.o drm.o
++	 omap_device.o sram.o drm.o gpu.o
+ 
+ omap-2-3-common				= irq.o
+ hwmod-common				= omap_hwmod.o omap_hwmod_reset.o \
+diff --git a/arch/arm/mach-omap2/board-generic.c b/arch/arm/mach-omap2/board-generic.c
+index b8920b6..c86a535 100644
+--- a/arch/arm/mach-omap2/board-generic.c
++++ b/arch/arm/mach-omap2/board-generic.c
+@@ -19,6 +19,7 @@
+ #include <asm/mach/arch.h>
+ 
+ #include "common.h"
++#include "soc.h"
+ 
+ #if !(defined(CONFIG_ARCH_OMAP2) || defined(CONFIG_ARCH_OMAP3))
+ #define intc_of_init	NULL
+@@ -39,6 +40,9 @@ static void __init omap_generic_init(void)
+ 
+ 	pdata_quirks_init(omap_dt_match_table);
+ 
++	if (omap3_has_sgx())
++		omap_sgx_init_of();
++
+ 	omapdss_init_of();
+ }
+ 
+diff --git a/arch/arm/mach-omap2/common.h b/arch/arm/mach-omap2/common.h
+index d88aff7..aef8b84 100644
+--- a/arch/arm/mach-omap2/common.h
++++ b/arch/arm/mach-omap2/common.h
+@@ -311,6 +311,7 @@ extern void omap_reserve(void);
+ 
+ struct omap_hwmod;
+ extern int omap_dss_reset(struct omap_hwmod *);
++void __init omap_sgx_init_of(void);
+ 
+ /* SoC specific clock initializer */
+ int omap_clk_init(void);
+diff --git a/arch/arm/mach-omap2/gpu.c b/arch/arm/mach-omap2/gpu.c
+new file mode 100644
+index 0000000..eebb1bd
+--- /dev/null
++++ b/arch/arm/mach-omap2/gpu.c
+@@ -0,0 +1,47 @@
++/*
++ * Deassert reset for AM33xx graphics device(SGX) hwmod
++ *
++ * Copyright (C) 2013 Texas Instruments Incorporated - http://www.ti.com/
++ * Prathap MS <msprathap@ti.com>
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation version 2.
++ *
++ * This program is distributed "as is" WITHOUT ANY WARRANTY of any
++ * kind, whether express or implied; without even the implied warranty
++ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++#include <linux/of_platform.h>
++#include "omap_device.h"
++
++void __init omap_sgx_init_of(void)
++{
++       struct device_node *node;
++       struct platform_device *pdev;
++       int ret = 0;
++       node = of_find_compatible_node(NULL, NULL, "ti,sgx");
++       if (!node)
++               return;
++       pdev = of_find_device_by_node(node);
++       if (!pdev) {
++               pr_warn("of_find_device_by_node() failed for sgx\n");
++               return;
++       }
++       ret = omap_device_deassert_hardreset(pdev, "gfx");
++       if (ret != 0)
++               pr_warn("omap_device_deassert_hardreset() failed for sgx(gfx hwmod)\n");
++
++       node = of_find_compatible_node(NULL, NULL, "ti,am335x-timer");
++       if (!node)
++               return;
++       pdev = of_find_device_by_node(node);
++       if (!pdev) {
++               pr_warn("of_find_device_by_node() failed for sgx\n");
++               return;
++       }
++       ret = omap_device_deassert_hardreset(pdev, "timer7");
++       if (ret != 0)
++               pr_warn("omap_device_deassert_hardreset() failed for sgx(gfx hwmod)\n");
++}
+-- 
+2.0.0
+
