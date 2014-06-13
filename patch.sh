@@ -70,6 +70,17 @@ usb  () {
 	${git} "${DIR}/patches/usb/0003-usb-musb-musb_cppi41-Handle-ISOCH-differently-and-no.patch"
 }
 
+reset () {
+	echo "dir: reset"
+	${git} "${DIR}/patches/reset/0001-drivers-reset-TI-SoC-reset-controller-support.patch"
+	${git} "${DIR}/patches/reset/0002-ARM-TI-Describe-the-ti-reset-DT-entries.patch"
+	${git} "${DIR}/patches/reset/0003-ARM-dts-am33xx-Add-prcm_resets-node.patch"
+	${git} "${DIR}/patches/reset/0004-ARM-dts-am4372-Add-prcm_resets-node.patch"
+	${git} "${DIR}/patches/reset/0005-ARM-dts-dra7-Add-prm_resets-node.patch"
+	${git} "${DIR}/patches/reset/0006-ARM-dts-omap5-Add-prm_resets-node.patch"
+	${git} "${DIR}/patches/reset/0007-SGX-reset-function-needed.patch"
+}
+
 sgx () {
 	echo "dir: sgx"
 	${git} "${DIR}/patches/sgx/0001-reset-Add-driver-for-gpio-controlled-reset-pins.patch"
@@ -115,6 +126,7 @@ rt () {
 dts
 fixes
 #usb
+reset
 #sgx
 
 dts_bone

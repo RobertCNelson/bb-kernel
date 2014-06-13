@@ -1,0 +1,416 @@
+From e1aba45800304e7f26227705f447d6e3e4c51897 Mon Sep 17 00:00:00 2001
+From: Dan Murphy <dmurphy@ti.com>
+Date: Mon, 5 May 2014 15:09:22 -0500
+Subject: [PATCH 1/6] drivers: reset: TI: SoC reset controller support.
+
+The TI SoC reset controller support utilizes the
+reset controller framework to give device drivers or
+function drivers a common set of APIs to call to reset
+a module.
+
+The reset-ti is a common interface to the reset framework.
+ The register data is retrieved during initialization
+ of the reset driver through the reset-ti-data
+file.  The array of data is associated with the compatible from the
+respective DT entry.
+
+Once the data is available then this is derefenced within the common
+interface.
+
+The device driver has the ability to assert, deassert or perform a
+complete reset.
+
+This code was derived from previous work by Rajendra Nayak and Afzal Mohammed.
+The code was changed to adopt to the reset core and abstract away the SoC information.
+
+Signed-off-by: Dan Murphy <dmurphy@ti.com>
+---
+ drivers/reset/Kconfig            |   1 +
+ drivers/reset/Makefile           |   1 +
+ drivers/reset/ti/Kconfig         |   8 ++
+ drivers/reset/ti/Makefile        |   1 +
+ drivers/reset/ti/reset-ti-data.h |  56 ++++++++
+ drivers/reset/ti/reset-ti.c      | 267 +++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 334 insertions(+)
+ create mode 100644 drivers/reset/ti/Kconfig
+ create mode 100644 drivers/reset/ti/Makefile
+ create mode 100644 drivers/reset/ti/reset-ti-data.h
+ create mode 100644 drivers/reset/ti/reset-ti.c
+
+diff --git a/drivers/reset/Kconfig b/drivers/reset/Kconfig
+index 0615f50..a58d789 100644
+--- a/drivers/reset/Kconfig
++++ b/drivers/reset/Kconfig
+@@ -13,3 +13,4 @@ menuconfig RESET_CONTROLLER
+ 	  If unsure, say no.
+ 
+ source "drivers/reset/sti/Kconfig"
++source "drivers/reset/ti/Kconfig"
+diff --git a/drivers/reset/Makefile b/drivers/reset/Makefile
+index 4f60caf..1c8c444 100644
+--- a/drivers/reset/Makefile
++++ b/drivers/reset/Makefile
+@@ -1,3 +1,4 @@
+ obj-$(CONFIG_RESET_CONTROLLER) += core.o
+ obj-$(CONFIG_ARCH_SUNXI) += reset-sunxi.o
+ obj-$(CONFIG_ARCH_STI) += sti/
++obj-$(CONFIG_RESET_TI) += ti/
+diff --git a/drivers/reset/ti/Kconfig b/drivers/reset/ti/Kconfig
+new file mode 100644
+index 0000000..dcdce90
+--- /dev/null
++++ b/drivers/reset/ti/Kconfig
+@@ -0,0 +1,8 @@
++config RESET_TI
++	depends on RESET_CONTROLLER
++	bool "TI reset controller"
++	help
++	  Reset controller support for TI SoC's
++
++	  Reset controller found in TI's AM series of SoC's like
++	  AM335x and AM43x and OMAP SoC's like OMAP5 and DRA7
+diff --git a/drivers/reset/ti/Makefile b/drivers/reset/ti/Makefile
+new file mode 100644
+index 0000000..55ab3f5
+--- /dev/null
++++ b/drivers/reset/ti/Makefile
+@@ -0,0 +1 @@
++obj-$(CONFIG_RESET_TI) += reset-ti.o
+diff --git a/drivers/reset/ti/reset-ti-data.h b/drivers/reset/ti/reset-ti-data.h
+new file mode 100644
+index 0000000..4d2a6d5
+--- /dev/null
++++ b/drivers/reset/ti/reset-ti-data.h
+@@ -0,0 +1,56 @@
++/*
++ * PRCM reset driver for TI SoC's
++ *
++ * Copyright 2014 Texas Instruments Inc.
++ *
++ * Author: Dan Murphy <dmurphy@ti.com>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++
++#ifndef _RESET_TI_DATA_H_
++#define _RESET_TI_DATA_H_
++
++#include <linux/kernel.h>
++#include <linux/reset-controller.h>
++
++/**
++ * struct ti_reset_reg_data - Structure of the reset register information
++ *		for a particular SoC.
++ * @rstctrl_offs: This is the reset control offset value from
++ *		from the parent reset node.
++ * @rstst_offs: This is the reset status offset value from
++ *		from the parent reset node.
++ * @rstctrl_bit: This is the reset control bit for the module.
++ * @rstst_bit: This is the reset status bit for the module.
++ *
++ * This structure describes the reset register control and status offsets.
++ * The bits are also defined for the same.
++ */
++struct ti_reset_reg_data {
++	void __iomem *reg_base;
++	u32	rstctrl_offs;
++	u32	rstst_offs;
++	u32	rstctrl_bit;
++	u32	rstst_bit;
++};
++
++/**
++ * struct ti_reset_data - Structure that contains the reset register data
++ *	as well as the total number of resets for a particular SoC.
++ * @reg_data:	Pointer to the register data structure.
++ * @nr_resets:	Total number of resets for the SoC in the reset array.
++ *
++ * This structure contains a pointer to the register data and the modules
++ * register base.  The number of resets and reset controller device data is
++ * stored within this structure.
++ *
++ */
++struct ti_reset_data {
++	struct ti_reset_reg_data *reg_data;
++	struct reset_controller_dev rcdev;
++};
++
++#endif
+diff --git a/drivers/reset/ti/reset-ti.c b/drivers/reset/ti/reset-ti.c
+new file mode 100644
+index 0000000..349f4fb
+--- /dev/null
++++ b/drivers/reset/ti/reset-ti.c
+@@ -0,0 +1,267 @@
++/*
++ * PRCM reset driver for TI SoC's
++ *
++ * Copyright 2014 Texas Instruments Inc.
++ *
++ * Author: Dan Murphy <dmurphy@ti.com>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++
++#include <linux/device.h>
++#include <linux/err.h>
++#include <linux/io.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/of_address.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
++#include <linux/reset.h>
++#include <linux/slab.h>
++
++#include "reset-ti-data.h"
++
++#define DRIVER_NAME "prcm_reset_ti"
++
++static struct ti_reset_data *ti_data;
++
++static int ti_reset_get_of_data(struct ti_reset_reg_data *reset_data,
++				unsigned long id)
++{
++	struct device_node *dev_node;
++	struct device_node *parent;
++	struct device_node *prcm_parent;
++	struct device_node *reset_parent;
++	int ret = -EINVAL;
++
++	dev_node = of_find_node_by_phandle((phandle) id);
++	if (!dev_node) {
++		pr_err("%s: Cannot find phandle node\n", __func__);
++		return ret;
++	}
++
++	/* node parent */
++	parent = of_get_parent(dev_node);
++	if (!parent) {
++		pr_err("%s: Cannot find parent reset node\n", __func__);
++		return ret;
++	}
++	/* prcm reset parent */
++	reset_parent = of_get_next_parent(parent);
++	if (!reset_parent) {
++		pr_err("%s: Cannot find parent reset node\n", __func__);
++		return ret;
++	}
++	/* PRCM Parent */
++	reset_parent = of_get_parent(reset_parent);
++	if (!prcm_parent) {
++		pr_err("%s: Cannot find parent reset node\n", __func__);
++		return ret;
++	}
++
++	reset_data->reg_base = of_iomap(reset_parent, 0);
++	if (!reset_data->reg_base) {
++		pr_err("%s: Cannot map reset parent.\n", __func__);
++		return ret;
++	}
++
++	ret = of_property_read_u32_index(parent, "reg", 0,
++					 &reset_data->rstctrl_offs);
++	if (ret)
++		return ret;
++
++	ret = of_property_read_u32_index(parent, "reg", 1,
++					 &reset_data->rstst_offs);
++	if (ret)
++		return ret;
++
++	ret = of_property_read_u32(dev_node, "control-bit",
++				   &reset_data->rstctrl_bit);
++	if (ret < 0)
++		pr_err("%s: No entry in %s for rstst_offs\n", __func__,
++			   dev_node->name);
++
++	ret = of_property_read_u32(dev_node, "status-bit",
++				   &reset_data->rstst_bit);
++	if (ret < 0)
++		pr_err("%s: No entry in %s for rstst_offs\n", __func__,
++			   dev_node->name);
++
++	return 0;
++}
++
++static void ti_reset_wait_on_reset(struct reset_controller_dev *rcdev,
++				unsigned long id)
++{
++	struct ti_reset_reg_data *temp_reg_data;
++	void __iomem *status_reg;
++	u32 bit_mask = 0;
++	u32 val = 0;
++
++	temp_reg_data = kzalloc(sizeof(struct ti_reset_reg_data), GFP_KERNEL);
++	ti_reset_get_of_data(temp_reg_data, id);
++
++	/* Clear the reset status bit to reflect the current status */
++	status_reg = temp_reg_data->reg_base + temp_reg_data->rstst_offs;
++	bit_mask = temp_reg_data->rstst_bit;
++	do {
++		val = readl(status_reg);
++		if (!(val & (1 << bit_mask)))
++			break;
++	} while (1);
++}
++
++static int ti_reset_assert(struct reset_controller_dev *rcdev,
++			       unsigned long id)
++{
++	struct ti_reset_reg_data *temp_reg_data;
++	void __iomem *reg;
++	void __iomem *status_reg;
++	u32 status_bit = 0;
++	u32 bit_mask = 0;
++	u32 val = 0;
++
++	temp_reg_data = kzalloc(sizeof(struct ti_reset_reg_data), GFP_KERNEL);
++	ti_reset_get_of_data(temp_reg_data, id);
++
++	/* Clear the reset status bit to reflect the current status */
++	status_reg = temp_reg_data->reg_base + temp_reg_data->rstst_offs;
++	status_bit = temp_reg_data->rstst_bit;
++	writel(1 << status_bit, status_reg);
++
++	reg = temp_reg_data->reg_base + temp_reg_data->rstctrl_offs;
++	bit_mask = temp_reg_data->rstctrl_bit;
++	val = readl(reg);
++	if (!(val & bit_mask)) {
++		val |= bit_mask;
++		writel(val, reg);
++	}
++
++	kfree(temp_reg_data);
++
++	return 0;
++}
++
++static int ti_reset_deassert(struct reset_controller_dev *rcdev,
++			       unsigned long id)
++{
++
++	struct ti_reset_reg_data *temp_reg_data;
++	void __iomem *reg;
++	void __iomem *status_reg;
++	u32 status_bit = 0;
++	u32 bit_mask = 0;
++	u32 val = 0;
++
++	temp_reg_data = kzalloc(sizeof(struct ti_reset_reg_data), GFP_KERNEL);
++	ti_reset_get_of_data(temp_reg_data, id);
++
++	/* Clear the reset status bit to reflect the current status */
++	status_reg = temp_reg_data->reg_base + temp_reg_data->rstst_offs;
++	status_bit = temp_reg_data->rstst_bit;
++	writel(1 << status_bit, status_reg);
++
++	reg = temp_reg_data->reg_base + temp_reg_data->rstctrl_offs;
++	bit_mask = temp_reg_data->rstctrl_bit;
++	val = readl(reg);
++	if (val & bit_mask) {
++		val &= ~bit_mask;
++		writel(val, reg);
++	}
++
++	return 0;
++}
++
++static int ti_reset_reset(struct reset_controller_dev *rcdev,
++				  unsigned long id)
++{
++	ti_reset_assert(rcdev, id);
++	ti_reset_deassert(rcdev, id);
++	ti_reset_wait_on_reset(rcdev, id);
++
++	return 0;
++}
++
++static int ti_reset_xlate(struct reset_controller_dev *rcdev,
++			const struct of_phandle_args *reset_spec)
++{
++	struct device_node *dev_node;
++
++	if (WARN_ON(reset_spec->args_count != rcdev->of_reset_n_cells))
++		return -EINVAL;
++
++	/* Verify that the phandle exists */
++	dev_node = of_find_node_by_phandle((phandle) reset_spec->args[0]);
++	if (!dev_node) {
++		pr_err("%s: Cannot find phandle node\n", __func__);
++		return -EINVAL;
++	}
++
++	return reset_spec->args[0];
++}
++
++static struct reset_control_ops ti_reset_ops = {
++	.reset = ti_reset_reset,
++	.assert = ti_reset_assert,
++	.deassert = ti_reset_deassert,
++};
++
++static int ti_reset_probe(struct platform_device *pdev)
++{
++	struct device_node *resets;
++
++	resets = of_find_node_by_name(NULL, "resets");
++	if (!resets) {
++		pr_err("%s: missing 'resets' child node.\n", __func__);
++		return -EINVAL;
++	}
++
++	ti_data = kzalloc(sizeof(*ti_data), GFP_KERNEL);
++	if (!ti_data)
++		return -ENOMEM;
++
++	ti_data->rcdev.owner = THIS_MODULE;
++	ti_data->rcdev.of_node = resets;
++	ti_data->rcdev.ops = &ti_reset_ops;
++
++	ti_data->rcdev.of_reset_n_cells = 1;
++	ti_data->rcdev.of_xlate = &ti_reset_xlate;
++
++	reset_controller_register(&ti_data->rcdev);
++
++	return 0;
++}
++
++static int ti_reset_remove(struct platform_device *pdev)
++{
++	reset_controller_unregister(&ti_data->rcdev);
++
++	return 0;
++}
++
++static const struct of_device_id ti_reset_of_match[] = {
++	{ .compatible = "ti,omap5-prm" },
++	{ .compatible =	"ti,omap4-prm" },
++	{ .compatible =	"ti,omap5-prm" },
++	{ .compatible =	"ti,dra7-prm" },
++	{ .compatible = "ti,am4-prcm" },
++	{ .compatible =	"ti,am3-prcm" },
++	{},
++};
++
++static struct platform_driver ti_reset_driver = {
++	.probe	= ti_reset_probe,
++	.remove	= ti_reset_remove,
++	.driver	= {
++		.name		= DRIVER_NAME,
++		.owner		= THIS_MODULE,
++		.of_match_table	= of_match_ptr(ti_reset_of_match),
++	},
++};
++module_platform_driver(ti_reset_driver);
++
++MODULE_DESCRIPTION("PRCM reset driver for TI SoCs");
++MODULE_LICENSE("GPL v2");
++MODULE_ALIAS("platform:" DRIVER_NAME);
+-- 
+2.0.0
+
