@@ -126,7 +126,7 @@ rt () {
 dts
 fixes
 #usb
-reset
+#reset
 
 dts_bone
 dts_bone_capes
