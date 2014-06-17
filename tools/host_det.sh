@@ -43,6 +43,8 @@ redhat_reqs () {
 	check_rpm
 	pkg="gcc"
 	check_rpm
+	pkg="lzop"
+	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
 	pkg="wget"
@@ -81,7 +83,7 @@ redhat_reqs () {
 			#pkg="uboot-tools"
 			#check_rpm
 			;;
-		17|18|19|20)
+		17|18|19|20|21)
 			pkg="uboot-tools"
 			check_rpm
 			;;
@@ -270,43 +272,47 @@ debian_regs () {
 		petra)
 			deb_distro="saucy"
 			;;
+		qiana)
+			deb_distro="trusty"
+			;;
 		esac
 
+		unset error_unknown_deb_distro
 		case "${deb_distro}" in
 		squeeze|wheezy|jessie|sid)
-			#Supported Debian:
-			unset error_unknown_deb_distro
 			unset warn_eol_distro
 			;;
-		lucid|precise|quantal|saucy|trusty)
-			#Supported Ubuntu:
-			unset error_unknown_deb_distro
+		utopic)
+			#14.10
+			unset warn_eol_distro
+			;;
+		trusty)
+			#14.04: lts: trusty -> xyz
+			unset warn_eol_distro
+			;;
+		quantal|saucy)
+			#12.10|13.10
 			unset warn_eol_distro
 			;;
 		raring)
-			#Old Ubuntu: between lts: precise -> trusty
-			#But still on: http://us.archive.ubuntu.com/ubuntu/dists/
-			unset error_unknown_deb_distro
+			#13.04
 			warn_eol_distro=1
 			;;
-		oneiric)
-			#Old Ubuntu: between lts: lucid -> precise
-			#But still on: http://us.archive.ubuntu.com/ubuntu/dists/ (supported except for oneiric)
-			#in 'theory' could bring oneiric back, but no reason too at this point...
-			unset error_unknown_deb_distro
+		precise)
+			#12.04: lts: precise -> trusty
+			unset warn_eol_distro
+			;;
+		maverick|natty|oneiric)
+			#10.04|10.10|11.04
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		maverick|natty)
-			#Old Ubuntu: between lts: lucid -> precise
-			#removed from http://us.archive.ubuntu.com/ubuntu/dists/ thus unsupported...
-			unset error_unknown_deb_distro
-			warn_eol_distro=1
-			stop_pkg_search=1
+		lucid)
+			#10.04: lts: lucid -> precise
+			unset warn_eol_distro
 			;;
 		hardy)
-			#Old Ubuntu LTS: unsupported...
-			unset error_unknown_deb_distro
+			#8.04: lts: hardy -> lucid
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -335,7 +341,7 @@ debian_regs () {
 
 		#Libs; starting with jessie/sid/saucy, lib<pkg_name>-dev:<arch>
 		case "${deb_distro}" in
-		jessie|sid|saucy|trusty)
+		jessie|sid|saucy|trusty|utopic)
 			pkg="libncurses5-dev:${deb_arch}"
 			check_dpkg
 			;;
@@ -353,7 +359,7 @@ debian_regs () {
 				pkg="ia32-libs"
 				check_dpkg
 				;;
-			wheezy|jessie|sid|quantal|raring|saucy|trusty)
+			wheezy|jessie|sid|quantal|raring|saucy|trusty|utopic)
 				pkg="libc6:i386"
 				check_dpkg
 				pkg="libncurses5:i386"

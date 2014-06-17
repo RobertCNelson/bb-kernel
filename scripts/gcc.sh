@@ -53,42 +53,26 @@ dl_gcc_generic () {
 }
 
 gcc_toolchain () {
+	site="https://releases.linaro.org"
 	case "${toolchain}" in
-	arm9_gcc_4_7)
-		#https://launchpad.net/gcc-arm-embedded/+download
-		#https://launchpad.net/gcc-arm-embedded/4.7/4.7-2013-q3-update/+download/gcc-arm-none-eabi-4_7-2013q3-20130916-linux.tar.bz2
-
-		toolchain_name="gcc-arm-none-eabi"
-		site="https://launchpad.net/gcc-arm-embedded"
-		version="4.7/4.7-2013-q3-update/+download"
-		version_date="20130916"
-		directory="${toolchain_name}-4_7-2013q3"
-		filename="${directory}-${version_date}-linux.tar.bz2"
-		datestamp="${version_date}-${toolchain_name}"
-
-		binary="bin/arm-none-eabi-"
-		;;
-	gcc_arm_embedded_4_8)
-		#https://launchpad.net/gcc-arm-embedded/+download
-		#https://launchpad.net/gcc-arm-embedded/4.8/4.8-2013-q4-major/+download/gcc-arm-none-eabi-4_8-2013q4-20131204-linux.tar.bz2
-
-		toolchain_name="gcc-arm-none-eabi"
-		site="https://launchpad.net/gcc-arm-embedded"
-		version="4.8/4.8-2013-q4-major/+download"
-		version_date="20131204"
-		directory="${toolchain_name}-4_8-2013q4"
-		filename="${directory}-${version_date}-linux.tar.bz2"
-		datestamp="${version_date}-${toolchain_name}"
-
-		binary="bin/arm-none-eabi-"
-		;;
 	gcc_linaro_eabi_4_8)
-		#http://releases.linaro.org/14.03/components/toolchain/binaries/gcc-linaro-arm-none-eabi-4.8-2014.03_linux.tar.xz
+		#https://releases.linaro.org/14.04/components/toolchain/binaries/gcc-linaro-arm-none-eabi-4.8-2014.04_linux.tar.xz
 		gcc_version="4.8"
-		release="2014.03"
+		release="2014.04"
 		toolchain_name="gcc-linaro-arm-none-eabi"
-		site="https://releases.linaro.org"
-		version="14.03/components/toolchain/binaries"
+		version="14.04/components/toolchain/binaries"
+		directory="${toolchain_name}-${gcc_version}-${release}_linux"
+		filename="${directory}.tar.xz"
+		datestamp="${release}-${toolchain_name}"
+
+		binary="bin/arm-none-eabi-"
+		;;
+	gcc_linaro_eabi_4_9)
+		#https://releases.linaro.org/14.05/components/toolchain/binaries/gcc-linaro-arm-none-eabi-4.9-2014.05_linux.tar.xz
+		gcc_version="4.9"
+		release="2014.05"
+		toolchain_name="gcc-linaro-arm-none-eabi"
+		version="14.05/components/toolchain/binaries"
 		directory="${toolchain_name}-${gcc_version}-${release}_linux"
 		filename="${directory}.tar.xz"
 		datestamp="${release}-${toolchain_name}"
@@ -96,10 +80,9 @@ gcc_toolchain () {
 		binary="bin/arm-none-eabi-"
 		;;
 	gcc_linaro_gnueabi_4_6)
-		#http://releases.linaro.org/12.03/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabi-2012.03-20120326_linux.tar.bz2
+		#https://releases.linaro.org/12.03/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabi-2012.03-20120326_linux.tar.bz2
 		release="2012.03"
 		toolchain_name="gcc-linaro-arm-linux-gnueabi"
-		site="https://releases.linaro.org"
 		version="12.03/components/toolchain/binaries"
 		version_date="20120326"
 		directory="${toolchain_name}-${release}-${version_date}_linux"
@@ -109,11 +92,10 @@ gcc_toolchain () {
 		binary="bin/arm-linux-gnueabi-"
 		;;
 	gcc_linaro_gnueabihf_4_7)
-		#http://releases.linaro.org/13.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
+		#https://releases.linaro.org/13.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
 		gcc_version="4.7"
 		release="2013.04"
 		toolchain_name="gcc-linaro-arm-linux-gnueabihf"
-		site="https://releases.linaro.org"
 		version="13.04/components/toolchain/binaries"
 		version_date="20130415"
 		directory="${toolchain_name}-${gcc_version}-${release}-${version_date}_linux"
@@ -123,12 +105,23 @@ gcc_toolchain () {
 		binary="bin/arm-linux-gnueabihf-"
 		;;
 	gcc_linaro_gnueabihf_4_8)
-		#http://releases.linaro.org/14.03/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.8-2014.03_linux.tar.xz
+		#https://releases.linaro.org/14.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux.tar.xz
 		gcc_version="4.8"
-		release="2014.03"
+		release="2014.04"
 		toolchain_name="gcc-linaro-arm-linux-gnueabihf"
-		site="https://releases.linaro.org"
-		version="14.03/components/toolchain/binaries"
+		version="14.04/components/toolchain/binaries"
+		directory="${toolchain_name}-${gcc_version}-${release}_linux"
+		filename="${directory}.tar.xz"
+		datestamp="${release}-${toolchain_name}"
+
+		binary="bin/arm-linux-gnueabihf-"
+		;;
+	gcc_linaro_gnueabihf_4_9)
+		#https://releases.linaro.org/14.05/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.9-2014.05_linux.tar.xz
+		gcc_version="4.9"
+		release="2014.05"
+		toolchain_name="gcc-linaro-arm-linux-gnueabihf"
+		version="14.05/components/toolchain/binaries"
 		directory="${toolchain_name}-${gcc_version}-${release}_linux"
 		filename="${directory}.tar.xz"
 		datestamp="${release}-${toolchain_name}"
