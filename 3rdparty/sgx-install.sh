@@ -5,6 +5,15 @@ if ! id | grep -q root; then
 	exit
 fi
 
+install_lib_n_system () {
+	if [ -f ${libdir}/${file} ] ; then
+		cp -v ${libdir}/${file} /usr/lib/${file}
+		if [ -d /usr/lib/arm-linux-gnueabihf/ ] ; then
+			cp -v ${libdir}/${file} /usr/lib/arm-linux-gnueabihf/${file}
+		fi
+	fi
+}
+
 install_lib () {
 	if [ -f ${libdir}/${file} ] ; then
 		cp -v ${libdir}/${file} /usr/lib/${file}
@@ -54,7 +63,7 @@ if [ -d /opt/gfxlibraries/gfx_rel_es8.x/ ] ; then
 	install_lib
 
 	file=libGLESv2.so
-	install_lib
+	install_lib_n_system
 
 	file=libglslcompiler.so
 	install_lib
@@ -62,7 +71,7 @@ if [ -d /opt/gfxlibraries/gfx_rel_es8.x/ ] ; then
 	file=libIMGegl.so
 	install_lib
 	file=libEGL.so
-	install_lib
+	install_lib_n_system
 	file=libpvr2d.so
 	install_lib
 
