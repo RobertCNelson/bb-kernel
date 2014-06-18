@@ -39,7 +39,6 @@ mmc_write_rootfs () {
 	sudo tar ${UNTAR} "${DIR}/deploy/${KERNEL_UTS}-modules.tar.gz" -C "${location}/"
 	sync
 
-
 	if [ -f "${DIR}/deploy/config-${KERNEL_UTS}" ] ; then
 		if [ -f "${location}/boot/config-${KERNEL_UTS}" ] ; then
 			sudo rm -f "${location}/boot/config-${KERNEL_UTS}" || true
