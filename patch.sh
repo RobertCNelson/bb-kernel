@@ -70,17 +70,6 @@ usb  () {
 	${git} "${DIR}/patches/usb/0003-usb-musb-musb_cppi41-Handle-ISOCH-differently-and-no.patch"
 }
 
-sgx () {
-	echo "dir: sgx"
-	${git} "${DIR}/patches/sgx/0001-reset-Add-driver-for-gpio-controlled-reset-pins.patch"
-	${git} "${DIR}/patches/sgx/0002-prcm-port-from-ti-linux-3.12.y.patch"
-	${git} "${DIR}/patches/sgx/0003-ARM-DTS-AM335x-Add-SGX-DT-node.patch"
-	${git} "${DIR}/patches/sgx/0004-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
-	${git} "${DIR}/patches/sgx/0005-hack-port-da8xx-changes-from-ti-3.12-repo.patch"
-	${git} "${DIR}/patches/sgx/0006-Revert-drm-remove-procfs-code-take-2.patch"
-	${git} "${DIR}/patches/sgx/0007-Changes-according-to-TI-for-SGX-support.patch"
-}
-
 dts_bone () {
 	echo "dir: dts-bone"
 	${git} "${DIR}/patches/dts-bone/0001-arm-dts-am335x-bone-common-add-uart2_pins-uart4_pins.patch"
@@ -107,6 +96,16 @@ saucy () {
 	${git} "${DIR}/patches/saucy/0002-saucy-error-variable-ilace-set-but-not-used-Werror-u.patch"
 }
 
+sgx () {
+	echo "dir: sgx"
+	${git} "${DIR}/patches/sgx/0001-reset-Add-driver-for-gpio-controlled-reset-pins.patch"
+	${git} "${DIR}/patches/sgx/0002-prcm-port-from-ti-linux-3.12.y.patch"
+	${git} "${DIR}/patches/sgx/0003-ARM-DTS-AM335x-Add-SGX-DT-node.patch"
+	${git} "${DIR}/patches/sgx/0004-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
+	${git} "${DIR}/patches/sgx/0005-hack-port-da8xx-changes-from-ti-3.12-repo.patch"
+	${git} "${DIR}/patches/sgx/0006-Changes-according-to-TI-for-SGX-support.patch"
+}
+
 rt () {
 	echo "dir: rt"
 	${git} "${DIR}/patches/rt/0001-rt-3.14-patchset.patch"
@@ -116,13 +115,13 @@ rt () {
 dts
 fixes
 usb
-#sgx
 
 dts_bone
 dts_bone_capes
 static_capes
 
 saucy
+#sgx
 
 #disabled by default
 #rt
