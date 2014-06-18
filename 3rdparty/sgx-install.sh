@@ -188,7 +188,7 @@ Ubuntu)
 	if [ -f /opt/gfxinstall/scripts/sgx-startup-ubuntu.conf ] ; then
 		cp -v /opt/gfxinstall/scripts/sgx-startup-ubuntu.conf /etc/init/sgx-startup.conf
 		chown root:root /etc/init/sgx-startup.conf
-		chmod +x /etc/init.d/sgx-startup.conf
+		chmod +x /etc/init/sgx-startup.conf
 	fi
 	;;
 esac
