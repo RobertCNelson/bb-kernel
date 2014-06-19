@@ -172,23 +172,29 @@ fi
 
 case "${distro}" in
 Debian)
-	if [ -f /opt/gfxinstall/scripts/sgx-startup-debian.sh ] ; then
+	if [ -f /opt/gfxinstall/scripts/sgx-startup-sysv.sh ] ; then
 		if [ -f /etc/init.d/sgx-startup.sh ] ; then
 			insserv --remove sgx-startup.sh
 			rm -rf /etc/init.d/sgx-startup.sh || true
 		fi
 
-		cp -v /opt/gfxinstall/scripts/sgx-startup-debian.sh /etc/init.d/sgx-startup.sh
+		cp -v /opt/gfxinstall/scripts/sgx-startup-sysv.sh /etc/init.d/sgx-startup.sh
 		chown root:root /etc/init.d/sgx-startup.sh
 		chmod +x /etc/init.d/sgx-startup.sh
 		insserv sgx-startup.sh || true
 	fi
 	;;
 Ubuntu)
-	if [ -f /opt/gfxinstall/scripts/sgx-startup-ubuntu.conf ] ; then
-		cp -v /opt/gfxinstall/scripts/sgx-startup-ubuntu.conf /etc/init/sgx-startup.conf
-		chown root:root /etc/init/sgx-startup.conf
-		chmod +x /etc/init/sgx-startup.conf
+	if [ -f /opt/gfxinstall/scripts/sgx-startup-sysv.sh ] ; then
+		if [ -f /etc/init.d/sgx-startup.sh ] ; then
+			rm -rf /etc/init.d/sgx-startup.sh || true
+			update-rc.d sgx-startup.sh remove
+		fi
+
+		cp -v /opt/gfxinstall/scripts/sgx-startup-sysv.sh /etc/init.d/sgx-startup.sh
+		chown root:root /etc/init.d/sgx-startup.sh
+		chmod +x /etc/init.d/sgx-startup.sh
+		update-rc.d sgx-startup.sh defaults
 	fi
 	;;
 esac
