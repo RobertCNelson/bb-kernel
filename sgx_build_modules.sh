@@ -217,7 +217,6 @@ installing_sgx_modules () {
 
 	mkdir -p ${DESTDIR}/opt/gfxinstall/scripts/ || true
 	cp -v "${DIR}"/3rdparty/sgx-startup-sysv.sh ${DESTDIR}/opt/gfxinstall/scripts/
-	#cp -v "${DIR}"/3rdparty/sgx-startup-ubuntu.conf ${DESTDIR}/opt/gfxinstall/scripts/
 	cp -v "${DIR}"/3rdparty/sgx-install.sh ${DESTDIR}/opt/gfxinstall/
 	chmod +x ${DESTDIR}/opt/gfxinstall/sgx-install.sh
 
