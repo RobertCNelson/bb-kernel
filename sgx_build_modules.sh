@@ -216,8 +216,8 @@ installing_sgx_modules () {
 	rm -rf ${DESTDIR}/etc/init.d/rc.pvr || true
 
 	mkdir -p ${DESTDIR}/opt/gfxinstall/scripts/ || true
-	cp -v "${DIR}"/3rdparty/sgx-startup-debian.sh ${DESTDIR}/opt/gfxinstall/scripts/
-	cp -v "${DIR}"/3rdparty/sgx-startup-ubuntu.conf ${DESTDIR}/opt/gfxinstall/scripts/
+	cp -v "${DIR}"/3rdparty/sgx-startup-sysv.sh ${DESTDIR}/opt/gfxinstall/scripts/
+	#cp -v "${DIR}"/3rdparty/sgx-startup-ubuntu.conf ${DESTDIR}/opt/gfxinstall/scripts/
 	cp -v "${DIR}"/3rdparty/sgx-install.sh ${DESTDIR}/opt/gfxinstall/
 	chmod +x ${DESTDIR}/opt/gfxinstall/sgx-install.sh
 
