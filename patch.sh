@@ -24,6 +24,8 @@
 
 git="git am"
 
+. ${DIR}/version.sh
+
 if [ -f ${DIR}/system.sh ] ; then
 	. ${DIR}/system.sh
 fi
@@ -107,6 +109,7 @@ sgx () {
 
 rt () {
 	echo "dir: rt"
+	git revert ${GIT_OPTS} 4c03d4699182312ed42257834b915492af16022a -s
 	${git} "${DIR}/patches/rt/0001-rt-3.14-patchset.patch"
 }
 
