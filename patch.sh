@@ -75,6 +75,9 @@ dts () {
 fixes () {
 	echo "dir: fixes"
 	${git} "${DIR}/patches/fixes/0001-pinctrl-pinctrl-single-must-be-initialized-early.patch"
+	${git} "${DIR}/patches/fixes/0002-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
+	${git} "${DIR}/patches/fixes/0003-am335x-bone-common-enable-ti-pmic-shutdown-controlle.patch"
+	${git} "${DIR}/patches/fixes/0004-dt-bone-common-Add-interrupt-for-PMIC.patch"
 }
 
 usb  () {
