@@ -78,6 +78,8 @@ fixes () {
 	${git} "${DIR}/patches/fixes/0002-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
 	${git} "${DIR}/patches/fixes/0003-am335x-bone-common-enable-ti-pmic-shutdown-controlle.patch"
 	${git} "${DIR}/patches/fixes/0004-dt-bone-common-Add-interrupt-for-PMIC.patch"
+	${git} "${DIR}/patches/fixes/0005-cpsw-Add-support-for-byte-queue-limits.patch"
+	${git} "${DIR}/patches/fixes/0006-cpsw-napi-polling-of-64-is-good-for-gigE-less-good-f.patch"
 }
 
 usb  () {
