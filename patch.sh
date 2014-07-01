@@ -80,6 +80,7 @@ fixes () {
 	${git} "${DIR}/patches/fixes/0004-dt-bone-common-Add-interrupt-for-PMIC.patch"
 	${git} "${DIR}/patches/fixes/0005-cpsw-Add-support-for-byte-queue-limits.patch"
 	${git} "${DIR}/patches/fixes/0006-cpsw-napi-polling-of-64-is-good-for-gigE-less-good-f.patch"
+	${git} "${DIR}/patches/fixes/0007-cpsw-search-for-phy.patch"
 }
 
 usb  () {
