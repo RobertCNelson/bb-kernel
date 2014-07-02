@@ -950,8 +950,9 @@ packaging () {
 	echo "dir: packaging"
 	${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
 	${git} "${DIR}/patches/packaging/0002-deb-pkg-install-dtbs-in-linux-image-package.patch"
+	${git} "${DIR}/patches/packaging/0003-deb-pkg-install-dtbs-when-dtbs_install-didnt-exist.patch"
 }
 
 #packaging_setup
-#packaging
+packaging
 echo "patch.sh ran successful"
