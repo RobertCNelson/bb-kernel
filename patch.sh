@@ -880,6 +880,7 @@ am33x_after () {
 	${git} "${DIR}/patches/BeagleLogic/0002-Add-BeagleLogic-binding-functions-to-pru_rproc.patch"
 	${git} "${DIR}/patches/BeagleLogic/0003-Add-kernel-module-for-BeagleLogic.patch"
 	${git} "${DIR}/patches/BeagleLogic/0004-Fix-compile-error-with-pru_rproc.c.patch"
+	${git} "${DIR}/patches/BeagleLogic/0005-BeagleLogic-module-v1.1-working-with-libsigrok.patch"
 
 	echo "dir: fixes"
 	${git} "${DIR}/patches/fixes/0001-sync-don-t-block-the-flusher-thread-waiting-on-IO.patch"
