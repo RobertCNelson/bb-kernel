@@ -35,6 +35,6 @@ BUILD=bone0
 #git branch
 BRANCH="am33x-v3.16"
 
-BUILDREV=1.0
 DISTRO=cross
 DEBARCH=armhf
+#
