@@ -875,6 +875,8 @@ am33x_after () {
 	echo "dir: logibone"
 	${git} "${DIR}/patches/logibone/0001-Instering-Logibone-driver-into-kernel.patch"
 	${git} "${DIR}/patches/logibone/0002-Adding-DTS-support-for-Logibone.patch"
+	${git} "${DIR}/patches/logibone/0003-Moving-from-bit-banged-configuration-to-SPI.patch"
+	${git} "${DIR}/patches/logibone/0004-removing-fpga-loading-interface-from-kernel-space.patch"
 
 	echo "dir: BeagleLogic"
 	${git} "${DIR}/patches/BeagleLogic/0001-Add-DTS-for-BeagleLogic.patch"
