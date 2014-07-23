@@ -849,6 +849,8 @@ am33x_after () {
 	echo "dir: logibone"
 	${git} "${DIR}/patches/logibone/0001-Instering-Logibone-driver-into-kernel.patch"
 	${git} "${DIR}/patches/logibone/0002-Adding-DTS-support-for-Logibone.patch"
+	${git} "${DIR}/patches/logibone/0003-Moving-from-bit-banged-configuration-to-SPI.patch"
+	${git} "${DIR}/patches/logibone/0004-removing-fpga-loading-interface-from-kernel-space.patch"
 
 	echo "dir: fixes"
 	${git} "${DIR}/patches/fixes/0001-sync-don-t-block-the-flusher-thread-waiting-on-IO.patch"
