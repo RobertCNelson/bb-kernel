@@ -43,6 +43,8 @@ mmc_write_rootfs () {
 		sudo cp -v "${DIR}/deploy/config-${KERNEL_UTS}" "${location}/boot/config-${KERNEL_UTS}"
 		sync
 	fi
+	sudo update-initramfs -ck ${KERNEL_UTS}
+	echo "info: [${KERNEL_UTS}] now installed..."
 }
 
 mmc_write_boot_uname () {
@@ -57,6 +59,10 @@ mmc_write_boot_uname () {
 	fi
 
 	sudo cp -v "${DIR}/deploy/${KERNEL_UTS}.zImage" "${location}/vmlinuz-${KERNEL_UTS}"
+
+	if [ -f "${location}/initrd.img-${KERNEL_UTS}" ] ; then
+		sudo rm -rf "${location}/initrd.img-${KERNEL_UTS}" || true
+	fi
 
 	if [ -f "${DIR}/deploy/${KERNEL_UTS}-dtbs.tar.gz" ] ; then
 		if [ -d "${location}/dtbs/${KERNEL_UTS}_bak/" ] ; then
@@ -74,10 +80,15 @@ mmc_write_boot_uname () {
 		sync
 	fi
 
-	older_kernel=$(grep uname_r "${location}/uEnv.txt" | awk -F"=" '{print $2}')
-	sudo sed -i -e 's:'${older_kernel}':'${KERNEL_UTS}':g' "${location}/uEnv.txt"
-	echo "info: /boot/uEnv.txt: `grep uname_r ${location}/uEnv.txt`"
-	echo "info: [${KERNEL_UTS}] now installed..."
+	unset older_kernel
+	older_kernel=$(grep uname_r "${location}/uEnv.txt" | grep -v '#' | awk -F"=" '{print $2}' || true)
+
+	if [ ! "x${older_kernel}" = "x" ] ; then
+		if [ ! "x${older_kernel}" = "x${KERNEL_UTS}" ] ; then
+			sudo sed -i -e 's:uname_r='${older_kernel}':uname_r='${KERNEL_UTS}':g' "${location}/uEnv.txt"
+		fi
+		echo "info: /boot/uEnv.txt: `grep uname_r ${location}/uEnv.txt`"
+	fi
 }
 
 mmc_write_boot () {
