@@ -868,6 +868,7 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0035-cape-universaln-remove-P9_31.patch"
 	${git} "${DIR}/patches/capes/0036-cape-add-BB-BONE-HAS-00R1.patch"
 	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
+	${git} "${DIR}/patches/capes/0038-cape-add-BB-BONE-SERL-01-00A2.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
