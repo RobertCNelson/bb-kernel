@@ -84,3 +84,57 @@ check_if_set_then_disable () {
 }
 
 #
+# CPU Core family selection
+#
+config="CONFIG_ARCH_MXC"
+check_config_disable
+
+#
+# OMAP Feature Selections
+#
+config="CONFIG_ARCH_OMAP3"
+check_config_disable
+config="CONFIG_ARCH_OMAP4"
+check_config_disable
+config="CONFIG_SOC_AM33XX"
+check_config_disable
+config="CONFIG_SOC_AM43XX"
+check_config_disable
+
+#
+# OMAP Legacy Platform Data Board Type
+#
+config="CONFIG_MACH_SUN4I"
+check_config_disable
+config="CONFIG_MACH_SUN5I"
+check_config_disable
+
+#
+# Processor Features
+#
+config="CONFIG_ARM_LPAE"
+check_config_builtin
+config="CONFIG_ARCH_PHYS_ADDR_T_64BIT"
+check_config_builtin
+config="CONFIG_ARM_ERRATA_430973"
+check_config_disable
+
+#
+# ARM CPU frequency scaling drivers
+#
+config="CONFIG_ARM_OMAP2PLUS_CPUFREQ"
+check_config_disable
+
+#
+# Android
+#
+config="CONFIG_DRM_IMX"
+check_config_disable
+
+#
+# Library routines
+#
+config="CONFIG_KVM"
+check_config_builtin
+
+#
