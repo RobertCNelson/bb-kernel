@@ -29,7 +29,7 @@ DIR=$PWD
 SDK="5.01.01.01"
 sdk_version="5_01_01_01"
 SDK_DIR="5_01_01_01"
-SGX_SHA="origin/${SDK}"
+SGX_SHA="origin/5.01.01.01-ti"
 #SGX_SHA="origin/master"
 
 http_ti="http://software-dl.ti.com/dsps/dsps_public_sw/gfxsdk/"

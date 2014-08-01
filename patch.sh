@@ -115,12 +115,15 @@ saucy () {
 
 sgx () {
 	echo "dir: sgx"
-	${git} "${DIR}/patches/sgx/0001-prcm-port-from-ti-linux-3.12.y.patch"
-	${git} "${DIR}/patches/sgx/0002-ARM-DTS-AM335x-Add-SGX-DT-node.patch"
-	${git} "${DIR}/patches/sgx/0003-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
-	${git} "${DIR}/patches/sgx/0004-hack-port-da8xx-changes-from-ti-3.12-repo.patch"
-	${git} "${DIR}/patches/sgx/0005-Changes-according-to-TI-for-SGX-support.patch"
+	${git} "${DIR}/patches/sgx/0001-HACK-drm-fb_helper-enable-panning-support.patch"
+	${git} "${DIR}/patches/sgx/0002-HACK-drm-tilcdc-add-vsync-callback-for-use-in-omaplf.patch"
+	${git} "${DIR}/patches/sgx/0003-drm-tilcdc-fix-the-ping-pong-dma-tearing-issue-seen-.patch"
+	${git} "${DIR}/patches/sgx/0004-ARM-OMAP2-Use-pdata-quirks-for-sgx-deassert_hardrese.patch"
+	${git} "${DIR}/patches/sgx/0005-ARM-dts-am33xx-add-DT-node-for-gpu.patch"
+	${git} "${DIR}/patches/sgx/0006-sgx-pdata-fixes-from-ti-v3.14.x-tree.patch"
+	${git} "${DIR}/patches/sgx/0007-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
 }
+
 
 rt () {
 	echo "dir: rt"
@@ -138,7 +141,7 @@ dts_bone_capes
 static_capes
 
 saucy
-#sgx
+sgx
 
 #disabled by default
 #rt
