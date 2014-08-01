@@ -142,6 +142,17 @@ saucy () {
 	${git} "${DIR}/patches/saucy/0002-saucy-error-variable-ilace-set-but-not-used-Werror-u.patch"
 }
 
+sgx () {
+	echo "dir: sgx"
+	${git} "${DIR}/patches/sgx/0001-HACK-drm-fb_helper-enable-panning-support.patch"
+	${git} "${DIR}/patches/sgx/0002-HACK-drm-tilcdc-add-vsync-callback-for-use-in-omaplf.patch"
+	${git} "${DIR}/patches/sgx/0003-drm-tilcdc-fix-the-ping-pong-dma-tearing-issue-seen-.patch"
+	${git} "${DIR}/patches/sgx/0004-ARM-OMAP2-Use-pdata-quirks-for-sgx-deassert_hardrese.patch"
+	${git} "${DIR}/patches/sgx/0005-ARM-dts-am33xx-add-DT-node-for-gpu.patch"
+	${git} "${DIR}/patches/sgx/0006-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
+}
+
+
 rt () {
 	echo "dir: rt"
 	${git} "${DIR}/patches/rt/0001-rt-3.14-patchset.patch"
@@ -157,9 +168,8 @@ dts_bone
 dts_bone_capes
 static_capes
 
-#sgx
-
 #saucy
+sgx
 
 #disabled by default
 #rt
