@@ -126,6 +126,7 @@ static_capes () {
 	${git} "${DIR}/patches/static-capes/0001-Added-Argus-UPS-cape-support.patch"
 	${git} "${DIR}/patches/static-capes/0002-Added-Argus-UPS-cape-support-BBW.patch"
 	${git} "${DIR}/patches/static-capes/0003-ARM-dts-am335x-boneblack-cape-audi.patch"
+	${git} "${DIR}/patches/static-capes/0004-Updated-dts-to-be-in-line-with-3.16-changes.patch"
 }
 
 saucy () {
