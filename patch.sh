@@ -67,35 +67,17 @@ local_patch () {
 #external_git
 #local_patch
 
-dts () {
-	echo "dir: dts"
-	${git} "${DIR}/patches/dts/0001-arm-dts-am335x-boneblack-lcdc-add-panel-info.patch"
-	${git} "${DIR}/patches/dts/0002-arm-dts-am335x-boneblack-add-cpu0-opp-points.patch"
-	${git} "${DIR}/patches/dts/0003-arm-dts-am335x-bone-common-enable-and-use-i2c2.patch"
-	${git} "${DIR}/patches/dts/0004-arm-dts-am335x-bone-common-setup-default-pinmux-http.patch"
-}
-
-fixes () {
-	echo "dir: fixes"
-	${git} "${DIR}/patches/fixes/0001-pinctrl-pinctrl-single-must-be-initialized-early.patch"
-}
-
-usb  () {
-	echo "dir: usb"
-	${git} "${DIR}/patches/usb/0001-usb-musb-musb_host-Enable-ISOCH-IN-handling-for-AM33.patch"
-	${git} "${DIR}/patches/usb/0002-usb-musb-musb_cppi41-Make-CPPI-aware-of-high-bandwid.patch"
-	${git} "${DIR}/patches/usb/0003-usb-musb-musb_cppi41-Handle-ISOCH-differently-and-no.patch"
-}
-
-reset () {
-	echo "dir: reset"
-	${git} "${DIR}/patches/reset/0001-drivers-reset-TI-SoC-reset-controller-support.patch"
-	${git} "${DIR}/patches/reset/0002-ARM-TI-Describe-the-ti-reset-DT-entries.patch"
-	${git} "${DIR}/patches/reset/0003-ARM-dts-am33xx-Add-prcm_resets-node.patch"
-	${git} "${DIR}/patches/reset/0004-ARM-dts-am4372-Add-prcm_resets-node.patch"
-	${git} "${DIR}/patches/reset/0005-ARM-dts-dra7-Add-prm_resets-node.patch"
-	${git} "${DIR}/patches/reset/0006-ARM-dts-omap5-Add-prm_resets-node.patch"
-	${git} "${DIR}/patches/reset/0007-SGX-reset-function-needed.patch"
+pinmux () {
+	echo "dir: pinmux"
+	${git} "${DIR}/patches/pinmux/0001-am335x-bone-split-out-pinmux.patch"
+	${git} "${DIR}/patches/pinmux/0002-am335x-boneblack-split-out-emmc.patch"
+	${git} "${DIR}/patches/pinmux/0003-am335x-boneblack-split-out-hdmi.patch"
+	${git} "${DIR}/patches/pinmux/0004-am335x-boneblack-add-cpu0-opp-points.patch"
+	${git} "${DIR}/patches/pinmux/0005-am335x-bone-eeprom-and-i2c2.patch"
+	${git} "${DIR}/patches/pinmux/0006-am335x-bone-pinmux-add-uarts.patch"
+	${git} "${DIR}/patches/pinmux/0007-capes-ttyO1-ttyO2-ttyO4-bone-ttyO5.patch"
+	${git} "${DIR}/patches/pinmux/0008-am335x-bone-pinmux-add-spi0.patch"
+	${git} "${DIR}/patches/pinmux/0009-cape-basic-proto-cape.patch"
 }
 
 sgx () {
@@ -109,18 +91,6 @@ sgx () {
 	${git} "${DIR}/patches/sgx/0007-Changes-according-to-TI-for-SGX-support.patch"
 }
 
-dts_bone () {
-	echo "dir: dts-bone"
-	${git} "${DIR}/patches/dts-bone/0001-arm-dts-am335x-bone-common-add-uart2_pins-uart4_pins.patch"
-
-}
-
-dts_bone_capes () {
-	echo "dir: dts-bone-capes"
-	${git} "${DIR}/patches/dts-bone-capes/0001-capes-ttyO1-ttyO2-ttyO4.patch"
-	${git} "${DIR}/patches/dts-bone-capes/0002-capes-Makefile.patch"
-}
-
 static_capes () {
 	echo "dir: static-capes"
 	${git} "${DIR}/patches/static-capes/0001-Added-Argus-UPS-cape-support.patch"
@@ -129,31 +99,16 @@ static_capes () {
 	${git} "${DIR}/patches/static-capes/0004-Updated-dts-to-be-in-line-with-3.16-changes.patch"
 }
 
-saucy () {
-	echo "dir: saucy"
-	#Ubuntu Saucy: so Ubuntu decided to enable almost every Warning -> Error option...
-	${git} "${DIR}/patches/saucy/0001-saucy-disable-Werror-pointer-sign.patch"
-	${git} "${DIR}/patches/saucy/0002-saucy-error-variable-ilace-set-but-not-used-Werror-u.patch"
-}
-
 rt () {
 	echo "dir: rt"
 	${git} "${DIR}/patches/rt/0001-rt-3.14-patchset.patch"
 }
 
 ###
-dts
-fixes
-#usb
-#reset
-
-dts_bone
-dts_bone_capes
+pinmux
 static_capes
 
 #sgx
-
-#saucy
 
 #disabled by default
 #rt
