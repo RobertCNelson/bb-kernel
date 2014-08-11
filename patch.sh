@@ -867,7 +867,8 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0034-cape-add-BB-BONE-AUDI-02-00A0-from-http-elinux.org-C.patch"
 	${git} "${DIR}/patches/capes/0035-cape-universaln-remove-P9_31.patch"
 	${git} "${DIR}/patches/capes/0036-cape-add-BB-BONE-HAS-00R1.patch"
-	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
+#element14_bb_view: breaks lcd4
+#	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
 	${git} "${DIR}/patches/capes/0038-cape-add-BB-BONE-SERL-01-00A2.patch"
 
 	echo "dir: proto"
@@ -895,7 +896,8 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0006-ti_am335x_tsc-touchscreen-jitter-fix.patch"
 	${git} "${DIR}/patches/fixes/0007-omap-RS485-support-by-Michael-Musset.patch"
 	${git} "${DIR}/patches/fixes/0008-deb-pkg-sync-with-v3.14.patch"
-	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
+#element14_bb_view: breaks lcd4
+#	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
 
 	echo "dir: firmware"
 	#http://arago-project.org/git/projects/?p=am33x-cm3.git;a=summary
