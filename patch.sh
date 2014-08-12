@@ -100,6 +100,7 @@ pinmux () {
 	${git} "${DIR}/patches/pinmux/0006-am335x-bone-common-pinmux-uart.patch"
 	${git} "${DIR}/patches/pinmux/0007-am335x-bone-common-pinmux-spi.patch"
 	${git} "${DIR}/patches/pinmux/0008-am335x-bone-common-pinmux-mcasp0.patch"
+	${git} "${DIR}/patches/pinmux/0009-am335x-bone-common-pinmux-lcd4.patch"
 }
 
 dts () {
@@ -180,6 +181,26 @@ capes () {
 
 	${git} "${DIR}/patches/capes/0002-cape-audio.patch"
 
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wfile="arch/arm/boot/dts/am335x-bone-lcd4.dts"
+		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo "" >> ${wfile}
+		echo '#include "am335x-bone-lcd4.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-boneblack-lcd4.dts"
+		cp arch/arm/boot/dts/am335x-boneblack.dts ${wfile}
+		sed -i -e 's:am335x-boneblack-nxp-hdmi.dtsi:am335x-bone-lcd4.dtsi:g' ${wfile}
+		git add ${wfile}
+
+		git commit -a -m 'cape: lcd4' -s
+		git format-patch -3
+		exit
+	fi
+
+	${git} "${DIR}/patches/capes/0003-cape-lcd4.patch"
+
 	#must be last..
 	${git} "${DIR}/patches/capes/000x-cape-basic-proto-cape.patch"
 }
@@ -188,12 +209,16 @@ dts_makefile () {
 # gedit arch/arm/boot/dts/Makefile
 #	am335x-bone.dtb \
 #	am335x-bone-audi.dtb \
+#	am335x-bone-cape-bone-argus.dtb \
+#	am335x-bone-lcd4.dtb \
 #	am335x-bone-ttyO1.dtb \
 #	am335x-bone-ttyO2.dtb \
 #	am335x-bone-ttyO4.dtb \
 #	am335x-bone-ttyO5.dtb \
 #	am335x-boneblack.dtb \
 #	am335x-boneblack-audi.dtb \
+#	am335x-boneblack-cape-bone-argus.dtb \
+#	am335x-boneblack-lcd4.dtb \
 #	am335x-boneblack-ttyO1.dtb \
 #	am335x-boneblack-ttyO2.dtb \
 #	am335x-boneblack-ttyO4.dtb \
