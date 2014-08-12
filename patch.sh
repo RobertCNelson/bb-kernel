@@ -99,6 +99,7 @@ pinmux () {
 	${git} "${DIR}/patches/pinmux/0005-am335x-bone-common-pinmux-i2c2.patch"
 	${git} "${DIR}/patches/pinmux/0006-am335x-bone-common-pinmux-uart.patch"
 	${git} "${DIR}/patches/pinmux/0007-am335x-bone-common-pinmux-spi.patch"
+	${git} "${DIR}/patches/pinmux/0008-am335x-bone-common-pinmux-mcasp0.patch"
 }
 
 dts () {
@@ -112,58 +113,92 @@ capes () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wfile="arch/arm/boot/dts/am335x-bone-ttyO1.dts"
 		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo "" >> ${wfile}
 		echo '#include "am335x-bone-ttyO1.dtsi"' >> ${wfile}
 		git add ${wfile}
 
 		wfile="arch/arm/boot/dts/am335x-bone-ttyO2.dts"
 		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo "" >> ${wfile}
 		echo '#include "am335x-bone-ttyO2.dtsi"' >> ${wfile}
 		git add ${wfile}
 
 		wfile="arch/arm/boot/dts/am335x-bone-ttyO4.dts"
 		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo "" >> ${wfile}
 		echo '#include "am335x-bone-ttyO4.dtsi"' >> ${wfile}
 		git add ${wfile}
 
 		wfile="arch/arm/boot/dts/am335x-bone-ttyO5.dts"
 		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo "" >> ${wfile}
 		echo '#include "am335x-bone-ttyO5.dtsi"' >> ${wfile}
 		git add ${wfile}
 
 		wfile="arch/arm/boot/dts/am335x-boneblack-ttyO1.dts"
 		cp arch/arm/boot/dts/am335x-boneblack.dts ${wfile}
+		echo "" >> ${wfile}
 		echo '#include "am335x-bone-ttyO1.dtsi"' >> ${wfile}
 		git add ${wfile}
 
 		wfile="arch/arm/boot/dts/am335x-boneblack-ttyO2.dts"
 		cp arch/arm/boot/dts/am335x-boneblack.dts ${wfile}
+		echo "" >> ${wfile}
 		echo '#include "am335x-bone-ttyO2.dtsi"' >> ${wfile}
 		git add ${wfile}
 
 		wfile="arch/arm/boot/dts/am335x-boneblack-ttyO4.dts"
 		cp arch/arm/boot/dts/am335x-boneblack.dts ${wfile}
+		echo "" >> ${wfile}
 		echo '#include "am335x-bone-ttyO4.dtsi"' >> ${wfile}
 		git add ${wfile}
 		git commit -a -m 'cape: uarts' -s
 		git format-patch -1
 		exit
 	fi
+
 	${git} "${DIR}/patches/capes/0001-cape-uarts.patch"
-	${git} "${DIR}/patches/capes/0002-cape-basic-proto-cape.patch"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wfile="arch/arm/boot/dts/am335x-bone-audi.dts"
+		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo "" >> ${wfile}
+		echo '#include "am335x-bone-audi.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-boneblack-audi.dts"
+		cp arch/arm/boot/dts/am335x-boneblack.dts ${wfile}
+		echo "" >> ${wfile}
+		echo '#include "am335x-bone-audi.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		git commit -a -m 'cape: audio' -s
+		git format-patch -2
+		exit
+	fi
+
+	${git} "${DIR}/patches/capes/0002-cape-audio.patch"
+
+	#must be last..
+	${git} "${DIR}/patches/capes/000x-cape-basic-proto-cape.patch"
 }
 
 dts_makefile () {
 # gedit arch/arm/boot/dts/Makefile
 #	am335x-bone.dtb \
+#	am335x-bone-audi.dtb \
 #	am335x-bone-ttyO1.dtb \
 #	am335x-bone-ttyO2.dtb \
 #	am335x-bone-ttyO4.dtb \
 #	am335x-bone-ttyO5.dtb \
 #	am335x-boneblack.dtb \
+#	am335x-boneblack-audi.dtb \
 #	am335x-boneblack-ttyO1.dtb \
 #	am335x-boneblack-ttyO2.dtb \
 #	am335x-boneblack-ttyO4.dtb \
 	echo "dir: dts_makefile"
+#exit
 	${git} "${DIR}/patches/dts_makefile/0001-dtb-sync-Makefile.patch"
 }
 
@@ -171,7 +206,6 @@ static_capes () {
 	echo "dir: static-capes"
 	${git} "${DIR}/patches/static-capes/0001-Added-Argus-UPS-cape-support.patch"
 	${git} "${DIR}/patches/static-capes/0002-Added-Argus-UPS-cape-support-BBW.patch"
-	${git} "${DIR}/patches/static-capes/0003-ARM-dts-am335x-boneblack-cape-audi.patch"
 	${git} "${DIR}/patches/static-capes/0004-Updated-dts-to-be-in-line-with-3.16-changes.patch"
 }
 
