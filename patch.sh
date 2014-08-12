@@ -69,26 +69,102 @@ local_patch () {
 
 pinmux () {
 	echo "dir: pinmux"
-	${git} "${DIR}/patches/pinmux/0001-am335x-bone-split-out-pinmux.patch"
-	${git} "${DIR}/patches/pinmux/0002-am335x-boneblack-split-out-emmc.patch"
-	${git} "${DIR}/patches/pinmux/0003-am335x-boneblack-split-out-hdmi.patch"
-	${git} "${DIR}/patches/pinmux/0004-am335x-boneblack-add-cpu0-opp-points.patch"
-	${git} "${DIR}/patches/pinmux/0005-am335x-bone-eeprom-and-i2c2.patch"
-	${git} "${DIR}/patches/pinmux/0006-am335x-bone-pinmux-add-uarts.patch"
-	${git} "${DIR}/patches/pinmux/0007-capes-ttyO1-ttyO2-ttyO4-bone-ttyO5.patch"
-	${git} "${DIR}/patches/pinmux/0008-am335x-bone-pinmux-add-spi0.patch"
-	${git} "${DIR}/patches/pinmux/0009-cape-basic-proto-cape.patch"
+	# cp arch/arm/boot/dts/am335x-bone-common.dtsi arch/arm/boot/dts/am335x-bone-common-pinmux.dtsi
+	# gedit arch/arm/boot/dts/am335x-bone-common.dtsi arch/arm/boot/dts/am335x-bone-common-pinmux.dtsi &
+	# gedit arch/arm/boot/dts/am335x-boneblack.dts arch/arm/boot/dts/am335x-bone.dts &
+	# git add arch/arm/boot/dts/am335x-bone-common-pinmux.dtsi
+	# git commit -a -m 'am335x-bone-common: split out am33xx_pinmux' -s
+
+	${git} "${DIR}/patches/pinmux/0001-am335x-bone-common-split-out-am33xx_pinmux.patch"
+
+	# meld arch/arm/boot/dts/am335x-bone-common-pinmux.dtsi arch/arm/boot/dts/am335x-boneblack.dts
+	# git commit -a -m 'am335x-boneblack: split out am33xx_pinmux' -s
+
+	${git} "${DIR}/patches/pinmux/0002-am335x-boneblack-split-out-am33xx_pinmux.patch"
+
+	# cp arch/arm/boot/dts/am335x-boneblack.dts arch/arm/boot/dts/am335x-boneblack-emmc.dtsi
+	# gedit arch/arm/boot/dts/am335x-boneblack.dts arch/arm/boot/dts/am335x-boneblack-emmc.dtsi &
+	# git add arch/arm/boot/dts/am335x-boneblack-emmc.dtsi
+	# git commit -a -m 'am335x-boneblack: split out emmc' -s
+
+	${git} "${DIR}/patches/pinmux/0003-am335x-boneblack-split-out-emmc.patch"
+
+	# cp arch/arm/boot/dts/am335x-boneblack.dts arch/arm/boot/dts/am335x-boneblack-nxp-hdmi.dtsi
+	# gedit arch/arm/boot/dts/am335x-boneblack.dts arch/arm/boot/dts/am335x-boneblack-nxp-hdmi.dtsi &
+	# git add arch/arm/boot/dts/am335x-boneblack-nxp-hdmi.dtsi
+	# git commit -a -m 'am335x-boneblack: split out nxp hdmi' -s
+
+	${git} "${DIR}/patches/pinmux/0004-am335x-boneblack-split-out-nxp-hdmi.patch"
+
+	${git} "${DIR}/patches/pinmux/0005-am335x-bone-common-pinmux-i2c2.patch"
+	${git} "${DIR}/patches/pinmux/0006-am335x-bone-common-pinmux-uart.patch"
+	${git} "${DIR}/patches/pinmux/0007-am335x-bone-common-pinmux-spi.patch"
 }
 
-sgx () {
-	echo "dir: sgx"
-#	${git} "${DIR}/patches/sgx/0001-reset-Add-driver-for-gpio-controlled-reset-pins.patch"
-#	${git} "${DIR}/patches/sgx/0002-prcm-port-from-ti-linux-3.12.y.patch"
-	${git} "${DIR}/patches/sgx/0003-ARM-DTS-AM335x-Add-SGX-DT-node.patch"
-	${git} "${DIR}/patches/sgx/0004-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
-#	${git} "${DIR}/patches/sgx/0005-hack-port-da8xx-changes-from-ti-3.12-repo.patch"
-#	${git} "${DIR}/patches/sgx/0006-Revert-drm-remove-procfs-code-take-2.patch"
-	${git} "${DIR}/patches/sgx/0007-Changes-according-to-TI-for-SGX-support.patch"
+dts () {
+	echo "dir: dts"
+	${git} "${DIR}/patches/dts/0001-am335x-boneblack-add-cpu0-opp-points.patch"
+}
+
+capes () {
+	echo "dir: capes"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wfile="arch/arm/boot/dts/am335x-bone-ttyO1.dts"
+		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo '#include "am335x-bone-ttyO1.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-bone-ttyO2.dts"
+		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo '#include "am335x-bone-ttyO2.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-bone-ttyO4.dts"
+		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo '#include "am335x-bone-ttyO4.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-bone-ttyO5.dts"
+		cp arch/arm/boot/dts/am335x-bone.dts ${wfile}
+		echo '#include "am335x-bone-ttyO5.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-boneblack-ttyO1.dts"
+		cp arch/arm/boot/dts/am335x-boneblack.dts ${wfile}
+		echo '#include "am335x-bone-ttyO1.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-boneblack-ttyO2.dts"
+		cp arch/arm/boot/dts/am335x-boneblack.dts ${wfile}
+		echo '#include "am335x-bone-ttyO2.dtsi"' >> ${wfile}
+		git add ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-boneblack-ttyO4.dts"
+		cp arch/arm/boot/dts/am335x-boneblack.dts ${wfile}
+		echo '#include "am335x-bone-ttyO4.dtsi"' >> ${wfile}
+		git add ${wfile}
+		git commit -a -m 'cape: uarts' -s
+		git format-patch -1
+		exit
+	fi
+	${git} "${DIR}/patches/capes/0001-cape-uarts.patch"
+	${git} "${DIR}/patches/capes/0002-cape-basic-proto-cape.patch"
+}
+
+dts_makefile () {
+# gedit arch/arm/boot/dts/Makefile
+#	am335x-bone.dtb \
+#	am335x-bone-ttyO1.dtb \
+#	am335x-bone-ttyO2.dtb \
+#	am335x-bone-ttyO4.dtb \
+#	am335x-bone-ttyO5.dtb \
+#	am335x-boneblack.dtb \
+#	am335x-boneblack-ttyO1.dtb \
+#	am335x-boneblack-ttyO2.dtb \
+#	am335x-boneblack-ttyO4.dtb \
+	echo "dir: dts_makefile"
+	${git} "${DIR}/patches/dts_makefile/0001-dtb-sync-Makefile.patch"
 }
 
 static_capes () {
@@ -116,6 +192,9 @@ rt () {
 
 ###
 pinmux
+dts
+capes
+dts_makefile
 static_capes
 sgx
 
