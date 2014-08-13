@@ -110,6 +110,7 @@ dts () {
 
 capes () {
 	echo "dir: capes"
+
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wfile="arch/arm/boot/dts/am335x-bone-ttyO1.dts"
@@ -153,12 +154,13 @@ capes () {
 		echo "" >> ${wfile}
 		echo '#include "am335x-bone-ttyO4.dtsi"' >> ${wfile}
 		git add ${wfile}
-		git commit -a -m 'cape: uarts' -s
+		git commit -a -m 'auto generated: cape: uarts' -s
 		git format-patch -1
+		cp -v 0001-auto-generated-cape-uarts.patch ../patches/capes/
 		exit
 	fi
 
-	${git} "${DIR}/patches/capes/0001-cape-uarts.patch"
+	${git} "${DIR}/patches/capes/0001-auto-generated-cape-uarts.patch"
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -174,12 +176,13 @@ capes () {
 		echo '#include "am335x-bone-audi.dtsi"' >> ${wfile}
 		git add ${wfile}
 
-		git commit -a -m 'cape: audio' -s
+		git commit -a -m 'auto generated: cape: audio' -s
 		git format-patch -2
+		cp -v 0002-auto-generated-cape-audio.patch ../patches/capes/
 		exit
 	fi
 
-	${git} "${DIR}/patches/capes/0002-cape-audio.patch"
+	${git} "${DIR}/patches/capes/0002-auto-generated-cape-audio.patch"
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -194,12 +197,13 @@ capes () {
 		sed -i -e 's:am335x-boneblack-nxp-hdmi.dtsi:am335x-bone-lcd4.dtsi:g' ${wfile}
 		git add ${wfile}
 
-		git commit -a -m 'cape: lcd4' -s
+		git commit -a -m 'auto generated: cape: lcd4' -s
 		git format-patch -3
+		cp -v 0003-auto-generated-cape-lcd4.patch ../patches/capes/
 		exit
 	fi
 
-	${git} "${DIR}/patches/capes/0003-cape-lcd4.patch"
+	${git} "${DIR}/patches/capes/0003-auto-generated-cape-lcd4.patch"
 
 	#must be last..
 	${git} "${DIR}/patches/capes/000x-cape-basic-proto-cape.patch"
@@ -207,24 +211,67 @@ capes () {
 
 dts_makefile () {
 # gedit arch/arm/boot/dts/Makefile
-#	am335x-bone.dtb \
-#	am335x-bone-audi.dtb \
-#	am335x-bone-cape-bone-argus.dtb \
-#	am335x-bone-lcd4.dtb \
-#	am335x-bone-ttyO1.dtb \
-#	am335x-bone-ttyO2.dtb \
-#	am335x-bone-ttyO4.dtb \
-#	am335x-bone-ttyO5.dtb \
-#	am335x-boneblack.dtb \
-#	am335x-boneblack-audi.dtb \
-#	am335x-boneblack-cape-bone-argus.dtb \
-#	am335x-boneblack-lcd4.dtb \
-#	am335x-boneblack-ttyO1.dtb \
-#	am335x-boneblack-ttyO2.dtb \
-#	am335x-boneblack-ttyO4.dtb \
+
 	echo "dir: dts_makefile"
 #exit
 	${git} "${DIR}/patches/dts_makefile/0001-dtb-sync-Makefile.patch"
+}
+
+dtb_makefile_append () {
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
+}
+
+dtb_makefile () {
+	echo "dir: dtb_makefile"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		device="am335x-bone-audi.dtb"
+		dtb_makefile_append
+
+		device="am335x-bone-cape-bone-argus.dtb"
+		dtb_makefile_append
+
+		device="am335x-bone-lcd4.dtb"
+		dtb_makefile_append
+
+		device="am335x-bone-ttyO1.dtb"
+		dtb_makefile_append
+
+		device="am335x-bone-ttyO2.dtb"
+		dtb_makefile_append
+
+		device="am335x-bone-ttyO4.dtb"
+		dtb_makefile_append
+
+		device="am335x-bone-ttyO5.dtb"
+		dtb_makefile_append
+
+		device="am335x-boneblack-audi.dtb"
+		dtb_makefile_append
+
+		device="am335x-boneblack-cape-bone-argus.dtb"
+		dtb_makefile_append
+
+		device="am335x-boneblack-lcd4.dtb"
+		dtb_makefile_append
+
+		device="am335x-boneblack-ttyO1.dtb"
+		dtb_makefile_append
+
+		device="am335x-boneblack-ttyO2.dtb"
+		dtb_makefile_append
+
+		device="am335x-boneblack-ttyO4.dtb"
+		dtb_makefile_append
+
+		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
+		git format-patch -1
+		cp -v 0001-auto-generated-capes-add-dtbs-to-makefile.patch ../patches/dtb_makefile/
+		exit
+	fi
+
+	${git} "${DIR}/patches/dtb_makefile/0001-auto-generated-capes-add-dtbs-to-makefile.patch"
 }
 
 static_capes () {
@@ -254,7 +301,7 @@ rt () {
 pinmux
 dts
 capes
-dts_makefile
+dtb_makefile
 static_capes
 sgx
 
