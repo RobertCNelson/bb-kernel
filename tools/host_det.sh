@@ -406,10 +406,10 @@ debian_regs () {
 		echo "-----------------------------"
 		echo "Please cut, paste and email to: bugs@rcn-ee.com"
 		echo "-----------------------------"
-		echo "git: `git rev-parse HEAD`"
-		echo "uname -m"
-		uname -m
-		echo "lsb_release -a"
+		echo "git: [`git rev-parse HEAD`]"
+		echo "git: [`cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g'`]"
+		echo "uname -m: [`uname -m`]"
+		echo "lsb_release -a:"
 		lsb_release -a
 		echo "-----------------------------"
 		return 1
