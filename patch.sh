@@ -294,17 +294,9 @@ sgx () {
 	${git} "${DIR}/patches/sgx/0006-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
 }
 
-rt () {
-	echo "dir: rt"
-	${git} "${DIR}/patches/rt/0001-rt-3.14-patchset.patch"
-}
-
 ###
 beaglebone
 sgx
-
-#disabled by default
-#rt
 
 packaging_setup () {
 	cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
