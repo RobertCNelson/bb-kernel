@@ -260,14 +260,9 @@ beaglebone () {
 	fi
 
 	${git} "${DIR}/patches/beaglebone/dtb_makefile/0001-auto-generated-capes-add-dtbs-to-makefile.patch"
-}
 
-static_capes () {
-	echo "dir: static-capes"
-	${git} "${DIR}/patches/static-capes/0001-Added-Argus-UPS-cape-support.patch"
-	${git} "${DIR}/patches/static-capes/0002-Added-Argus-UPS-cape-support-BBW.patch"
-	${git} "${DIR}/patches/static-capes/0004-Updated-dts-to-be-in-line-with-3.16-changes.patch"
-	${git} "${DIR}/patches/static-capes/0005-wip-argus-rewrite.patch"
+	echo "dir: beaglebone/driver_n_cape"
+	${git} "${DIR}/patches/beaglebone/driver_n_cape/0001-driver_n_cape-Argus-UPS-cape-support.patch"
 }
 
 sgx () {
@@ -287,7 +282,6 @@ rt () {
 
 ###
 beaglebone
-static_capes
 sgx
 
 #disabled by default
