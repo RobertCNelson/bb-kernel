@@ -24,19 +24,30 @@
 
 DIR=$PWD
 
+repo="git@github.com:beagleboard/linux.git"
+
 if [ -e ${DIR}/version.sh ]; then
 	unset BRANCH
 	. ${DIR}/version.sh
 
-	git commit -a -m "${KERNEL_TAG}-${BUILD} release" -s
-	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}"
-
-	git push origin ${BRANCH}
-	git push origin ${BRANCH} --tags
-
 	cd ${DIR}/KERNEL/
 	make ARCH=arm distclean
-	git push -f git@github.com:RobertCNelson/linux-stable-rcn-ee.git "v${KERNEL_TAG}-${BUILD}"
+
+	cp ${DIR}/patches/defconfig ${DIR}/KERNEL/arch/arm/configs/bb.org_defconfig
+	git add arch/arm/configs/bb.org_defconfig
+
+	git commit -a -m "${KERNEL_TAG}-${BUILD} bb.org_defconfig" -s
+	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}"
+
+	#push tag
+	git push -f ${repo} "${KERNEL_TAG}-${BUILD}"
+
+	git branch -D ${KERNEL_REL} || true
+	git branch -m v${KERNEL_TAG}-${BUILD} ${KERNEL_REL}
+
+	#push branch
+	git push -f ${repo} ${KERNEL_REL}
+
 	cd ${DIR}/
 fi
 
