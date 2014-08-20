@@ -935,6 +935,7 @@ sgx () {
 backports () {
 	echo "dir: backports"
 	${git} "${DIR}/patches/backports/0001-backport-v3.13.7-tpm_i2c_atmel.c.patch"
+	${git} "${DIR}/patches/backports/0002-backport-am335x-ti-omap4-rng-from-ti-v3.12-bsp.patch"
 }
 
 am33x
