@@ -127,6 +127,7 @@ beaglebone () {
 	# git commit -a -m 'am335x-boneblack: split out nxp hdmi no audio' -s
 
 	${git} "${DIR}/patches/beaglebone/pinmux/0004-am335x-boneblack-split-out-nxp-hdmi-no-audio.patch"
+
 	${git} "${DIR}/patches/beaglebone/pinmux/0005-am335x-bone-common-pinmux-i2c2.patch"
 	${git} "${DIR}/patches/beaglebone/pinmux/0006-am335x-bone-common-pinmux-uart.patch"
 	${git} "${DIR}/patches/beaglebone/pinmux/0007-am335x-bone-common-pinmux-spi0-spidev.patch"
@@ -134,6 +135,7 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/pinmux/0009-am335x-bone-common-pinmux-lcd.patch"
 	${git} "${DIR}/patches/beaglebone/pinmux/0010-am335x-bone-common-pinmux-tscadc-4-wire.patch"
 	${git} "${DIR}/patches/beaglebone/pinmux/0011-am335x-bone-common-pinmux-hdmi-audio.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=11
 		cleanup
@@ -143,8 +145,11 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0001-am335x-boneblack-add-cpu0-opp-points.patch"
 
 	echo "dir: beaglebone/capes"
+	${git} "${DIR}/patches/beaglebone/capes/0001-cape-basic-proto-cape.patch"
+	${git} "${DIR}/patches/beaglebone/capes/0002-driver_n_cape-Argus-UPS-cape-support.patch"
 
 	#regenerate="enable"
+	echo "dir: beaglebone/generated"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		base_dts="am335x-bone"
 		cape="ttyO1"
@@ -174,9 +179,9 @@ beaglebone () {
 		dtsi_drop_nxp_hdmi_audio
 
 		git commit -a -m 'auto generated: cape: uarts' -s
-		git format-patch -1 -o ../patches/beaglebone/capes/
+		git format-patch -1 -o ../patches/beaglebone/generated/
 	else
-		${git} "${DIR}/patches/beaglebone/capes/0001-auto-generated-cape-uarts.patch"
+		${git} "${DIR}/patches/beaglebone/generated/0001-auto-generated-cape-uarts.patch"
 	fi
 
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -190,9 +195,9 @@ beaglebone () {
 		dtsi_drop_nxp_hdmi_audio
 
 		git commit -a -m 'auto generated: cape: audio' -s
-		git format-patch -2 -o ../patches/beaglebone/capes/
+		git format-patch -2 -o ../patches/beaglebone/generated/
 	else
-		${git} "${DIR}/patches/beaglebone/capes/0002-auto-generated-cape-audio.patch"
+		${git} "${DIR}/patches/beaglebone/generated/0002-auto-generated-cape-audio.patch"
 	fi
 
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -233,12 +238,30 @@ beaglebone () {
 		dtsi_drop_nxp_hdmi_audio
 
 		git commit -a -m 'auto generated: cape: lcd' -s
-		git format-patch -3 -o ../patches/beaglebone/capes/
+		git format-patch -3 -o ../patches/beaglebone/generated/
 	else
-		${git} "${DIR}/patches/beaglebone/capes/0003-auto-generated-cape-lcd.patch"
+		${git} "${DIR}/patches/beaglebone/generated/0003-auto-generated-cape-lcd.patch"
 	fi
 
-	#last...
+	#last beaglebone/beaglebone black default
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wfile="arch/arm/boot/dts/am335x-bone.dts"
+		echo "" >> ${wfile}
+		echo "/* http://elinux.org/CircuitCo:Basic_Proto_Cape */" >> ${wfile}
+		echo "#include \"am335x-bone-basic-proto-cape.dtsi\"" >> ${wfile}
+
+		wfile="arch/arm/boot/dts/am335x-boneblack.dts"
+		echo "" >> ${wfile}
+		echo "/* http://elinux.org/CircuitCo:Basic_Proto_Cape */" >> ${wfile}
+		echo "#include \"am335x-bone-basic-proto-cape.dtsi\"" >> ${wfile}
+
+		git commit -a -m 'auto generated: cape: basic-proto-cape' -s
+		git format-patch -4 -o ../patches/beaglebone/generated/
+	else
+		${git} "${DIR}/patches/beaglebone/generated/0004-auto-generated-cape-basic-proto-cape.patch"
+	fi
+
+	#dtb makefile
 	if [ "x${regenerate}" = "xenable" ] ; then
 		device="am335x-bone-audio.dtb"
 		dtb_makefile_append
@@ -304,18 +327,11 @@ beaglebone () {
 		dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
-		git format-patch -1 -o ../patches/beaglebone/dtb_makefile/
+		git format-patch -5 -o ../patches/beaglebone/generated/
 		exit
 	else
-		echo "dir: beaglebone/dtb_makefile"
-		${git} "${DIR}/patches/beaglebone/dtb_makefile/0001-auto-generated-capes-add-dtbs-to-makefile.patch"
+		${git} "${DIR}/patches/beaglebone/generated/0005-auto-generated-capes-add-dtbs-to-makefile.patch"
 	fi
-
-	#must be last..
-	${git} "${DIR}/patches/beaglebone/capes/000x-cape-basic-proto-cape.patch"
-
-	echo "dir: beaglebone/driver_n_cape"
-	${git} "${DIR}/patches/beaglebone/driver_n_cape/0001-driver_n_cape-Argus-UPS-cape-support.patch"
 
 	echo "dir: beaglebone/power"
 	${git} "${DIR}/patches/beaglebone/power/0001-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
