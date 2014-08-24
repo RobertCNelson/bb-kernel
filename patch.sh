@@ -341,6 +341,13 @@ beaglebone () {
 #	${git} "${DIR}/patches/beaglebone/mac/0007-arm-dts-am33xx-Add-syscon-phandle-to-cpsw-node.patch"
 }
 
+musb () {
+	echo "dir: musb"
+	${git} "${DIR}/patches/musb/0001-usb-musb-core-added-musb_restart-API-to-handle-babbl.patch"
+	${git} "${DIR}/patches/musb/0002-usb-musb-core-added-babble-recovery-func-ptr-to-musb.patch"
+	${git} "${DIR}/patches/musb/0003-usb-musb-dsps-handle-babble-condition-for-dsps-platf.patch"
+}
+
 fixes () {
 	echo "dir: fixes"
 	${git} "${DIR}/patches/fixes/0001-pinctrl-pinctrl-single-must-be-initialized-early.patch"
@@ -369,6 +376,7 @@ rt () {
 
 ###
 beaglebone
+musb
 fixes
 sgx
 
