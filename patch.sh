@@ -141,19 +141,22 @@ beaglebone () {
 
 	${git} "${DIR}/patches/beaglebone/pinmux/0004-am335x-boneblack-split-out-nxp-hdmi-no-audio.patch"
 
-	${git} "${DIR}/patches/beaglebone/pinmux/0005-am335x-bone-common-pinmux-i2c2.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0006-am335x-bone-common-pinmux-uart.patch"
+
+	${git} "${DIR}/patches/beaglebone/pinmux/0005-am335x-bone-common-pinmux-i2c1-i2c2.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0006-am335x-bone-common-pinmux-uart1-uart2-uart4-uart5.patch"
 	${git} "${DIR}/patches/beaglebone/pinmux/0007-am335x-bone-common-pinmux-spi0-spidev.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0008-am335x-bone-common-pinmux-mcasp0.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0009-am335x-bone-common-pinmux-lcd.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0010-am335x-bone-common-pinmux-tscadc-4-wire.patch"
-#	${git} "${DIR}/patches/beaglebone/pinmux/0011-am335x-bone-common-pinmux-hdmi-audio.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0012-am335x-bone-common-pinmux-led-keys-lcd4-01-00a1-lcd7.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0013-am335x-bone-common-pinmux-i2c1-rtc-01-00a1.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0014-am335x-bone-common-pinmux-led-keys-lcd7-01-00a2.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0015-am335x-bone-common-pinmux-cryptocape.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0016-cape-lcd-4dcape-43-lcd-4dcape-43t.patch"
-	${git} "${DIR}/patches/beaglebone/pinmux/0017-cape-lcd3-01-00a2-backlight-keys-led.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0008-am335x-bone-common-pinmux-mcasp-audio-cape-revb.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0009-am335x-bone-ti-tscadc-4-wire.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0010-am335x-bone-common-pinmux-led-gpio1_18-gpio1_28-gpio.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0011-am335x-bone-common-pinmux-gpio-backlight-gpio1_18.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0012-am335x-bone-common-pinmux-keymaps.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0013-am335x-bone-common-pinmux-lcd-panels.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0014-am335x-bone-capes-lcd3-lcd4-lcd7-4dcape-43-t-4dcape-.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0015-am335x-bone-cape-rtc-01-00a1.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux/0016-am335x-bone-cape-crypto-00a0.patch"
+
+	#last: (hdmi audio needs to be backported..)
+	#${git} "${DIR}/patches/beaglebone/pinmux/0017-am335x-bone-common-pinmux-hdmi-audio.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=17
@@ -223,13 +226,12 @@ beaglebone () {
 		cape="lcd3-01-00a2"
 		dtsi_append
 
-		cape="lcd4-01-00a0"
-		dtsi_append
 		cape="lcd4-01-00a1"
 		dtsi_append
 
 		cape="lcd7-01-00a2"
 		dtsi_append
+
 		cape="lcd7-01-00a3"
 		dtsi_append
 
@@ -312,19 +314,29 @@ beaglebone () {
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		base_dts="am335x-boneblack"
-		cape="lcd-4dcape-43"
+		cape="4dcape-43"
 		dtsi_append
 		dtsi_drop_nxp_hdmi_audio
 
 		base_dts="am335x-boneblack"
-		cape="lcd-4dcape-43t"
+		cape="4dcape-43t"
 		dtsi_append
 		dtsi_drop_nxp_hdmi_audio
 
-		git commit -a -m 'auto generated: cape: 4dcape-43' -s
+		base_dts="am335x-boneblack"
+		cape="4dcape-70"
+		dtsi_append
+		dtsi_drop_nxp_hdmi_audio
+
+		base_dts="am335x-boneblack"
+		cape="4dcape-70t"
+		dtsi_append
+		dtsi_drop_nxp_hdmi_audio
+
+		git commit -a -m 'auto generated: cape: 4dcape' -s
 		git format-patch -7 -o ../patches/beaglebone/generated/
 	else
-		${git} "${DIR}/patches/beaglebone/generated/0007-auto-generated-cape-4dcape-43.patch"
+		${git} "${DIR}/patches/beaglebone/generated/0007-auto-generated-cape-4dcape.patch"
 	fi
 
 	####
@@ -361,9 +373,6 @@ beaglebone () {
 		device="am335x-bone-lcd3-01-00a2.dtb"
 		dtb_makefile_append
 
-		device="am335x-bone-lcd4-01-00a0.dtb"
-		dtb_makefile_append
-
 		device="am335x-bone-lcd4-01-00a1.dtb"
 		dtb_makefile_append
 
@@ -397,10 +406,16 @@ beaglebone () {
 		device="am335x-boneblack-crypto-00a0.dtb"
 		dtb_makefile_append
 
-		device="am335x-boneblack-lcd-4dcape-43.dtb"
+		device="am335x-boneblack-4dcape-43.dtb"
 		dtb_makefile_append
 
-		device="am335x-boneblack-lcd-4dcape-43t.dtb"
+		device="am335x-boneblack-4dcape-43t.dtb"
+		dtb_makefile_append
+
+		device="am335x-boneblack-4dcape-70.dtb"
+		dtb_makefile_append
+
+		device="am335x-boneblack-4dcape-70t.dtb"
 		dtb_makefile_append
 
 		device="am335x-boneblack-lcd3-01-00a2.dtb"
