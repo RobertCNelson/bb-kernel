@@ -25,7 +25,7 @@
 DIR=$PWD
 
 repo="git@github.com:beagleboard/linux.git"
-config="bb.org"
+example="bb.org"
 
 if [ -e ${DIR}/version.sh ]; then
 	unset BRANCH
@@ -34,11 +34,11 @@ if [ -e ${DIR}/version.sh ]; then
 	cd ${DIR}/KERNEL/
 	make ARCH=arm distclean
 
-	cp ${DIR}/patches/defconfig ${DIR}/KERNEL/arch/arm/configs/${config}_defconfig
-	git add arch/arm/configs/${config}_defconfig
+	cp ${DIR}/patches/defconfig ${DIR}/KERNEL/arch/arm/configs/${example}_defconfig
+	git add arch/arm/configs/${example}_defconfig
 
-	git commit -a -m "${KERNEL_TAG}-${BUILD} ${config}_defconfig" -s
-	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}"
+	git commit -a -m "${KERNEL_TAG}-${BUILD} ${example}_defconfig" -s
+	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}" -f
 
 	#push tag
 	git push -f ${repo} "${KERNEL_TAG}-${BUILD}"
