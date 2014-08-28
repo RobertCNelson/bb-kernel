@@ -898,6 +898,7 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0008-deb-pkg-sync-with-v3.14.patch"
 #element14_bb_view: breaks lcd4
 #	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
+	${git} "${DIR}/patches/fixes/0010-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
 
 	echo "dir: firmware"
 	#http://arago-project.org/git/projects/?p=am33x-cm3.git;a=summary
