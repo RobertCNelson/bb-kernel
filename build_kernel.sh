@@ -232,6 +232,11 @@ unset LINUX_GIT
 . ${DIR}/system.sh
 /bin/sh -e "${DIR}/scripts/gcc.sh" || { exit 1 ; }
 . ${DIR}/.CC
+if [ ${AUTO_BUILD} ] ; then
+	if [ -f /usr/bin/ccache ] ; then
+		CC="ccache ${CC}"
+	fi
+fi
 echo "CROSS_COMPILE=${CC}"
 
 . ${DIR}/version.sh
