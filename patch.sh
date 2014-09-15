@@ -900,6 +900,11 @@ am33x_after () {
 #	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
 	${git} "${DIR}/patches/fixes/0010-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
 
+	echo "dir: tre"
+	${git} "${DIR}/patches/tre/0001-Arduino-Tre-added.patch"
+	${git} "${DIR}/patches/tre/0002-arduino-tre.dts-remote-trailing-whitespace.patch"
+	${git} "${DIR}/patches/tre/0003-arduino-tre.dts-update-vdd_ddr-regulator-to-1.35V.patch"
+
 	echo "dir: firmware"
 	#http://arago-project.org/git/projects/?p=am33x-cm3.git;a=summary
 	#http://arago-project.org/git/projects/?p=am33x-cm3.git;a=commit;h=750362868d914702086187096ec2c67b68eac101
