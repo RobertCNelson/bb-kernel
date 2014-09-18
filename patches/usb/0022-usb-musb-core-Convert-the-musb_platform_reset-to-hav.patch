@@ -1,0 +1,104 @@
+From 30087c79c201dc9e841b1d70de68beb0910a3619 Mon Sep 17 00:00:00 2001
+From: George Cherian <george.cherian@ti.com>
+Date: Wed, 16 Jul 2014 18:22:11 +0530
+Subject: [PATCH 22/22] usb: musb: core: Convert the musb_platform_reset to
+ have a return value.
+
+Currently musb_platform_reset() is only used by dsps.
+In case of BABBLE interrupt for other platforms the  musb_platform_reset()
+is a NOP. In such situations no need to re-initialize the endpoints.
+Also in the latest silicon revision of AM335x, we do have a babble recovery
+mechanism without resetting the IP block. In preperation to add that support
+its better to have a rest_done return for  musb_platform_reset().
+
+Signed-off-by: George Cherian <george.cherian@ti.com>
+Tested-by: Bin Liu <b-liu@ti.com>
+Signed-off-by: Felipe Balbi <balbi@ti.com>
+---
+ drivers/usb/musb/musb_core.c | 10 ++++++----
+ drivers/usb/musb/musb_core.h | 10 ++++++----
+ drivers/usb/musb/musb_dsps.c |  3 ++-
+ 3 files changed, 14 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/usb/musb/musb_core.c b/drivers/usb/musb/musb_core.c
+index 75e6e4e..df03377 100644
+--- a/drivers/usb/musb/musb_core.c
++++ b/drivers/usb/musb/musb_core.c
+@@ -1764,9 +1764,11 @@ static void musb_irq_work(struct work_struct *data)
+ static void musb_recover_work(struct work_struct *data)
+ {
+ 	struct musb *musb = container_of(data, struct musb, recover_work.work);
+-	int status;
++	int status, ret;
+ 
+-	musb_platform_reset(musb);
++	ret  = musb_platform_reset(musb);
++	if (ret)
++		return;
+ 
+ 	usb_phy_vbus_off(musb->xceiv);
+ 	usleep_range(100, 200);
+@@ -1775,8 +1777,8 @@ static void musb_recover_work(struct work_struct *data)
+ 	usleep_range(100, 200);
+ 
+ 	/*
+-	 * When a babble condition occurs, the musb controller removes the
+-	 * session bit and the endpoint config is lost.
++	 * When a babble condition occurs, the musb controller
++	 * removes the session bit and the endpoint config is lost.
+ 	 */
+ 	if (musb->dyn_fifo)
+ 		status = ep_config_from_table(musb);
+diff --git a/drivers/usb/musb/musb_core.h b/drivers/usb/musb/musb_core.h
+index f185c5c..0a5a158 100644
+--- a/drivers/usb/musb/musb_core.h
++++ b/drivers/usb/musb/musb_core.h
+@@ -206,7 +206,7 @@ struct musb_platform_ops {
+ 
+ 	int	(*set_mode)(struct musb *musb, u8 mode);
+ 	void	(*try_idle)(struct musb *musb, unsigned long timeout);
+-	void	(*reset)(struct musb *musb);
++	int	(*reset)(struct musb *musb);
+ 
+ 	int	(*vbus_status)(struct musb *musb);
+ 	void	(*set_vbus)(struct musb *musb, int on);
+@@ -567,10 +567,12 @@ static inline void musb_platform_try_idle(struct musb *musb,
+ 		musb->ops->try_idle(musb, timeout);
+ }
+ 
+-static inline void musb_platform_reset(struct musb *musb)
++static inline int  musb_platform_reset(struct musb *musb)
+ {
+-	if (musb->ops->reset)
+-		musb->ops->reset(musb);
++	if (!musb->ops->reset)
++		return -EINVAL;
++
++	return musb->ops->reset(musb);
+ }
+ 
+ static inline int musb_platform_get_vbus_status(struct musb *musb)
+diff --git a/drivers/usb/musb/musb_dsps.c b/drivers/usb/musb/musb_dsps.c
+index 7303a37..5133afc 100644
+--- a/drivers/usb/musb/musb_dsps.c
++++ b/drivers/usb/musb/musb_dsps.c
+@@ -508,7 +508,7 @@ static int dsps_musb_exit(struct musb *musb)
+ 	return 0;
+ }
+ 
+-static void dsps_musb_reset(struct musb *musb)
++static int dsps_musb_reset(struct musb *musb)
+ {
+ 	struct device *dev = musb->controller;
+ 	struct dsps_glue *glue = dev_get_drvdata(dev->parent);
+@@ -520,6 +520,7 @@ static void dsps_musb_reset(struct musb *musb)
+ 	usleep_range(100, 200);
+ 	usb_phy_init(musb->xceiv);
+ 
++	return 0;
+ }
+ 
+ static struct musb_platform_ops dsps_ops = {
+-- 
+2.1.0
+

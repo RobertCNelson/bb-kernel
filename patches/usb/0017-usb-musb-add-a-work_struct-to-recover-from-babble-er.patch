@@ -1,0 +1,114 @@
+From 6f46cf56c8d1b442bb74899d2171b3c217046d6e Mon Sep 17 00:00:00 2001
+From: Daniel Mack <zonque@gmail.com>
+Date: Wed, 2 Apr 2014 13:58:28 +0200
+Subject: [PATCH 17/22] usb: musb: add a work_struct to recover from babble
+ errors
+
+Handle BABBLE interrupt error conditions from a work struct handler.
+This indirection is necessary as we can't be certain that the phy
+functions don't sleep.
+
+Platform layer implementation may pass a babble error down to the core
+in order to handle it.
+
+Signed-off-by: Daniel Mack <zonque@gmail.com>
+Signed-off-by: Felipe Balbi <balbi@ti.com>
+
+Conflicts:
+	drivers/usb/musb/musb_core.c
+	drivers/usb/musb/musb_core.h
+---
+ drivers/usb/musb/musb_core.c | 36 ++++++++++++++++++++++++++++++++++++
+ drivers/usb/musb/musb_core.h |  1 +
+ 2 files changed, 37 insertions(+)
+
+diff --git a/drivers/usb/musb/musb_core.c b/drivers/usb/musb/musb_core.c
+index 731e651..6585832 100644
+--- a/drivers/usb/musb/musb_core.c
++++ b/drivers/usb/musb/musb_core.c
+@@ -855,6 +855,10 @@ b_host:
+ 		}
+ 	}
+ 
++	/* handle babble condition */
++	if (int_usb & MUSB_INTR_BABBLE)
++		schedule_work(&musb->recover_work);
++
+ #if 0
+ /* REVISIT ... this would be for multiplexing periodic endpoints, or
+  * supporting transfer phasing to prevent exceeding ISO bandwidth
+@@ -1755,6 +1759,34 @@ static void musb_irq_work(struct work_struct *data)
+ 	}
+ }
+ 
++/* Recover from babble interrupt conditions */
++static void musb_recover_work(struct work_struct *data)
++{
++	struct musb *musb = container_of(data, struct musb, recover_work);
++	int status;
++
++	musb_platform_reset(musb);
++
++	usb_phy_vbus_off(musb->xceiv);
++	udelay(100);
++
++	usb_phy_vbus_on(musb->xceiv);
++	udelay(100);
++
++	/*
++	 * When a babble condition occurs, the musb controller removes the
++	 * session bit and the endpoint config is lost.
++	 */
++	if (musb->dyn_fifo)
++		status = ep_config_from_table(musb);
++	else
++		status = ep_config_from_hw(musb);
++
++	/* start the session again */
++	if (status == 0)
++		musb_start(musb);
++}
++
+ /* --------------------------------------------------------------------------
+  * Init support
+  */
+@@ -1914,6 +1946,8 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
+ 	musb_platform_disable(musb);
+ 	musb_generic_disable(musb);
+ 
++	INIT_WORK(&musb->recover_work, musb_recover_work);
++
+ 	/* setup musb parts of the core (especially endpoints) */
+ 	status = musb_core_init(plat->config->multipoint
+ 			? MUSB_CONTROLLER_MHDRC
+@@ -2020,6 +2054,7 @@ fail4:
+ 		musb_gadget_cleanup(musb);
+ 
+ fail3:
++	cancel_work_sync(&musb->recover_work);
+ 	pm_runtime_put_sync(musb->controller);
+ 
+ fail2:
+@@ -2084,6 +2119,7 @@ static int musb_remove(struct platform_device *pdev)
+ 	musb_exit_debugfs(musb);
+ 	musb_shutdown(pdev);
+ 
++	cancel_work_sync(&musb->recover_work);
+ 	musb_free(musb);
+ 	iounmap(ctrl_base);
+ 	device_init_wakeup(dev, 0);
+diff --git a/drivers/usb/musb/musb_core.h b/drivers/usb/musb/musb_core.h
+index a20152f..56ad922 100644
+--- a/drivers/usb/musb/musb_core.h
++++ b/drivers/usb/musb/musb_core.h
+@@ -311,6 +311,7 @@ struct musb {
+ 
+ 	irqreturn_t		(*isr)(int, void *);
+ 	struct work_struct	irq_work;
++	struct work_struct	recover_work;
+ 	u16			hwvers;
+ 
+ 	u16			intrrxe;
+-- 
+2.1.0
+
