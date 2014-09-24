@@ -914,6 +914,12 @@ am33x_after () {
 	${git} "${DIR}/patches/tre/0002-arduino-tre.dts-remote-trailing-whitespace.patch"
 	${git} "${DIR}/patches/tre/0003-arduino-tre.dts-update-vdd_ddr-regulator-to-1.35V.patch"
 
+	echo "dir: pruspeak"
+	${git} "${DIR}/patches/pruspeak/0001-pruspeak-imported-original-source.patch"
+	${git} "${DIR}/patches/pruspeak/0002-pru_speak-integrated-with-pru_rproc-in-bb.org-3.8-ke.patch"
+	${git} "${DIR}/patches/pruspeak/0003-pru_speak-fix-dma-mask.patch"
+	${git} "${DIR}/patches/pruspeak/0004-Add-DTS-for-PRUSPEAK.patch"
+
 	echo "dir: firmware"
 	#http://arago-project.org/git/projects/?p=am33x-cm3.git;a=summary
 	#http://arago-project.org/git/projects/?p=am33x-cm3.git;a=commit;h=750362868d914702086187096ec2c67b68eac101
