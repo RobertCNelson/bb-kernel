@@ -28,27 +28,19 @@ install_bin () {
 
 distro=$(lsb_release -si)
 
-if [ -f /opt/gfxmodules/gfx_rel_es8.x/pvrsrvkm.ko ] ; then
-	if [ ! -d /lib/modules/$(uname -r)/extra/ ] ; then
-		mkdir -p /lib/modules/$(uname -r)/extra/ || true
-	fi
+if [ ! -f /lib/modules/`uname -r`/extra/es8.x/pvrsrvkm.ko ] ; then
+	if [ -f /opt/gfxmodules/gfx_rel_es8.x/pvrsrvkm.ko ] ; then
+		if [ ! -d /lib/modules/$(uname -r)/extra/ ] ; then
+			mkdir -p /lib/modules/$(uname -r)/extra/ || true
+		fi
 
-	cp -v /opt/gfxmodules/gfx_rel_es8.x/pvrsrvkm.ko /lib/modules/$(uname -r)/extra/pvrsrvkm.ko
-
-	grep -v -e "extra/pvrsrvkm.ko" /lib/modules/$(uname -r)/modules.dep >/tmp/modules.tmp
-	echo "/lib/modules/$(uname -r)/extra/pvrsrvkm.ko:" >>/tmp/modules.tmp
-	cp /tmp/modules.tmp /lib/modules/$(uname -r)/modules.dep
-
-	if [ -f /opt/gfxmodules/gfx_rel_es8.x/omaplfb.ko ] ; then
+		cp -v /opt/gfxmodules/gfx_rel_es8.x/pvrsrvkm.ko /lib/modules/$(uname -r)/extra/pvrsrvkm.ko
 		cp -v /opt/gfxmodules/gfx_rel_es8.x/omaplfb.ko /lib/modules/$(uname -r)/extra/omaplfb.ko
-
-		grep -v -e "extra/omaplfb.ko" /lib/modules/$(uname -r)/modules.dep >/tmp/modules.tmp
-		echo "/lib/modules/$(uname -r)/extra/omaplfb.ko: /lib/modules/$(uname -r)/extra/pvrsrvkm.ko" >>/tmp/modules.tmp
-		cp /tmp/modules.tmp /lib/modules/$(uname -r)/modules.dep
 	fi
-	echo "Running [depmod -a]"
-	depmod -a
 fi
+
+echo "Running [depmod -a `uname -r`]"
+depmod -a `uname -r`
 
 if [ -d /opt/gfxlibraries/gfx_rel_es8.x/ ] ; then
 	echo "Copying libraries"
