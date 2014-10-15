@@ -602,7 +602,7 @@ packaging_setup () {
 
 packaging () {
 	echo "dir: packaging"
-	#${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
+	${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
 	${git} "${DIR}/patches/packaging/0002-deb-pkg-install-dtbs-in-linux-image-package.patch"
 	#${git} "${DIR}/patches/packaging/0003-deb-pkg-no-dtbs_install.patch"
 }

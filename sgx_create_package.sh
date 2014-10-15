@@ -80,7 +80,7 @@ install_sgx () {
 }
 
 set_sgx_make_vars () {
-	source ${DIR}/.CC
+#	source ${DIR}/.CC
 	GRAPHICS_PATH="GRAPHICS_INSTALL_DIR="${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/""
 	KERNEL_PATH="KERNEL_INSTALL_DIR="${DIR}/KERNEL""
 	USER_VAR="HOME=/home/${USER}"
