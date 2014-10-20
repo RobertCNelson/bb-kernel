@@ -67,6 +67,23 @@ local_patch () {
 #external_git
 #local_patch
 
+imx_next () {
+	echo "dir: imx_next"
+	#From: https://git.kernel.org/cgit/linux/kernel/git/shawnguo/linux.git/
+	#git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux.git for-next
+}
+
+omap_next () {
+	echo "dir: omap_next"
+	#from: https://git.kernel.org/cgit/linux/kernel/git/tmlind/linux-omap.git/
+}
+
+tegra_next () {
+	echo "dir: tegra_next"
+	#From: https://git.kernel.org/cgit/linux/kernel/git/tegra/linux.git/log/?h=for-next
+	#git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux.git for-next
+}
+
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -116,6 +133,7 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/hdmi_audio/0003-ASoC-davinci-evm-HDMI-audio-support-for-TDA998x-trou.patch"
 	${git} "${DIR}/patches/beaglebone/hdmi_audio/0004-ASoC-davinci-HDMI-audio-build-for-AM33XX-and-TDA998x.patch"
 	${git} "${DIR}/patches/beaglebone/hdmi_audio/0005-ARM-dts-am33xx-Add-external-clock-provider.patch"
+	${git} "${DIR}/patches/fixes/0001-clk-fix-extra-clk_gpio.patch"
 
 	echo "dir: beaglebone/pinmux-helper"
 	#regenerate="enable"
@@ -196,14 +214,22 @@ beaglebone () {
 	fi
 
 	echo "dir: beaglebone/dts"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
 	${git} "${DIR}/patches/beaglebone/dts/0001-am335x-boneblack-add-cpu0-opp-points.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0002-dts-am335x-bone-common-fixup-leds-to-match-3.8.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0003-ARM-dts-am335x-bone-Fix-model-name-and-update-compat.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0004-ARM-dts-am335x-boneblack-dcdc1-set-to-1.35v-for-ddr3.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0003-ARM-dts-am335x-boneblack-dcdc1-set-to-1.35v-for-ddr3.patch"
 
-	#echo "patch -p1 < \"${DIR}/patches/beaglebone/dts/0005-add-base-files.patch\""
+	#echo "patch -p1 < \"${DIR}/patches/beaglebone/dts/0004-add-base-files.patch\""
 	#exit
-	${git} "${DIR}/patches/beaglebone/dts/0005-add-base-files.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0004-add-base-files.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=4
+		cleanup
+	fi
 
 	echo "dir: beaglebone/capes"
 	${git} "${DIR}/patches/beaglebone/capes/0001-cape-Argus-UPS-cape-support.patch"
@@ -567,16 +593,6 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/phy/0001-cpsw-Add-support-for-byte-queue-limits.patch"
 	${git} "${DIR}/patches/beaglebone/phy/0002-cpsw-napi-polling-of-64-is-good-for-gigE-less-good-f.patch"
 	${git} "${DIR}/patches/beaglebone/phy/0003-cpsw-search-for-phy.patch"
-
-	echo "dir: beaglebone/mac"
-	#[PATCH v6 0/7] net: cpsw: Support for am335x chip MACIDs
-	${git} "${DIR}/patches/beaglebone/mac/0001-DT-doc-net-cpsw-mac-address-is-optional.patch"
-	${git} "${DIR}/patches/beaglebone/mac/0002-net-cpsw-Add-missing-return-value.patch"
-	${git} "${DIR}/patches/beaglebone/mac/0003-net-cpsw-header-Add-missing-include.patch"
-	${git} "${DIR}/patches/beaglebone/mac/0004-net-cpsw-Replace-pr_err-by-dev_err.patch"
-	${git} "${DIR}/patches/beaglebone/mac/0005-net-cpsw-Add-am33xx-MACID-readout.patch"
-	${git} "${DIR}/patches/beaglebone/mac/0006-am33xx-define-syscon-control-module-device-node.patch"
-	${git} "${DIR}/patches/beaglebone/mac/0007-arm-dts-am33xx-Add-syscon-phandle-to-cpsw-node.patch"
 }
 
 sgx () {
@@ -590,7 +606,13 @@ sgx () {
 }
 
 ###
+
+#imx_next
+#omap_next
+#tegra_next
+
 beaglebone
+
 sgx
 
 packaging_setup () {
@@ -602,7 +624,7 @@ packaging_setup () {
 
 packaging () {
 	echo "dir: packaging"
-	${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
+	#${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
 	${git} "${DIR}/patches/packaging/0002-deb-pkg-install-dtbs-in-linux-image-package.patch"
 	#${git} "${DIR}/patches/packaging/0003-deb-pkg-no-dtbs_install.patch"
 }
