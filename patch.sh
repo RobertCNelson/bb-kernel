@@ -116,6 +116,7 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/hdmi_audio/0003-ASoC-davinci-evm-HDMI-audio-support-for-TDA998x-trou.patch"
 	${git} "${DIR}/patches/beaglebone/hdmi_audio/0004-ASoC-davinci-HDMI-audio-build-for-AM33XX-and-TDA998x.patch"
 	${git} "${DIR}/patches/beaglebone/hdmi_audio/0005-ARM-dts-am33xx-Add-external-clock-provider.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi_audio/0006-clk-ti-add-support-for-external-clock-provider.patch"
 
 	echo "dir: beaglebone/pinmux-helper"
 	#regenerate="enable"
