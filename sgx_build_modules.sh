@@ -98,7 +98,7 @@ set_sgx_make_vars () {
 
 git_sgx_modules () {
 	if [ ! -f "${DIR}/ignore/ti-sdk-pvr/.git/config" ] ; then
-		git clone git://github.com/RobertCNelson/ti-sdk-pvr.git "${DIR}/ignore/ti-sdk-pvr/"
+		git clone https://github.com/RobertCNelson/ti-sdk-pvr.git "${DIR}/ignore/ti-sdk-pvr/"
 		cd "${DIR}/ignore/ti-sdk-pvr/"
 		git checkout ${SGX_SHA} -b tmp-build
 		cd ${DIR}/
@@ -198,6 +198,10 @@ installing_sgx_modules () {
 	mkdir -p ${DESTDIR}/etc/init.d/ || true
 	mkdir -p ${DESTDIR}/opt/ || true
 
+	mkdir -p ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
+	cp -v "${DIR}"/ignore/ti-sdk-pvr/Graphics_SDK/gfx_rel_es$2/*.ko ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
+	echo "-----------------------------"
+
 	INSTALL_HOME="${DIR}/ignore/SDK_BIN/"
 	GRAPHICS_INSTALL_DIR="${INSTALL_HOME}Graphics_SDK_setuplinux_${sdk_version}"
 
@@ -205,10 +209,6 @@ installing_sgx_modules () {
 	echo "make BUILD=(debug | release} OMAPES={5.x | 8.x | 9.x} install"
 	echo "make DESTDIR=${DESTDIR} HOME=${INSTALL_HOME} GRAPHICS_INSTALL_DIR=${GRAPHICS_INSTALL_DIR} BUILD="$1" OMAPES="$2" "$3""
 	make DESTDIR=${DESTDIR} HOME=${INSTALL_HOME} GRAPHICS_INSTALL_DIR=${GRAPHICS_INSTALL_DIR} BUILD="$1" OMAPES="$2" "$3"
-
-	OMAPES="$2"
-	mkdir -p ${DESTDIR}/opt/gfxmodules/gfx_rel_es${OMAPES} || true
-	cp -v "${DIR}"/ignore/ti-sdk-pvr/Graphics_SDK/gfx_rel_es${OMAPES}/*.ko ${DESTDIR}/opt/gfxmodules/gfx_rel_es${OMAPES} || true
 
 	#remove devmem2:
 	find "${DESTDIR}/" -name "devmem2" -exec rm -rf {} \;

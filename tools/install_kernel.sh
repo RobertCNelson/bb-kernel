@@ -53,6 +53,51 @@ mmc_write_rootfs () {
 		fi
 		sudo cp -v "${DIR}/deploy/GFX_5.01.01.01.tar.gz" "${location}/opt/"
 	fi
+	echo "info: [${KERNEL_UTS}] now installed..."
+}
+
+mmc_write_boot_uname () {
+	echo "Installing ${KERNEL_UTS} to ${partition}"
+
+	if [ -f "${location}/vmlinuz-${KERNEL_UTS}_bak" ] ; then
+		sudo rm -f "${location}/vmlinuz-${KERNEL_UTS}_bak" || true
+	fi
+
+	if [ -f "${location}/vmlinuz-${KERNEL_UTS}" ] ; then
+		sudo mv "${location}/vmlinuz-${KERNEL_UTS}" "${location}/vmlinuz-${KERNEL_UTS}_bak"
+	fi
+
+	sudo cp -v "${DIR}/deploy/${KERNEL_UTS}.zImage" "${location}/vmlinuz-${KERNEL_UTS}"
+
+	if [ -f "${location}/initrd.img-${KERNEL_UTS}" ] ; then
+		sudo rm -rf "${location}/initrd.img-${KERNEL_UTS}" || true
+	fi
+
+	if [ -f "${DIR}/deploy/${KERNEL_UTS}-dtbs.tar.gz" ] ; then
+		if [ -d "${location}/dtbs/${KERNEL_UTS}_bak/" ] ; then
+			sudo rm -rf "${location}/dtbs/${KERNEL_UTS}_bak/" || true
+		fi
+
+		if [ -d "${location}/dtbs/${KERNEL_UTS}/" ] ; then
+			sudo mv "${location}/dtbs/${KERNEL_UTS}/" "${location}/dtbs/${KERNEL_UTS}_bak/" || true
+		fi
+
+		sudo mkdir -p "${location}/dtbs/${KERNEL_UTS}/"
+
+		echo "Installing ${KERNEL_UTS}-dtbs.tar.gz to ${partition}"
+		sudo tar xf "${DIR}/deploy/${KERNEL_UTS}-dtbs.tar.gz" -C "${location}/dtbs/${KERNEL_UTS}/"
+		sync
+	fi
+
+	unset older_kernel
+	older_kernel=$(grep uname_r "${location}/uEnv.txt" | grep -v '#' | awk -F"=" '{print $2}' || true)
+
+	if [ ! "x${older_kernel}" = "x" ] ; then
+		if [ ! "x${older_kernel}" = "x${KERNEL_UTS}" ] ; then
+			sudo sed -i -e 's:uname_r='${older_kernel}':uname_r='${KERNEL_UTS}':g' "${location}/uEnv.txt"
+		fi
+		echo "info: /boot/uEnv.txt: `grep uname_r ${location}/uEnv.txt`"
+	fi
 }
 
 mmc_write_boot () {
@@ -84,14 +129,19 @@ mmc_write_boot () {
 }
 
 mmc_partition_discover () {
-	if [ -f "${DIR}/deploy/disk/uEnv.txt" ] || [ -f "${DIR}/deploy/disk/BOOT.BIN" ] ; then
+	if [ -f "${DIR}/deploy/disk/uEnv.txt" ] ; then
 		location="${DIR}/deploy/disk"
 		mmc_write_boot
 	fi
 
 	if [ -f "${DIR}/deploy/disk/boot/uEnv.txt" ] ; then
 		location="${DIR}/deploy/disk/boot"
-		mmc_write_boot
+		test_uname=$(grep uname_r "${DIR}/deploy/disk/boot/uEnv.txt" | awk -F"=" '{print $2}' || true)
+		if [ ! "x${test_uname}" = "x" ] ; then
+			mmc_write_boot_uname
+		else
+			mmc_write_boot
+		fi
 	fi
 
 	if [ -f "${DIR}/deploy/disk/etc/fstab" ] ; then
