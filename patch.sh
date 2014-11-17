@@ -84,6 +84,11 @@ tegra_next () {
 	#git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux.git for-next
 }
 
+fixes () {
+	echo "dir: fixes"
+	${git} "${DIR}/patches/fixes/0001-trusty-gcc-4.8-4.8.2-19ubuntu1-has-fix.patch"
+}
+
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -149,9 +154,10 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/pinmux-helper/0007-beaglebone-added-expansion-header-to-dtb.patch"
 	${git} "${DIR}/patches/beaglebone/pinmux-helper/0008-bone-pinmux-helper-Add-support-for-mode-device-tree-.patch"
 	${git} "${DIR}/patches/beaglebone/pinmux-helper/0009-pinmux-helper-add-P8_37_pinmux-P8_38_pinmux.patch"
+	${git} "${DIR}/patches/beaglebone/pinmux-helper/0010-Remove-CONFIG_EXPERIMENTAL-dependency-on-CONFIG_GPIO.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=9
+		number=10
 		cleanup
 	fi
 
@@ -218,15 +224,16 @@ beaglebone () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
+
 	${git} "${DIR}/patches/beaglebone/dts/0001-am335x-boneblack-add-cpu0-opp-points.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0002-dts-am335x-bone-common-fixup-leds-to-match-3.8.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0003-ARM-dts-am335x-boneblack-dcdc1-set-to-1.35v-for-ddr3.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0004-ARM-dts-am335x-boneblack-enable-power-off-and-rtc-wa.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0005-bbb-force-usb0-to-perhiperal-mode-fixes-http-bugs.el.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0003-ARM-dts-am335x-boneblack-enable-power-off-and-rtc-wa.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0004-bbb-force-usb0-to-perhiperal-mode-fixes-http-bugs.el.patch"
 
-	#echo "patch -p1 < \"${DIR}/patches/beaglebone/dts/0004-add-base-files.patch\""
+
+	#echo "patch -p1 < \"${DIR}/patches/beaglebone/dts/0005-add-base-files.patch\""
 	#exit
-	${git} "${DIR}/patches/beaglebone/dts/0004-add-base-files.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0005-add-base-files.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=5
@@ -635,6 +642,7 @@ sgx () {
 #omap_next
 #tegra_next
 
+fixes
 beaglebone
 
 sgx
