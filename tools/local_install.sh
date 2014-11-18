@@ -21,7 +21,6 @@
 # THE SOFTWARE.
 
 unset KERNEL_UTS
-unset ZRELADDR
 
 DIR=$PWD
 
@@ -34,38 +33,8 @@ mmc_write_rootfs () {
 		sudo rm -rf "${location}/lib/modules/${KERNEL_UTS}" || true
 	fi
 
-	sudo tar ${UNTAR} "${DIR}/deploy/${KERNEL_UTS}-modules.tar.gz" -C "${location}/"
+	sudo tar xf "${DIR}/deploy/${KERNEL_UTS}-modules.tar.gz" -C "${location}/"
 	sync
-
-	echo "Installing ${KERNEL_UTS}-firmware.tar.gz"
-
-	if [ -d "${DIR}/deploy/tmp" ] ; then
-		rm -rf "${DIR}/deploy/tmp" || true
-	fi
-	mkdir -p "${DIR}/deploy/tmp/"
-
-	tar -xf "${DIR}/deploy/${KERNEL_UTS}-firmware.tar.gz" -C "${DIR}/deploy/tmp/"
-	sync
-
-	sudo cp -v "${DIR}/deploy/tmp"/*.dtbo "${location}/lib/firmware/" 2>/dev/null || true
-	sync
-
-	rm -rf "${DIR}/deploy/tmp/" || true
-
-	if [ "${ZRELADDR}" ] ; then
-		if [ ! -f "${location}/boot/SOC.sh" ] ; then
-			if [ -f "${location}/boot/uImage" ] ; then
-				#Possibly Angstrom: dump a newer uImage if one exists..
-				if [ -f "${location}/boot/uImage_bak" ] ; then
-					sudo rm -f "${location}/boot/uImage_bak" || true
-				fi
-
-				sudo mv "${location}/boot/uImage" "${location}/boot/uImage_bak"
-				sudo mkimage -A arm -O linux -T kernel -C none -a ${ZRELADDR} -e ${ZRELADDR} -n ${KERNEL_UTS} -d "${DIR}/deploy/${KERNEL_UTS}.zImage" "${location}/boot/uImage"
-				sync
-			fi
-		fi
-	fi
 
 	if [ -f "${DIR}/deploy/config-${KERNEL_UTS}" ] ; then
 		if [ -f "${location}/boot/config-${KERNEL_UTS}" ] ; then
@@ -74,27 +43,56 @@ mmc_write_rootfs () {
 		sudo cp -v "${DIR}/deploy/config-${KERNEL_UTS}" "${location}/boot/config-${KERNEL_UTS}"
 		sync
 	fi
+	sudo update-initramfs -ck ${KERNEL_UTS}
+	echo "info: [${KERNEL_UTS}] now installed..."
+}
+
+mmc_write_boot_uname () {
+	echo "Installing ${KERNEL_UTS}"
+
+	if [ -f "${location}/vmlinuz-${KERNEL_UTS}_bak" ] ; then
+		sudo rm -f "${location}/vmlinuz-${KERNEL_UTS}_bak" || true
+	fi
+
+	if [ -f "${location}/vmlinuz-${KERNEL_UTS}" ] ; then
+		sudo mv "${location}/vmlinuz-${KERNEL_UTS}" "${location}/vmlinuz-${KERNEL_UTS}_bak"
+	fi
+
+	sudo cp -v "${DIR}/deploy/${KERNEL_UTS}.zImage" "${location}/vmlinuz-${KERNEL_UTS}"
+
+	if [ -f "${location}/initrd.img-${KERNEL_UTS}" ] ; then
+		sudo rm -rf "${location}/initrd.img-${KERNEL_UTS}" || true
+	fi
+
+	if [ -f "${DIR}/deploy/${KERNEL_UTS}-dtbs.tar.gz" ] ; then
+		if [ -d "${location}/dtbs/${KERNEL_UTS}_bak/" ] ; then
+			sudo rm -rf "${location}/dtbs/${KERNEL_UTS}_bak/" || true
+		fi
+
+		if [ -d "${location}/dtbs/${KERNEL_UTS}/" ] ; then
+			sudo mv "${location}/dtbs/${KERNEL_UTS}/" "${location}/dtbs/${KERNEL_UTS}_bak/" || true
+		fi
+
+		sudo mkdir -p "${location}/dtbs/${KERNEL_UTS}/"
+
+		echo "Installing ${KERNEL_UTS}-dtbs.tar.gz to ${partition}"
+		sudo tar xf "${DIR}/deploy/${KERNEL_UTS}-dtbs.tar.gz" -C "${location}/dtbs/${KERNEL_UTS}/"
+		sync
+	fi
+
+	unset older_kernel
+	older_kernel=$(grep uname_r "${location}/uEnv.txt" | grep -v '#' | awk -F"=" '{print $2}' || true)
+
+	if [ ! "x${older_kernel}" = "x" ] ; then
+		if [ ! "x${older_kernel}" = "x${KERNEL_UTS}" ] ; then
+			sudo sed -i -e 's:uname_r='${older_kernel}':uname_r='${KERNEL_UTS}':g' "${location}/uEnv.txt"
+		fi
+		echo "info: /boot/uEnv.txt: `grep uname_r ${location}/uEnv.txt`"
+	fi
 }
 
 mmc_write_boot () {
 	echo "Installing ${KERNEL_UTS}"
-
-	if [ -f "${location}/SOC.sh" ] ; then
-		. "${location}/SOC.sh"
-		ZRELADDR=${load_addr}
-	fi
-
-	if [ -f "${location}/uImage_bak" ] ; then
-		sudo rm -f "${location}/uImage_bak" || true
-	fi
-
-	if [ -f "${location}/uImage" ] ; then
-		sudo mv "${location}/uImage" "${location}/uImage_bak"
-	fi
-
-	if [ "${ZRELADDR}" ] ; then
-		sudo mkimage -A arm -O linux -T kernel -C none -a ${ZRELADDR} -e ${ZRELADDR} -n ${KERNEL_UTS} -d "${DIR}/deploy/${KERNEL_UTS}.zImage" "${location}/uImage"
-	fi
 
 	if [ -f "${location}/zImage_bak" ] ; then
 		sudo rm -f "${location}/zImage_bak" || true
@@ -116,7 +114,7 @@ mmc_write_boot () {
 		sudo mkdir -p "${location}/dtbs"
 
 		echo "Installing ${KERNEL_UTS}-dtbs.tar.gz to ${partition}"
-		sudo tar ${UNTAR} "${DIR}/deploy/${KERNEL_UTS}-dtbs.tar.gz" -C "${location}/dtbs/"
+		sudo tar xf "${DIR}/deploy/${KERNEL_UTS}-dtbs.tar.gz" -C "${location}/dtbs/"
 		sync
 	fi
 }
@@ -126,7 +124,14 @@ if [ -f "${DIR}/system.sh" ] ; then
 
 	if [ -f "${DIR}/KERNEL/arch/arm/boot/zImage" ] ; then
 		KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
-		if [ -f "/boot/uboot/uEnv.txt" ] ; then
+		if [ -f "/boot/uEnv.txt" ] ; then
+			location="/boot/"
+			mmc_write_boot_uname
+			location=""
+			mmc_write_rootfs
+			sync
+
+		elif [ -f "/boot/uboot/uEnv.txt" ] ; then
 			location="/boot/uboot"
 			mmc_write_boot
 			location=""

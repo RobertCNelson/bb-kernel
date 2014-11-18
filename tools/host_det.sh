@@ -43,6 +43,8 @@ redhat_reqs () {
 	check_rpm
 	pkg="gcc"
 	check_rpm
+	pkg="lzop"
+	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
 	pkg="wget"
@@ -191,7 +193,6 @@ debian_regs () {
 
 			#http://docs.kali.org/kali-policy/kali-linux-relationship-with-debian
 			#lsb_release -a
-			#No LSB modules are available.
 			#Distributor ID:    Debian
 			#Description:    Debian GNU/Linux Kali Linux 1.0
 			#Release:    Kali Linux 1.0
@@ -202,7 +203,6 @@ debian_regs () {
 
 			#Debian "testing"
 			#lsb_release -a
-			#No LSB modules are available.
 			#Distributor ID: Debian
 			#Description:    Debian GNU/Linux testing/unstable
 			#Release:        testing/unstable
@@ -218,7 +218,6 @@ debian_regs () {
 
 			#http://solydxk.com/about/solydxk/
 			#lsb_release -a
-			#No LSB modules are available.
 			#Distributor ID: SolydXK
 			#Description:    SolydXK
 			#Release:        1
@@ -231,11 +230,20 @@ debian_regs () {
 		if [ "x${deb_distro}" = "xluna" ] ; then
 			#http://distrowatch.com/table.php?distribution=elementary
 			#lsb_release -a
-			#No LSB modules are available.
 			#Distributor ID:    elementary OS
 			#Description:    elementary OS Luna
 			#Release:    0.2
 			#Codename:    luna
+			deb_distro="precise"
+		fi
+
+		if [ "x${deb_distro}" = "xtoutatis" ] ; then
+			#http://listas.trisquel.info/pipermail/trisquel-announce/2013-March/000014.html
+			#lsb_release -a
+			#Distributor ID:    Trisquel
+			#Description:    Trisquel GNU/Linux 6.0.1, Toutatis
+			#Release:    6.0.1
+			#Codename:    toutatis
 			deb_distro="precise"
 		fi
 
@@ -275,42 +283,44 @@ debian_regs () {
 			;;
 		esac
 
+		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
 		squeeze|wheezy|jessie|sid)
 			unset warn_eol_distro
 			;;
 		utopic)
-			#14.10
+			#14.10 (EOL: xyz)
 			unset warn_eol_distro
 			;;
 		trusty)
-			#14.04: lts: trusty -> xyz
+			#14.04 (EOL: April 2019) lts: trusty -> xyz
 			unset warn_eol_distro
 			;;
-		quantal|saucy)
-			#12.10|13.10
-			unset warn_eol_distro
-			;;
-		raring)
-			#13.04
+		quantal|raring|saucy)
+			#12.10 (EOL: May 16, 2014)
+			#13.04 (EOL: January 27, 2014)
+			#13.10 (EOL: July 17, 2014)
 			warn_eol_distro=1
+			stop_pkg_search=1
 			;;
 		precise)
-			#12.04: lts: precise -> trusty
+			#12.04 (EOL: April 2017) lts: precise -> trusty
 			unset warn_eol_distro
 			;;
 		maverick|natty|oneiric)
-			#10.04|10.10|11.04
+			#10.10 (EOL: April 10, 2012)
+			#11.04 (EOL: October 28, 2012)
+			#11.10 (EOL: May 9, 2013)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
 		lucid)
-			#10.04: lts: lucid -> precise
+			#10.04 (EOL: April 2015) lts: lucid -> precise
 			unset warn_eol_distro
 			;;
 		hardy)
-			#8.04: lts: hardy -> lucid
+			#8.04 (EOL: May 2013) lts: hardy -> lucid
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -337,14 +347,14 @@ debian_regs () {
 			;;
 		esac
 
-		#Libs; starting with jessie/sid/saucy, lib<pkg_name>-dev:<arch>
+		#Libs; starting with jessie/sid, lib<pkg_name>-dev:<arch>
 		case "${deb_distro}" in
-		jessie|sid|saucy|trusty|utopic)
-			pkg="libncurses5-dev:${deb_arch}"
+		squeeze|wheezy|lucid|precise)
+			pkg="libncurses5-dev"
 			check_dpkg
 			;;
 		*)
-			pkg="libncurses5-dev"
+			pkg="libncurses5-dev:${deb_arch}"
 			check_dpkg
 			;;
 		esac
@@ -357,7 +367,7 @@ debian_regs () {
 				pkg="ia32-libs"
 				check_dpkg
 				;;
-			wheezy|jessie|sid|quantal|raring|saucy|trusty|utopic)
+			*)
 				pkg="libc6:i386"
 				check_dpkg
 				pkg="libncurses5:i386"
@@ -396,10 +406,10 @@ debian_regs () {
 		echo "-----------------------------"
 		echo "Please cut, paste and email to: bugs@rcn-ee.com"
 		echo "-----------------------------"
-		echo "git: `git rev-parse HEAD`"
-		echo "uname -m"
-		uname -m
-		echo "lsb_release -a"
+		echo "git: [`git rev-parse HEAD`]"
+		echo "git: [`cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g'`]"
+		echo "uname -m: [`uname -m`]"
+		echo "lsb_release -a:"
 		lsb_release -a
 		echo "-----------------------------"
 		return 1

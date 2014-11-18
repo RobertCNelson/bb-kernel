@@ -1,0 +1,695 @@
+From f732eb81ebb72025c77eded2d794fc0021bf734d Mon Sep 17 00:00:00 2001
+From: "clayshooter811@gmail.com" <clayshooter811@gmail.com>
+Date: Wed, 20 Aug 2014 17:12:09 -0500
+Subject: [PATCH 2/2] backport: am335x: ti,omap4-rng: from ti v3.12 bsp
+
+http://beagleboard.org/Community/Forums?place=msg%2Fbeagleboard%2FU3-4wh9yook%2Fgfc81YXrH6kJ
+
+Signed-off-by: James Johnson <clayshooter811@gmail.com>
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ arch/arm/boot/dts/am33xx.dtsi              |   7 +
+ arch/arm/mach-omap2/cclock33xx_data.c      |   5 +
+ arch/arm/mach-omap2/devices.c              |   6 +-
+ arch/arm/mach-omap2/omap_hwmod_33xx_data.c |  46 ++++
+ drivers/char/hw_random/Kconfig             |   6 +-
+ drivers/char/hw_random/omap-rng.c          | 399 +++++++++++++++++++++++------
+ 6 files changed, 386 insertions(+), 83 deletions(-)
+
+diff --git a/arch/arm/boot/dts/am33xx.dtsi b/arch/arm/boot/dts/am33xx.dtsi
+index 168dc7a..3a5a456 100644
+--- a/arch/arm/boot/dts/am33xx.dtsi
++++ b/arch/arm/boot/dts/am33xx.dtsi
+@@ -693,5 +693,12 @@
+ 			compatible = "ti,am335x-bandgap";
+ 			reg = <0x44e10448 0x8>;
+ 		};
++
++		rng: rng@483100000 {
++			compatible = "ti,omap4-rng";
++			ti,hwmods = "rng";
++			reg = <0x48310000 0x2000>;
++			interrupts = <111>;
++		};
+ 	};
+ };
+diff --git a/arch/arm/mach-omap2/cclock33xx_data.c b/arch/arm/mach-omap2/cclock33xx_data.c
+index c028220..11a8173 100644
+--- a/arch/arm/mach-omap2/cclock33xx_data.c
++++ b/arch/arm/mach-omap2/cclock33xx_data.c
+@@ -421,6 +421,10 @@ static struct clk aes0_fck;
+ DEFINE_STRUCT_CLK_HW_OMAP(aes0_fck, NULL);
+ DEFINE_STRUCT_CLK(aes0_fck, dpll_core_ck_parents, clk_ops_null);
+ 
++static struct clk rng_fck;
++DEFINE_STRUCT_CLK_HW_OMAP(rng_fck, NULL);
++DEFINE_STRUCT_CLK(rng_fck, dpll_core_ck_parents, clk_ops_null);
++
+ /*
+  * Modules clock nodes
+  *
+@@ -1151,6 +1155,7 @@ static struct omap_clk am33xx_clks[] = {
+ 	CLK(NULL,	"smartreflex1_fck",	&smartreflex1_fck,	CK_AM33XX),
+ 	CLK(NULL,	"sha0_fck",		&sha0_fck,	CK_AM33XX),
+ 	CLK(NULL,	"aes0_fck",		&aes0_fck,	CK_AM33XX),
++	CLK(NULL,	"rng_fck",		&rng_fck,	CK_AM33XX),
+ 	CLK(NULL,	"timer1_fck",		&timer1_fck,	CK_AM33XX),
+ 	CLK(NULL,	"timer2_fck",		&timer2_fck,	CK_AM33XX),
+ 	CLK(NULL,	"timer3_fck",		&timer3_fck,	CK_AM33XX),
+diff --git a/arch/arm/mach-omap2/devices.c b/arch/arm/mach-omap2/devices.c
+index a6d8070..8a82085 100644
+--- a/arch/arm/mach-omap2/devices.c
++++ b/arch/arm/mach-omap2/devices.c
+@@ -471,8 +471,10 @@ static void omap_init_rng(void)
+ 	struct platform_device *pdev;
+ 
+ 	oh = omap_hwmod_lookup("rng");
+-	if (!oh)
++	if (!oh) {
++		pr_err("Could not lookup rng hwmod\n");
+ 		return;
++	}
+ 
+ 	pdev = omap_device_build("omap_rng", -1, oh, NULL, 0, NULL, 0, 0);
+ 	WARN(IS_ERR(pdev), "Can't build omap_device for omap_rng\n");
+@@ -631,9 +633,9 @@ static int __init omap2_init_devices(void)
+ 		omap_init_mcspi();
+ 		omap_init_sham();
+ 		omap_init_aes();
++		omap_init_rng();
+ 	}
+ 	omap_init_sti();
+-	omap_init_rng();
+ 	omap_init_vout();
+ 	omap_init_ocp2scp();
+ 	if (soc_is_am33xx()) {
+diff --git a/arch/arm/mach-omap2/omap_hwmod_33xx_data.c b/arch/arm/mach-omap2/omap_hwmod_33xx_data.c
+index 6e80edb..d621186 100644
+--- a/arch/arm/mach-omap2/omap_hwmod_33xx_data.c
++++ b/arch/arm/mach-omap2/omap_hwmod_33xx_data.c
+@@ -3452,6 +3452,51 @@ static struct omap_hwmod_ocp_if am33xx_l3_main__aes0 = {
+ 	.user		= OCP_USER_MPU | OCP_USER_SDMA,
+ };
+ 
++/* rng */
++static struct omap_hwmod_class_sysconfig am33xx_rng_sysc = {
++	.rev_offs		= 0x1fe0,
++	.sysc_offs		= 0x1fe4,
++	.sysc_flags		= SYSC_HAS_AUTOIDLE | SYSC_HAS_SIDLEMODE,
++	.idlemodes		= SIDLE_FORCE | SIDLE_NO,
++	.sysc_fields		= &omap_hwmod_sysc_type1,
++};
++
++static struct omap_hwmod_class am33xx_rng_hwmod_class = {
++	.name	= "rng",
++	.sysc	= &am33xx_rng_sysc,
++};
++
++static struct omap_hwmod am33xx_rng_hwmod = {
++	.name		= "rng",
++	.class		= &am33xx_rng_hwmod_class,
++	.clkdm_name	= "l4ls_clkdm",
++	.flags		= HWMOD_SWSUP_SIDLE,
++	.main_clk	= "rng_fck",
++	.prcm		= {
++		.omap4	= {
++			.clkctrl_offs	= AM33XX_CM_PER_RNG_CLKCTRL_OFFSET,
++			.modulemode		= MODULEMODE_SWCTRL,
++		},
++	},
++};
++
++static struct omap_hwmod_addr_space am33xx_rng_addrs[] = {
++	{
++		.pa_start	= 0x48310000,
++		.pa_end		= 0x48310000 + 0x2000 - 1,
++		.flags		= ADDR_TYPE_RT
++	},
++	{ }
++};
++
++struct omap_hwmod_ocp_if am33xx_l4_per__rng = {
++	.master	= &am33xx_l4_ls_hwmod,
++	.slave	= &am33xx_rng_hwmod,
++	.clk	= "rng_fck",
++	.addr	= am33xx_rng_addrs,
++	.user	= OCP_USER_MPU,
++};
++
+ static struct omap_hwmod_ocp_if *am33xx_hwmod_ocp_ifs[] __initdata = {
+ 	&am33xx_l4_fw__emif_fw,
+ 	&am33xx_l3_main__emif,
+@@ -3531,6 +3576,7 @@ static struct omap_hwmod_ocp_if *am33xx_hwmod_ocp_ifs[] __initdata = {
+ 	&am33xx_cpgmac0__mdio,
+ 	&am33xx_l3_main__sha0,
+ 	&am33xx_l3_main__aes0,
++	&am33xx_l4_per__rng,
+ 	NULL,
+ };
+ 
+diff --git a/drivers/char/hw_random/Kconfig b/drivers/char/hw_random/Kconfig
+index c5a0262..9fc736e 100644
+--- a/drivers/char/hw_random/Kconfig
++++ b/drivers/char/hw_random/Kconfig
+@@ -141,12 +141,12 @@ config HW_RANDOM_IXP4XX
+ 
+ config HW_RANDOM_OMAP
+ 	tristate "OMAP Random Number Generator support"
+-	depends on HW_RANDOM && (ARCH_OMAP16XX || ARCH_OMAP2)
++	depends on HW_RANDOM && (ARCH_OMAP16XX || ARCH_OMAP2PLUS)
+ 	default HW_RANDOM
+  	---help---
+  	  This driver provides kernel-side support for the Random Number
+-	  Generator hardware found on OMAP16xx and OMAP24xx multimedia
+-	  processors.
++	  Generator hardware found on OMAP16xx, OMAP2/3/4/5 and AM33xx/AM43xx
++	  multimedia processors.
+ 
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called omap-rng.
+diff --git a/drivers/char/hw_random/omap-rng.c b/drivers/char/hw_random/omap-rng.c
+index d8c54e2..f56c6f0 100644
+--- a/drivers/char/hw_random/omap-rng.c
++++ b/drivers/char/hw_random/omap-rng.c
+@@ -24,57 +24,131 @@
+ #include <linux/delay.h>
+ #include <linux/slab.h>
+ #include <linux/pm_runtime.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/of_address.h>
++#include <linux/interrupt.h>
+ 
+ #include <asm/io.h>
+ 
+-#define RNG_OUT_REG		0x00		/* Output register */
+-#define RNG_STAT_REG		0x04		/* Status register
+-							[0] = STAT_BUSY */
+-#define RNG_ALARM_REG		0x24		/* Alarm register
+-							[7:0] = ALARM_COUNTER */
+-#define RNG_CONFIG_REG		0x28		/* Configuration register
+-							[11:6] = RESET_COUNT
+-							[5:3]  = RING2_DELAY
+-							[2:0]  = RING1_DELAY */
+-#define RNG_REV_REG		0x3c		/* Revision register
+-							[7:0] = REV_NB */
+-#define RNG_MASK_REG		0x40		/* Mask and reset register
+-							[2] = IT_EN
+-							[1] = SOFTRESET
+-							[0] = AUTOIDLE */
+-#define RNG_SYSSTATUS		0x44		/* System status
+-							[0] = RESETDONE */
++#define RNG_REG_STATUS_RDY			(1 << 0)
++
++#define RNG_REG_INTACK_RDY_MASK			(1 << 0)
++#define RNG_REG_INTACK_SHUTDOWN_OFLO_MASK	(1 << 1)
++#define RNG_SHUTDOWN_OFLO_MASK			(1 << 1)
++
++#define RNG_CONTROL_STARTUP_CYCLES_SHIFT	16
++#define RNG_CONTROL_STARTUP_CYCLES_MASK		(0xffff << 16)
++#define RNG_CONTROL_ENABLE_TRNG_SHIFT		10
++#define RNG_CONTROL_ENABLE_TRNG_MASK		(1 << 10)
++
++#define RNG_CONFIG_MAX_REFIL_CYCLES_SHIFT	16
++#define RNG_CONFIG_MAX_REFIL_CYCLES_MASK	(0xffff << 16)
++#define RNG_CONFIG_MIN_REFIL_CYCLES_SHIFT	0
++#define RNG_CONFIG_MIN_REFIL_CYCLES_MASK	(0xff << 0)
++
++#define RNG_CONTROL_STARTUP_CYCLES		0xff
++#define RNG_CONFIG_MIN_REFIL_CYCLES		0x21
++#define RNG_CONFIG_MAX_REFIL_CYCLES		0x22
++
++#define RNG_ALARMCNT_ALARM_TH_SHIFT		0x0
++#define RNG_ALARMCNT_ALARM_TH_MASK		(0xff << 0)
++#define RNG_ALARMCNT_SHUTDOWN_TH_SHIFT		16
++#define RNG_ALARMCNT_SHUTDOWN_TH_MASK		(0x1f << 16)
++#define RNG_ALARM_THRESHOLD			0xff
++#define RNG_SHUTDOWN_THRESHOLD			0x4
++
++#define RNG_REG_FROENABLE_MASK			0xffffff
++#define RNG_REG_FRODETUNE_MASK			0xffffff
++
++#define OMAP2_RNG_OUTPUT_SIZE			0x4
++#define OMAP4_RNG_OUTPUT_SIZE			0x8
++
++enum {
++	RNG_OUTPUT_L_REG = 0,
++	RNG_OUTPUT_H_REG,
++	RNG_STATUS_REG,
++	RNG_INTMASK_REG,
++	RNG_INTACK_REG,
++	RNG_CONTROL_REG,
++	RNG_CONFIG_REG,
++	RNG_ALARMCNT_REG,
++	RNG_FROENABLE_REG,
++	RNG_FRODETUNE_REG,
++	RNG_ALARMMASK_REG,
++	RNG_ALARMSTOP_REG,
++	RNG_REV_REG,
++	RNG_SYSCONFIG_REG,
++};
++
++static const u16 reg_map_omap2[] = {
++	[RNG_OUTPUT_L_REG]	= 0x0,
++	[RNG_STATUS_REG]	= 0x4,
++	[RNG_CONFIG_REG]	= 0x28,
++	[RNG_REV_REG]		= 0x3c,
++	[RNG_SYSCONFIG_REG]	= 0x40,
++};
+ 
++static const u16 reg_map_omap4[] = {
++	[RNG_OUTPUT_L_REG]	= 0x0,
++	[RNG_OUTPUT_H_REG]	= 0x4,
++	[RNG_STATUS_REG]	= 0x8,
++	[RNG_INTMASK_REG]	= 0xc,
++	[RNG_INTACK_REG]	= 0x10,
++	[RNG_CONTROL_REG]	= 0x14,
++	[RNG_CONFIG_REG]	= 0x18,
++	[RNG_ALARMCNT_REG]	= 0x1c,
++	[RNG_FROENABLE_REG]	= 0x20,
++	[RNG_FRODETUNE_REG]	= 0x24,
++	[RNG_ALARMMASK_REG]	= 0x28,
++	[RNG_ALARMSTOP_REG]	= 0x2c,
++	[RNG_REV_REG]		= 0x1FE0,
++	[RNG_SYSCONFIG_REG]	= 0x1FE4,
++};
++
++struct omap_rng_dev;
+ /**
+- * struct omap_rng_private_data - RNG IP block-specific data
+- * @base: virtual address of the beginning of the RNG IP block registers
+- * @mem_res: struct resource * for the IP block registers physical memory
++ * struct omap_rng_pdata - RNG IP block-specific data
++ * @regs: Pointer to the register offsets structure.
++ * @data_size: No. of bytes in RNG output.
++ * @data_present: Callback to determine if data is available.
++ * @init: Callback for IP specific initialization sequence.
++ * @cleanup: Callback for IP specific cleanup sequence.
+  */
+-struct omap_rng_private_data {
+-	void __iomem *base;
+-	struct resource *mem_res;
++struct omap_rng_pdata {
++	u16	*regs;
++	u32	data_size;
++	u32	(*data_present)(struct omap_rng_dev *priv);
++	int	(*init)(struct omap_rng_dev *priv);
++	void	(*cleanup)(struct omap_rng_dev *priv);
++};
++
++struct omap_rng_dev {
++	void __iomem			*base;
++	struct device			*dev;
++	const struct omap_rng_pdata	*pdata;
+ };
+ 
+-static inline u32 omap_rng_read_reg(struct omap_rng_private_data *priv, int reg)
++static inline u32 omap_rng_read(struct omap_rng_dev *priv, u16 reg)
+ {
+-	return __raw_readl(priv->base + reg);
++	return __raw_readl(priv->base + priv->pdata->regs[reg]);
+ }
+ 
+-static inline void omap_rng_write_reg(struct omap_rng_private_data *priv,
+-				      int reg, u32 val)
++static inline void omap_rng_write(struct omap_rng_dev *priv, u16 reg,
++				      u32 val)
+ {
+-	__raw_writel(val, priv->base + reg);
++	__raw_writel(val, priv->base + priv->pdata->regs[reg]);
+ }
+ 
+ static int omap_rng_data_present(struct hwrng *rng, int wait)
+ {
+-	struct omap_rng_private_data *priv;
++	struct omap_rng_dev *priv;
+ 	int data, i;
+ 
+-	priv = (struct omap_rng_private_data *)rng->priv;
++	priv = (struct omap_rng_dev *)rng->priv;
+ 
+ 	for (i = 0; i < 20; i++) {
+-		data = omap_rng_read_reg(priv, RNG_STAT_REG) ? 0 : 1;
++		data = priv->pdata->data_present(priv);
+ 		if (data || !wait)
+ 			break;
+ 		/* RNG produces data fast enough (2+ MBit/sec, even
+@@ -89,59 +163,246 @@ static int omap_rng_data_present(struct hwrng *rng, int wait)
+ 
+ static int omap_rng_data_read(struct hwrng *rng, u32 *data)
+ {
+-	struct omap_rng_private_data *priv;
++	struct omap_rng_dev *priv;
++	u32 data_size, i;
++
++	priv = (struct omap_rng_dev *)rng->priv;
++	data_size = priv->pdata->data_size;
++
++	for (i = 0; i < data_size / sizeof(u32); i++)
++		data[i] = omap_rng_read(priv, RNG_OUTPUT_L_REG + i);
+ 
+-	priv = (struct omap_rng_private_data *)rng->priv;
++	if (priv->pdata->regs[RNG_INTACK_REG])
++		omap_rng_write(priv, RNG_INTACK_REG, RNG_REG_INTACK_RDY_MASK);
++	return data_size;
++}
+ 
+-	*data = omap_rng_read_reg(priv, RNG_OUT_REG);
++static int omap_rng_init(struct hwrng *rng)
++{
++	struct omap_rng_dev *priv;
+ 
+-	return sizeof(u32);
++	priv = (struct omap_rng_dev *)rng->priv;
++	return priv->pdata->init(priv);
++}
++
++static void omap_rng_cleanup(struct hwrng *rng)
++{
++	struct omap_rng_dev *priv;
++
++	priv = (struct omap_rng_dev *)rng->priv;
++	priv->pdata->cleanup(priv);
+ }
+ 
+ static struct hwrng omap_rng_ops = {
+ 	.name		= "omap",
+ 	.data_present	= omap_rng_data_present,
+ 	.data_read	= omap_rng_data_read,
++	.init		= omap_rng_init,
++	.cleanup	= omap_rng_cleanup,
++};
++
++static inline u32 omap2_rng_data_present(struct omap_rng_dev *priv)
++{
++	return omap_rng_read(priv, RNG_STATUS_REG) ? 0 : 1;
++}
++
++static int omap2_rng_init(struct omap_rng_dev *priv)
++{
++	omap_rng_write(priv, RNG_SYSCONFIG_REG, 0x1);
++	return 0;
++}
++
++static void omap2_rng_cleanup(struct omap_rng_dev *priv)
++{
++	omap_rng_write(priv, RNG_SYSCONFIG_REG, 0x0);
++}
++
++static struct omap_rng_pdata omap2_rng_pdata = {
++	.regs		= (u16 *)reg_map_omap2,
++	.data_size	= OMAP2_RNG_OUTPUT_SIZE,
++	.data_present	= omap2_rng_data_present,
++	.init		= omap2_rng_init,
++	.cleanup	= omap2_rng_cleanup,
+ };
+ 
++#if defined(CONFIG_OF)
++static inline u32 omap4_rng_data_present(struct omap_rng_dev *priv)
++{
++	return omap_rng_read(priv, RNG_STATUS_REG) & RNG_REG_STATUS_RDY;
++}
++
++static int omap4_rng_init(struct omap_rng_dev *priv)
++{
++	u32 val;
++
++	/* Return if RNG is already running. */
++	if (omap_rng_read(priv, RNG_CONFIG_REG) & RNG_CONTROL_ENABLE_TRNG_MASK)
++		return 0;
++
++	val = RNG_CONFIG_MIN_REFIL_CYCLES << RNG_CONFIG_MIN_REFIL_CYCLES_SHIFT;
++	val |= RNG_CONFIG_MAX_REFIL_CYCLES << RNG_CONFIG_MAX_REFIL_CYCLES_SHIFT;
++	omap_rng_write(priv, RNG_CONFIG_REG, val);
++
++	omap_rng_write(priv, RNG_FRODETUNE_REG, 0x0);
++	omap_rng_write(priv, RNG_FROENABLE_REG, RNG_REG_FROENABLE_MASK);
++	val = RNG_ALARM_THRESHOLD << RNG_ALARMCNT_ALARM_TH_SHIFT;
++	val |= RNG_SHUTDOWN_THRESHOLD << RNG_ALARMCNT_SHUTDOWN_TH_SHIFT;
++	omap_rng_write(priv, RNG_ALARMCNT_REG, val);
++
++	val = RNG_CONTROL_STARTUP_CYCLES << RNG_CONTROL_STARTUP_CYCLES_SHIFT;
++	val |= RNG_CONTROL_ENABLE_TRNG_MASK;
++	omap_rng_write(priv, RNG_CONTROL_REG, val);
++
++	return 0;
++}
++
++static void omap4_rng_cleanup(struct omap_rng_dev *priv)
++{
++	int val;
++
++	val = omap_rng_read(priv, RNG_CONTROL_REG);
++	val &= ~RNG_CONTROL_ENABLE_TRNG_MASK;
++	omap_rng_write(priv, RNG_CONFIG_REG, val);
++}
++
++static irqreturn_t omap4_rng_irq(int irq, void *dev_id)
++{
++	struct omap_rng_dev *priv = dev_id;
++	u32 fro_detune, fro_enable;
++
++	/*
++	 * Interrupt raised by a fro shutdown threshold, do the following:
++	 * 1. Clear the alarm events.
++	 * 2. De tune the FROs which are shutdown.
++	 * 3. Re enable the shutdown FROs.
++	 */
++	omap_rng_write(priv, RNG_ALARMMASK_REG, 0x0);
++	omap_rng_write(priv, RNG_ALARMSTOP_REG, 0x0);
++
++	fro_enable = omap_rng_read(priv, RNG_FROENABLE_REG);
++	fro_detune = ~fro_enable & RNG_REG_FRODETUNE_MASK;
++	fro_detune = fro_detune | omap_rng_read(priv, RNG_FRODETUNE_REG);
++	fro_enable = RNG_REG_FROENABLE_MASK;
++
++	omap_rng_write(priv, RNG_FRODETUNE_REG, fro_detune);
++	omap_rng_write(priv, RNG_FROENABLE_REG, fro_enable);
++
++	omap_rng_write(priv, RNG_INTACK_REG, RNG_REG_INTACK_SHUTDOWN_OFLO_MASK);
++
++	return IRQ_HANDLED;
++}
++
++static struct omap_rng_pdata omap4_rng_pdata = {
++	.regs		= (u16 *)reg_map_omap4,
++	.data_size	= OMAP4_RNG_OUTPUT_SIZE,
++	.data_present	= omap4_rng_data_present,
++	.init		= omap4_rng_init,
++	.cleanup	= omap4_rng_cleanup,
++};
++
++static const struct of_device_id omap_rng_of_match[] = {
++		{
++			.compatible	= "ti,omap2-rng",
++			.data		= &omap2_rng_pdata,
++		},
++		{
++			.compatible	= "ti,omap4-rng",
++			.data		= &omap4_rng_pdata,
++		},
++		{},
++};
++MODULE_DEVICE_TABLE(of, omap_rng_of_match);
++
++static int of_get_omap_rng_device_details(struct omap_rng_dev *priv,
++					  struct platform_device *pdev)
++{
++	const struct of_device_id *match;
++	struct device *dev = &pdev->dev;
++	int irq, err;
++
++	match = of_match_device(of_match_ptr(omap_rng_of_match), dev);
++	if (!match) {
++		dev_err(dev, "no compatible OF match\n");
++		return -EINVAL;
++	}
++	priv->pdata = match->data;
++
++	if (of_device_is_compatible(dev->of_node, "ti,omap4-rng")) {
++		irq = platform_get_irq(pdev, 0);
++		if (irq < 0) {
++			dev_err(dev, "%s: error getting IRQ resource - %d\n",
++				__func__, irq);
++			return irq;
++		}
++
++		err = devm_request_irq(dev, irq, omap4_rng_irq,
++				       IRQF_TRIGGER_NONE, dev_name(dev), priv);
++		if (err) {
++			dev_err(dev, "unable to request irq %d, err = %d\n",
++				irq, err);
++			return err;
++		}
++		omap_rng_write(priv, RNG_INTMASK_REG, RNG_SHUTDOWN_OFLO_MASK);
++	}
++	return 0;
++}
++#else
++static int of_get_omap_rng_device_details(struct omap_rng_dev *omap_rng,
++					  struct platform_device *pdev)
++{
++	return -EINVAL;
++}
++#endif
++
++static int get_omap_rng_device_details(struct omap_rng_dev *omap_rng)
++{
++	/* Only OMAP2/3 can be non-DT */
++	omap_rng->pdata = &omap2_rng_pdata;
++	return 0;
++}
++
+ static int omap_rng_probe(struct platform_device *pdev)
+ {
+-	struct omap_rng_private_data *priv;
++	struct omap_rng_dev *priv;
++	struct resource *res;
++	struct device *dev = &pdev->dev;
+ 	int ret;
+ 
+-	priv = kzalloc(sizeof(struct omap_rng_private_data), GFP_KERNEL);
++
++	priv = devm_kzalloc(dev, sizeof(struct omap_rng_dev), GFP_KERNEL);
+ 	if (!priv) {
+ 		dev_err(&pdev->dev, "could not allocate memory\n");
+ 		return -ENOMEM;
+ 	};
+ 
+ 	omap_rng_ops.priv = (unsigned long)priv;
+-	dev_set_drvdata(&pdev->dev, priv);
++	platform_set_drvdata(pdev, priv);
++	priv->dev = dev;
+ 
+-	priv->mem_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	if (!priv->mem_res) {
+-		ret = -ENOENT;
+-		goto err_ioremap;
+-	}
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+ 
+-	priv->base = devm_request_and_ioremap(&pdev->dev, priv->mem_res);
++	priv->base = devm_request_and_ioremap(dev, res);
+ 	if (!priv->base) {
+-		ret = -ENOMEM;
+-		goto err_ioremap;
++
++	  ret = -ENOMEM;
++	  goto err_ioremap;
+ 	}
+-	dev_set_drvdata(&pdev->dev, priv);
++	dev_info(&pdev->dev,"base address of priv is %d\n",priv->base);
+ 
+ 	pm_runtime_enable(&pdev->dev);
+ 	pm_runtime_get_sync(&pdev->dev);
+ 
++	ret = (dev->of_node) ? of_get_omap_rng_device_details(priv, pdev) :
++				get_omap_rng_device_details(priv);
++	if (ret)
++		goto err_ioremap;
++
+ 	ret = hwrng_register(&omap_rng_ops);
+ 	if (ret)
+ 		goto err_register;
+ 
+ 	dev_info(&pdev->dev, "OMAP Random Number Generator ver. %02x\n",
+-		 omap_rng_read_reg(priv, RNG_REV_REG));
+-
+-	omap_rng_write_reg(priv, RNG_MASK_REG, 0x1);
++		 omap_rng_read(priv, RNG_REV_REG));
+ 
+ 	return 0;
+ 
+@@ -149,26 +410,21 @@ err_register:
+ 	priv->base = NULL;
+ 	pm_runtime_disable(&pdev->dev);
+ err_ioremap:
+-	kfree(priv);
+-
++	dev_err(dev, "initialization failed.\n");
+ 	return ret;
+ }
+ 
+ static int __exit omap_rng_remove(struct platform_device *pdev)
+ {
+-	struct omap_rng_private_data *priv = dev_get_drvdata(&pdev->dev);
++	struct omap_rng_dev *priv = platform_get_drvdata(pdev);
+ 
+ 	hwrng_unregister(&omap_rng_ops);
+ 
+-	omap_rng_write_reg(priv, RNG_MASK_REG, 0x0);
++	priv->pdata->cleanup(priv);
+ 
+ 	pm_runtime_put_sync(&pdev->dev);
+ 	pm_runtime_disable(&pdev->dev);
+ 
+-	release_mem_region(priv->mem_res->start, resource_size(priv->mem_res));
+-
+-	kfree(priv);
+-
+ 	return 0;
+ }
+ 
+@@ -176,9 +432,9 @@ static int __exit omap_rng_remove(struct platform_device *pdev)
+ 
+ static int omap_rng_suspend(struct device *dev)
+ {
+-	struct omap_rng_private_data *priv = dev_get_drvdata(dev);
++	struct omap_rng_dev *priv = dev_get_drvdata(dev);
+ 
+-	omap_rng_write_reg(priv, RNG_MASK_REG, 0x0);
++	priv->pdata->cleanup(priv);
+ 	pm_runtime_put_sync(dev);
+ 
+ 	return 0;
+@@ -186,10 +442,10 @@ static int omap_rng_suspend(struct device *dev)
+ 
+ static int omap_rng_resume(struct device *dev)
+ {
+-	struct omap_rng_private_data *priv = dev_get_drvdata(dev);
++	struct omap_rng_dev *priv = dev_get_drvdata(dev);
+ 
+ 	pm_runtime_get_sync(dev);
+-	omap_rng_write_reg(priv, RNG_MASK_REG, 0x1);
++	priv->pdata->init(priv);
+ 
+ 	return 0;
+ }
+@@ -203,31 +459,18 @@ static SIMPLE_DEV_PM_OPS(omap_rng_pm, omap_rng_suspend, omap_rng_resume);
+ 
+ #endif
+ 
+-/* work with hotplug and coldplug */
+-MODULE_ALIAS("platform:omap_rng");
+-
+ static struct platform_driver omap_rng_driver = {
+ 	.driver = {
+ 		.name		= "omap_rng",
+ 		.owner		= THIS_MODULE,
+ 		.pm		= OMAP_RNG_PM,
++		.of_match_table = of_match_ptr(omap_rng_of_match),
+ 	},
+ 	.probe		= omap_rng_probe,
+ 	.remove		= __exit_p(omap_rng_remove),
+ };
+ 
+-static int __init omap_rng_init(void)
+-{
+-	return platform_driver_register(&omap_rng_driver);
+-}
+-
+-static void __exit omap_rng_exit(void)
+-{
+-	platform_driver_unregister(&omap_rng_driver);
+-}
+-
+-module_init(omap_rng_init);
+-module_exit(omap_rng_exit);
+-
++module_platform_driver(omap_rng_driver);
++MODULE_ALIAS("platform:omap_rng");
+ MODULE_AUTHOR("Deepak Saxena (and others)");
+ MODULE_LICENSE("GPL");
+-- 
+2.1.0.rc1
+

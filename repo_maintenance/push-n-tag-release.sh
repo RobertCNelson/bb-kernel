@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2012 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,9 @@
 
 DIR=$PWD
 
+repo="git@github.com:RobertCNelson/linux-stable-rcn-ee.git"
+example="rcn-ee"
+
 if [ -e ${DIR}/version.sh ]; then
 	unset BRANCH
 	. ${DIR}/version.sh
@@ -33,5 +36,19 @@ if [ -e ${DIR}/version.sh ]; then
 
 	git push origin ${BRANCH}
 	git push origin ${BRANCH} --tags
+
+	cd ${DIR}/KERNEL/
+	make ARCH=arm distclean
+
+	cp ${DIR}/patches/defconfig ${DIR}/KERNEL/arch/arm/configs/${example}_defconfig
+	git add arch/arm/configs/${example}_defconfig
+
+	git commit -a -m "${KERNEL_TAG}-${BUILD} ${example}_defconfig" -s
+	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}"
+
+	#push tag
+	git push -f ${repo} "${KERNEL_TAG}-${BUILD}"
+
+	cd ${DIR}/
 fi
 

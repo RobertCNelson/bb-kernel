@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,14 @@
 
 # Split out, so build_kernel.sh and build_deb.sh can share..
 
-git="git am"
-
+. ${DIR}/version.sh
 if [ -f ${DIR}/system.sh ] ; then
 	. ${DIR}/system.sh
 fi
+
+git="git am"
+#git_patchset=""
+#git_opts
 
 if [ "${RUN_BISECT}" ] ; then
 	git="git apply"
@@ -49,6 +52,20 @@ cleanup () {
 	fi
 	exit
 }
+
+external_git () {
+	git_tag=""
+	echo "pulling: ${git_tag}"
+	git pull ${git_opts} ${git_patchset} ${git_tag}
+}
+
+local_patch () {
+	echo "dir: dir"
+	${git} "${DIR}/patches/dir/0001-patch.patch"
+}
+
+#external_git
+#local_patch
 
 am33x () {
 	echo "dir: dma"
@@ -329,6 +346,8 @@ am33x_after () {
 	${git} "${DIR}/patches/net/0005-add-proper-db.txt-for-CRDA.patch"
 	${git} "${DIR}/patches/net/0006-mcp251x-add-device-tree-support.patch"
 	${git} "${DIR}/patches/net/0007-net-cpsw-fix-irq_disable-with-threaded-interrupts.patch"
+	${git} "${DIR}/patches/net/0008-wireless-rtl8192cu-v4.0.2_9000.20130911.patch"
+	${git} "${DIR}/patches/net/0009-cpsw-search-for-phy.patch"
 
 	echo "dir: drm"
 	${git} "${DIR}/patches/drm/0001-am33xx-Add-clock-for-the-lcdc-DRM-driver.patch"
@@ -553,6 +572,7 @@ am33x_after () {
 	${git} "${DIR}/patches/pru/0017-rproc-PRU-Add-downcall-RPC-capability.patch"
 	${git} "${DIR}/patches/pru/0018-rproc-pru-Implement-a-software-defined-PWM-channel-s.patch"
 	${git} "${DIR}/patches/pru/0019-capes-PRU-PWM-channels-information.patch"
+	${git} "${DIR}/patches/pru/0020-PRU-2.0.0-compiler-changes-for-pru_rpoc.patch"
 
 	echo "dir: usb"
 	${git} "${DIR}/patches/usb/0001-drivers-usb-phy-add-a-new-driver-for-usb-part-of-con.patch"
@@ -568,6 +588,15 @@ am33x_after () {
 	${git} "${DIR}/patches/usb/0011-ARM-OMAP-am335x-musb-use-250-for-power.patch"
 	${git} "${DIR}/patches/usb/0012-ARM-OMAP2-MUSB-Specify-omap4-has-mailbox.patch"
 	${git} "${DIR}/patches/usb/0013-usb-musb-avoid-stopping-the-session-in-host-mode.patch"
+	${git} "${DIR}/patches/usb/0014-usb-phy-introduce-set_vbus-method.patch"
+	${git} "${DIR}/patches/usb/0015-usb-musb-core-Fix-remote-wakeup-resume.patch"
+	${git} "${DIR}/patches/usb/0016-usb-musb-add-reset-hook-to-platform-ops.patch"
+	${git} "${DIR}/patches/usb/0017-usb-musb-add-a-work_struct-to-recover-from-babble-er.patch"
+	${git} "${DIR}/patches/usb/0018-usb-musb-dsps-handle-babble-interrupts.patch"
+	${git} "${DIR}/patches/usb/0019-usb-musb-dsps-Call-usb_phy-_shutdown-_init-during-mu.patch"
+	${git} "${DIR}/patches/usb/0020-usb-musb-core-Handle-Babble-condition-only-in-HOST-m.patch"
+	${git} "${DIR}/patches/usb/0021-usb-musb-core-Convert-babble-recover-work-to-delayed.patch"
+	${git} "${DIR}/patches/usb/0022-usb-musb-core-Convert-the-musb_platform_reset-to-hav.patch"
 
 	echo "dir: PG2"
 	${git} "${DIR}/patches/PG2/0001-beaglebone-black-1ghz-hack.patch"
@@ -846,6 +875,10 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0033-Firmware-Update-Replicape-device-tree-overlay-files-.patch"
 	${git} "${DIR}/patches/capes/0034-cape-add-BB-BONE-AUDI-02-00A0-from-http-elinux.org-C.patch"
 	${git} "${DIR}/patches/capes/0035-cape-universaln-remove-P9_31.patch"
+	${git} "${DIR}/patches/capes/0036-cape-add-BB-BONE-HAS-00R1.patch"
+#element14_bb_view: breaks lcd4
+#	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
+	${git} "${DIR}/patches/capes/0038-cape-add-BB-BONE-SERL-01-00A2.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
@@ -853,6 +886,15 @@ am33x_after () {
 	echo "dir: logibone"
 	${git} "${DIR}/patches/logibone/0001-Instering-Logibone-driver-into-kernel.patch"
 	${git} "${DIR}/patches/logibone/0002-Adding-DTS-support-for-Logibone.patch"
+	${git} "${DIR}/patches/logibone/0003-Moving-from-bit-banged-configuration-to-SPI.patch"
+	${git} "${DIR}/patches/logibone/0004-removing-fpga-loading-interface-from-kernel-space.patch"
+
+	echo "dir: BeagleLogic"
+	${git} "${DIR}/patches/BeagleLogic/0001-Add-DTS-for-BeagleLogic.patch"
+	${git} "${DIR}/patches/BeagleLogic/0002-Add-BeagleLogic-binding-functions-to-pru_rproc.patch"
+	${git} "${DIR}/patches/BeagleLogic/0003-Add-kernel-module-for-BeagleLogic.patch"
+	${git} "${DIR}/patches/BeagleLogic/0004-Fix-compile-error-with-pru_rproc.c.patch"
+	${git} "${DIR}/patches/BeagleLogic/0005-BeagleLogic-module-v1.1-working-with-libsigrok.patch"
 
 	echo "dir: fixes"
 	${git} "${DIR}/patches/fixes/0001-sync-don-t-block-the-flusher-thread-waiting-on-IO.patch"
@@ -863,6 +905,20 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0006-ti_am335x_tsc-touchscreen-jitter-fix.patch"
 	${git} "${DIR}/patches/fixes/0007-omap-RS485-support-by-Michael-Musset.patch"
 	${git} "${DIR}/patches/fixes/0008-deb-pkg-sync-with-v3.14.patch"
+#element14_bb_view: breaks lcd4
+#	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
+	${git} "${DIR}/patches/fixes/0010-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
+
+	echo "dir: tre"
+	${git} "${DIR}/patches/tre/0001-Arduino-Tre-added.patch"
+	${git} "${DIR}/patches/tre/0002-arduino-tre.dts-remote-trailing-whitespace.patch"
+	${git} "${DIR}/patches/tre/0003-arduino-tre.dts-update-vdd_ddr-regulator-to-1.35V.patch"
+
+	echo "dir: pruspeak"
+	${git} "${DIR}/patches/pruspeak/0001-pruspeak-imported-original-source.patch"
+	${git} "${DIR}/patches/pruspeak/0002-pru_speak-integrated-with-pru_rproc-in-bb.org-3.8-ke.patch"
+	${git} "${DIR}/patches/pruspeak/0003-pru_speak-fix-dma-mask.patch"
+	${git} "${DIR}/patches/pruspeak/0004-Add-DTS-for-PRUSPEAK.patch"
 
 	echo "dir: firmware"
 	#http://arago-project.org/git/projects/?p=am33x-cm3.git;a=summary
@@ -892,11 +948,13 @@ sgx () {
 	${git} "${DIR}/patches/sgx/0001-OpenGl-added-SGX-device-to-device-tree.patch"
 	${git} "${DIR}/patches/sgx/0002-OpenGL-apply-SGX-patch-from-TI-forum-FIXES-crash-aft.patch"
 	${git} "${DIR}/patches/sgx/0003-OpenGL-fixed-IRQ-offset.patch"
+	${git} "${DIR}/patches/sgx/0004-SGX-am335x_feature_detection.patch"
 }
 
 backports () {
 	echo "dir: backports"
 	${git} "${DIR}/patches/backports/0001-backport-v3.13.7-tpm_i2c_atmel.c.patch"
+	${git} "${DIR}/patches/backports/0002-backport-am335x-ti-omap4-rng-from-ti-v3.12-bsp.patch"
 }
 
 xenomai () {
@@ -949,4 +1007,20 @@ sgx
 backports
 xenomai
 
-echo "patch.sh ran successful"
+packaging_setup () {
+	cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
+	git commit -a -m 'packaging: sync with mainline' -s
+
+	git format-patch -1 -o "${DIR}/patches/packaging"
+}
+
+packaging () {
+	echo "dir: packaging"
+	${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
+	${git} "${DIR}/patches/packaging/0002-deb-pkg-install-dtbs-in-linux-image-package.patch"
+	${git} "${DIR}/patches/packaging/0003-deb-pkg-no-dtbs_install.patch"
+}
+
+#packaging_setup
+packaging
+echo "patch.sh ran successfully"

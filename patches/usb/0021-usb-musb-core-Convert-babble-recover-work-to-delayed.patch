@@ -1,0 +1,107 @@
+From e7686bc97ebbaf5455ddd1ab55c07667b2b15e59 Mon Sep 17 00:00:00 2001
+From: George Cherian <george.cherian@ti.com>
+Date: Wed, 16 Jul 2014 18:22:10 +0530
+Subject: [PATCH 21/22] usb: musb: core: Convert babble recover work to delayed
+ work
+
+During babble condition both first disconnect of devices are
+initiated. Make sure MUSB controller is reset and re-initialized
+after all disconnects.
+
+To acheive this schedule a delayed work for babble recovery.
+
+While at that convert udelay to usleep_range.
+Refer Documentation/timers/timers-howto.txt
+
+Signed-off-by: George Cherian <george.cherian@ti.com>
+Tested-by: Bin Liu <b-liu@ti.com>
+Signed-off-by: Felipe Balbi <balbi@ti.com>
+
+Conflicts:
+	drivers/usb/musb/musb_core.c
+	drivers/usb/musb/musb_core.h
+
+Conflicts:
+	drivers/usb/musb/musb_core.c
+---
+ drivers/usb/musb/musb_core.c | 15 ++++++++-------
+ drivers/usb/musb/musb_core.h |  2 +-
+ 2 files changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/usb/musb/musb_core.c b/drivers/usb/musb/musb_core.c
+index df7f6df..75e6e4e 100644
+--- a/drivers/usb/musb/musb_core.c
++++ b/drivers/usb/musb/musb_core.c
+@@ -857,7 +857,8 @@ b_host:
+ 
+ 	/* handle babble condition */
+ 	if (int_usb & MUSB_INTR_BABBLE && is_host_active(musb))
+-		schedule_work(&musb->recover_work);
++		schedule_delayed_work(&musb->recover_work,
++				      msecs_to_jiffies(100));
+ 
+ #if 0
+ /* REVISIT ... this would be for multiplexing periodic endpoints, or
+@@ -1762,16 +1763,16 @@ static void musb_irq_work(struct work_struct *data)
+ /* Recover from babble interrupt conditions */
+ static void musb_recover_work(struct work_struct *data)
+ {
+-	struct musb *musb = container_of(data, struct musb, recover_work);
++	struct musb *musb = container_of(data, struct musb, recover_work.work);
+ 	int status;
+ 
+ 	musb_platform_reset(musb);
+ 
+ 	usb_phy_vbus_off(musb->xceiv);
+-	udelay(100);
++	usleep_range(100, 200);
+ 
+ 	usb_phy_vbus_on(musb->xceiv);
+-	udelay(100);
++	usleep_range(100, 200);
+ 
+ 	/*
+ 	 * When a babble condition occurs, the musb controller removes the
+@@ -1946,7 +1947,7 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
+ 	musb_platform_disable(musb);
+ 	musb_generic_disable(musb);
+ 
+-	INIT_WORK(&musb->recover_work, musb_recover_work);
++	INIT_DELAYED_WORK(&musb->recover_work, musb_recover_work);
+ 
+ 	/* setup musb parts of the core (especially endpoints) */
+ 	status = musb_core_init(plat->config->multipoint
+@@ -2054,7 +2055,7 @@ fail4:
+ 		musb_gadget_cleanup(musb);
+ 
+ fail3:
+-	cancel_work_sync(&musb->recover_work);
++	cancel_delayed_work_sync(&musb->recover_work);
+ 	pm_runtime_put_sync(musb->controller);
+ 
+ fail2:
+@@ -2119,7 +2120,7 @@ static int musb_remove(struct platform_device *pdev)
+ 	musb_exit_debugfs(musb);
+ 	musb_shutdown(pdev);
+ 
+-	cancel_work_sync(&musb->recover_work);
++	cancel_delayed_work_sync(&musb->recover_work);
+ 	musb_free(musb);
+ 	iounmap(ctrl_base);
+ 	device_init_wakeup(dev, 0);
+diff --git a/drivers/usb/musb/musb_core.h b/drivers/usb/musb/musb_core.h
+index 56ad922..f185c5c 100644
+--- a/drivers/usb/musb/musb_core.h
++++ b/drivers/usb/musb/musb_core.h
+@@ -311,7 +311,7 @@ struct musb {
+ 
+ 	irqreturn_t		(*isr)(int, void *);
+ 	struct work_struct	irq_work;
+-	struct work_struct	recover_work;
++	struct delayed_work	recover_work;
+ 	u16			hwvers;
+ 
+ 	u16			intrrxe;
+-- 
+2.1.0
+
