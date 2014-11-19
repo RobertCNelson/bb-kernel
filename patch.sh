@@ -879,6 +879,7 @@ am33x_after () {
 #element14_bb_view: breaks lcd4
 #	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
 	${git} "${DIR}/patches/capes/0038-cape-add-BB-BONE-SERL-01-00A2.patch"
+	${git} "${DIR}/patches/capes/0039-cape-add-NL-AB-BBBC-00D0.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
