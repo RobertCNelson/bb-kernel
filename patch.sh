@@ -973,6 +973,7 @@ packaging_setup () {
 	git commit -a -m 'packaging: sync with mainline' -s
 
 	git format-patch -1 -o "${DIR}/patches/packaging"
+	exit
 }
 
 packaging () {
