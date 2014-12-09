@@ -30,10 +30,11 @@ KERNEL_TAG=${KERNEL_REL}.13
 BUILD=bone67
 
 #v3.X-rcX + upto SHA
+#prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="am33x-v3.8"
+BRANCH="3.8.13-xenomai"
 
 DISTRO=cross
 DEBARCH=armhf
