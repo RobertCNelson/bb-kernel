@@ -882,6 +882,7 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0039-cape-add-NL-AB-BBBC-00D0.patch"
 	${git} "${DIR}/patches/capes/0040-add-cape-MT-CAPE-01-still-needs-gpiolib-mtctrl-patch.patch"
 	${git} "${DIR}/patches/capes/0041-cape-LCD4-Fix-GPIO-buttons.patch"
+	${git} "${DIR}/patches/capes/0042-capes-HDMI-Fix-incorrect-pinmux-register-for-GPIO1_2.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
