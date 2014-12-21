@@ -643,9 +643,8 @@ sgx () {
 #tegra_next
 
 fixes
-beaglebone
-
-sgx
+#beaglebone
+#sgx
 
 packaging_setup () {
 	cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
