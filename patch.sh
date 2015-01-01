@@ -879,6 +879,10 @@ am33x_after () {
 #element14_bb_view: breaks lcd4
 #	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
 	${git} "${DIR}/patches/capes/0038-cape-add-BB-BONE-SERL-01-00A2.patch"
+	${git} "${DIR}/patches/capes/0039-cape-add-NL-AB-BBBC-00D0.patch"
+	${git} "${DIR}/patches/capes/0040-add-cape-MT-CAPE-01-still-needs-gpiolib-mtctrl-patch.patch"
+	${git} "${DIR}/patches/capes/0041-cape-LCD4-Fix-GPIO-buttons.patch"
+	${git} "${DIR}/patches/capes/0042-capes-HDMI-Fix-incorrect-pinmux-register-for-GPIO1_2.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
@@ -957,6 +961,11 @@ backports () {
 	${git} "${DIR}/patches/backports/0002-backport-am335x-ti-omap4-rng-from-ti-v3.12-bsp.patch"
 }
 
+probotix () {
+	echo "dir: probotix"
+	${git} "${DIR}/patches/probotix/0001-Add-Probotix-custom-LCD-device-tree-overlay.patch"
+}
+
 xenomai () {
 	echo "dir: xenomai - ipipe"
 	KDIR="$(pwd)"
@@ -1005,6 +1014,7 @@ saucy
 machinekit
 sgx
 backports
+probotix
 xenomai
 
 packaging_setup () {
@@ -1012,6 +1022,7 @@ packaging_setup () {
 	git commit -a -m 'packaging: sync with mainline' -s
 
 	git format-patch -1 -o "${DIR}/patches/packaging"
+	exit
 }
 
 packaging () {
