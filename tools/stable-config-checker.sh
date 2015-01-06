@@ -55,5 +55,4 @@ config="CONFIG_HID_LOGITECH_DJ" ; config_enable
 config="CONFIG_CAN_C_CAN" ; config_module
 config="CONFIG_CAN_C_CAN_PLATFORM" ; config_module
 
-
 #
