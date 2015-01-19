@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -92,6 +92,10 @@ mmc_write_boot_uname () {
 }
 
 mmc_write_boot () {
+	if [ ! -f "${location}/zImage" ] ; then
+		echo "Error: no current ${location}/zImage, this might not boot..."
+	fi
+
 	echo "Installing ${KERNEL_UTS}"
 
 	if [ -f "${location}/zImage_bak" ] ; then
