@@ -605,8 +605,8 @@ beaglebone () {
 
 	echo "dir: beaglebone/rtc"
 	#v2
-	${git} "${DIR}/patches/beaglebone/rtc/0001-rtc-omap-fix-clock-source-configuration.patch"
-	${git} "${DIR}/patches/beaglebone/rtc/0002-rtc-omap-fix-missing-wakealarm-attribute.patch"
+#	${git} "${DIR}/patches/beaglebone/rtc/0001-rtc-omap-fix-clock-source-configuration.patch"
+#	${git} "${DIR}/patches/beaglebone/rtc/0002-rtc-omap-fix-missing-wakealarm-attribute.patch"
 	${git} "${DIR}/patches/beaglebone/rtc/0003-rtc-omap-fix-interrupt-disable-at-probe.patch"
 	${git} "${DIR}/patches/beaglebone/rtc/0004-rtc-omap-clean-up-probe-error-handling.patch"
 	${git} "${DIR}/patches/beaglebone/rtc/0005-rtc-omap-fix-class-device-registration.patch"
