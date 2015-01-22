@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -50,7 +50,7 @@ cleanup () {
 	if [ "${number}" ] ; then
 		git format-patch -${number} -o ${DIR}/patches/
 	fi
-	exit
+	exit 2
 }
 
 external_git () {
