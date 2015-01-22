@@ -22,7 +22,7 @@ toolchain="gcc_linaro_gnueabihf_4_7"
 #Kernel/Build
 KERNEL_REL=3.8
 KERNEL_TAG=${KERNEL_REL}.13
-BUILD=xenomai-r69.1
+BUILD=xenomai-r70
 
 #v3.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
