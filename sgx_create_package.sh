@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2012-2014 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2012-2015 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,21 +20,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-VERSION="v2014.09-1"
+VERSION="v2015.01-1"
 
 unset DIR
 
 DIR=$PWD
 
-SDK="5.01.01.01"
-sdk_version="5_01_01_01"
-SDK_DIR="5_01_01_01"
-SGX_SHA="origin/5.01.01.01-ti"
+SDK="5.01.01.02"
+sdk_version="5_01_01_02"
+SDK_DIR="5_01_01_02"
+SGX_SHA="origin/5.01.01.02"
 #SGX_SHA="origin/${SDK}"
 
 http_ti="http://software-dl.ti.com/dsps/dsps_public_sw/gfxsdk/"
 sgx_file="Graphics_SDK_setuplinux_hardfp_${sdk_version}.bin"
-sgx_md5sum="94acdbd20152c905939c2448d5e80a72"
+sgx_md5sum="94bcb31ea7eb50df1dfa4037055b638e"
 
 dl_sdk () {
 	echo "md5sum mis-match: ${md5sum} (re-downloading)"
@@ -213,6 +213,7 @@ installing_sgx_modules () {
 	#remove devmem2:
 	find "${DESTDIR}/" -name "devmem2" -exec rm -rf {} \;
 	rm -rf ${DESTDIR}/etc/init.d/335x-demo || true
+	rm -rf ${DESTDIR}/etc/init.d/43xx-demo || true
 	rm -rf ${DESTDIR}/etc/init.d/rc.pvr || true
 
 	mkdir -p ${DESTDIR}/opt/gfxinstall/scripts/ || true
@@ -221,7 +222,7 @@ installing_sgx_modules () {
 	chmod +x ${DESTDIR}/opt/gfxinstall/sgx-install.sh
 
 	cd ${DESTDIR}/
-	tar czf ${DIR}/deploy/GFX_${SDK}.tar.gz *
+	tar czf ${DIR}/deploy/GFX_${SDK}_es${2}.tar.gz *
 	cd "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/"
 }
 
@@ -264,11 +265,12 @@ if [ -e ${DIR}/system.sh ] ; then
 #	build_sgx_modules release 5.x yes all
 
 	clean_sgx_modules
-	#build_sgx_modules release 8.x yes all
+#	build_sgx_modules release 8.x yes all
 	installing_sgx_modules release 8.x install
 
 #	clean_sgx_modules
 #	build_sgx_modules release 9.x yes all
+#	installing_sgx_modules release 9.x install
 
 	#Disable when debugging...
 	if [ -d "${DIR}/ignore/ti-sdk-pvr/pkg/" ] ; then
