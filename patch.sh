@@ -884,6 +884,7 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0041-cape-LCD4-Fix-GPIO-buttons.patch"
 	${git} "${DIR}/patches/capes/0042-capes-HDMI-Fix-incorrect-pinmux-register-for-GPIO1_2.patch"
 	${git} "${DIR}/patches/capes/0043-beaglebone-universal-io-sync-with-master-of-https-gi.patch"
+	${git} "${DIR}/patches/capes/0044-nimbelink-add-missing-ids.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
@@ -963,6 +964,7 @@ backports () {
 	${git} "${DIR}/patches/backports/0001-backport-v3.13.7-tpm_i2c_atmel.c.patch"
 	${git} "${DIR}/patches/backports/0002-backport-am335x-ti-omap4-rng-from-ti-v3.12-bsp.patch"
 	${git} "${DIR}/patches/backports/0003-ARM-OMAP-Add-function-to-request-timer-by-node.patch"
+	${git} "${DIR}/patches/backports/0004-pps-use-an-external-clock-source-on-pin-P9.41-TCLKIN.patch"
 }
 
 probotix () {
