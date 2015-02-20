@@ -965,6 +965,7 @@ backports () {
 	${git} "${DIR}/patches/backports/0002-backport-am335x-ti-omap4-rng-from-ti-v3.12-bsp.patch"
 	${git} "${DIR}/patches/backports/0003-ARM-OMAP-Add-function-to-request-timer-by-node.patch"
 	${git} "${DIR}/patches/backports/0004-pps-use-an-external-clock-source-on-pin-P9.41-TCLKIN.patch"
+	${git} "${DIR}/patches/backports/0005-add-pps-gmtimer-from-https-github.com-ddrown-pps-gmt.patch"
 }
 
 probotix () {
