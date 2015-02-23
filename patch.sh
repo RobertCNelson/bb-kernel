@@ -961,11 +961,22 @@ sgx () {
 
 backports () {
 	echo "dir: backports"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
 	${git} "${DIR}/patches/backports/0001-backport-v3.13.7-tpm_i2c_atmel.c.patch"
 	${git} "${DIR}/patches/backports/0002-backport-am335x-ti-omap4-rng-from-ti-v3.12-bsp.patch"
 	${git} "${DIR}/patches/backports/0003-ARM-OMAP-Add-function-to-request-timer-by-node.patch"
 	${git} "${DIR}/patches/backports/0004-pps-use-an-external-clock-source-on-pin-P9.41-TCLKIN.patch"
 	${git} "${DIR}/patches/backports/0005-add-pps-gmtimer-from-https-github.com-ddrown-pps-gmt.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=5
+		cleanup
+	fi
 }
 
 probotix () {
