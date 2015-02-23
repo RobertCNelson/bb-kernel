@@ -67,14 +67,25 @@ local_patch () {
 #external_git
 #local_patch
 
-need_to_push_mainline () {
-	echo "dir: need_to_push_mainline"
-	${git} "${DIR}/patches/need_to_push_mainline/0001-ARM-dts-restructure-imx6q-udoo.dts-to-support-udoo-d.patch"
-}
-
 overlay () {
 	echo "dir: overlay"
-#	${git} "${DIR}/patches/overlay/0001-OF-DT-Overlay-configfs-interface-v3.patch"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/overlay/0001-of-Custom-printk-format-specifier-for-device-node.patch"
+	${git} "${DIR}/patches/overlay/0002-arm-of-Add-a-DT-quirk-method-after-unflattening.patch"
+	${git} "${DIR}/patches/overlay/0003-of-DT-quirks-infrastructure.patch"
+	${git} "${DIR}/patches/overlay/0004-arm-am33xx-DT-quirks-for-am33xx-based-beaglebone-var.patch"
+	${git} "${DIR}/patches/overlay/0005-arm-dts-Common-Black-White-Beaglebone-DTS-using-quir.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=5
+		cleanup
+	fi
+
+
 }
 
 dt () {
@@ -134,13 +145,9 @@ fixes () {
 	fi
 
 	${git} "${DIR}/patches/fixes/0001-trusty-gcc-4.8-4.8.2-19ubuntu1-has-fix.patch"
-	${git} "${DIR}/patches/fixes/0002-ARM-dts-am57xx-beagle-x15-Add-GPIO-controlled-fan-no.patch"
-	${git} "${DIR}/patches/fixes/0003-tty-serial-8250-omap-add-ttySx-console-if-the-user-d.patch"
-	${git} "${DIR}/patches/fixes/0004-ARM-dts-am57xx-beagle-x15-Add-dual-ethernet.patch"
-	${git} "${DIR}/patches/fixes/0005-gpio-fan-Add-thermal-control-hooks.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=5
+		number=1
 		cleanup
 	fi
 
@@ -269,7 +276,7 @@ sgx () {
 
 ###
 
-overlay
+#overlay
 dt
 #dts
 #wand
@@ -284,6 +291,7 @@ packaging_setup () {
 	git commit -a -m 'packaging: sync with mainline' -s
 
 	git format-patch -1 -o "${DIR}/patches/packaging"
+	exit 2
 }
 
 packaging () {

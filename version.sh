@@ -20,16 +20,16 @@ config="omap2plus_defconfig"
 toolchain="gcc_linaro_gnueabihf_4_9"
 
 #Kernel/Build
-KERNEL_REL=3.19
-KERNEL_TAG=${KERNEL_REL}
-BUILD=bone3
+KERNEL_REL=4.0
+KERNEL_TAG=${KERNEL_REL}-rc1
+BUILD=bone0
 
 #v3.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="am33x-v3.19"
+BRANCH="am33x-v4.0"
 
 DISTRO=cross
 DEBARCH=armhf
