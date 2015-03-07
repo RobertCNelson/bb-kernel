@@ -45,11 +45,11 @@ mmc_write_rootfs () {
 		sync
 	fi
 
-	if [ -f "${DIR}/deploy/GFX_5.01.01.01.tar.gz" ] ; then
+	if [ -f "${DIR}/deploy/GFX_5.01.01.02.tar.gz" ] ; then
 		if [ ! -d "${location}/opt/" ] ; then
 			sudo mkdir -p "${location}/opt/"
 		fi
-		sudo cp -v "${DIR}/deploy/GFX_5.01.01.01.tar.gz" "${location}/opt/"
+		sudo cp -v "${DIR}/deploy/GFX_5.01.01.02.tar.gz" "${location}/opt/"
 	fi
 
 	echo "info: [${KERNEL_UTS}] now installed..."
