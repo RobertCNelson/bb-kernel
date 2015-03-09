@@ -893,6 +893,7 @@ am33x_after () {
 	${git} "${DIR}/patches/logibone/0002-Adding-DTS-support-for-Logibone.patch"
 	${git} "${DIR}/patches/logibone/0003-Moving-from-bit-banged-configuration-to-SPI.patch"
 	${git} "${DIR}/patches/logibone/0004-removing-fpga-loading-interface-from-kernel-space.patch"
+	${git} "${DIR}/patches/logibone/0005-adding-pin-exlusive-property-to-device-tree-file.patch"
 
 	echo "dir: BeagleLogic"
 	${git} "${DIR}/patches/BeagleLogic/0001-Add-DTS-for-BeagleLogic.patch"
