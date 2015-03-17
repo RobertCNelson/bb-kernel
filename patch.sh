@@ -1011,7 +1011,7 @@ packaging_setup () {
 
 packaging () {
 	echo "dir: packaging"
-	regenerate="enable"
+	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
