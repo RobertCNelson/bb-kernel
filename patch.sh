@@ -876,14 +876,14 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0034-cape-add-BB-BONE-AUDI-02-00A0-from-http-elinux.org-C.patch"
 	${git} "${DIR}/patches/capes/0035-cape-universaln-remove-P9_31.patch"
 	${git} "${DIR}/patches/capes/0036-cape-add-BB-BONE-HAS-00R1.patch"
-#element14_bb_view: breaks lcd4
-#	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
+
 	${git} "${DIR}/patches/capes/0038-cape-add-BB-BONE-SERL-01-00A2.patch"
 	${git} "${DIR}/patches/capes/0039-cape-add-NL-AB-BBBC-00D0.patch"
 	${git} "${DIR}/patches/capes/0040-add-cape-MT-CAPE-01-still-needs-gpiolib-mtctrl-patch.patch"
 	${git} "${DIR}/patches/capes/0041-cape-LCD4-Fix-GPIO-buttons.patch"
 	${git} "${DIR}/patches/capes/0042-capes-HDMI-Fix-incorrect-pinmux-register-for-GPIO1_2.patch"
 	${git} "${DIR}/patches/capes/0043-beaglebone-universal-io-sync-with-master-of-https-gi.patch"
+	${git} "${DIR}/patches/capes/0044-nimbelink-add-missing-ids.patch"
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
@@ -910,8 +910,7 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0006-ti_am335x_tsc-touchscreen-jitter-fix.patch"
 	${git} "${DIR}/patches/fixes/0007-omap-RS485-support-by-Michael-Musset.patch"
 	${git} "${DIR}/patches/fixes/0008-deb-pkg-sync-with-v3.14.patch"
-#element14_bb_view: breaks lcd4
-#	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
+
 	${git} "${DIR}/patches/fixes/0010-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
 
 	echo "dir: tre"
@@ -958,13 +957,33 @@ sgx () {
 
 backports () {
 	echo "dir: backports"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
 	${git} "${DIR}/patches/backports/0001-backport-v3.13.7-tpm_i2c_atmel.c.patch"
 	${git} "${DIR}/patches/backports/0002-backport-am335x-ti-omap4-rng-from-ti-v3.12-bsp.patch"
+	#${git} "${DIR}/patches/backports/0003-ARM-OMAP-Add-function-to-request-timer-by-node.patch"
+	#${git} "${DIR}/patches/backports/0004-pps-use-an-external-clock-source-on-pin-P9.41-TCLKIN.patch"
+	#${git} "${DIR}/patches/backports/0005-add-pps-gmtimer-from-https-github.com-ddrown-pps-gmt.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=5
+		cleanup
+	fi
 }
 
 probotix () {
 	echo "dir: probotix"
 	${git} "${DIR}/patches/probotix/0001-Add-Probotix-custom-LCD-device-tree-overlay.patch"
+}
+
+bb_view_lcd () {
+#element14_bb_view: breaks lcd4
+	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
+	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
 }
 
 xenomai () {
@@ -1018,19 +1037,32 @@ backports
 probotix
 xenomai
 
+#element14_bb_view: breaks lcd4
+#bb_view_lcd
+
 packaging_setup () {
 	cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
 	git commit -a -m 'packaging: sync with mainline' -s
 
 	git format-patch -1 -o "${DIR}/patches/packaging"
-	exit
+	exit 2
 }
 
 packaging () {
 	echo "dir: packaging"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
 	${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
 	${git} "${DIR}/patches/packaging/0002-deb-pkg-install-dtbs-in-linux-image-package.patch"
 	${git} "${DIR}/patches/packaging/0003-deb-pkg-no-dtbs_install.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=3
+		cleanup
+	fi
 }
 
 #packaging_setup
