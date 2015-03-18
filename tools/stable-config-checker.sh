@@ -58,4 +58,6 @@ config="CONFIG_CAN_C_CAN_PLATFORM" ; config_module
 #usb0: instead us cdc_ether, which works...
 config="CONFIG_USB_ETH_EEM" ; config_disable
 
+config="CONFIG_UIO_PDRV_GENIRQ" ; config_module
+
 #
