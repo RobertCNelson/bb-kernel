@@ -1,0 +1,272 @@
+From 58d38d79ac42e688f699a14ce87664eef45fe8e7 Mon Sep 17 00:00:00 2001
+From: Mark Brown <broonie@linaro.org>
+Date: Fri, 7 Feb 2014 19:08:11 +0000
+Subject: [PATCH 03/20] ASoC: pcm512x: Implement paging support
+
+The PCM512x devices use a paged register map covering the entire register
+range. Implement support for this, mapping pages in at addresses starting
+at 0x100 for ease of use (though since the pages are numbered from 0 there
+is going to be an off by one when looking at the first byte as a page
+number).
+
+Also mark the new registers as accessible with the exception of the
+coefficient RAM which is a bit fiddly and may benefit from some extra
+handling to linearise the blocks.
+
+Signed-off-by: Mark Brown <broonie@linaro.org>
+---
+ sound/soc/codecs/pcm512x.c |  65 ++++++++++++++++-------
+ sound/soc/codecs/pcm512x.h | 126 +++++++++++++++++++++++++--------------------
+ 2 files changed, 116 insertions(+), 75 deletions(-)
+
+diff --git a/sound/soc/codecs/pcm512x.c b/sound/soc/codecs/pcm512x.c
+index 1150381..cdcb51e 100644
+--- a/sound/soc/codecs/pcm512x.c
++++ b/sound/soc/codecs/pcm512x.c
+@@ -66,22 +66,29 @@ PCM512x_REGULATOR_EVENT(1)
+ PCM512x_REGULATOR_EVENT(2)
+ 
+ static const struct reg_default pcm512x_reg_defaults[] = {
+-	{ PCM512x_RESET,            0x00 },
+-	{ PCM512x_POWER,            0x00 },
+-	{ PCM512x_MUTE,             0x00 },
+-	{ PCM512x_DSP,              0x00 },
+-	{ PCM512x_PLL_REF,          0x00 },
+-	{ PCM512x_DAC_ROUTING,      0x11 },
+-	{ PCM512x_DSP_PROGRAM,      0x01 },
+-	{ PCM512x_CLKDET,           0x00 },
+-	{ PCM512x_AUTO_MUTE,        0x00 },
+-	{ PCM512x_ERROR_DETECT,     0x00 },
+-	{ PCM512x_DIGITAL_VOLUME_1, 0x00 },
+-	{ PCM512x_DIGITAL_VOLUME_2, 0x30 },
+-	{ PCM512x_DIGITAL_VOLUME_3, 0x30 },
+-	{ PCM512x_DIGITAL_MUTE_1,   0x22 },
+-	{ PCM512x_DIGITAL_MUTE_2,   0x00 },
+-	{ PCM512x_DIGITAL_MUTE_3,   0x07 },
++	{ PCM512x_RESET,             0x00 },
++	{ PCM512x_POWER,             0x00 },
++	{ PCM512x_MUTE,              0x00 },
++	{ PCM512x_DSP,               0x00 },
++	{ PCM512x_PLL_REF,           0x00 },
++	{ PCM512x_DAC_ROUTING,       0x11 },
++	{ PCM512x_DSP_PROGRAM,       0x01 },
++	{ PCM512x_CLKDET,            0x00 },
++	{ PCM512x_AUTO_MUTE,         0x00 },
++	{ PCM512x_ERROR_DETECT,      0x00 },
++	{ PCM512x_DIGITAL_VOLUME_1,  0x00 },
++	{ PCM512x_DIGITAL_VOLUME_2,  0x30 },
++	{ PCM512x_DIGITAL_VOLUME_3,  0x30 },
++	{ PCM512x_DIGITAL_MUTE_1,    0x22 },
++	{ PCM512x_DIGITAL_MUTE_2,    0x00 },
++	{ PCM512x_DIGITAL_MUTE_3,    0x07 },
++	{ PCM512x_OUTPUT_AMPLITUDE,  0x00 },
++	{ PCM512x_ANALOG_GAIN_CTRL,  0x00 },
++	{ PCM512x_UNDERVOLTAGE_PROT, 0x00 },
++	{ PCM512x_ANALOG_MUTE_CTRL,  0x00 },
++	{ PCM512x_ANALOG_GAIN_BOOST, 0x00 },
++	{ PCM512x_VCOM_CTRL_1,       0x00 },
++	{ PCM512x_VCOM_CTRL_2,       0x01 },
+ };
+ 
+ static bool pcm512x_readable(struct device *dev, unsigned int reg)
+@@ -141,9 +148,18 @@ static bool pcm512x_readable(struct device *dev, unsigned int reg)
+ 	case PCM512x_ANALOG_MUTE_DET:
+ 	case PCM512x_GPIN:
+ 	case PCM512x_DIGITAL_MUTE_DET:
++	case PCM512x_OUTPUT_AMPLITUDE:
++	case PCM512x_ANALOG_GAIN_CTRL:
++	case PCM512x_UNDERVOLTAGE_PROT:
++	case PCM512x_ANALOG_MUTE_CTRL:
++	case PCM512x_ANALOG_GAIN_BOOST:
++	case PCM512x_VCOM_CTRL_1:
++	case PCM512x_VCOM_CTRL_2:
++	case PCM512x_CRAM_CTRL:
+ 		return true;
+ 	default:
+-		return false;
++		/* There are 256 raw register addresses */
++		return reg < 0xff;
+ 	}
+ }
+ 
+@@ -159,9 +175,11 @@ static bool pcm512x_volatile(struct device *dev, unsigned int reg)
+ 	case PCM512x_ANALOG_MUTE_DET:
+ 	case PCM512x_GPIN:
+ 	case PCM512x_DIGITAL_MUTE_DET:
++	case PCM512x_CRAM_CTRL:
+ 		return true;
+ 	default:
+-		return false;
++		/* There are 256 raw register addresses */
++		return reg < 0xff;
+ 	}
+ }
+ 
+@@ -343,6 +361,14 @@ static struct snd_soc_codec_driver pcm512x_codec_driver = {
+ 	.num_dapm_routes = ARRAY_SIZE(pcm512x_dapm_routes),
+ };
+ 
++static const struct regmap_range_cfg pcm512x_range = {
++	.name = "Pages", .range_min = PCM512x_VIRT_BASE,
++	.range_max = PCM512x_MAX_REGISTER,
++	.selector_reg = PCM512x_PAGE,
++	.selector_mask = 0xff,
++	.window_start = 0, .window_len = 0x100,
++};
++
+ static const struct regmap_config pcm512x_regmap = {
+ 	.reg_bits = 8,
+ 	.val_bits = 8,
+@@ -350,6 +376,9 @@ static const struct regmap_config pcm512x_regmap = {
+ 	.readable_reg = pcm512x_readable,
+ 	.volatile_reg = pcm512x_volatile,
+ 
++	.ranges = &pcm512x_range,
++	.num_ranges = 1,
++
+ 	.max_register = PCM512x_MAX_REGISTER,
+ 	.reg_defaults = pcm512x_reg_defaults,
+ 	.num_reg_defaults = ARRAY_SIZE(pcm512x_reg_defaults),
+diff --git a/sound/soc/codecs/pcm512x.h b/sound/soc/codecs/pcm512x.h
+index b2f518e..e58743c 100644
+--- a/sound/soc/codecs/pcm512x.h
++++ b/sound/soc/codecs/pcm512x.h
+@@ -17,66 +17,78 @@
+ #ifndef _SND_SOC_PCM512X
+ #define _SND_SOC_PCM512X
+ 
+-#define PCM512x_PAGE_0_BASE 0
++#define PCM512x_VIRT_BASE 0x100
++#define PCM512x_PAGE_LEN  0x100
++#define PCM512x_PAGE_BASE(n)  (PCM512x_VIRT_BASE + (PCM512x_PAGE_LEN * n))
+ 
+ #define PCM512x_PAGE              0
+ 
+-#define PCM512x_RESET             (PCM512x_PAGE_0_BASE +   1)
+-#define PCM512x_POWER             (PCM512x_PAGE_0_BASE +   2)
+-#define PCM512x_MUTE              (PCM512x_PAGE_0_BASE +   3)
+-#define PCM512x_PLL_EN            (PCM512x_PAGE_0_BASE +   4)
+-#define PCM512x_SPI_MISO_FUNCTION (PCM512x_PAGE_0_BASE +   6)
+-#define PCM512x_DSP               (PCM512x_PAGE_0_BASE +   7)
+-#define PCM512x_GPIO_EN           (PCM512x_PAGE_0_BASE +   8)
+-#define PCM512x_BCLK_LRCLK_CFG    (PCM512x_PAGE_0_BASE +   9)
+-#define PCM512x_DSP_GPIO_INPUT    (PCM512x_PAGE_0_BASE +  10)
+-#define PCM512x_MASTER_MODE       (PCM512x_PAGE_0_BASE +  12)
+-#define PCM512x_PLL_REF           (PCM512x_PAGE_0_BASE +  13)
+-#define PCM512x_PLL_COEFF_0       (PCM512x_PAGE_0_BASE +  20)
+-#define PCM512x_PLL_COEFF_1       (PCM512x_PAGE_0_BASE +  21)
+-#define PCM512x_PLL_COEFF_2       (PCM512x_PAGE_0_BASE +  22)
+-#define PCM512x_PLL_COEFF_3       (PCM512x_PAGE_0_BASE +  23)
+-#define PCM512x_PLL_COEFF_4       (PCM512x_PAGE_0_BASE +  24)
+-#define PCM512x_DSP_CLKDIV        (PCM512x_PAGE_0_BASE +  27)
+-#define PCM512x_DAC_CLKDIV        (PCM512x_PAGE_0_BASE +  28)
+-#define PCM512x_NCP_CLKDIV        (PCM512x_PAGE_0_BASE +  29)
+-#define PCM512x_OSR_CLKDIV        (PCM512x_PAGE_0_BASE +  30)
+-#define PCM512x_MASTER_CLKDIV_1   (PCM512x_PAGE_0_BASE +  32)
+-#define PCM512x_MASTER_CLKDIV_2   (PCM512x_PAGE_0_BASE +  33)
+-#define PCM512x_FS_SPEED_MODE     (PCM512x_PAGE_0_BASE +  34)
+-#define PCM512x_IDAC_1            (PCM512x_PAGE_0_BASE +  35)
+-#define PCM512x_IDAC_2            (PCM512x_PAGE_0_BASE +  36)
+-#define PCM512x_ERROR_DETECT      (PCM512x_PAGE_0_BASE +  37)
+-#define PCM512x_I2S_1             (PCM512x_PAGE_0_BASE +  40)
+-#define PCM512x_I2S_2             (PCM512x_PAGE_0_BASE +  41)
+-#define PCM512x_DAC_ROUTING       (PCM512x_PAGE_0_BASE +  42)
+-#define PCM512x_DSP_PROGRAM       (PCM512x_PAGE_0_BASE +  43)
+-#define PCM512x_CLKDET            (PCM512x_PAGE_0_BASE +  44)
+-#define PCM512x_AUTO_MUTE         (PCM512x_PAGE_0_BASE +  59)
+-#define PCM512x_DIGITAL_VOLUME_1  (PCM512x_PAGE_0_BASE +  60)
+-#define PCM512x_DIGITAL_VOLUME_2  (PCM512x_PAGE_0_BASE +  61)
+-#define PCM512x_DIGITAL_VOLUME_3  (PCM512x_PAGE_0_BASE +  62)
+-#define PCM512x_DIGITAL_MUTE_1    (PCM512x_PAGE_0_BASE +  63)
+-#define PCM512x_DIGITAL_MUTE_2    (PCM512x_PAGE_0_BASE +  64)
+-#define PCM512x_DIGITAL_MUTE_3    (PCM512x_PAGE_0_BASE +  65)
+-#define PCM512x_GPIO_OUTPUT_1     (PCM512x_PAGE_0_BASE +  80)
+-#define PCM512x_GPIO_OUTPUT_2     (PCM512x_PAGE_0_BASE +  81)
+-#define PCM512x_GPIO_OUTPUT_3     (PCM512x_PAGE_0_BASE +  82)
+-#define PCM512x_GPIO_OUTPUT_4     (PCM512x_PAGE_0_BASE +  83)
+-#define PCM512x_GPIO_OUTPUT_5     (PCM512x_PAGE_0_BASE +  84)
+-#define PCM512x_GPIO_OUTPUT_6     (PCM512x_PAGE_0_BASE +  85)
+-#define PCM512x_GPIO_CONTROL_1    (PCM512x_PAGE_0_BASE +  86)
+-#define PCM512x_GPIO_CONTROL_2    (PCM512x_PAGE_0_BASE +  87)
+-#define PCM512x_OVERFLOW          (PCM512x_PAGE_0_BASE +  90)
+-#define PCM512x_RATE_DET_1        (PCM512x_PAGE_0_BASE +  91)
+-#define PCM512x_RATE_DET_2        (PCM512x_PAGE_0_BASE +  92)
+-#define PCM512x_RATE_DET_3        (PCM512x_PAGE_0_BASE +  93)
+-#define PCM512x_RATE_DET_4        (PCM512x_PAGE_0_BASE +  94)
+-#define PCM512x_ANALOG_MUTE_DET   (PCM512x_PAGE_0_BASE + 108)
+-#define PCM512x_GPIN              (PCM512x_PAGE_0_BASE + 119)
+-#define PCM512x_DIGITAL_MUTE_DET  (PCM512x_PAGE_0_BASE + 120)
+-
+-#define PCM512x_MAX_REGISTER      (PCM512x_PAGE_0_BASE + 120)
++#define PCM512x_RESET             (PCM512x_PAGE_BASE(0) +   1)
++#define PCM512x_POWER             (PCM512x_PAGE_BASE(0) +   2)
++#define PCM512x_MUTE              (PCM512x_PAGE_BASE(0) +   3)
++#define PCM512x_PLL_EN            (PCM512x_PAGE_BASE(0) +   4)
++#define PCM512x_SPI_MISO_FUNCTION (PCM512x_PAGE_BASE(0) +   6)
++#define PCM512x_DSP               (PCM512x_PAGE_BASE(0) +   7)
++#define PCM512x_GPIO_EN           (PCM512x_PAGE_BASE(0) +   8)
++#define PCM512x_BCLK_LRCLK_CFG    (PCM512x_PAGE_BASE(0) +   9)
++#define PCM512x_DSP_GPIO_INPUT    (PCM512x_PAGE_BASE(0) +  10)
++#define PCM512x_MASTER_MODE       (PCM512x_PAGE_BASE(0) +  12)
++#define PCM512x_PLL_REF           (PCM512x_PAGE_BASE(0) +  13)
++#define PCM512x_PLL_COEFF_0       (PCM512x_PAGE_BASE(0) +  20)
++#define PCM512x_PLL_COEFF_1       (PCM512x_PAGE_BASE(0) +  21)
++#define PCM512x_PLL_COEFF_2       (PCM512x_PAGE_BASE(0) +  22)
++#define PCM512x_PLL_COEFF_3       (PCM512x_PAGE_BASE(0) +  23)
++#define PCM512x_PLL_COEFF_4       (PCM512x_PAGE_BASE(0) +  24)
++#define PCM512x_DSP_CLKDIV        (PCM512x_PAGE_BASE(0) +  27)
++#define PCM512x_DAC_CLKDIV        (PCM512x_PAGE_BASE(0) +  28)
++#define PCM512x_NCP_CLKDIV        (PCM512x_PAGE_BASE(0) +  29)
++#define PCM512x_OSR_CLKDIV        (PCM512x_PAGE_BASE(0) +  30)
++#define PCM512x_MASTER_CLKDIV_1   (PCM512x_PAGE_BASE(0) +  32)
++#define PCM512x_MASTER_CLKDIV_2   (PCM512x_PAGE_BASE(0) +  33)
++#define PCM512x_FS_SPEED_MODE     (PCM512x_PAGE_BASE(0) +  34)
++#define PCM512x_IDAC_1            (PCM512x_PAGE_BASE(0) +  35)
++#define PCM512x_IDAC_2            (PCM512x_PAGE_BASE(0) +  36)
++#define PCM512x_ERROR_DETECT      (PCM512x_PAGE_BASE(0) +  37)
++#define PCM512x_I2S_1             (PCM512x_PAGE_BASE(0) +  40)
++#define PCM512x_I2S_2             (PCM512x_PAGE_BASE(0) +  41)
++#define PCM512x_DAC_ROUTING       (PCM512x_PAGE_BASE(0) +  42)
++#define PCM512x_DSP_PROGRAM       (PCM512x_PAGE_BASE(0) +  43)
++#define PCM512x_CLKDET            (PCM512x_PAGE_BASE(0) +  44)
++#define PCM512x_AUTO_MUTE         (PCM512x_PAGE_BASE(0) +  59)
++#define PCM512x_DIGITAL_VOLUME_1  (PCM512x_PAGE_BASE(0) +  60)
++#define PCM512x_DIGITAL_VOLUME_2  (PCM512x_PAGE_BASE(0) +  61)
++#define PCM512x_DIGITAL_VOLUME_3  (PCM512x_PAGE_BASE(0) +  62)
++#define PCM512x_DIGITAL_MUTE_1    (PCM512x_PAGE_BASE(0) +  63)
++#define PCM512x_DIGITAL_MUTE_2    (PCM512x_PAGE_BASE(0) +  64)
++#define PCM512x_DIGITAL_MUTE_3    (PCM512x_PAGE_BASE(0) +  65)
++#define PCM512x_GPIO_OUTPUT_1     (PCM512x_PAGE_BASE(0) +  80)
++#define PCM512x_GPIO_OUTPUT_2     (PCM512x_PAGE_BASE(0) +  81)
++#define PCM512x_GPIO_OUTPUT_3     (PCM512x_PAGE_BASE(0) +  82)
++#define PCM512x_GPIO_OUTPUT_4     (PCM512x_PAGE_BASE(0) +  83)
++#define PCM512x_GPIO_OUTPUT_5     (PCM512x_PAGE_BASE(0) +  84)
++#define PCM512x_GPIO_OUTPUT_6     (PCM512x_PAGE_BASE(0) +  85)
++#define PCM512x_GPIO_CONTROL_1    (PCM512x_PAGE_BASE(0) +  86)
++#define PCM512x_GPIO_CONTROL_2    (PCM512x_PAGE_BASE(0) +  87)
++#define PCM512x_OVERFLOW          (PCM512x_PAGE_BASE(0) +  90)
++#define PCM512x_RATE_DET_1        (PCM512x_PAGE_BASE(0) +  91)
++#define PCM512x_RATE_DET_2        (PCM512x_PAGE_BASE(0) +  92)
++#define PCM512x_RATE_DET_3        (PCM512x_PAGE_BASE(0) +  93)
++#define PCM512x_RATE_DET_4        (PCM512x_PAGE_BASE(0) +  94)
++#define PCM512x_ANALOG_MUTE_DET   (PCM512x_PAGE_BASE(0) + 108)
++#define PCM512x_GPIN              (PCM512x_PAGE_BASE(0) + 119)
++#define PCM512x_DIGITAL_MUTE_DET  (PCM512x_PAGE_BASE(0) + 120)
++
++#define PCM512x_OUTPUT_AMPLITUDE  (PCM512x_PAGE_BASE(1) +   1)
++#define PCM512x_ANALOG_GAIN_CTRL  (PCM512x_PAGE_BASE(1) +   2)
++#define PCM512x_UNDERVOLTAGE_PROT (PCM512x_PAGE_BASE(1) +   5)
++#define PCM512x_ANALOG_MUTE_CTRL  (PCM512x_PAGE_BASE(1) +   6)
++#define PCM512x_ANALOG_GAIN_BOOST (PCM512x_PAGE_BASE(1) +   7)
++#define PCM512x_VCOM_CTRL_1       (PCM512x_PAGE_BASE(1) +   8)
++#define PCM512x_VCOM_CTRL_2       (PCM512x_PAGE_BASE(1) +   9)
++
++#define PCM512x_CRAM_CTRL         (PCM512x_PAGE_BASE(44) +  1)
++
++#define PCM512x_MAX_REGISTER      (PCM512x_PAGE_BASE(44) +  1)
+ 
+ /* Page 0, Register 1 - reset */
+ #define PCM512x_RSTR (1 << 0)
+-- 
+2.1.4
+

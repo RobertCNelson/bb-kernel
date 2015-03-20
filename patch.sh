@@ -982,6 +982,30 @@ probotix () {
 	${git} "${DIR}/patches/probotix/0001-Add-Probotix-custom-LCD-device-tree-overlay.patch"
 }
 
+pcm512x () {
+	echo "dir: pcm512x"
+	${git} "${DIR}/patches/pcm512x/0001-ASoC-pcm512x-Add-PCM512x-driver.patch"
+	${git} "${DIR}/patches/pcm512x/0002-ASoC-pcm512x-More-constification.patch"
+	${git} "${DIR}/patches/pcm512x/0003-ASoC-pcm512x-Implement-paging-support.patch"
+	${git} "${DIR}/patches/pcm512x/0004-ASoC-pcm512x-Implement-analogue-volume-control.patch"
+	${git} "${DIR}/patches/pcm512x/0005-ASoC-pcm512x-Split-out-bus-drivers.patch"
+	${git} "${DIR}/patches/pcm512x/0006-ASoC-pcm512x-Fix-duplicate-const-warning.patch"
+	${git} "${DIR}/patches/pcm512x/0007-ASoC-pcm512x-Use-CONFIG_PM_RUNTIME-macro.patch"
+	${git} "${DIR}/patches/pcm512x/0008-ASoC-pcm512x-Replace-usage-deprecated-SOC_VALUE_ENUM.patch"
+	${git} "${DIR}/patches/pcm512x/0009-ASoC-pcm512x-Correct-Digital-Playback-control-names.patch"
+	${git} "${DIR}/patches/pcm512x/0010-ASoC-pcm512x-Trigger-auto-increment-of-register-addr.patch"
+	${git} "${DIR}/patches/pcm512x/0011-ASoC-pcm512x-Also-support-PCM514x-devices.patch"
+	${git} "${DIR}/patches/pcm512x/0012-ASoC-pcm512x-Fix-DSP-program-selection.patch"
+	${git} "${DIR}/patches/pcm512x/0013-ALSA-pcm-Add-snd_interval_ranges-and-snd_pcm_hw_cons.patch"
+	${git} "${DIR}/patches/pcm512x/0014-ASoC-pcm512x-Fix-spelling-of-register-field-names.patch"
+	${git} "${DIR}/patches/pcm512x/0015-ASoC-pcm512x-Support-mastering-BCLK-LRCLK-without-us.patch"
+	${git} "${DIR}/patches/pcm512x/0016-ASoC-pcm512x-Support-mastering-BCLK-LRCLK-using-the-.patch"
+	${git} "${DIR}/patches/pcm512x/0017-ASoC-pcm512x-Avoid-the-PLL-for-the-DAC-clock-if-poss.patch"
+	${git} "${DIR}/patches/pcm512x/0018-ASoC-pcm512x-Support-SND_SOC_DAIFMT_CBM_CFS.patch"
+	${git} "${DIR}/patches/pcm512x/0019-ASoC-pcm512x-Fixup-warning-splat.patch"
+	${git} "${DIR}/patches/pcm512x/0020-ASoC-pcm512x-Use-the-correct-range-constraints-for-S.patch"
+}
+
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
 	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
@@ -997,6 +1021,7 @@ machinekit
 sgx
 backports
 probotix
+pcm512x
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
