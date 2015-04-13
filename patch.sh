@@ -133,8 +133,18 @@ wand () {
 }
 
 errata () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
 	echo "dir: errata"
-	${git} "${DIR}/patches/errata/0001-hack-omap-clockk-dpll5-apply-sprz319e-2.1-erratum-co.patch"
+
+	${git} "${DIR}/patches/errata/0001-hack-omap-clockk-dpll5-apply-sprz319e-2.1-erratum.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
 }
 
 fixes () {
@@ -150,7 +160,12 @@ fixes () {
 		number=1
 		cleanup
 	fi
+}
 
+pru () {
+	echo "dir: pru"
+	${git} "${DIR}/patches/pru/0000-enable-uio-pruss.patch"
+	${git} "${DIR}/patches/pru/0001-clean-up-errors.patch"
 }
 
 dtb_makefile_append () {
@@ -175,6 +190,7 @@ beaglebone () {
 
 	echo "dir: beaglebone/capes"
 	${git} "${DIR}/patches/beaglebone/capes/0001-cape-Argus-UPS-cape-support.patch"
+	${git} "${DIR}/patches/beaglebone/capes/0002-cape-Replicape-add-cape-support.patch"
 
 	echo "dir: beaglebone/dtbs"
 	#regenerate="enable"
@@ -230,6 +246,9 @@ beaglebone () {
 		device="am335x-boneblack-ttyO5.dtb"
 		dtb_makefile_append
 
+		device="am335x-boneblack-replicape.dtb"
+                dtb_makefile_append
+
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
 		exit 2
@@ -281,7 +300,7 @@ dt
 #wand
 #errata
 fixes
-
+pru
 beaglebone
 sgx
 
