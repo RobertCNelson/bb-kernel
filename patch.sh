@@ -1027,7 +1027,16 @@ xenomai () {
 	# and apply it
 	git apply "${OUTPATCH}"
 
+	git add .
+	git commit -a -m 'xenomai patchset'
+
 	# rm -f "${OUTPATCH}"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		git_add
+		start_cleanup
+	fi
 
 	# remove broken reference to mach/timex.h
 	${git} "${DIR}/patches/xenomai/0002-arm-remove-reference-to-mach-timex.h-in-arch-arm-inc.patch"
@@ -1037,6 +1046,11 @@ xenomai () {
 
 	# and Kconfig options for same
 	${git} "${DIR}/patches/xenomai/0004-config-add-RT-CAN-options-for-Bosch-CCAN-DCAN-driver.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=4
+		cleanup
+	fi
 }
 
 am33x
