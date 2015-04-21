@@ -1024,6 +1024,12 @@ xenomai () {
 
 	# remove broken reference to mach/timex.h
 	${git} "${DIR}/patches/xenomai/0002-arm-remove-reference-to-mach-timex.h-in-arch-arm-inc.patch"
+
+	# add RT-CAN driver for Bosch cores
+	${git} "${DIR}/patches/xenomai/0003-xeno_d_can-RTDM-driver-for-Bosch-CCAN-and-DCAN-perip.patch"
+
+	# and Kconfig options for same
+	${git} "${DIR}/patches/xenomai/0004-config-add-RT-CAN-options-for-Bosch-CCAN-DCAN-driver.patch"
 }
 
 am33x
