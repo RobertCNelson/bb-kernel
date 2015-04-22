@@ -205,19 +205,19 @@ beaglebone () {
 		device="am335x-bone-can0.dtb" ; dtb_makefile_append
 		device="am335x-bone-can1.dtb" ; dtb_makefile_append
 		device="am335x-bone-cape-bone-argus.dtb" ; dtb_makefile_append
-		device="am335x-bone-ttyO1.dtb" ; dtb_makefile_append
-		device="am335x-bone-ttyO2.dtb" ; dtb_makefile_append
-		device="am335x-bone-ttyO4.dtb" ; dtb_makefile_append
-		device="am335x-bone-ttyO5.dtb" ; dtb_makefile_append
+		device="am335x-bone-ttyS1.dtb" ; dtb_makefile_append
+		device="am335x-bone-ttyS2.dtb" ; dtb_makefile_append
+		device="am335x-bone-ttyS4.dtb" ; dtb_makefile_append
+		device="am335x-bone-ttyS5.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-can0.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-can1.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-cape-bone-argus.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-ttyO1.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-ttyO2.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-ttyO4.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-ttyO5.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-ttyS1.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-ttyS2.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-ttyS4.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-ttyS5.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-replicape.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
