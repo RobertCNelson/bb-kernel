@@ -1,6 +1,6 @@
-From 33e3067d1987ef3c97a4811cda295e46bf0888b0 Mon Sep 17 00:00:00 2001
+From 2f13b2dd9ace80df80e741feafde4a82fee2b500 Mon Sep 17 00:00:00 2001
 From: Benoit Parrot <bparrot@ti.com>
-Date: Fri, 19 Dec 2014 14:07:50 -0600
+Date: Mon, 2 Feb 2015 11:44:44 -0600
 Subject: [PATCH 1/2] gpio: add GPIO hogging mechanism
 
 Based on Boris Brezillion's work this is a reworked patch
@@ -24,14 +24,15 @@ what accounts to a specific board implementation. This board level
 
 Signed-off-by: Benoit Parrot <bparrot@ti.com>
 Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Signed-off-by: Linus Walleij <linus.walleij@linaro.org>
 ---
- drivers/gpio/gpiolib-of.c | 118 ++++++++++++++++++++++++++++++++++++++++++
- drivers/gpio/gpiolib.c    | 128 ++++++++++++++++++++++++++++++++++++++--------
+ drivers/gpio/gpiolib-of.c | 111 +++++++++++++++++++++++++++++++++++++++++
+ drivers/gpio/gpiolib.c    | 124 +++++++++++++++++++++++++++++++++++++++-------
  drivers/gpio/gpiolib.h    |   3 ++
- 3 files changed, 229 insertions(+), 20 deletions(-)
+ 3 files changed, 219 insertions(+), 19 deletions(-)
 
 diff --git a/drivers/gpio/gpiolib-of.c b/drivers/gpio/gpiolib-of.c
-index 08261f2..ab80cd6 100644
+index 4650bf8..a6c67c6 100644
 --- a/drivers/gpio/gpiolib-of.c
 +++ b/drivers/gpio/gpiolib-of.c
 @@ -22,6 +22,7 @@
@@ -42,19 +43,20 @@ index 08261f2..ab80cd6 100644
  
  #include "gpiolib.h"
  
-@@ -117,6 +118,121 @@ int of_get_named_gpio_flags(struct device_node *np, const char *list_name,
+@@ -118,6 +119,114 @@ int of_get_named_gpio_flags(struct device_node *np, const char *list_name,
  EXPORT_SYMBOL(of_get_named_gpio_flags);
  
  /**
 + * of_get_gpio_hog() - Get a GPIO hog descriptor, names and flags for GPIO API
 + * @np:		device node to get GPIO from
 + * @name:	GPIO line name
-+ * @flags:	a flags pointer to fill in
++ * @lflags:	gpio_lookup_flags - returned from of_find_gpio() or
++ *		of_get_gpio_hog()
++ * @dflags:	gpiod_flags - optional GPIO initialization flags
 + *
 + * Returns GPIO descriptor to use with Linux GPIO API, or one of the errno
 + * value on the error condition.
 + */
-+
 +static struct gpio_desc *of_get_gpio_hog(struct device_node *np,
 +				  const char **name,
 +				  enum gpio_lookup_flags *lflags,
@@ -63,7 +65,6 @@ index 08261f2..ab80cd6 100644
 +	struct device_node *chip_np;
 +	enum of_gpio_flags xlate_flags;
 +	struct gpio_desc *desc;
-+	const char *dir_val;
 +	struct gg_data gg_data = {
 +		.flags = &xlate_flags,
 +	};
@@ -99,28 +100,21 @@ index 08261f2..ab80cd6 100644
 +		if (np->parent == np)
 +			return ERR_PTR(-ENXIO);
 +		else
-+			return ERR_PTR(-EPROBE_DEFER);
++			return ERR_PTR(-EINVAL);
 +	}
 +
 +	if (xlate_flags & OF_GPIO_ACTIVE_LOW)
 +		*lflags |= GPIO_ACTIVE_LOW;
 +
-+	if (of_property_read_string(np, "state", &dir_val)) {
-+		pr_warn("%s: GPIO:%d (%s): no hogging state specified, bailing out\n",
-+			 __func__, desc_to_gpio(gg_data.out_gpio), np->name);
-+		return ERR_PTR(-EINVAL);
-+	}
-+
-+	if (!strcmp(dir_val, "input"))
++	if (of_property_read_bool(np, "input"))
 +		*dflags |= GPIOD_IN;
-+	else if (!strcmp(dir_val, "output-low"))
++	else if (of_property_read_bool(np, "output-low"))
 +		*dflags |= GPIOD_OUT_LOW;
-+	else if (!strcmp(dir_val, "output-high"))
++	else if (of_property_read_bool(np, "output-high"))
 +		*dflags |= GPIOD_OUT_HIGH;
 +	else {
-+		pr_warn("%s: GPIO:%d (%s): invalid state '%s' requested, bailing out\n",
-+			 __func__, desc_to_gpio(gg_data.out_gpio),
-+			np->name, dir_val);
++		pr_warn("GPIO line %d (%s): no hogging state specified, bailing out\n",
++			desc_to_gpio(gg_data.out_gpio), np->name);
 +		return ERR_PTR(-EINVAL);
 +	}
 +
@@ -164,7 +158,7 @@ index 08261f2..ab80cd6 100644
   * of_gpio_simple_xlate - translate gpio_spec to the GPIO number and flags
   * @gc:		pointer to the gpio_chip structure
   * @np:		device node of the GPIO chip
-@@ -308,6 +424,8 @@ void of_gpiochip_add(struct gpio_chip *chip)
+@@ -326,6 +435,8 @@ void of_gpiochip_add(struct gpio_chip *chip)
  
  	of_gpiochip_add_pin_range(chip);
  	of_node_get(chip->of_node);
@@ -174,7 +168,7 @@ index 08261f2..ab80cd6 100644
  
  void of_gpiochip_remove(struct gpio_chip *chip)
 diff --git a/drivers/gpio/gpiolib.c b/drivers/gpio/gpiolib.c
-index 568aa2b..73e005e 100644
+index 1ca9295..1583726 100644
 --- a/drivers/gpio/gpiolib.c
 +++ b/drivers/gpio/gpiolib.c
 @@ -315,6 +315,7 @@ EXPORT_SYMBOL_GPL(gpiochip_add);
@@ -201,13 +195,13 @@ index 568aa2b..73e005e 100644
  		ret = true;
  	}
  
-@@ -1838,6 +1841,47 @@ struct gpio_desc *__must_check __gpiod_get_optional(struct device *dev,
+@@ -1840,6 +1843,47 @@ struct gpio_desc *__must_check __gpiod_get_optional(struct device *dev,
  }
  EXPORT_SYMBOL_GPL(__gpiod_get_optional);
  
 +
 +/**
-+ * __gpiod_set_helper - helper function to configure a given GPIO
++ * gpiod_configure_flags - helper function to configure a given GPIO
 + * @desc:	gpio whose value will be assigned
 + * @con_id:	function within the GPIO consumer
 + * @lflags:	gpio_lookup_flags - returned from of_find_gpio() or
@@ -218,7 +212,7 @@ index 568aa2b..73e005e 100644
 + * requested function and/or index, or another IS_ERR() code if an error
 + * occurred while trying to acquire the GPIO.
 + */
-+static int __gpiod_set_helper(struct gpio_desc *desc, const char *con_id,
++static int gpiod_configure_flags(struct gpio_desc *desc, const char *con_id,
 +		unsigned long lflags, enum gpiod_flags dflags)
 +{
 +	int status;
@@ -249,7 +243,7 @@ index 568aa2b..73e005e 100644
  /**
   * gpiod_get_index - obtain a GPIO from a multi-index GPIO function
   * @dev:	GPIO consumer, can be NULL for system-global GPIOs
-@@ -1887,30 +1931,12 @@ struct gpio_desc *__must_check __gpiod_get_index(struct device *dev,
+@@ -1889,28 +1933,10 @@ struct gpio_desc *__must_check __gpiod_get_index(struct device *dev,
  	}
  
  	status = gpiod_request(desc, con_id);
@@ -275,14 +269,11 @@ index 568aa2b..73e005e 100644
 -	else
 -		status = gpiod_direction_input(desc);
 -
-+	status = __gpiod_set_helper(desc, con_id, lookupflags, flags);
++	status = gpiod_configure_flags(desc, con_id, lookupflags, flags);
  	if (status < 0) {
--		dev_dbg(dev, "setup of GPIO %s failed\n", con_id);
-+		pr_debug("setup of GPIO %s failed\n", con_id);
+ 		dev_dbg(dev, "setup of GPIO %s failed\n", con_id);
  		gpiod_put(desc);
- 		return ERR_PTR(status);
- 	}
-@@ -2004,6 +2030,68 @@ struct gpio_desc *__must_check __gpiod_get_index_optional(struct device *dev,
+@@ -2006,6 +2032,66 @@ struct gpio_desc *__must_check __gpiod_get_index_optional(struct device *dev,
  EXPORT_SYMBOL_GPL(__gpiod_get_index_optional);
  
  /**
@@ -292,7 +283,6 @@ index 568aa2b..73e005e 100644
 + * @lflags:	gpio_lookup_flags - returned from of_find_gpio() or
 + *		of_get_gpio_hog()
 + * @dflags:	gpiod_flags - optional GPIO initialization flags
-+ *
 + */
 +int gpiod_hog(struct gpio_desc *desc, const char *name,
 +	      unsigned long lflags, enum gpiod_flags dflags)
@@ -311,7 +301,7 @@ index 568aa2b..73e005e 100644
 +		return PTR_ERR(local_desc);
 +	}
 +
-+	status = __gpiod_set_helper(desc, name, lflags, dflags);
++	status = gpiod_configure_flags(desc, name, lflags, dflags);
 +	if (status < 0) {
 +		pr_debug("setup of GPIO %s failed\n", name);
 +		gpiochip_free_own_desc(desc);
@@ -321,7 +311,7 @@ index 568aa2b..73e005e 100644
 +	/* Mark GPIO as hogged so it can be identified and removed later */
 +	set_bit(FLAG_IS_HOGGED, &desc->flags);
 +
-+	pr_debug("%s: GPIO:%d (%s) as %s%s\n", __func__,
++	pr_info("GPIO line %d (%s) hogged as %s%s\n",
 +		desc_to_gpio(desc), name,
 +		(dflags&GPIOD_FLAGS_BIT_DIR_OUT) ? "output" : "input",
 +		(dflags&GPIOD_FLAGS_BIT_DIR_OUT) ?
@@ -335,7 +325,6 @@ index 568aa2b..73e005e 100644
 + * @chip:	gpio chip to act on
 + *
 + * This is only used by of_gpiochip_remove to free hogged gpios
-+ *
 + */
 +static void gpiochip_free_hogs(struct gpio_chip *chip)
 +{
