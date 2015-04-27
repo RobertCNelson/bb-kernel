@@ -74,18 +74,36 @@ local_patch () {
 #external_git
 #local_patch
 
-dt () {
-	echo "dir: dt/gpiohog"
+overlay () {
+	echo "dir: overlay"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/dt/gpiohog/0001-gpio-add-GPIO-hogging-mechanism.patch"
-	${git} "${DIR}/patches/dt/gpiohog/0002-gpio-Document-GPIO-hogging-mechanism.patch"
+	${git} "${DIR}/patches/overlay/0001-of-Custom-printk-format-specifier-for-device-node.patch"
+	${git} "${DIR}/patches/overlay/0002-arm-of-Add-a-DT-quirk-method-after-unflattening.patch"
+	${git} "${DIR}/patches/overlay/0003-of-DT-quirks-infrastructure.patch"
+	${git} "${DIR}/patches/overlay/0004-arm-am33xx-DT-quirks-for-am33xx-based-beaglebone-var.patch"
+	${git} "${DIR}/patches/overlay/0005-arm-dts-Common-Black-White-Beaglebone-DTS-using-quir.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
+		number=5
+		cleanup
+	fi
+
+
+}
+
+dt () {
+	echo "dir: dt"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=0
 		cleanup
 	fi
 }
@@ -105,9 +123,10 @@ dts () {
 	${git} "${DIR}/patches/dts/0006-arm-dts-omap4-move-emif-so-panda-es-b3-now-boots.patch"
 	${git} "${DIR}/patches/dts/0007-omap3-beagle-xm-ehci-works-again.patch"
 	${git} "${DIR}/patches/dts/0008-ARM-dts-omap3-beagle-ddc-i2c-bus-is-not-responding-d.patch"
+	${git} "${DIR}/patches/dts/0009-first-pass-imx6q-ccimx6sbc.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=8
+		number=9
 		cleanup
 	fi
 }
