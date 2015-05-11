@@ -169,8 +169,62 @@ fixes () {
 
 pru () {
 	echo "dir: pru"
-	${git} "${DIR}/patches/pru/0000-enable-uio-pruss.patch"
-	${git} "${DIR}/patches/pru/0001-clean-up-errors.patch"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/pru/0001-Making-the-uio-pruss-driver-work.patch"
+	${git} "${DIR}/patches/pru/0002-Cleaned-up-error-reporting.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=2
+		cleanup
+	fi
+}
+
+bbb_overlays () {
+	echo "dir: bbb_overlays"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/bbb_overlays/0001-configfs-Implement-binary-attributes-v4.patch"
+	${git} "${DIR}/patches/bbb_overlays/0002-OF-DT-Overlay-configfs-interface-v4.patch"
+	${git} "${DIR}/patches/bbb_overlays/0003-gitignore-Ignore-DTB-files.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+	${git} "${DIR}/patches/bbb_overlays/0004-add-PM-firmware.patch"
+	${git} "${DIR}/patches/bbb_overlays/0005-ARM-CUSTOM-Build-a-uImage-with-dtb-already-appended.patch"
+	fi
+
+	${git} "${DIR}/patches/bbb_overlays/0006-omap-Properly-handle-resources-for-omap_devices.patch"
+	${git} "${DIR}/patches/bbb_overlays/0007-pdev-Fix-platform-device-resource-linking.patch"
+	${git} "${DIR}/patches/bbb_overlays/0008-arm-omap-Proper-cleanups-for-omap_device.patch"
+	${git} "${DIR}/patches/bbb_overlays/0009-serial-omap-Fix-port-line-number-without-aliases.patch"
+	${git} "${DIR}/patches/bbb_overlays/0010-tty-omap-serial-Fix-up-platform-data-alloc.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+	${git} "${DIR}/patches/bbb_overlays/0011-boneblack-defconfig.patch"
+	fi
+
+	${git} "${DIR}/patches/bbb_overlays/0012-scripts-dtc-Update-to-upstream-version-with-overlay-.patch"
+	${git} "${DIR}/patches/bbb_overlays/0013-ARM-DT-Enable-symbols-when-CONFIG_OF_OVERLAY-is-used.patch"
+	${git} "${DIR}/patches/bbb_overlays/0014-of-Custom-printk-format-specifier-for-device-node.patch"
+	${git} "${DIR}/patches/bbb_overlays/0015-i2c-Mark-instantiated-device-nodes-with-OF_POPULATE.patch"
+	${git} "${DIR}/patches/bbb_overlays/0016-of-overlay-kobjectify-overlay-objects.patch"
+	${git} "${DIR}/patches/bbb_overlays/0017-of-overlay-global-sysfs-enable-attribute.patch"
+	${git} "${DIR}/patches/bbb_overlays/0018-of-overlay-add-per-overlay-sysfs-attributes.patch"
+	${git} "${DIR}/patches/bbb_overlays/0019-Documentation-ABI-sys-firmware-devicetree-overlays.patch"
+	${git} "${DIR}/patches/bbb_overlays/0020-of-Move-OF-flags-to-be-visible-even-when-CONFIG_OF.patch"
+	${git} "${DIR}/patches/bbb_overlays/0021-i2c-EEPROM-In-kernel-memory-accessor-interface.patch"
+	${git} "${DIR}/patches/bbb_overlays/0022-capemgr-Beaglebone-capemanager.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=22
+		cleanup
+	fi
 }
 
 dtb_makefile_append () {
@@ -187,9 +241,10 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0001-am335x-boneblack-add-cpu0-opp-points.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0002-dts-am335x-bone-common-fixup-leds-to-match-3.8.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0003-arm-dts-am335x-bone-common-add-collision-and-carrier.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0004-add-am335x-bonegreen.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=3
+		number=4
 		cleanup
 	fi
 
@@ -199,8 +254,8 @@ beaglebone () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/beaglebone/capes/0001-cape-Argus-UPS-cape-support.patch"
-	${git} "${DIR}/patches/beaglebone/capes/0002-Added-support-for-Replicape.patch"
+	#${git} "${DIR}/patches/beaglebone/capes/0001-cape-Argus-UPS-cape-support.patch"
+	#${git} "${DIR}/patches/beaglebone/capes/0002-Added-support-for-Replicape.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=2
@@ -214,7 +269,7 @@ beaglebone () {
 		patch -p1 < "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
 		exit 2
 	fi
-	${git} "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
+	#${git} "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
 
 	####
 	#dtb makefile
@@ -242,8 +297,8 @@ beaglebone () {
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
 		exit 2
-	else
-		${git} "${DIR}/patches/beaglebone/generated/0001-auto-generated-capes-add-dtbs-to-makefile.patch"
+	#else
+	#	${git} "${DIR}/patches/beaglebone/generated/0001-auto-generated-capes-add-dtbs-to-makefile.patch"
 	fi
 
 	echo "dir: beaglebone/phy"
@@ -252,9 +307,9 @@ beaglebone () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/beaglebone/phy/0001-cpsw-Add-support-for-byte-queue-limits.patch"
-	${git} "${DIR}/patches/beaglebone/phy/0002-cpsw-napi-polling-of-64-is-good-for-gigE-less-good-f.patch"
-	${git} "${DIR}/patches/beaglebone/phy/0003-cpsw-search-for-phy.patch"
+#	${git} "${DIR}/patches/beaglebone/phy/0001-cpsw-Add-support-for-byte-queue-limits.patch"
+#	${git} "${DIR}/patches/beaglebone/phy/0002-cpsw-napi-polling-of-64-is-good-for-gigE-less-good-f.patch"
+#	${git} "${DIR}/patches/beaglebone/phy/0003-cpsw-search-for-phy.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=3
@@ -290,6 +345,7 @@ dt
 #errata
 fixes
 pru
+bbb_overlays
 beaglebone
 sgx
 
