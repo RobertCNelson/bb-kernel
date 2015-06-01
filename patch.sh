@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,7 @@
 
 # Split out, so build_kernel.sh and build_deb.sh can share..
 
-git="git am"
-
+. ${DIR}/version.sh
 am33x_linux="git://github.com/RobertCNelson/linux.git"
 if [ -f ${DIR}/system.sh ] ; then
 	. ${DIR}/system.sh
@@ -31,6 +30,17 @@ if [ -f ${DIR}/system.sh ] ; then
 		am33x_linux="https://github.com/RobertCNelson/linux.git"
 	fi
 fi
+
+#Debian 7 (Wheezy): git version 1.7.10.4 and later needs "--no-edit"
+unset git_opts
+git_no_edit=$(LC_ALL=C git help pull | grep -m 1 -e "--no-edit" || true)
+if [ ! "x${git_no_edit}" = "x" ] ; then
+	git_opts="--no-edit"
+fi
+
+git="git am"
+#git_patchset=""
+#git_opts
 
 if [ "${RUN_BISECT}" ] ; then
 	git="git apply"
@@ -51,7 +61,7 @@ cleanup () {
 	if [ "${number}" ] ; then
 		git format-patch -${number} -o ${DIR}/patches/
 	fi
-	exit
+	exit 2
 }
 
 bugs_trivial () {
@@ -63,7 +73,7 @@ bugs_trivial () {
 am33x_cleanup () {
 	echo "[git] am33x-cleanup"
 	echo "pulling ti_am33x_v3.2-staging_8"
-	git pull ${GIT_OPTS} ${am33x_linux} ti_am33x_v3.2-staging_8
+	git pull ${git_opts} ${am33x_linux} ti_am33x_v3.2-staging_8
 
 	#Breaks: BeagleBone: eth0: dhcp doesn't get ip address...
 	${git} "${DIR}/patches/3.2.30/0137-Revert-ARM-OMAP2-Fix-dmtimer-set-source-clock-failur.patch"
@@ -1392,5 +1402,31 @@ bugs_trivial
 
 #rt_patchset
 
-echo "patch.sh ran successful"
+packaging_setup () {
+	cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
+	git commit -a -m 'packaging: sync with mainline' -s
 
+	git format-patch -1 -o "${DIR}/patches/packaging"
+	exit 2
+}
+
+packaging () {
+	echo "dir: packaging"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
+	${git} "${DIR}/patches/packaging/0002-deb-pkg-install-dtbs-in-linux-image-package.patch"
+	#${git} "${DIR}/patches/packaging/0003-deb-pkg-no-dtbs_install.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=3
+		cleanup
+	fi
+}
+
+#packaging_setup
+#packaging
+echo "patch.sh ran successfully"
