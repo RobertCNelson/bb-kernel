@@ -1013,10 +1013,40 @@ pcm512x () {
 	${git} "${DIR}/patches/pcm512x/0020-ASoC-pcm512x-Use-the-correct-range-constraints-for-S.patch"
 }
 
+beagleboy () {
+	echo "dir: beagleboy"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/BeagleBoy/0001-ST-lsm303dlhc-driver-added.patch"
+	${git} "${DIR}/patches/BeagleBoy/0002-ST-lsm303dlhc-header-file-moved-to-correct-location.patch"
+	${git} "${DIR}/patches/BeagleBoy/0003-ST-lsm303dlhc-patched-for-build-against-3.8-kernel.patch"
+	${git} "${DIR}/patches/BeagleBoy/0004-ST-lsm330-driver.patch"
+	${git} "${DIR}/patches/BeagleBoy/0005-ST-lsm330-added-to-build.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=5
+		cleanup
+	fi
+}
+
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
-	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
-	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
+	echo "dir: bb_view_lcd"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/bb_view_lcd/0001-capes-element14_bb_view_lcd_capes.patch"
+	${git} "${DIR}/patches/bb_view_lcd/0002-sitara_red_blue_swap_workaround.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=2
+		cleanup
+	fi
 }
 
 am33x
@@ -1029,6 +1059,7 @@ sgx
 backports
 probotix
 pcm512x
+beagleboy
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
