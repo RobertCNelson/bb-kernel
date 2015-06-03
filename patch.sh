@@ -282,6 +282,30 @@ beaglebone () {
 		cleanup
 	fi
 
+	echo "dir: beaglebone/hdmi-audio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0001-ASoC-davinci-mcasp-Calculate-BCLK-using-TDM-slots-an.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0002-ASoC-davinci-mcasp-Channel-count-constraints-for-mul.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0003-ASoC-davinci-macsp-Optimize-implicit-BLCK-sample-rat.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0004-drm-tilcdc-Fix-module-unloading.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0005-drm-tilcdc-Remove-tilcdc-slave-support-for-tda998x-d.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0006-drm-tilcdc-Add-support-for-external-tda998x-encoder.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0007-drm-tilcdc-Add-DRM_TILCDC_SLAVE_COMPAT-for-ti-tilcdc.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0008-drm-tilcdc-Force-building-of-DRM_TILCDC_SLAVE_COMPAT.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0009-ARM-dts-am335x-boneblack-Use-new-binding-for-HDMI.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0010-ARM-dts-am335x-boneblack-Add-HDMI-audio-support-HACK.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0011-ASoC-hdmi-codec-lib-Add-hdmi-codec-lib-for-external-.patch"
+	${git} "${DIR}/patches/beaglebone/hdmi-audio/0012-drm-i2c-tda998x-HACK-Implement-primitive-HDMI-audio-.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=12
+		cleanup
+	fi
+
 	#This has to be last...
 	echo "dir: beaglebone/dtbs"
 	#regenerate="enable"
