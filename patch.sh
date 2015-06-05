@@ -282,6 +282,20 @@ beaglebone () {
 		cleanup
 	fi
 
+	echo "dir: beaglebone/eqep"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/eqep/0001-Provides-a-sysfs-interface-to-the-eQEP-hardware-on-t.patch"
+	${git} "${DIR}/patches/beaglebone/eqep/0002-tieqep.c-devres-remove-devm_request_and_ioremap.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=2
+		cleanup
+	fi
+
 #	echo "dir: beaglebone/hdmi-audio"
 #	#regenerate="enable"
 #	if [ "x${regenerate}" = "xenable" ] ; then
