@@ -355,6 +355,7 @@ am33x_after () {
 	${git} "${DIR}/patches/net/0007-net-cpsw-fix-irq_disable-with-threaded-interrupts.patch"
 	${git} "${DIR}/patches/net/0008-wireless-rtl8192cu-v4.0.2_9000.20130911.patch"
 	${git} "${DIR}/patches/net/0009-cpsw-search-for-phy.patch"
+	${git} "${DIR}/patches/net/0010-backport-patch-to-fix-kernel-panic-caused-by-c_can-driver.patch"
 
 	echo "dir: drm"
 	${git} "${DIR}/patches/drm/0001-am33xx-Add-clock-for-the-lcdc-DRM-driver.patch"
