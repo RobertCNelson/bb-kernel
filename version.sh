@@ -13,7 +13,7 @@ toolchain="gcc_linaro_gnueabihf_4_9"
 
 #Kernel/Build
 KERNEL_REL=4.1
-KERNEL_TAG=${KERNEL_REL}-rc8
+KERNEL_TAG=${KERNEL_REL}
 BUILD=bone9
 
 #v3.X-rcX + upto SHA
