@@ -27,6 +27,13 @@ if [ -f ${DIR}/system.sh ] ; then
 	. ${DIR}/system.sh
 fi
 
+#Debian 7 (Wheezy): git version 1.7.10.4 and later needs "--no-edit"
+unset git_opts
+git_no_edit=$(LC_ALL=C git help pull | grep -m 1 -e "--no-edit" || true)
+if [ ! "x${git_no_edit}" = "x" ] ; then
+	git_opts="--no-edit"
+fi
+
 git="git am"
 #git_patchset=""
 #git_opts
@@ -647,29 +654,28 @@ beaglebone
 
 sgx
 
-packaging_setup () {
-	cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
-	git commit -a -m 'packaging: sync with mainline' -s
-
-	git format-patch -1 -o "${DIR}/patches/packaging"
-}
-
 packaging () {
 	echo "dir: packaging"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
+		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
+		git commit -a -m 'packaging: sync builddeb changes' -s
+		git format-patch -1 -o "${DIR}/patches/packaging"
+	else
+		${git} "${DIR}/patches/packaging/0001-packaging-sync-builddeb-changes.patch"
 	fi
-	#${git} "${DIR}/patches/packaging/0001-packaging-sync-with-mainline.patch"
-	${git} "${DIR}/patches/packaging/0002-deb-pkg-install-dtbs-in-linux-image-package.patch"
-	#${git} "${DIR}/patches/packaging/0003-deb-pkg-no-dtbs_install.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=3
+		start_cleanup
+	fi
+
+	#${git} "${DIR}/patches/packaging/0002"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
 		cleanup
 	fi
 }
 
-#packaging_setup
 packaging
 echo "patch.sh ran successfully"
