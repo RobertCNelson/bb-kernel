@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -31,16 +31,13 @@ git_kernel_stable () {
 git_kernel_torvalds () {
 	echo "-----------------------------"
 	echo "scripts/git: pulling from: ${torvalds_linux}"
-	git pull ${GIT_OPTS} ${torvalds_linux} master --tags || true
+	git pull ${git_opts} ${torvalds_linux} master --tags || true
 	git tag | grep v${KERNEL_TAG} >/dev/null 2>&1 || git_kernel_stable
 }
 
 check_and_or_clone () {
 	#For Legacy: moving to "${DIR}/ignore/linux-src/" for all new installs
 	if [ ! "${LINUX_GIT}" ] && [ -f "${HOME}/linux-src/.git/config" ] ; then
-		echo "-----------------------------"
-		echo "scripts/git: Warning: LINUX_GIT not defined in system.sh"
-		echo "using legacy location: ${HOME}/linux-src"
 		LINUX_GIT="${HOME}/linux-src"
 	fi
 
@@ -88,14 +85,11 @@ git_kernel () {
 
 	cd ${LINUX_GIT}/
 	echo "-----------------------------"
-	echo "scripts/git: Debug: LINUX_GIT is setup as..."
-	pwd
-	echo "-----------------------------"
-	cat .git/config
-	echo "-----------------------------"
-	echo "scripts/git: Updating LINUX_GIT tree via: git fetch"
+	echo "scripts/git: Debug: LINUX_GIT is setup as: [${LINUX_GIT}]."
+	echo "scripts/git: [`cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g'`]"
 	git fetch || true
-	cd -
+	echo "-----------------------------"
+	cd ${DIR}/
 
 	if [ ! -f "${DIR}/KERNEL/.git/config" ] ; then
 		rm -rf ${DIR}/KERNEL/ || true
@@ -110,6 +104,20 @@ git_kernel () {
 
 	cd ${DIR}/KERNEL/
 
+	if [ "x${git_has_local}" = "xenable" ] ; then
+		#Debian Jessie: git version 2.0.0.rc0
+		#Disable git's default setting of running `git gc --auto` in the background as the patch.sh script can fail.
+		git config --local --list | grep gc.autodetach >/dev/null 2>&1 || git config --local gc.autodetach 0
+
+		if [ ! "${git_config_user_email}" ] ; then
+			git config --local user.email you@example.com
+		fi
+
+		if [ ! "${git_config_user_name}" ] ; then
+			git config --local user.name "Your Name"
+		fi
+	fi
+
 	if [ "${RUN_BISECT}" ] ; then
 		git bisect reset || true
 	fi
@@ -121,7 +129,7 @@ git_kernel () {
 	git reset --hard HEAD
 	git checkout master -f
 
-	git pull ${GIT_OPTS} || true
+	git pull ${git_opts} || true
 
 	git tag | grep v${KERNEL_TAG} | grep -v rc >/dev/null 2>&1 || git_kernel_torvalds
 
@@ -131,8 +139,8 @@ git_kernel () {
 
 	#CentOS 6.4: git version 1.7.1 (no --list option)
 	unset git_branch_has_list
-	LC_ALL=C git help branch | grep -m 1 -e "--list" >/dev/null 2>&1 && git_branch_has_list=1
-	if [ "${git_branch_has_list}" ] ; then
+	LC_ALL=C git help branch | grep -m 1 -e "--list" >/dev/null 2>&1 && git_branch_has_list=enable
+	if [ "x${git_branch_has_list}" = "xenable" ] ; then
 		test_for_branch=$(git branch --list v${KERNEL_TAG}-${BUILD})
 		if [ "x${test_for_branch}" != "x" ] ; then
 			git branch v${KERNEL_TAG}-${BUILD} -D
@@ -149,8 +157,8 @@ git_kernel () {
 	fi
 
 	if [ "${TOPOFTREE}" ] ; then
-		git pull ${GIT_OPTS} ${torvalds_linux} master || true
-		git pull ${GIT_OPTS} ${torvalds_linux} master --tags || true
+		git pull ${git_opts} ${torvalds_linux} master || true
+		git pull ${git_opts} ${torvalds_linux} master --tags || true
 	fi
 
 	git describe
@@ -161,35 +169,33 @@ git_kernel () {
 . ${DIR}/version.sh
 . ${DIR}/system.sh
 
-unset git_config_user_email
-git_config_user_email=$(git config --get user.email || true)
-
-unset git_config_user_name
-git_config_user_name=$(git config --get user.name || true)
-
-if [ ! "${git_config_user_email}" ] || [ ! "${git_config_user_name}" ] ; then
-	echo "-----------------------------"
-	echo "Error: git user.name/user.email not set:"
-	echo ""
-	echo "For help please read:"
-	echo "https://help.github.com/articles/setting-your-username-in-git"
-	echo "https://help.github.com/articles/setting-your-email-in-git"
-	echo ""
-	echo "For example, if your real name and email was: Billy Everteen & me@here.com"
-	echo "you would type the following into the terminal window to set it up:"
-	echo "-----------------------------"
-	echo "git config --global user.name \"Billy Everyteen\""
-	echo "git config --global user.email \"me@here.com\""
-	echo "-----------------------------"
-	exit 1
+#Debian 7 (Wheezy): git version 1.7.10.4 and later needs "--no-edit"
+unset git_opts
+git_no_edit=$(LC_ALL=C git help pull | grep -m 1 -e "--no-edit" || true)
+if [ ! "x${git_no_edit}" = "x" ] ; then
+	git_opts="--no-edit"
 fi
 
-if [ "${GIT_OVER_HTTP}" ] ; then
-	torvalds_linux="http://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-	linux_stable="http://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
-else
-	torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-	linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+#CentOS 6.4: git version 1.7.1 (no --local option)
+unset git_has_local
+LC_ALL=C git help | grep -m 1 -e "--local" >/dev/null 2>&1 && git_has_local=enable
+
+#git 1.7.1 doesnt care if email/user is not set...
+if [ "x${git_has_local}" = "xenable" ] ; then
+	unset git_config_user_email
+	git_config_user_email=$(git config --global --get user.email || true)
+	if [ ! "${git_config_user_email}" ] ; then
+		git config --local user.email you@example.com
+	fi
+
+	unset git_config_user_name
+	git_config_user_name=$(git config --global --get user.name || true)
+	if [ ! "${git_config_user_name}" ] ; then
+		git config --local user.name "Your Name"
+	fi
 fi
+
+torvalds_linux="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
 
 git_kernel

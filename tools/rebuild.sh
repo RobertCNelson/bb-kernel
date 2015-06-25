@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2013 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,13 +21,14 @@
 # THE SOFTWARE.
 
 DIR=$PWD
+CORES=$(getconf _NPROCESSORS_ONLN)
 
 mkdir -p ${DIR}/deploy/
 
 patch_kernel () {
 	cd ${DIR}/KERNEL
 
-	export DIR GIT_OPTS
+	export DIR
 	/bin/sh -e ${DIR}/patch.sh || { git add . ; exit 1 ; }
 
 	if [ ! "${RUN_BISECT}" ] ; then
@@ -40,8 +41,8 @@ patch_kernel () {
 
 copy_defconfig () {
 	cd ${DIR}/KERNEL/
-	make ARCH=arm CROSS_COMPILE=${CC} distclean
-	make ARCH=arm CROSS_COMPILE=${CC} ${config}
+	make ARCH=arm CROSS_COMPILE="${CC}" distclean
+	make ARCH=arm CROSS_COMPILE="${CC}" ${config}
 	cp -v .config ${DIR}/patches/ref_${config}
 	cp -v ${DIR}/patches/defconfig .config
 	cd ${DIR}/
@@ -49,7 +50,7 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd ${DIR}/KERNEL/
-	make ARCH=arm CROSS_COMPILE=${CC} menuconfig
+	make ARCH=arm CROSS_COMPILE="${CC}" menuconfig
 	cp -v .config ${DIR}/patches/defconfig
 	cd ${DIR}/
 }
@@ -64,17 +65,27 @@ make_kernel () {
 
 	cd ${DIR}/KERNEL/
 	echo "-----------------------------"
-	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=${CC} ${address} ${image} modules"
+	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" ${address} ${image} modules"
 	echo "-----------------------------"
-	make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=${CC} ${address} ${image} modules
+	make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" ${address} ${image} modules
 
 	unset DTBS
-	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" >/dev/null 2>&1 && DTBS=1
-	if [ "x${DTBS}" != "x" ] ; then
+	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" >/dev/null 2>&1 && DTBS=enable
+
+	#FIXME: Starting with v3.15-rc0
+	unset has_dtbs_install
+	if [ "x${DTBS}" = "x" ] ; then
+		cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs dtbs_install:" >/dev/null 2>&1 && DTBS=enable
+		if [ "x${DTBS}" = "xenable" ] ; then
+			has_dtbs_install=enable
+		fi
+	fi
+
+	if [ "x${DTBS}" = "xenable" ] ; then
 		echo "-----------------------------"
-		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=${CC} dtbs"
+		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs"
 		echo "-----------------------------"
-		make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=${CC} dtbs
+		make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs
 		ls arch/arm/boot/* | grep dtb >/dev/null 2>&1 || unset DTBS
 	fi
 
@@ -106,13 +117,6 @@ make_pkg () {
 	deployfile="-${pkg}.tar.gz"
 	tar_options="--create --gzip --file"
 
-	if [ "${AUTO_TESTER}" ] ; then
-		#FIXME: xz might not be available everywhere...
-		#FIXME: ./tools/install_kernel.sh needs update...
-		deployfile="-${pkg}.tar.xz"
-		tar_options="--create --xz --file"
-	fi
-
 	if [ -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
 		rm -rf "${DIR}/deploy/${KERNEL_UTS}${deployfile}" || true
 	fi
@@ -127,13 +131,17 @@ make_pkg () {
 
 	case "${pkg}" in
 	modules)
-		make -s ARCH=arm CROSS_COMPILE=${CC} modules_install INSTALL_MOD_PATH=${DIR}/deploy/tmp
+		make -s ARCH=arm CROSS_COMPILE="${CC}" modules_install INSTALL_MOD_PATH=${DIR}/deploy/tmp
 		;;
 	firmware)
-		make -s ARCH=arm CROSS_COMPILE=${CC} firmware_install INSTALL_FW_PATH=${DIR}/deploy/tmp
+		make -s ARCH=arm CROSS_COMPILE="${CC}" firmware_install INSTALL_FW_PATH=${DIR}/deploy/tmp
 		;;
 	dtbs)
-		find ./arch/arm/boot/ -iname "*.dtb" -exec cp -v '{}' ${DIR}/deploy/tmp/ \;
+		if [ "x${has_dtbs_install}" = "xenable" ] ; then
+			make -s ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs_install INSTALL_DTBS_PATH=${DIR}/deploy/tmp
+		else
+			find ./arch/arm/boot/ -iname "*.dtb" -exec cp -v '{}' ${DIR}/deploy/tmp/ \;
+		fi
 		;;
 	esac
 
@@ -170,11 +178,7 @@ make_dtbs_pkg () {
 /bin/sh -e ${DIR}/tools/host_det.sh || { exit 1 ; }
 
 if [ ! -f ${DIR}/system.sh ] ; then
-	cp ${DIR}/system.sh.sample ${DIR}/system.sh
-else
-	#fixes for bash -> sh conversion...
-	sed -i 's/bash/sh/g' ${DIR}/system.sh
-	sed -i 's/==/=/g' ${DIR}/system.sh
+	cp -v ${DIR}/system.sh.sample ${DIR}/system.sh
 fi
 
 unset CC
@@ -182,7 +186,11 @@ unset LINUX_GIT
 . ${DIR}/system.sh
 /bin/sh -e "${DIR}/scripts/gcc.sh" || { exit 1 ; }
 . ${DIR}/.CC
-echo "debug: CC=${CC}"
+echo "CROSS_COMPILE=${CC}"
+if [ -f /usr/bin/ccache ] ; then
+	echo "ccache [enabled]"
+	CC="ccache ${CC}"
+fi
 
 . ${DIR}/version.sh
 export LINUX_GIT
@@ -205,7 +213,7 @@ fi
 make_kernel
 make_modules_pkg
 make_firmware_pkg
-if [ "x${DTBS}" != "x" ] ; then
+if [ "x${DTBS}" = "xenable" ] ; then
 	make_dtbs_pkg
 fi
 echo "-----------------------------"
