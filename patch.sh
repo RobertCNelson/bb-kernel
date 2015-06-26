@@ -437,7 +437,7 @@ packaging () {
 		start_cleanup
 	fi
 
-		#${git} "${DIR}/patches/packaging/0002"
+	#${git} "${DIR}/patches/packaging/0002-deb-pkg-no-dtbs_install.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=1
