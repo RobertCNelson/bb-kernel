@@ -180,8 +180,11 @@ bbb_overlays () {
 		start_cleanup
 	fi
 
+	#mainline: 668abc729fcb9d034eccadf63166d2c76cd645d1
 	${git} "${DIR}/patches/bbb_overlays/0001-regmap-Introduce-regmap_get_max_register.patch"
+	#mainline: a2f776cbb8271d7149784207da0b0c51e8b1847c
 	${git} "${DIR}/patches/bbb_overlays/0002-regmap-Introduce-regmap_get_reg_stride.patch"
+
 	${git} "${DIR}/patches/bbb_overlays/0003-nvmem-Add-a-simple-NVMEM-framework-for-nvmem-provide.patch"
 	${git} "${DIR}/patches/bbb_overlays/0004-nvmem-Add-a-simple-NVMEM-framework-for-consumers.patch"
 	${git} "${DIR}/patches/bbb_overlays/0005-nvmem-Add-nvmem_device-based-consumer-apis.patch"
