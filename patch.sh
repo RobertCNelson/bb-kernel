@@ -74,6 +74,15 @@ local_patch () {
 #external_git
 #local_patch
 
+rt () {
+	echo "dir: rt"
+	#patch-4.0.5-rt4.patch
+	#exit 2
+
+	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
+	${git} "${DIR}/patches/rt/0002-rt-we-append-rt-on-our-own.patch"
+}
+
 dt () {
 	echo "dir: dt/gpiohog"
 	#regenerate="enable"
@@ -277,7 +286,7 @@ sgx () {
 }
 
 ###
-
+rt
 dt
 #dts
 #wand
