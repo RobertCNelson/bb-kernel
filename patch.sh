@@ -180,7 +180,7 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0003-arm-dts-am335x-bone-common-add-collision-and-carrier.patch"
 #	${git} "${DIR}/patches/beaglebone/dts/0004-add-am335x-bonegreen.patch"
 #	${git} "${DIR}/patches/beaglebone/dts/0005-add-overlay-dtb.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0006-ARM-dts-AM33XX-Set-pmic-shutdown-controller-for-Beag.patch"
+#	${git} "${DIR}/patches/beaglebone/dts/0006-ARM-dts-AM33XX-Set-pmic-shutdown-controller-for-Beag.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=6
