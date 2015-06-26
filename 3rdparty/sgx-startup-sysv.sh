@@ -11,7 +11,7 @@
 
 case "$1" in
 start)
-	if [ -d /sys/devices/ocp*/56000000.sgx ] ; then
+	if [ -d /sys/devices/ocp*/56000000.sgx ] || [ -d /sys/devices/platform/ocp/56000000.sgx ] ; then
 		echo "sgx: Starting PVR"
 
 		modprobe -q pvrsrvkm
@@ -36,7 +36,7 @@ start)
 	fi
 	;;
 reload|force-reload|restart)
-	if [ -d /sys/devices/ocp*/56000000.sgx ] ; then
+	if [ -d /sys/devices/ocp*/56000000.sgx ] || [ -d /sys/devices/platform/ocp/56000000.sgx ] ; then
 		echo "sgx: Restarting PVR"
 	fi
 	;;
