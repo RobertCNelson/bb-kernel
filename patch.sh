@@ -467,6 +467,36 @@ beaglebone () {
 		number=9
 		cleanup
 	fi
+
+	echo "dir: beaglebone/suspend"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/suspend/0001-ARM-OMAP2-Use-pdata-quirks-for-wkup_m3-reset-managem.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0002-ARM-dts-AM33xx-Update-and-move-wkup_m3-node-to-l4-no.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0003-ARM-dts-AM4372-Add-the-wkupm3-rproc-node.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0004-asm-generic-io-Add-exec-versions-of-ioremap.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0005-lib-devres-Add-exec-versions-of-devm_ioremap_resourc.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0006-misc-SRAM-Add-option-to-map-SRAM-to-allow-code-execu.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0007-Documentation-dt-add-bindings-for-TI-Wakeup-M3-IPC-d.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0008-soc-ti-Add-wkup_m3_ipc-driver.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0009-ARM-dts-AM33xx-Add-the-wkup_m3_ipc-node.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0010-ARM-dts-AM4372-Add-the-wkup_m3_ipc-node.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0011-Documentation-dt-add-ti-am3352-emif-bindings.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0012-memory-ti-emif-sram-introduce-relocatable-suspend-re.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0013-ARM-dts-am33xx-Add-emif-node.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0014-ARM-OMAP2-timer-Add-suspend-resume-callbacks-for-clk.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0015-ARM-OMAP2-AM33XX-Add-assembly-code-for-PM-operations.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0016-ARM-OMAP2-AM33XX-Basic-suspend-resume-support.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0017-ARM-OMAP2-AM33XX-Hookup-AM33XX-PM-code-into-OMAP-bui.patch"
+	${git} "${DIR}/patches/beaglebone/suspend/0018-ARM-OMAP2-pdata-quirks-provide-wkup_m3_ipc-ops-to-pl.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=18
+		cleanup
+	fi
 }
 
 sgx () {
