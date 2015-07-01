@@ -393,6 +393,26 @@ beaglebone () {
 		number=3
 		cleanup
 	fi
+
+	echo "dir: beaglebone/remoteproc"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/remoteproc/0001-remoteproc-ste-add-blank-lines-after-declarations.patch"
+	${git} "${DIR}/patches/beaglebone/remoteproc/0002-remoteproc-davinci-fix-quoted-split-string-checkpatc.patch"
+	${git} "${DIR}/patches/beaglebone/remoteproc/0003-remoteproc-fix-various-checkpatch-warnings.patch"
+	${git} "${DIR}/patches/beaglebone/remoteproc/0004-remoteproc-introduce-rproc_get_by_phandle-API.patch"
+	${git} "${DIR}/patches/beaglebone/remoteproc/0005-remoteproc-add-a-rproc-ops-for-performing-address-tr.patch"
+	${git} "${DIR}/patches/beaglebone/remoteproc/0006-Documentation-dt-add-bindings-for-TI-Wakeup-M3-proce.patch"
+	${git} "${DIR}/patches/beaglebone/remoteproc/0007-remoteproc-wkup_m3-add-a-remoteproc-driver-for-TI-Wa.patch"
+	${git} "${DIR}/patches/beaglebone/remoteproc/0008-remoteproc-fix-CONFIG_OF-build-breakage.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=8
+		cleanup
+	fi
 }
 
 sgx () {
