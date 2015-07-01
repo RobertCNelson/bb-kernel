@@ -414,6 +414,39 @@ beaglebone () {
 		cleanup
 	fi
 
+	echo "dir: beaglebone/firmware"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	#git clone git://git.ti.com/ti-cm3-pm-firmware/amx3-cm3.git
+	#cd amx3-cm3/
+	#git checkout origin/next-upstream -b tmp
+
+	#commit 277eef8611e260a5d73a9e3773fff8f767fe2b01
+	#Author: Dave Gerlach <d-gerlach@ti.com>
+	#Date:   Wed Mar 4 21:34:54 2015 -0600
+	#
+	#    CM3: Bump firmware release to 0x191
+	#    
+	#    This version, 0x191, includes the following changes:
+	#         - Add trace output on boot for kernel remoteproc driver
+	#         - Fix resouce table as RSC_INTMEM is no longer used in kernel
+	#    
+	#    Signed-off-by: Dave Gerlach <d-gerlach@ti.com>
+
+	#cp -v bin/am* /opt/github/bb-kernel/KERNEL/firmware/
+
+	#git add -f ./firmware/am*
+
+	${git} "${DIR}/patches/beaglebone/firmware/0001-add-am33x-firmware.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+
 	echo "dir: beaglebone/hwspinlock"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
