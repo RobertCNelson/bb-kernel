@@ -85,9 +85,14 @@ reverts () {
 	${git} "${DIR}/patches/reverts/0001-Revert-ARM-dts-am335x-boneblack-disable-RTC-only-sle.patch"
 
 	${git} "${DIR}/patches/reverts/0002-Revert-spi-spidev-Warn-loudly-if-instantiated-from-D.patch"
+	#udoo:
+	${git} "${DIR}/patches/reverts/0003-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
+
+	${git} "${DIR}/patches/reverts/0004-Revert-of-make-CONFIG_OF-user-selectable.patch"
+	${git} "${DIR}/patches/reverts/0005-Revert-of-make-unittest-select-OF_EARLY_FLATTREE-ins.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
+		number=5
 		cleanup
 	fi
 }
@@ -181,9 +186,9 @@ bbb_overlays () {
 	fi
 
 	#mainline: 668abc729fcb9d034eccadf63166d2c76cd645d1
-	${git} "${DIR}/patches/bbb_overlays/0001-regmap-Introduce-regmap_get_max_register.patch"
+	#${git} "${DIR}/patches/bbb_overlays/0001-regmap-Introduce-regmap_get_max_register.patch"
 	#mainline: a2f776cbb8271d7149784207da0b0c51e8b1847c
-	${git} "${DIR}/patches/bbb_overlays/0002-regmap-Introduce-regmap_get_reg_stride.patch"
+	#${git} "${DIR}/patches/bbb_overlays/0002-regmap-Introduce-regmap_get_reg_stride.patch"
 
 	${git} "${DIR}/patches/bbb_overlays/0003-nvmem-Add-a-simple-NVMEM-framework-for-nvmem-provide.patch"
 	${git} "${DIR}/patches/bbb_overlays/0004-nvmem-Add-a-simple-NVMEM-framework-for-consumers.patch"
@@ -213,14 +218,17 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/0024-of-overlay-global-sysfs-enable-attribute.patch"
 	${git} "${DIR}/patches/bbb_overlays/0025-of-overlay-add-per-overlay-sysfs-attributes.patch"
 	${git} "${DIR}/patches/bbb_overlays/0026-Documentation-ABI-sys-firmware-devicetree-overlays.patch"
-	${git} "${DIR}/patches/bbb_overlays/0027-of-Move-OF-flags-to-be-visible-even-when-CONFIG_OF.patch"
+#	${git} "${DIR}/patches/bbb_overlays/0027-of-Move-OF-flags-to-be-visible-even-when-CONFIG_OF.patch"
 	${git} "${DIR}/patches/bbb_overlays/0028-i2c-nvmem-at24-Provide-an-EEPROM-framework-interface.patch"
 	${git} "${DIR}/patches/bbb_overlays/0029-misc-Beaglebone-capemanager.patch"
 	${git} "${DIR}/patches/bbb_overlays/0030-doc-misc-Beaglebone-capemanager-documentation.patch"
 	${git} "${DIR}/patches/bbb_overlays/0031-doc-dt-beaglebone-cape-manager-bindings.patch"
 	${git} "${DIR}/patches/bbb_overlays/0032-doc-ABI-bone_capemgr-sysfs-API.patch"
 	${git} "${DIR}/patches/bbb_overlays/0033-MAINTAINERS-Beaglebone-capemanager-maintainer.patch"
-	${git} "${DIR}/patches/bbb_overlays/0034-arm-dts-Beaglebone-i2c-definitions.patch"
+
+#	mainline: 5d1a2961adf906f965b00eb8059fd2e0585e0e09
+	#${git} "${DIR}/patches/bbb_overlays/0034-arm-dts-Beaglebone-i2c-definitions.patch"
+
 	${git} "${DIR}/patches/bbb_overlays/0035-arm-dts-Enable-beaglebone-cape-manager.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -368,9 +376,12 @@ beaglebone () {
 		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-can0.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-cape-bone-argus.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-replicape.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-universal.dtb" ; dtb_makefile_append
+
+		device="am335x-bonegreen.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
@@ -391,26 +402,6 @@ beaglebone () {
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=3
-		cleanup
-	fi
-
-	echo "dir: beaglebone/remoteproc"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/beaglebone/remoteproc/0001-remoteproc-ste-add-blank-lines-after-declarations.patch"
-	${git} "${DIR}/patches/beaglebone/remoteproc/0002-remoteproc-davinci-fix-quoted-split-string-checkpatc.patch"
-	${git} "${DIR}/patches/beaglebone/remoteproc/0003-remoteproc-fix-various-checkpatch-warnings.patch"
-	${git} "${DIR}/patches/beaglebone/remoteproc/0004-remoteproc-introduce-rproc_get_by_phandle-API.patch"
-	${git} "${DIR}/patches/beaglebone/remoteproc/0005-remoteproc-add-a-rproc-ops-for-performing-address-tr.patch"
-	${git} "${DIR}/patches/beaglebone/remoteproc/0006-Documentation-dt-add-bindings-for-TI-Wakeup-M3-proce.patch"
-	${git} "${DIR}/patches/beaglebone/remoteproc/0007-remoteproc-wkup_m3-add-a-remoteproc-driver-for-TI-Wa.patch"
-	${git} "${DIR}/patches/beaglebone/remoteproc/0008-remoteproc-fix-CONFIG_OF-build-breakage.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=8
 		cleanup
 	fi
 
@@ -444,57 +435,6 @@ beaglebone () {
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=1
-		cleanup
-	fi
-
-	echo "dir: beaglebone/hwspinlock"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0001-Documentation-dt-add-common-bindings-for-hwspinlock.patch"
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0002-hwspinlock-core-add-device-tree-support.patch"
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0003-Documentation-dt-add-the-omap-hwspinlock-bindings-do.patch"
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0004-hwspinlock-omap-add-support-for-dt-nodes.patch"
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0005-DT-hwspinlock-Add-binding-documentation-for-Qualcomm.patch"
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0006-hwspinlock-qcom-Add-support-for-Qualcomm-HW-Mutex-bl.patch"
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0007-hwspinlock-add-a-CSR-atlas7-driver.patch"
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0008-DT-hwspinlock-add-the-CSR-atlas7-hwspinlock-bindings.patch"
-	${git} "${DIR}/patches/beaglebone/hwspinlock/0009-hwspinlock-qcom-Correct-msb-in-regmap_field.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=9
-		cleanup
-	fi
-
-	echo "dir: beaglebone/suspend"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/beaglebone/suspend/0001-ARM-OMAP2-Use-pdata-quirks-for-wkup_m3-reset-managem.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0002-ARM-dts-AM33xx-Update-and-move-wkup_m3-node-to-l4-no.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0003-ARM-dts-AM4372-Add-the-wkupm3-rproc-node.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0004-asm-generic-io-Add-exec-versions-of-ioremap.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0005-lib-devres-Add-exec-versions-of-devm_ioremap_resourc.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0006-misc-SRAM-Add-option-to-map-SRAM-to-allow-code-execu.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0007-Documentation-dt-add-bindings-for-TI-Wakeup-M3-IPC-d.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0008-soc-ti-Add-wkup_m3_ipc-driver.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0009-ARM-dts-AM33xx-Add-the-wkup_m3_ipc-node.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0010-ARM-dts-AM4372-Add-the-wkup_m3_ipc-node.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0011-Documentation-dt-add-ti-am3352-emif-bindings.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0012-memory-ti-emif-sram-introduce-relocatable-suspend-re.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0013-ARM-dts-am33xx-Add-emif-node.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0014-ARM-OMAP2-timer-Add-suspend-resume-callbacks-for-clk.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0015-ARM-OMAP2-AM33XX-Add-assembly-code-for-PM-operations.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0016-ARM-OMAP2-AM33XX-Basic-suspend-resume-support.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0017-ARM-OMAP2-AM33XX-Hookup-AM33XX-PM-code-into-OMAP-bui.patch"
-	${git} "${DIR}/patches/beaglebone/suspend/0018-ARM-OMAP2-pdata-quirks-provide-wkup_m3_ipc-ops-to-pl.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=18
 		cleanup
 	fi
 }
