@@ -1,6 +1,6 @@
-From 9078d6e4a624402fedc2a3edb7a20f96701fd3ce Mon Sep 17 00:00:00 2001
+From 2359e7868aa47bd2b55d8b8408d3869b8ea77ad9 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 26 Jun 2015 11:59:57 -0500
+Date: Mon, 13 Jul 2015 17:09:03 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -12,7 +12,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/alpha/mm/fault.c                              |    5 +-
  arch/arc/include/asm/futex.h                       |   10 +-
  arch/arc/mm/fault.c                                |    2 +-
- arch/arm/Kconfig                                   |    1 +
+ arch/arm/Kconfig                                   |    3 +-
  arch/arm/include/asm/cmpxchg.h                     |    2 +
  arch/arm/include/asm/futex.h                       |   13 +-
  arch/arm/include/asm/switch_to.h                   |    8 +
@@ -243,7 +243,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/irqdesc.h                            |    1 +
  include/linux/irqflags.h                           |   29 +-
  include/linux/jbd_common.h                         |   24 +
- include/linux/jump_label.h                         |    3 +-
  include/linux/kdb.h                                |    2 +
  include/linux/kernel.h                             |    8 +-
  include/linux/kvm_host.h                           |    4 +-
@@ -270,7 +269,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/rwlock_types.h                       |    7 +-
  include/linux/rwlock_types_rt.h                    |   33 +
  include/linux/rwsem.h                              |    6 +
- include/linux/rwsem_rt.h                           |  134 +++
+ include/linux/rwsem_rt.h                           |  140 +++
  include/linux/sched.h                              |  233 +++-
  include/linux/seqlock.h                            |   56 +-
  include/linux/signal.h                             |    1 +
@@ -323,8 +322,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/locking/Makefile                            |    9 +-
  kernel/locking/lglock.c                            |   79 +-
  kernel/locking/lockdep.c                           |    2 +
- kernel/locking/percpu-rwsem.c                      |    4 +
- kernel/locking/rt.c                                |  456 +++++++
+ kernel/locking/rt.c                                |  462 ++++++++
  kernel/locking/rtmutex.c                           |  775 +++++++++++-
  kernel/locking/rtmutex_common.h                    |   18 +
  kernel/locking/spinlock.c                          |    7 +
@@ -365,7 +363,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/time/tick-internal.h                        |    3 +-
  kernel/time/tick-sched.c                           |   40 +-
  kernel/time/timekeeping.c                          |    6 +-
- kernel/time/timer.c                                |  105 +-
+ kernel/time/timer.c                                |   99 +-
  kernel/trace/Kconfig                               |  104 ++
  kernel/trace/Makefile                              |    4 +
  kernel/trace/latency_hist.c                        | 1178 +++++++++++++++++++
@@ -398,7 +396,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/mmu_context.c                                   |    2 +
  mm/page_alloc.c                                    |  142 ++-
  mm/slab.h                                          |    4 +
- mm/slub.c                                          |  128 +-
+ mm/slub.c                                          |  206 ++--
  mm/swap.c                                          |   34 +-
  mm/truncate.c                                      |    7 +-
  mm/vmalloc.c                                       |   13 +-
@@ -420,7 +418,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/soc/intel/sst/sst.c                          |    4 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 415 files changed, 11713 insertions(+), 1927 deletions(-)
+ 413 files changed, 11746 insertions(+), 1973 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -827,9 +825,18 @@ index 6a2e006..d948e4e 100644
  
  	if (user_mode(regs))
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
-index cf4c0c9..6efcb23 100644
+index cf4c0c9..91daa50 100644
 --- a/arch/arm/Kconfig
 +++ b/arch/arm/Kconfig
+@@ -30,7 +30,7 @@ config ARM
+ 	select HARDIRQS_SW_RESEND
+ 	select HAVE_ARCH_AUDITSYSCALL if (AEABI && !OABI_COMPAT)
+ 	select HAVE_ARCH_BITREVERSE if (CPU_32v7M || CPU_32v7) && !CPU_32v6
+-	select HAVE_ARCH_JUMP_LABEL if !XIP_KERNEL
++	select HAVE_ARCH_JUMP_LABEL if (!XIP_KERNEL && !PREEMPT_RT_BASE)
+ 	select HAVE_ARCH_KGDB
+ 	select HAVE_ARCH_SECCOMP_FILTER if (AEABI && !OABI_COMPAT)
+ 	select HAVE_ARCH_TRACEHOOK
 @@ -65,6 +65,7 @@ config ARM
  	select HAVE_PERF_EVENTS
  	select HAVE_PERF_REGS
@@ -1117,7 +1124,7 @@ index b652af5..b8dd0ce 100644
  
  static int kvm_vcpu_initialized(struct kvm_vcpu *vcpu)
 diff --git a/arch/arm/kvm/psci.c b/arch/arm/kvm/psci.c
-index 02fa8ef..901ef77 100644
+index 531e922..e24f046 100644
 --- a/arch/arm/kvm/psci.c
 +++ b/arch/arm/kvm/psci.c
 @@ -68,7 +68,7 @@ static unsigned long kvm_psci_vcpu_on(struct kvm_vcpu *source_vcpu)
@@ -1151,10 +1158,10 @@ index b00d095..cc873c1 100644
  		irqmask = 0;
  		break;
 diff --git a/arch/arm/mach-exynos/platsmp.c b/arch/arm/mach-exynos/platsmp.c
-index d2e9f12..73033cb 100644
+index d45e8cd..2e2611a 100644
 --- a/arch/arm/mach-exynos/platsmp.c
 +++ b/arch/arm/mach-exynos/platsmp.c
-@@ -251,7 +251,7 @@ static void __iomem *scu_base_addr(void)
+@@ -217,7 +217,7 @@ static void __iomem *scu_base_addr(void)
  	return (void __iomem *)(S5P_VA_SCU);
  }
  
@@ -1163,7 +1170,7 @@ index d2e9f12..73033cb 100644
  
  static void exynos_secondary_init(unsigned int cpu)
  {
-@@ -264,8 +264,8 @@ static void exynos_secondary_init(unsigned int cpu)
+@@ -230,8 +230,8 @@ static void exynos_secondary_init(unsigned int cpu)
  	/*
  	 * Synchronise with the boot thread.
  	 */
@@ -1174,7 +1181,7 @@ index d2e9f12..73033cb 100644
  }
  
  static int exynos_boot_secondary(unsigned int cpu, struct task_struct *idle)
-@@ -279,7 +279,7 @@ static int exynos_boot_secondary(unsigned int cpu, struct task_struct *idle)
+@@ -245,7 +245,7 @@ static int exynos_boot_secondary(unsigned int cpu, struct task_struct *idle)
  	 * Set synchronisation state between this boot processor
  	 * and the secondary one
  	 */
@@ -1183,7 +1190,7 @@ index d2e9f12..73033cb 100644
  
  	/*
  	 * The secondary processor is waiting to be released from
-@@ -306,7 +306,7 @@ static int exynos_boot_secondary(unsigned int cpu, struct task_struct *idle)
+@@ -272,7 +272,7 @@ static int exynos_boot_secondary(unsigned int cpu, struct task_struct *idle)
  
  		if (timeout == 0) {
  			printk(KERN_ERR "cpu1 power enable failed");
@@ -1192,7 +1199,7 @@ index d2e9f12..73033cb 100644
  			return -ETIMEDOUT;
  		}
  	}
-@@ -362,7 +362,7 @@ static int exynos_boot_secondary(unsigned int cpu, struct task_struct *idle)
+@@ -325,7 +325,7 @@ static int exynos_boot_secondary(unsigned int cpu, struct task_struct *idle)
  	 * calibrations, then wait for it to finish
  	 */
  fail:
@@ -3272,7 +3279,7 @@ index cd4c68e..8320d82 100644
   * Get the size of a NUL-terminated string in user space.
   *
 diff --git a/arch/s390/kvm/interrupt.c b/arch/s390/kvm/interrupt.c
-index e7bc2fd..a679c34 100644
+index b2b7ddf..791f77c 100644
 --- a/arch/s390/kvm/interrupt.c
 +++ b/arch/s390/kvm/interrupt.c
 @@ -836,13 +836,13 @@ no_timer:
@@ -3758,7 +3765,7 @@ index 0dc922d..afccef552 100644
  
  	if (user_mode(regs))
 diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
-index b7d31ca..01cb7cc 100644
+index 570c71d..92818ed 100644
 --- a/arch/x86/Kconfig
 +++ b/arch/x86/Kconfig
 @@ -22,6 +22,7 @@ config X86_64
@@ -4936,10 +4943,10 @@ index 4ff5d16..e4d56e6 100644
  
  exit:
 diff --git a/arch/x86/kvm/lapic.c b/arch/x86/kvm/lapic.c
-index 4ee827d..62322cb 100644
+index 8ee4aa7..d943e54 100644
 --- a/arch/x86/kvm/lapic.c
 +++ b/arch/x86/kvm/lapic.c
-@@ -1067,7 +1067,7 @@ static void update_divide_count(struct kvm_lapic *apic)
+@@ -1078,7 +1078,7 @@ static void apic_update_lvtt(struct kvm_lapic *apic)
  static void apic_timer_expired(struct kvm_lapic *apic)
  {
  	struct kvm_vcpu *vcpu = apic->vcpu;
@@ -4948,7 +4955,7 @@ index 4ee827d..62322cb 100644
  	struct kvm_timer *ktimer = &apic->lapic_timer;
  
  	if (atomic_read(&apic->lapic_timer.pending))
-@@ -1076,8 +1076,8 @@ static void apic_timer_expired(struct kvm_lapic *apic)
+@@ -1087,8 +1087,8 @@ static void apic_timer_expired(struct kvm_lapic *apic)
  	atomic_inc(&apic->lapic_timer.pending);
  	kvm_set_pending_timer(vcpu);
  
@@ -4959,7 +4966,7 @@ index 4ee827d..62322cb 100644
  
  	if (apic_lvtt_tscdeadline(apic))
  		ktimer->expired_tscdeadline = ktimer->tscdeadline;
-@@ -1130,8 +1130,36 @@ void wait_lapic_expire(struct kvm_vcpu *vcpu)
+@@ -1141,8 +1141,36 @@ void wait_lapic_expire(struct kvm_vcpu *vcpu)
  		__delay(tsc_deadline - guest_tsc);
  }
  
@@ -4996,7 +5003,7 @@ index 4ee827d..62322cb 100644
  	ktime_t now;
  
  	atomic_set(&apic->lapic_timer.pending, 0);
-@@ -1162,9 +1190,11 @@ static void start_apic_timer(struct kvm_lapic *apic)
+@@ -1173,9 +1201,11 @@ static void start_apic_timer(struct kvm_lapic *apic)
  			}
  		}
  
@@ -5009,7 +5016,7 @@ index 4ee827d..62322cb 100644
  
  		apic_debug("%s: bus cycle is %" PRId64 "ns, now 0x%016"
  			   PRIx64 ", "
-@@ -1196,8 +1226,10 @@ static void start_apic_timer(struct kvm_lapic *apic)
+@@ -1207,8 +1237,10 @@ static void start_apic_timer(struct kvm_lapic *apic)
  			do_div(ns, this_tsc_khz);
  			expire = ktime_add_ns(now, ns);
  			expire = ktime_sub_ns(expire, lapic_timer_advance_ns);
@@ -5021,7 +5028,7 @@ index 4ee827d..62322cb 100644
  		} else
  			apic_timer_expired(apic);
  
-@@ -1678,6 +1710,7 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
+@@ -1683,6 +1715,7 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
  	hrtimer_init(&apic->lapic_timer.timer, CLOCK_MONOTONIC,
  		     HRTIMER_MODE_ABS);
  	apic->lapic_timer.timer.function = apic_timer_fn;
@@ -5029,7 +5036,7 @@ index 4ee827d..62322cb 100644
  
  	/*
  	 * APIC is created enabled. This will prevent kvm_lapic_set_base from
-@@ -1803,7 +1836,8 @@ void __kvm_migrate_apic_timer(struct kvm_vcpu *vcpu)
+@@ -1810,7 +1843,8 @@ void __kvm_migrate_apic_timer(struct kvm_vcpu *vcpu)
  
  	timer = &vcpu->arch.apic->lapic_timer.timer;
  	if (hrtimer_cancel(timer))
@@ -6522,10 +6529,10 @@ index f476ae2..27e835f 100644
  	return 0;
  }
 diff --git a/drivers/gpu/drm/i915/i915_gem.c b/drivers/gpu/drm/i915/i915_gem.c
-index 7a628e4..5fbee3f 100644
+index 9536ec3..66006cf 100644
 --- a/drivers/gpu/drm/i915/i915_gem.c
 +++ b/drivers/gpu/drm/i915/i915_gem.c
-@@ -5114,7 +5114,7 @@ static bool mutex_is_locked_by(struct mutex *mutex, struct task_struct *task)
+@@ -5117,7 +5117,7 @@ static bool mutex_is_locked_by(struct mutex *mutex, struct task_struct *task)
  	if (!mutex_is_locked(mutex))
  		return false;
  
@@ -6844,7 +6851,7 @@ index 4d20088..98b64ed 100644
  	Allows a block device to be used as cache for other devices; uses
  	a btree for indexing and the layout is optimized for SSDs.
 diff --git a/drivers/md/dm.c b/drivers/md/dm.c
-index 9b4e30a..0357304 100644
+index beda011..75e0269 100644
 --- a/drivers/md/dm.c
 +++ b/drivers/md/dm.c
 @@ -2002,7 +2002,7 @@ static void dm_request_fn(struct request_queue *q)
@@ -8263,7 +8270,7 @@ index 7fe1619..482840f 100644
  	 * If we have less than the fifo 'half-full' threshold to transfer,
  	 * trigger a PIO interrupt as soon as any data is available.
 diff --git a/drivers/mmc/host/sdhci.c b/drivers/mmc/host/sdhci.c
-index 0ad412a..0e61a8c6 100644
+index d3a7bff..ed28af9 100644
 --- a/drivers/mmc/host/sdhci.c
 +++ b/drivers/mmc/host/sdhci.c
 @@ -2703,6 +2703,31 @@ static irqreturn_t sdhci_thread_irq(int irq, void *dev_id)
@@ -8940,7 +8947,7 @@ index 45a915c..69398f9 100644
  	usb_anchor_resume_wakeups(anchor);
  	atomic_dec(&urb->use_count);
 diff --git a/drivers/usb/gadget/function/f_fs.c b/drivers/usb/gadget/function/f_fs.c
-index 175c995..f6481de 100644
+index ce3b407..651cad8 100644
 --- a/drivers/usb/gadget/function/f_fs.c
 +++ b/drivers/usb/gadget/function/f_fs.c
 @@ -1404,7 +1404,7 @@ static void ffs_data_put(struct ffs_data *ffs)
@@ -9150,7 +9157,7 @@ index 20805db..8b97680 100644
  		__this_cpu_inc(bh_accounting.nr);
  		recalc_bh_state();
 diff --git a/fs/dcache.c b/fs/dcache.c
-index 922f23e..04dc12f 100644
+index b05c557..124e97f 100644
 --- a/fs/dcache.c
 +++ b/fs/dcache.c
 @@ -19,6 +19,7 @@
@@ -9244,7 +9251,7 @@ index 988b32e..6f691c2 100644
  
  		/*
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 13b0f7b..3fab10d 100644
+index f07c769..32fcf4a 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -14,6 +14,7 @@
@@ -10212,20 +10219,6 @@ index 3dc5343..a90a6f5 100644
  }
  
  #endif
-diff --git a/include/linux/jump_label.h b/include/linux/jump_label.h
-index 98f923b6..e17a47e 100644
---- a/include/linux/jump_label.h
-+++ b/include/linux/jump_label.h
-@@ -55,7 +55,8 @@ extern bool static_key_initialized;
- 				    "%s used before call to jump_label_init", \
- 				    __func__)
- 
--#if defined(CC_HAVE_ASM_GOTO) && defined(CONFIG_JUMP_LABEL)
-+#if defined(CC_HAVE_ASM_GOTO) && defined(CONFIG_JUMP_LABEL) && \
-+	!defined(CONFIG_PREEMPT_BASE)
- 
- struct static_key {
- 	atomic_t enabled;
 diff --git a/include/linux/kdb.h b/include/linux/kdb.h
 index a19bcf9..8974953 100644
 --- a/include/linux/kdb.h
@@ -11667,10 +11660,10 @@ index 8f498cd..2b21484 100644
  #endif /* _LINUX_RWSEM_H */
 diff --git a/include/linux/rwsem_rt.h b/include/linux/rwsem_rt.h
 new file mode 100644
-index 0000000..924c2d2
+index 0000000..928a05c
 --- /dev/null
 +++ b/include/linux/rwsem_rt.h
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,140 @@
 +#ifndef _LINUX_RWSEM_RT_H
 +#define _LINUX_RWSEM_RT_H
 +
@@ -11732,6 +11725,7 @@ index 0000000..924c2d2
 +extern void  rt_down_read(struct rw_semaphore *rwsem);
 +extern int  rt_down_write_trylock(struct rw_semaphore *rwsem);
 +extern int  rt_down_read_trylock(struct rw_semaphore *rwsem);
++extern void  __rt_up_read(struct rw_semaphore *rwsem);
 +extern void  rt_up_read(struct rw_semaphore *rwsem);
 +extern void  rt_up_write(struct rw_semaphore *rwsem);
 +extern void  rt_downgrade_write(struct rw_semaphore *rwsem);
@@ -11763,6 +11757,11 @@ index 0000000..924c2d2
 +static inline int down_write_trylock(struct rw_semaphore *sem)
 +{
 +	return rt_down_write_trylock(sem);
++}
++
++static inline void __up_read(struct rw_semaphore *sem)
++{
++	__rt_up_read(sem);
 +}
 +
 +static inline void up_read(struct rw_semaphore *sem)
@@ -15447,29 +15446,12 @@ index ba77ab5..e9a10b3 100644
  
  	if (!debug_locks)
  		print_irqtrace_events(current);
-diff --git a/kernel/locking/percpu-rwsem.c b/kernel/locking/percpu-rwsem.c
-index 652a8ee..2db0f42 100644
---- a/kernel/locking/percpu-rwsem.c
-+++ b/kernel/locking/percpu-rwsem.c
-@@ -84,8 +84,12 @@ void percpu_down_read(struct percpu_rw_semaphore *brw)
- 
- 	down_read(&brw->rw_sem);
- 	atomic_inc(&brw->slow_read_ctr);
-+#ifdef CONFIG_PREEMPT_RT_FULL
-+	up_read(&brw->rw_sem);
-+#else
- 	/* avoid up_read()->rwsem_release() */
- 	__up_read(&brw->rw_sem);
-+#endif
- }
- 
- void percpu_up_read(struct percpu_rw_semaphore *brw)
 diff --git a/kernel/locking/rt.c b/kernel/locking/rt.c
 new file mode 100644
-index 0000000..73c5508
+index 0000000..3482ce8
 --- /dev/null
 +++ b/kernel/locking/rt.c
-@@ -0,0 +1,456 @@
+@@ -0,0 +1,462 @@
 +/*
 + * kernel/rt.c
 + *
@@ -15791,11 +15773,17 @@ index 0000000..73c5508
 +}
 +EXPORT_SYMBOL(rt_up_write);
 +
++
++void  __rt_up_read(struct rw_semaphore *rwsem)
++{
++	if (--rwsem->read_depth == 0)
++		rt_mutex_unlock(&rwsem->lock);
++}
++
 +void  rt_up_read(struct rw_semaphore *rwsem)
 +{
 +	rwsem_release(&rwsem->dep_map, 1, _RET_IP_);
-+	if (--rwsem->read_depth == 0)
-+		rt_mutex_unlock(&rwsem->lock);
++	__rt_up_read(rwsem);
 +}
 +EXPORT_SYMBOL(rt_up_read);
 +
@@ -22448,7 +22436,7 @@ index 91db941..f39bbca 100644
  	update_wall_time();
  }
 diff --git a/kernel/time/timer.c b/kernel/time/timer.c
-index 2d3f5c5..292eea0 100644
+index 2d3f5c5..4b15aa0 100644
 --- a/kernel/time/timer.c
 +++ b/kernel/time/timer.c
 @@ -78,6 +78,9 @@ struct tvec_root {
@@ -22582,32 +22570,24 @@ index 2d3f5c5..292eea0 100644
  	spin_unlock_irq(&base->lock);
  }
  
-@@ -1355,17 +1407,31 @@ unsigned long get_next_timer_interrupt(unsigned long now)
+@@ -1355,7 +1407,16 @@ unsigned long get_next_timer_interrupt(unsigned long now)
  	if (cpu_is_offline(smp_processor_id()))
  		return expires;
  
 +#ifdef CONFIG_PREEMPT_RT_FULL
 +	/*
-+	 * On PREEMPT_RT we cannot sleep here. If the trylock does not
-+	 * succeed then we return the worst-case 'expires in 1 tick'
-+	 * value.  We use the rt functions here directly to avoid a
-+	 * migrate_disable() call.
++	 * On PREEMPT_RT we cannot sleep here. As a result we can't take
++	 * the base lock to check when the next timer is pending and so
++	 * we assume the next jiffy.
 +	 */
-+	if (!spin_do_trylock(&base->lock))
-+		return  now + 1;
++	return now + 1;
 +#else
  	spin_lock(&base->lock);
 +#endif
  	if (base->active_timers) {
  		if (time_before_eq(base->next_timer, base->timer_jiffies))
  			base->next_timer = __next_timer_interrupt(base);
- 		expires = base->next_timer;
- 	}
-+#ifdef CONFIG_PREEMPT_RT_FULL
-+	rt_spin_unlock_after_trylock_in_irq(&base->lock);
-+#else
- 	spin_unlock(&base->lock);
-+#endif
+@@ -1365,7 +1426,6 @@ unsigned long get_next_timer_interrupt(unsigned long now)
  
  	if (time_before_eq(expires, now))
  		return now;
@@ -22615,7 +22595,7 @@ index 2d3f5c5..292eea0 100644
  	return cmp_next_hrtimer_event(now, expires);
  }
  #endif
-@@ -1380,13 +1446,13 @@ void update_process_times(int user_tick)
+@@ -1380,13 +1440,13 @@ void update_process_times(int user_tick)
  
  	/* Note: this timer irq context must be accounted for as well. */
  	account_process_tick(p, user_tick);
@@ -22631,7 +22611,7 @@ index 2d3f5c5..292eea0 100644
  	run_posix_cpu_timers(p);
  }
  
-@@ -1399,6 +1465,10 @@ static void run_timer_softirq(struct softirq_action *h)
+@@ -1399,6 +1459,10 @@ static void run_timer_softirq(struct softirq_action *h)
  
  	hrtimer_run_pending();
  
@@ -22642,7 +22622,7 @@ index 2d3f5c5..292eea0 100644
  	if (time_after_eq(jiffies, base->timer_jiffies))
  		__run_timers(base);
  }
-@@ -1573,6 +1643,9 @@ static int init_timers_cpu(int cpu)
+@@ -1573,6 +1637,9 @@ static int init_timers_cpu(int cpu)
  		base = per_cpu(tvec_bases, cpu);
  	}
  
@@ -22652,7 +22632,7 @@ index 2d3f5c5..292eea0 100644
  
  	for (j = 0; j < TVN_SIZE; j++) {
  		INIT_LIST_HEAD(base->tv5.vec + j);
-@@ -1612,7 +1685,7 @@ static void migrate_timers(int cpu)
+@@ -1612,7 +1679,7 @@ static void migrate_timers(int cpu)
  
  	BUG_ON(cpu_online(cpu));
  	old_base = per_cpu(tvec_bases, cpu);
@@ -22661,7 +22641,7 @@ index 2d3f5c5..292eea0 100644
  	/*
  	 * The caller is globally serialized and nobody else
  	 * takes two locks at once, deadlock is not possible.
-@@ -1633,7 +1706,7 @@ static void migrate_timers(int cpu)
+@@ -1633,7 +1700,7 @@ static void migrate_timers(int cpu)
  
  	spin_unlock(&old_base->lock);
  	spin_unlock_irq(&new_base->lock);
@@ -25386,11 +25366,11 @@ index 1164961..5f8b3e8 100644
   *
 diff --git a/localversion-rt b/localversion-rt
 new file mode 100644
-index 0000000..ad3da1b
+index 0000000..8fc605d
 --- /dev/null
 +++ b/localversion-rt
 @@ -0,0 +1 @@
-+-rt4
++-rt6
 diff --git a/mm/Kconfig b/mm/Kconfig
 index a03131b..1ebbff0 100644
 --- a/mm/Kconfig
@@ -26012,7 +25992,7 @@ index 4c3ac12..0c9bda0 100644
  #ifdef CONFIG_SLAB
  	struct list_head slabs_partial;	/* partial list first, better asm code */
 diff --git a/mm/slub.c b/mm/slub.c
-index 82c4737..ea83736 100644
+index 82c4737..935ad58 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
 @@ -1069,7 +1069,7 @@ static noinline struct kmem_cache_node *free_debug_processing(
@@ -26046,10 +26026,30 @@ index 82c4737..ea83736 100644
  /*
   * Hooks for other subsystems that check memory allocations. In a typical
   * production configuration these hooks all should produce no code at all.
-@@ -1338,10 +1344,15 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
+@@ -1308,6 +1314,17 @@ static inline void slab_free_hook(struct kmem_cache *s, void *x)
+ 	kasan_slab_free(s, x);
+ }
+ 
++static void setup_object(struct kmem_cache *s, struct page *page,
++				void *object)
++{
++	setup_object_debug(s, page, object);
++	if (unlikely(s->ctor)) {
++		kasan_unpoison_object_data(s, object);
++		s->ctor(object);
++		kasan_poison_object_data(s, object);
++	}
++}
++
+ /*
+  * Slab allocation and freeing
+  */
+@@ -1338,10 +1355,17 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
  	struct page *page;
  	struct kmem_cache_order_objects oo = s->oo;
  	gfp_t alloc_gfp;
++	void *start, *p;
++	int idx, order;
 +	bool enableirqs;
  
  	flags &= gfp_allowed_mask;
@@ -26063,30 +26063,113 @@ index 82c4737..ea83736 100644
  		local_irq_enable();
  
  	flags |= s->allocflags;
-@@ -1382,7 +1393,7 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
+@@ -1361,13 +1385,13 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
+ 		 * Try a lower order alloc if possible
+ 		 */
+ 		page = alloc_slab_page(s, alloc_gfp, node, oo);
+-
+-		if (page)
+-			stat(s, ORDER_FALLBACK);
++		if (!unlikely(page))
++			goto out;
++		stat(s, ORDER_FALLBACK);
+ 	}
+ 
+-	if (kmemcheck_enabled && page
+-		&& !(s->flags & (SLAB_NOTRACK | DEBUG_DEFAULT_FLAGS))) {
++	if (kmemcheck_enabled &&
++		!(s->flags & (SLAB_NOTRACK | DEBUG_DEFAULT_FLAGS))) {
+ 		int pages = 1 << oo_order(oo);
+ 
+ 		kmemcheck_alloc_shadow(page, oo_order(oo), alloc_gfp, node);
+@@ -1382,51 +1406,9 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
  			kmemcheck_mark_unallocated_pages(page, pages);
  	}
  
 -	if (flags & __GFP_WAIT)
+-		local_irq_disable();
+-	if (!page)
+-		return NULL;
+-
+ 	page->objects = oo_objects(oo);
+-	mod_zone_page_state(page_zone(page),
+-		(s->flags & SLAB_RECLAIM_ACCOUNT) ?
+-		NR_SLAB_RECLAIMABLE : NR_SLAB_UNRECLAIMABLE,
+-		1 << oo_order(oo));
+-
+-	return page;
+-}
+-
+-static void setup_object(struct kmem_cache *s, struct page *page,
+-				void *object)
+-{
+-	setup_object_debug(s, page, object);
+-	if (unlikely(s->ctor)) {
+-		kasan_unpoison_object_data(s, object);
+-		s->ctor(object);
+-		kasan_poison_object_data(s, object);
+-	}
+-}
+-
+-static struct page *new_slab(struct kmem_cache *s, gfp_t flags, int node)
+-{
+-	struct page *page;
+-	void *start;
+-	void *p;
+-	int order;
+-	int idx;
+-
+-	if (unlikely(flags & GFP_SLAB_BUG_MASK)) {
+-		pr_emerg("gfp: %u\n", flags & GFP_SLAB_BUG_MASK);
+-		BUG();
+-	}
+-
+-	page = allocate_slab(s,
+-		flags & (GFP_RECLAIM_MASK | GFP_CONSTRAINT_MASK), node);
+-	if (!page)
+-		goto out;
+ 
+ 	order = compound_order(page);
+-	inc_slabs_node(s, page_to_nid(page), page->objects);
+ 	page->slab_cache = s;
+ 	__SetPageSlab(page);
+ 	if (page->pfmemalloc)
+@@ -1450,10 +1432,34 @@ static struct page *new_slab(struct kmem_cache *s, gfp_t flags, int node)
+ 	page->freelist = start;
+ 	page->inuse = page->objects;
+ 	page->frozen = 1;
++
+ out:
 +	if (enableirqs)
- 		local_irq_disable();
- 	if (!page)
- 		return NULL;
-@@ -1400,11 +1411,13 @@ static void setup_object(struct kmem_cache *s, struct page *page,
- 				void *object)
- {
- 	setup_object_debug(s, page, object);
-+#ifndef CONFIG_PREEMPT_RT_FULL
- 	if (unlikely(s->ctor)) {
- 		kasan_unpoison_object_data(s, object);
- 		s->ctor(object);
- 		kasan_poison_object_data(s, object);
- 	}
-+#endif
++		local_irq_disable();
++	if (!page)
++		return NULL;
++
++	mod_zone_page_state(page_zone(page),
++			    (s->flags & SLAB_RECLAIM_ACCOUNT) ?
++			    NR_SLAB_RECLAIMABLE : NR_SLAB_UNRECLAIMABLE,
++			    1 << oo_order(oo));
++
++	inc_slabs_node(s, page_to_nid(page), page->objects);
++
+ 	return page;
  }
  
- static struct page *new_slab(struct kmem_cache *s, gfp_t flags, int node)
-@@ -1485,6 +1498,16 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
++static struct page *new_slab(struct kmem_cache *s, gfp_t flags, int node)
++{
++	if (unlikely(flags & GFP_SLAB_BUG_MASK)) {
++		pr_emerg("gfp: %u\n", flags & GFP_SLAB_BUG_MASK);
++		BUG();
++	}
++
++	return allocate_slab(s,
++		     flags & (GFP_RECLAIM_MASK | GFP_CONSTRAINT_MASK), node);
++}
++
+ static void __free_slab(struct kmem_cache *s, struct page *page)
+ {
+ 	int order = compound_order(page);
+@@ -1485,6 +1491,16 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
  	memcg_uncharge_slab(s, order);
  }
  
@@ -26103,7 +26186,7 @@ index 82c4737..ea83736 100644
  #define need_reserve_slab_rcu						\
  	(sizeof(((struct page *)NULL)->lru) < sizeof(struct rcu_head))
  
-@@ -1519,6 +1542,12 @@ static void free_slab(struct kmem_cache *s, struct page *page)
+@@ -1519,6 +1535,12 @@ static void free_slab(struct kmem_cache *s, struct page *page)
  		}
  
  		call_rcu(head, rcu_free_slab);
@@ -26116,7 +26199,7 @@ index 82c4737..ea83736 100644
  	} else
  		__free_slab(s, page);
  }
-@@ -1632,7 +1661,7 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
+@@ -1632,7 +1654,7 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
  	if (!n || !n->nr_partial)
  		return NULL;
  
@@ -26125,7 +26208,7 @@ index 82c4737..ea83736 100644
  	list_for_each_entry_safe(page, page2, &n->partial, lru) {
  		void *t;
  
-@@ -1657,7 +1686,7 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
+@@ -1657,7 +1679,7 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
  			break;
  
  	}
@@ -26134,7 +26217,7 @@ index 82c4737..ea83736 100644
  	return object;
  }
  
-@@ -1903,7 +1932,7 @@ redo:
+@@ -1903,7 +1925,7 @@ redo:
  			 * that acquire_slab() will see a slab page that
  			 * is frozen
  			 */
@@ -26143,7 +26226,7 @@ index 82c4737..ea83736 100644
  		}
  	} else {
  		m = M_FULL;
-@@ -1914,7 +1943,7 @@ redo:
+@@ -1914,7 +1936,7 @@ redo:
  			 * slabs from diagnostic functions will not see
  			 * any frozen slabs.
  			 */
@@ -26152,7 +26235,7 @@ index 82c4737..ea83736 100644
  		}
  	}
  
-@@ -1949,7 +1978,7 @@ redo:
+@@ -1949,7 +1971,7 @@ redo:
  		goto redo;
  
  	if (lock)
@@ -26161,7 +26244,7 @@ index 82c4737..ea83736 100644
  
  	if (m == M_FREE) {
  		stat(s, DEACTIVATE_EMPTY);
-@@ -1981,10 +2010,10 @@ static void unfreeze_partials(struct kmem_cache *s,
+@@ -1981,10 +2003,10 @@ static void unfreeze_partials(struct kmem_cache *s,
  		n2 = get_node(s, page_to_nid(page));
  		if (n != n2) {
  			if (n)
@@ -26174,7 +26257,7 @@ index 82c4737..ea83736 100644
  		}
  
  		do {
-@@ -2013,7 +2042,7 @@ static void unfreeze_partials(struct kmem_cache *s,
+@@ -2013,7 +2035,7 @@ static void unfreeze_partials(struct kmem_cache *s,
  	}
  
  	if (n)
@@ -26183,7 +26266,7 @@ index 82c4737..ea83736 100644
  
  	while (discard_page) {
  		page = discard_page;
-@@ -2052,14 +2081,21 @@ static void put_cpu_partial(struct kmem_cache *s, struct page *page, int drain)
+@@ -2052,14 +2074,21 @@ static void put_cpu_partial(struct kmem_cache *s, struct page *page, int drain)
  			pobjects = oldpage->pobjects;
  			pages = oldpage->pages;
  			if (drain && pobjects > s->cpu_partial) {
@@ -26205,7 +26288,7 @@ index 82c4737..ea83736 100644
  				oldpage = NULL;
  				pobjects = 0;
  				pages = 0;
-@@ -2131,7 +2167,22 @@ static bool has_cpu_slab(int cpu, void *info)
+@@ -2131,7 +2160,22 @@ static bool has_cpu_slab(int cpu, void *info)
  
  static void flush_all(struct kmem_cache *s)
  {
@@ -26228,7 +26311,7 @@ index 82c4737..ea83736 100644
  }
  
  /*
-@@ -2167,10 +2218,10 @@ static unsigned long count_partial(struct kmem_cache_node *n,
+@@ -2167,10 +2211,10 @@ static unsigned long count_partial(struct kmem_cache_node *n,
  	unsigned long x = 0;
  	struct page *page;
  
@@ -26241,7 +26324,7 @@ index 82c4737..ea83736 100644
  	return x;
  }
  #endif /* CONFIG_SLUB_DEBUG || CONFIG_SYSFS */
-@@ -2307,9 +2358,11 @@ static inline void *get_freelist(struct kmem_cache *s, struct page *page)
+@@ -2307,9 +2351,11 @@ static inline void *get_freelist(struct kmem_cache *s, struct page *page)
  static void *__slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
  			  unsigned long addr, struct kmem_cache_cpu *c)
  {
@@ -26253,7 +26336,7 @@ index 82c4737..ea83736 100644
  
  	local_irq_save(flags);
  #ifdef CONFIG_PREEMPT
-@@ -2377,7 +2430,13 @@ load_freelist:
+@@ -2377,7 +2423,13 @@ load_freelist:
  	VM_BUG_ON(!c->page->frozen);
  	c->freelist = get_freepointer(s, freelist);
  	c->tid = next_tid(c->tid);
@@ -26267,7 +26350,7 @@ index 82c4737..ea83736 100644
  	return freelist;
  
  new_slab:
-@@ -2394,8 +2453,7 @@ new_slab:
+@@ -2394,8 +2446,7 @@ new_slab:
  
  	if (unlikely(!freelist)) {
  		slab_out_of_memory(s, gfpflags, node);
@@ -26277,7 +26360,7 @@ index 82c4737..ea83736 100644
  	}
  
  	page = c->page;
-@@ -2410,8 +2468,7 @@ new_slab:
+@@ -2410,8 +2461,7 @@ new_slab:
  	deactivate_slab(s, page, get_freepointer(s, freelist));
  	c->page = NULL;
  	c->freelist = NULL;
@@ -26287,21 +26370,7 @@ index 82c4737..ea83736 100644
  }
  
  /*
-@@ -2505,6 +2562,13 @@ redo:
- 
- 	if (unlikely(gfpflags & __GFP_ZERO) && object)
- 		memset(object, 0, s->object_size);
-+#ifdef CONFIG_PREEMPT_RT_FULL
-+	if (unlikely(s->ctor) && object) {
-+		kasan_unpoison_object_data(s, object);
-+		s->ctor(object);
-+		kasan_poison_object_data(s, object);
-+	}
-+#endif
- 
- 	slab_post_alloc_hook(s, gfpflags, object);
- 
-@@ -2595,7 +2659,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
+@@ -2595,7 +2645,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
  
  	do {
  		if (unlikely(n)) {
@@ -26310,7 +26379,7 @@ index 82c4737..ea83736 100644
  			n = NULL;
  		}
  		prior = page->freelist;
-@@ -2627,7 +2691,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
+@@ -2627,7 +2677,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
  				 * Otherwise the list_lock will synchronize with
  				 * other processors updating the list of slabs.
  				 */
@@ -26319,7 +26388,7 @@ index 82c4737..ea83736 100644
  
  			}
  		}
-@@ -2669,7 +2733,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
+@@ -2669,7 +2719,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
  		add_partial(n, page, DEACTIVATE_TO_TAIL);
  		stat(s, FREE_ADD_PARTIAL);
  	}
@@ -26328,7 +26397,7 @@ index 82c4737..ea83736 100644
  	return;
  
  slab_empty:
-@@ -2684,7 +2748,7 @@ slab_empty:
+@@ -2684,7 +2734,7 @@ slab_empty:
  		remove_full(s, n, page);
  	}
  
@@ -26337,7 +26406,7 @@ index 82c4737..ea83736 100644
  	stat(s, FREE_SLAB);
  	discard_slab(s, page);
  }
-@@ -2883,7 +2947,7 @@ static void
+@@ -2883,7 +2933,7 @@ static void
  init_kmem_cache_node(struct kmem_cache_node *n)
  {
  	n->nr_partial = 0;
@@ -26346,7 +26415,7 @@ index 82c4737..ea83736 100644
  	INIT_LIST_HEAD(&n->partial);
  #ifdef CONFIG_SLUB_DEBUG
  	atomic_long_set(&n->nr_slabs, 0);
-@@ -3465,7 +3529,7 @@ int __kmem_cache_shrink(struct kmem_cache *s, bool deactivate)
+@@ -3465,7 +3515,7 @@ int __kmem_cache_shrink(struct kmem_cache *s, bool deactivate)
  		for (i = 0; i < SHRINK_PROMOTE_MAX; i++)
  			INIT_LIST_HEAD(promote + i);
  
@@ -26355,7 +26424,7 @@ index 82c4737..ea83736 100644
  
  		/*
  		 * Build lists of slabs to discard or promote.
-@@ -3496,7 +3560,7 @@ int __kmem_cache_shrink(struct kmem_cache *s, bool deactivate)
+@@ -3496,7 +3546,7 @@ int __kmem_cache_shrink(struct kmem_cache *s, bool deactivate)
  		for (i = SHRINK_PROMOTE_MAX - 1; i >= 0; i--)
  			list_splice(promote + i, &n->partial);
  
@@ -26364,7 +26433,7 @@ index 82c4737..ea83736 100644
  
  		/* Release empty slabs */
  		list_for_each_entry_safe(page, t, &discard, lru)
-@@ -3672,6 +3736,12 @@ void __init kmem_cache_init(void)
+@@ -3672,6 +3722,12 @@ void __init kmem_cache_init(void)
  {
  	static __initdata struct kmem_cache boot_kmem_cache,
  		boot_kmem_cache_node;
@@ -26377,7 +26446,7 @@ index 82c4737..ea83736 100644
  
  	if (debug_guardpage_minorder())
  		slub_max_order = 0;
-@@ -3914,7 +3984,7 @@ static int validate_slab_node(struct kmem_cache *s,
+@@ -3914,7 +3970,7 @@ static int validate_slab_node(struct kmem_cache *s,
  	struct page *page;
  	unsigned long flags;
  
@@ -26386,7 +26455,7 @@ index 82c4737..ea83736 100644
  
  	list_for_each_entry(page, &n->partial, lru) {
  		validate_slab_slab(s, page, map);
-@@ -3936,7 +4006,7 @@ static int validate_slab_node(struct kmem_cache *s,
+@@ -3936,7 +3992,7 @@ static int validate_slab_node(struct kmem_cache *s,
  		       s->name, count, atomic_long_read(&n->nr_slabs));
  
  out:
@@ -26395,7 +26464,7 @@ index 82c4737..ea83736 100644
  	return count;
  }
  
-@@ -4124,12 +4194,12 @@ static int list_locations(struct kmem_cache *s, char *buf,
+@@ -4124,12 +4180,12 @@ static int list_locations(struct kmem_cache *s, char *buf,
  		if (!atomic_long_read(&n->nr_slabs))
  			continue;
  
@@ -27019,7 +27088,7 @@ index e977e15..172ad49 100644
  		sd->output_queue_tailp = &sd->output_queue;
  #ifdef CONFIG_RPS
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index e9f9a15..54ffe2a 100644
+index 1e3abb8..544a652 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
 @@ -63,6 +63,7 @@
@@ -27051,7 +27120,7 @@ index e9f9a15..54ffe2a 100644
  }
  
 diff --git a/net/core/sock.c b/net/core/sock.c
-index 71e3e5f..428c737 100644
+index c77d5d2..3b17379 100644
 --- a/net/core/sock.c
 +++ b/net/core/sock.c
 @@ -2386,12 +2386,11 @@ void lock_sock_nested(struct sock *sk, int subclass)
@@ -27177,7 +27246,7 @@ index fea9ef5..0b947de 100644
  
  const struct nf_afinfo __rcu *nf_afinfo[NFPROTO_NUMPROTO] __read_mostly;
 diff --git a/net/packet/af_packet.c b/net/packet/af_packet.c
-index f8db706..b6e83c3 100644
+index bfe5c69..df3b02d 100644
 --- a/net/packet/af_packet.c
 +++ b/net/packet/af_packet.c
 @@ -63,6 +63,7 @@

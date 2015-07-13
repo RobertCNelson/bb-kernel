@@ -76,7 +76,7 @@ local_patch () {
 
 rt () {
 	echo "dir: rt"
-	#patch-4.0.5-rt4.patch
+	#patch-4.0.8-rt6.patch
 	#exit 2
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
