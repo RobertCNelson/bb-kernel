@@ -76,8 +76,16 @@ local_patch () {
 
 rt () {
 	echo "dir: rt"
-	#patch-4.0.8-rt6.patch
-	#exit 2
+	rt_patch="4.0.8-rt6"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/4.0/patch-${rt_patch}.patch.xz
+		xzcat patch-${rt_patch}.patch.xz | patch -p1
+		rm -rf patch-${rt_patch}.patch.xz
+
+		sed -i -e 's:rt5:rt6:g' ../patches/rt/0002-rt-we-append-rt-on-our-own.patch
+		exit 2
+	fi
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
 	${git} "${DIR}/patches/rt/0002-rt-we-append-rt-on-our-own.patch"
