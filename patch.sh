@@ -113,12 +113,10 @@ dts () {
 	${git} "${DIR}/patches/dts/0010-imx6-wl1835-base-boards.patch"
 	${git} "${DIR}/patches/dts/0011-imx6q-sabresd-add-support-for-wilink8-wlan-and-bluet.patch"
 	${git} "${DIR}/patches/dts/0012-imx6sl-evk-add-support-for-wilink8-wlan-and-bluetoot.patch"
-	${git} "${DIR}/patches/dts/0013-drm-imx-tve-fix-media-bus-format-for-VGA-output.patch"
-	${git} "${DIR}/patches/dts/0014-ARM-dts-imx53-qsb-fix-TVE-entry.patch"
-	${git} "${DIR}/patches/dts/0015-ARM-dts-imx53-qsb-select-open-drain-mode-for-i2c1-pa.patch"
+	${git} "${DIR}/patches/dts/0013-ARM-dts-imx53-qsb-select-open-drain-mode-for-i2c1-pa.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=15
+		number=13
 		cleanup
 	fi
 }
@@ -152,9 +150,13 @@ fixes () {
 	fi
 
 	${git} "${DIR}/patches/fixes/0001-trusty-gcc-4.8-4.8.2-19ubuntu1-has-fix.patch"
+	${git} "${DIR}/patches/fixes/0002-ARM-move-heavy-barrier-support-out-of-line.patch"
+	${git} "${DIR}/patches/fixes/0003-ARM-add-soc-memory-barrier-extension.patch"
+#	${git} "${DIR}/patches/fixes/0004-Revert-ARM-OMAP4-remove-dead-kconfig-option-OMAP4_ER.patch"
+#	${git} "${DIR}/patches/fixes/0005-ARM-omap2-restore-OMAP4-barrier-behaviour.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
+		number=5
 		cleanup
 	fi
 }
@@ -374,6 +376,9 @@ beaglebone () {
 		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-can0.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-cape-bone-argus.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-emmc-overlay.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-hdmi-overlay.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-nhdmi-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-replicape.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
@@ -437,6 +442,21 @@ beaglebone () {
 	fi
 }
 
+quieter () {
+	echo "dir: quieter"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/quieter/0001-quiet-8250_omap.c-use-pr_info-over-pr_err.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+}
+
 sgx () {
 	echo "dir: sgx"
 	#regenerate="enable"
@@ -465,6 +485,7 @@ fixes
 pru
 bbb_overlays
 beaglebone
+quieter
 sgx
 
 packaging () {
