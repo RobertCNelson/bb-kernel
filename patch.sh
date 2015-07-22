@@ -396,7 +396,7 @@ beaglebone () {
 	####
 	#dtb makefile
 	echo "dir: beaglebone/generated"
-	regenerate="enable"
+	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 
 		device="am335x-arduino-tre.dtb" ; dtb_makefile_append
