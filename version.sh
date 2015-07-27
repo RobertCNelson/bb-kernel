@@ -14,14 +14,14 @@ toolchain="gcc_linaro_gnueabihf_4_9"
 #Kernel/Build
 KERNEL_REL=4.1
 KERNEL_TAG=${KERNEL_REL}.3
-BUILD=bone14.2
+BUILD=bone-rt-14.2
 
 #v3.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="am33x-v4.1"
+BRANCH="am33x-rt-v4.1"
 
 DISTRO=cross
 DEBARCH=armhf

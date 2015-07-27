@@ -74,6 +74,23 @@ local_patch () {
 #external_git
 #local_patch
 
+rt () {
+	echo "dir: rt"
+	rt_patch="4.1.3-rt3"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/4.1/patch-${rt_patch}.patch.xz
+		xzcat patch-${rt_patch}.patch.xz | patch -p1
+		rm -rf patch-${rt_patch}.patch.xz
+
+		sed -i -e 's:rt6:rt3:g' ../patches/rt/0002-rt-we-append-rt-on-our-own.patch
+		exit 2
+	fi
+
+	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
+	${git} "${DIR}/patches/rt/0002-rt-we-append-rt-on-our-own.patch"
+}
+
 reverts () {
 	echo "dir: reverts"
 	#regenerate="enable"
@@ -603,6 +620,7 @@ sgx () {
 }
 
 ###
+rt
 reverts
 backports
 ti
