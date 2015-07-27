@@ -848,6 +848,11 @@ am33x_after () {
 	${git} "${DIR}/patches/leds/0006-leds-pwm-Enable-compilation-on-this-version-of-the-k.patch"
 
 	echo "dir: capes"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
 	${git} "${DIR}/patches/capes/0001-capes-Add-bacon-cape.patch"
 	${git} "${DIR}/patches/capes/0002-cape-bacon-Cosmetic-change-of-the-adc-helper-name.patch"
 	${git} "${DIR}/patches/capes/0003-cape-bacon-educational-edition.patch"
@@ -884,14 +889,19 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0034-cape-add-BB-BONE-AUDI-02-00A0-from-http-elinux.org-C.patch"
 	${git} "${DIR}/patches/capes/0035-cape-universaln-remove-P9_31.patch"
 	${git} "${DIR}/patches/capes/0036-cape-add-BB-BONE-HAS-00R1.patch"
+	${git} "${DIR}/patches/capes/0037-cape-add-BB-BONE-SERL-01-00A2.patch"
+	${git} "${DIR}/patches/capes/0038-cape-add-NL-AB-BBBC-00D0.patch"
+	${git} "${DIR}/patches/capes/0039-add-cape-MT-CAPE-01-still-needs-gpiolib-mtctrl-patch.patch"
+	${git} "${DIR}/patches/capes/0040-cape-LCD4-Fix-GPIO-buttons-Correct-errant-GPIO-setti.patch"
+	${git} "${DIR}/patches/capes/0041-capes-HDMI-Fix-incorrect-pinmux-register-for-GPIO1_2.patch"
+	${git} "${DIR}/patches/capes/0042-beaglebone-universal-io-sync-with-master-of-https-gi.patch"
+	${git} "${DIR}/patches/capes/0043-nimbelink-add-missing-ids.patch"
+	${git} "${DIR}/patches/capes/0044-capes-add-BB-MIKROBUS-01-00A1.patch"
 
-	${git} "${DIR}/patches/capes/0038-cape-add-BB-BONE-SERL-01-00A2.patch"
-	${git} "${DIR}/patches/capes/0039-cape-add-NL-AB-BBBC-00D0.patch"
-	${git} "${DIR}/patches/capes/0040-add-cape-MT-CAPE-01-still-needs-gpiolib-mtctrl-patch.patch"
-	${git} "${DIR}/patches/capes/0041-cape-LCD4-Fix-GPIO-buttons.patch"
-	${git} "${DIR}/patches/capes/0042-capes-HDMI-Fix-incorrect-pinmux-register-for-GPIO1_2.patch"
-	${git} "${DIR}/patches/capes/0043-beaglebone-universal-io-sync-with-master-of-https-gi.patch"
-	${git} "${DIR}/patches/capes/0044-nimbelink-add-missing-ids.patch"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=44
+		cleanup
+	fi
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
@@ -910,6 +920,11 @@ am33x_after () {
 	${git} "${DIR}/patches/BeagleLogic/0005-BeagleLogic-module-v1.1-working-with-libsigrok.patch"
 
 	echo "dir: fixes"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
 	${git} "${DIR}/patches/fixes/0001-sync-don-t-block-the-flusher-thread-waiting-on-IO.patch"
 	${git} "${DIR}/patches/fixes/0002-USB-Fix-USB-device-disconnects-on-resume.patch"
 	${git} "${DIR}/patches/fixes/0003-beaglebone-switch-uSD-to-4-bit-mode.patch"
@@ -918,8 +933,13 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0006-ti_am335x_tsc-touchscreen-jitter-fix.patch"
 	${git} "${DIR}/patches/fixes/0007-omap-RS485-support-by-Michael-Musset.patch"
 	${git} "${DIR}/patches/fixes/0008-deb-pkg-sync-with-v3.14.patch"
+	${git} "${DIR}/patches/fixes/0009-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
+	${git} "${DIR}/patches/fixes/0010-modified-drivers-tty-serial-omap-serial.c-the-change.patch"
 
-	${git} "${DIR}/patches/fixes/0010-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=10
+		cleanup
+	fi
 
 	echo "dir: tre"
 	${git} "${DIR}/patches/tre/0001-Arduino-Tre-added.patch"

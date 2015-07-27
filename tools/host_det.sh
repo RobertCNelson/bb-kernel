@@ -381,7 +381,7 @@ debian_regs () {
 			#12.04 precise: (EOL: April 2017) lts: precise -> trusty
 			unset warn_eol_distro
 			;;
-)		hardy|lucid|maverick|natty|oneiric)
+		hardy|lucid|maverick|natty|oneiric)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
