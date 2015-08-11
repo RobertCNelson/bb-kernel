@@ -1053,6 +1053,20 @@ beagleboy () {
 	fi
 }
 
+treewide () {
+	#anything that touches every cape....
+	echo "dir: tree-wide"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+	${git} "${DIR}/patches/tree-wide/0001-add-am335x-bonegreen.patch"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+}
+
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
 	echo "dir: bb_view_lcd"
@@ -1081,6 +1095,7 @@ backports
 probotix
 pcm512x
 beagleboy
+treewide
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
