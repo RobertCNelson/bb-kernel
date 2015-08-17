@@ -202,14 +202,13 @@ fixes () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/fixes/0001-trusty-gcc-4.8-4.8.2-19ubuntu1-has-fix.patch"
-	${git} "${DIR}/patches/fixes/0002-ARM-move-heavy-barrier-support-out-of-line.patch"
-	${git} "${DIR}/patches/fixes/0003-ARM-add-soc-memory-barrier-extension.patch"
-#	${git} "${DIR}/patches/fixes/0004-Revert-ARM-OMAP4-remove-dead-kconfig-option-OMAP4_ER.patch"
-#	${git} "${DIR}/patches/fixes/0005-ARM-omap2-restore-OMAP4-barrier-behaviour.patch"
+	${git} "${DIR}/patches/fixes/0001-ARM-move-heavy-barrier-support-out-of-line.patch"
+	${git} "${DIR}/patches/fixes/0002-ARM-add-soc-memory-barrier-extension.patch"
+#	${git} "${DIR}/patches/fixes/0003-Revert-ARM-OMAP4-remove-dead-kconfig-option-OMAP4_ER.patch"
+#	${git} "${DIR}/patches/fixes/0004-ARM-omap2-restore-OMAP4-barrier-behaviour.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=5
+		number=4
 		cleanup
 	fi
 }
@@ -293,8 +292,14 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0007-nvmem-qfprom-Add-bindings-for-qfprom.patch"
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0008-nvmem-sunxi-Move-the-SID-driver-to-the-nvmem-framewo.patch"
 
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0009-nvmem-make-default-user-binary-file-root-access-only.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0010-nvmem-set-the-size-for-the-nvmem-binary-file.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0011-nvmem-add-permission-flags-in-nvmem_config.patch"
+
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0012-nvmem-core-fix-a-copy-paste-error.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=8
+		number=12
 		cleanup
 	fi
 
@@ -329,21 +334,20 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/0019-doc-ABI-bone_capemgr-sysfs-API.patch"
 	${git} "${DIR}/patches/bbb_overlays/0020-MAINTAINERS-Beaglebone-capemanager-maintainer.patch"
 	${git} "${DIR}/patches/bbb_overlays/0021-arm-dts-Enable-beaglebone-cape-manager.patch"
+	${git} "${DIR}/patches/bbb_overlays/0022-gcl-Fix-resource-linking.patch"
+	${git} "${DIR}/patches/bbb_overlays/0023-of-overlay-Implement-indirect-target-support.patch"
+	${git} "${DIR}/patches/bbb_overlays/0024-of-unittest-Add-indirect-overlay-target-test.patch"
+	${git} "${DIR}/patches/bbb_overlays/0025-doc-dt-Document-the-indirect-overlay-method.patch"
+	${git} "${DIR}/patches/bbb_overlays/0026-of-overlay-Introduce-target-root-capability.patch"
+	${git} "${DIR}/patches/bbb_overlays/0027-of-unittest-Unit-tests-for-target-root-overlays.patch"
+	${git} "${DIR}/patches/bbb_overlays/0028-doc-dt-Document-the-target-root-overlay-method.patch"
+	${git} "${DIR}/patches/bbb_overlays/0029-of-dynamic-Add-__of_node_dupv.patch"
+	${git} "${DIR}/patches/bbb_overlays/0030-of-changesets-Introduce-changeset-helper-methods.patch"
+	${git} "${DIR}/patches/bbb_overlays/0031-RFC-Device-overlay-manager-PCI-USB-DT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-	${git} "${DIR}/patches/bbb_overlays/0022-boneblack-defconfig.patch"
+	${git} "${DIR}/patches/bbb_overlays/0032-boneblack-defconfig.patch"
 	fi
-
-	${git} "${DIR}/patches/bbb_overlays/0023-gcl-Fix-resource-linking.patch"
-	${git} "${DIR}/patches/bbb_overlays/0024-of-overlay-Implement-indirect-target-support.patch"
-	${git} "${DIR}/patches/bbb_overlays/0025-of-unittest-Add-indirect-overlay-target-test.patch"
-	${git} "${DIR}/patches/bbb_overlays/0026-doc-dt-Document-the-indirect-overlay-method.patch"
-	${git} "${DIR}/patches/bbb_overlays/0027-of-overlay-Introduce-target-root-capability.patch"
-	${git} "${DIR}/patches/bbb_overlays/0028-of-unittest-Unit-tests-for-target-root-overlays.patch"
-	${git} "${DIR}/patches/bbb_overlays/0029-doc-dt-Document-the-target-root-overlay-method.patch"
-	${git} "${DIR}/patches/bbb_overlays/0030-of-dynamic-Add-__of_node_dupv.patch"
-	${git} "${DIR}/patches/bbb_overlays/0031-of-changesets-Introduce-changeset-helper-methods.patch"
-	${git} "${DIR}/patches/bbb_overlays/0032-RFC-Device-overlay-manager-PCI-USB-DT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=32
