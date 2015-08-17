@@ -85,12 +85,12 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_eabi_4_9)
 		#
-		#https://releases.linaro.org/14.11/components/toolchain/binaries/arm-none-eabi/gcc-linaro-4.9-2014.11-x86_64_arm-eabi.tar.xz
+		#https://releases.linaro.org/15.05/components/toolchain/binaries/arm-eabi/gcc-linaro-4.9-2015.05-x86_64_arm-eabi.tar.xz
 		#
 
 		gcc_version="4.9"
-		release="14.11"
-		target="arm-none-eabi"
+		release="15.05"
+		target="arm-eabi"
 
 		version="${release}/components/toolchain/binaries/${target}"
 		filename="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi.tar.xz"
@@ -98,7 +98,7 @@ gcc_toolchain () {
 
 		datestamp="${gcc_version}-20${release}-${target}"
 
-		binary="bin/${target}-"
+		binary="bin/arm-eabi-"
 		;;
 	gcc_linaro_gnueabi_4_6)
 		#
@@ -159,11 +159,11 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_gnueabihf_4_9)
 		#
-		#https://releases.linaro.org/14.11/components/toolchain/binaries/arm-linux-gnueabihf/gcc-linaro-4.9-2014.11-x86_64_arm-linux-gnueabihf.tar.xz
+		#https://releases.linaro.org/15.05/components/toolchain/binaries/arm-linux-gnueabihf/gcc-linaro-4.9-2015.05-x86_64_arm-linux-gnueabihf.tar.xz
 		#
 
 		gcc_version="4.9"
-		release="14.11"
+		release="15.05"
 		target="arm-linux-gnueabihf"
 
 		version="${release}/components/toolchain/binaries/${target}"
