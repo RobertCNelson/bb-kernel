@@ -1,6 +1,6 @@
-From 3211e14e93590edb0702602187fc9a185e13098b Mon Sep 17 00:00:00 2001
+From 1d4532ab7e594c4e1693c224f7a294861755de7d Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 27 Jul 2015 08:49:14 -0500
+Date: Mon, 17 Aug 2015 10:03:17 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -118,6 +118,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/x86/kernel/apic/x2apic_uv_x.c                 |    2 +-
  arch/x86/kernel/asm-offsets.c                      |    2 +
  arch/x86/kernel/cpu/mcheck/mce.c                   |  120 +-
+ arch/x86/kernel/dumpstack_32.c                     |    4 +-
+ arch/x86/kernel/dumpstack_64.c                     |    8 +-
  arch/x86/kernel/entry_32.S                         |   20 +-
  arch/x86/kernel/entry_64.S                         |   26 +-
  arch/x86/kernel/irq_32.c                           |    2 +
@@ -373,6 +375,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/workqueue_internal.h                        |    5 +-
  lib/Kconfig                                        |    1 +
  lib/debugobjects.c                                 |    5 +-
+ lib/dump_stack.c                                   |    4 +-
  lib/idr.c                                          |   36 +-
  lib/locking-selftest.c                             |   50 +
  lib/percpu_ida.c                                   |   20 +-
@@ -412,7 +415,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/soc/intel/atom/sst/sst.c                     |    4 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 407 files changed, 11674 insertions(+), 2006 deletions(-)
+ 410 files changed, 11682 insertions(+), 2014 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -2327,10 +2330,10 @@ index 5a92576..2fcc5a5 100644
  }
  EXPORT_SYMBOL(__kunmap_atomic);
 diff --git a/arch/mips/Kconfig b/arch/mips/Kconfig
-index f501665..db1f416 100644
+index a3b1ffe..9b95c9b 100644
 --- a/arch/mips/Kconfig
 +++ b/arch/mips/Kconfig
-@@ -2365,7 +2365,7 @@ config CPU_R4400_WORKAROUNDS
+@@ -2366,7 +2366,7 @@ config CPU_R4400_WORKAROUNDS
  #
  config HIGHMEM
  	bool "High Memory Support"
@@ -2679,7 +2682,7 @@ index de65f66..ec2df4b 100644
  
  #define kmap_atomic_prot(page, prot)	kmap_atomic(page)
 diff --git a/arch/parisc/kernel/traps.c b/arch/parisc/kernel/traps.c
-index 47ee620..6548fd1 100644
+index 7f67c4c..b99b39f 100644
 --- a/arch/parisc/kernel/traps.c
 +++ b/arch/parisc/kernel/traps.c
 @@ -26,9 +26,9 @@
@@ -2693,7 +2696,7 @@ index 47ee620..6548fd1 100644
  #include <asm/io.h>
  #include <asm/irq.h>
  #include <asm/traps.h>
-@@ -800,7 +800,7 @@ void notrace handle_interruption(int code, struct pt_regs *regs)
+@@ -796,7 +796,7 @@ void notrace handle_interruption(int code, struct pt_regs *regs)
  	     * unless pagefault_disable() was called before.
  	     */
  
@@ -4553,6 +4556,68 @@ index 20190bd..9d46f9a 100644
  	if (!zalloc_cpumask_var(&mce_device_initialized, GFP_KERNEL)) {
  		err = -ENOMEM;
  		goto err_out;
+diff --git a/arch/x86/kernel/dumpstack_32.c b/arch/x86/kernel/dumpstack_32.c
+index 464ffd6..00db1aa 100644
+--- a/arch/x86/kernel/dumpstack_32.c
++++ b/arch/x86/kernel/dumpstack_32.c
+@@ -42,7 +42,7 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
+ 		unsigned long *stack, unsigned long bp,
+ 		const struct stacktrace_ops *ops, void *data)
+ {
+-	const unsigned cpu = get_cpu();
++	const unsigned cpu = get_cpu_light();
+ 	int graph = 0;
+ 	u32 *prev_esp;
+ 
+@@ -86,7 +86,7 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
+ 			break;
+ 		touch_nmi_watchdog();
+ 	}
+-	put_cpu();
++	put_cpu_light();
+ }
+ EXPORT_SYMBOL(dump_trace);
+ 
+diff --git a/arch/x86/kernel/dumpstack_64.c b/arch/x86/kernel/dumpstack_64.c
+index 5f1c626..c331e3f 100644
+--- a/arch/x86/kernel/dumpstack_64.c
++++ b/arch/x86/kernel/dumpstack_64.c
+@@ -152,7 +152,7 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
+ 		unsigned long *stack, unsigned long bp,
+ 		const struct stacktrace_ops *ops, void *data)
+ {
+-	const unsigned cpu = get_cpu();
++	const unsigned cpu = get_cpu_light();
+ 	struct thread_info *tinfo;
+ 	unsigned long *irq_stack = (unsigned long *)per_cpu(irq_stack_ptr, cpu);
+ 	unsigned long dummy;
+@@ -241,7 +241,7 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
+ 	 * This handles the process stack:
+ 	 */
+ 	bp = ops->walk_stack(tinfo, stack, bp, ops, data, NULL, &graph);
+-	put_cpu();
++	put_cpu_light();
+ }
+ EXPORT_SYMBOL(dump_trace);
+ 
+@@ -255,7 +255,7 @@ show_stack_log_lvl(struct task_struct *task, struct pt_regs *regs,
+ 	int cpu;
+ 	int i;
+ 
+-	preempt_disable();
++	migrate_disable();
+ 	cpu = smp_processor_id();
+ 
+ 	irq_stack_end	= (unsigned long *)(per_cpu(irq_stack_ptr, cpu));
+@@ -291,7 +291,7 @@ show_stack_log_lvl(struct task_struct *task, struct pt_regs *regs,
+ 			pr_cont(" %016lx", *stack++);
+ 		touch_nmi_watchdog();
+ 	}
+-	preempt_enable();
++	migrate_enable();
+ 
+ 	pr_cont("\n");
+ 	show_trace_log_lvl(task, regs, sp, bp, log_lvl);
 diff --git a/arch/x86/kernel/entry_32.S b/arch/x86/kernel/entry_32.S
 index 1c30976..8612b31 100644
 --- a/arch/x86/kernel/entry_32.S
@@ -5512,7 +5577,7 @@ index bb3ed48..628c6c1 100644
  
  void blk_mq_init_cpu_notifier(struct blk_mq_cpu_notifier *notifier,
 diff --git a/block/blk-mq.c b/block/blk-mq.c
-index 594eea0..1f469b3 100644
+index 2dc1fd6..c473bd1 100644
 --- a/block/blk-mq.c
 +++ b/block/blk-mq.c
 @@ -88,7 +88,7 @@ static int blk_mq_queue_enter(struct request_queue *q, gfp_t gfp)
@@ -6621,7 +6686,7 @@ index f7929e7..8ea68ad 100644
  #else
  	/* Since UP may be pre-empted, we cannot assume that we own the lock */
 diff --git a/drivers/gpu/drm/i915/intel_display.c b/drivers/gpu/drm/i915/intel_display.c
-index d0f3cbc..3002759 100644
+index 57c8878..4021633 100644
 --- a/drivers/gpu/drm/i915/intel_display.c
 +++ b/drivers/gpu/drm/i915/intel_display.c
 @@ -10086,7 +10086,7 @@ void intel_check_page_flip(struct drm_device *dev, int pipe)
@@ -6899,10 +6964,10 @@ index 4d20088..98b64ed 100644
  	Allows a block device to be used as cache for other devices; uses
  	a btree for indexing and the layout is optimized for SSDs.
 diff --git a/drivers/md/dm.c b/drivers/md/dm.c
-index 2caf492..9275239 100644
+index e8d8456..08e3855 100644
 --- a/drivers/md/dm.c
 +++ b/drivers/md/dm.c
-@@ -2143,7 +2143,7 @@ static void dm_request_fn(struct request_queue *q)
+@@ -2139,7 +2139,7 @@ static void dm_request_fn(struct request_queue *q)
  		/* Establish tio->ti before queuing work (map_tio_request) */
  		tio->ti = ti;
  		queue_kthread_work(&md->kworker, &tio->work);
@@ -8318,7 +8383,7 @@ index fb26674..d42fc08 100644
  	 * If we have less than the fifo 'half-full' threshold to transfer,
  	 * trigger a PIO interrupt as soon as any data is available.
 diff --git a/drivers/mmc/host/sdhci.c b/drivers/mmc/host/sdhci.c
-index 9231cdf..f09bc10 100644
+index bec8a30..acd8c62 100644
 --- a/drivers/mmc/host/sdhci.c
 +++ b/drivers/mmc/host/sdhci.c
 @@ -2691,6 +2691,31 @@ static irqreturn_t sdhci_thread_irq(int irq, void *dev_id)
@@ -8364,7 +8429,7 @@ index 9231cdf..f09bc10 100644
  		if (ret)
  			return ret;
  	} else {
-@@ -3417,8 +3440,7 @@ int sdhci_add_host(struct sdhci_host *host)
+@@ -3421,8 +3444,7 @@ int sdhci_add_host(struct sdhci_host *host)
  
  	sdhci_init(host, 0);
  
@@ -8979,10 +9044,10 @@ index 7f49172..f9d192f 100644
  
  static int __init
 diff --git a/drivers/usb/core/hcd.c b/drivers/usb/core/hcd.c
-index 45a915c..69398f9 100644
+index 1c1385e..ab14f84 100644
 --- a/drivers/usb/core/hcd.c
 +++ b/drivers/usb/core/hcd.c
-@@ -1681,9 +1681,9 @@ static void __usb_hcd_giveback_urb(struct urb *urb)
+@@ -1684,9 +1684,9 @@ static void __usb_hcd_giveback_urb(struct urb *urb)
  	 * and no one may trigger the above deadlock situation when
  	 * running complete() in tasklet.
  	 */
@@ -8995,10 +9060,10 @@ index 45a915c..69398f9 100644
  	usb_anchor_resume_wakeups(anchor);
  	atomic_dec(&urb->use_count);
 diff --git a/drivers/usb/gadget/function/f_fs.c b/drivers/usb/gadget/function/f_fs.c
-index 45b8c8b..40223b5 100644
+index 6e7be91..f51bb89 100644
 --- a/drivers/usb/gadget/function/f_fs.c
 +++ b/drivers/usb/gadget/function/f_fs.c
-@@ -1403,7 +1403,7 @@ static void ffs_data_put(struct ffs_data *ffs)
+@@ -1405,7 +1405,7 @@ static void ffs_data_put(struct ffs_data *ffs)
  		pr_info("%s(): freeing\n", __func__);
  		ffs_data_clear(ffs);
  		BUG_ON(waitqueue_active(&ffs->ev.waitq) ||
@@ -9205,7 +9270,7 @@ index c7a5602..2907544 100644
  		__this_cpu_inc(bh_accounting.nr);
  		recalc_bh_state();
 diff --git a/fs/dcache.c b/fs/dcache.c
-index 50bb3c2..e1d20e1 100644
+index 5d03eb0..c1dad92 100644
 --- a/fs/dcache.c
 +++ b/fs/dcache.c
 @@ -19,6 +19,7 @@
@@ -9225,7 +9290,7 @@ index 50bb3c2..e1d20e1 100644
  	return dentry; /* try again with same dentry */
  }
  
-@@ -2392,7 +2393,7 @@ again:
+@@ -2395,7 +2396,7 @@ again:
  	if (dentry->d_lockref.count == 1) {
  		if (!spin_trylock(&inode->i_lock)) {
  			spin_unlock(&dentry->d_lock);
@@ -9286,7 +9351,7 @@ index 08c0304..95debd7 100644
  
  		/*
 diff --git a/fs/jbd2/checkpoint.c b/fs/jbd2/checkpoint.c
-index 988b32e..6f691c2 100644
+index 4227dc4..9c00e2e 100644
 --- a/fs/jbd2/checkpoint.c
 +++ b/fs/jbd2/checkpoint.c
 @@ -116,6 +116,8 @@ void __jbd2_log_wait_for_space(journal_t *journal)
@@ -9299,7 +9364,7 @@ index 988b32e..6f691c2 100644
  
  		/*
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 02c6875..c246b29 100644
+index fce3cc1..2893702 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -14,6 +14,7 @@
@@ -9558,7 +9623,7 @@ index 86c12c9..8ca9389 100644
  
  #endif /* _LINUX_BH_H */
 diff --git a/include/linux/buffer_head.h b/include/linux/buffer_head.h
-index 73b4522..ea72f52 100644
+index e6797de..6d25afd 100644
 --- a/include/linux/buffer_head.h
 +++ b/include/linux/buffer_head.h
 @@ -75,8 +75,52 @@ struct buffer_head {
@@ -17246,10 +17311,10 @@ index 8d7a1ef..db920b1 100644
  	BUG_ON(irqs_disabled());
  
 diff --git a/kernel/printk/printk.c b/kernel/printk/printk.c
-index c099b08..6062a04 100644
+index bff0169..c2d5877 100644
 --- a/kernel/printk/printk.c
 +++ b/kernel/printk/printk.c
-@@ -1162,6 +1162,7 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+@@ -1163,6 +1163,7 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
  {
  	char *text;
  	int len = 0;
@@ -17257,7 +17322,7 @@ index c099b08..6062a04 100644
  
  	text = kmalloc(LOG_LINE_MAX + PREFIX_MAX, GFP_KERNEL);
  	if (!text)
-@@ -1173,7 +1174,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+@@ -1174,7 +1175,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
  		u64 seq;
  		u32 idx;
  		enum log_flags prev;
@@ -17273,7 +17338,7 @@ index c099b08..6062a04 100644
  		if (clear_seq < log_first_seq) {
  			/* messages are gone, move to first available one */
  			clear_seq = log_first_seq;
-@@ -1194,6 +1202,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+@@ -1195,6 +1203,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
  			prev = msg->flags;
  			idx = log_next(idx);
  			seq++;
@@ -17288,7 +17353,7 @@ index c099b08..6062a04 100644
  		}
  
  		/* move first record forward until length fits into the buffer */
-@@ -1207,6 +1223,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+@@ -1208,6 +1224,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
  			prev = msg->flags;
  			idx = log_next(idx);
  			seq++;
@@ -17303,7 +17368,7 @@ index c099b08..6062a04 100644
  		}
  
  		/* last message fitting into this dump */
-@@ -1247,6 +1271,7 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+@@ -1248,6 +1272,7 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
  		clear_seq = log_next_seq;
  		clear_idx = log_next_idx;
  	}
@@ -17311,7 +17376,7 @@ index c099b08..6062a04 100644
  	raw_spin_unlock_irq(&logbuf_lock);
  
  	kfree(text);
-@@ -1404,6 +1429,7 @@ static void call_console_drivers(int level, const char *text, size_t len)
+@@ -1401,6 +1426,7 @@ static void call_console_drivers(int level, const char *text, size_t len)
  	if (!console_drivers)
  		return;
  
@@ -17319,7 +17384,7 @@ index c099b08..6062a04 100644
  	for_each_console(con) {
  		if (exclusive_console && con != exclusive_console)
  			continue;
-@@ -1416,6 +1442,7 @@ static void call_console_drivers(int level, const char *text, size_t len)
+@@ -1413,6 +1439,7 @@ static void call_console_drivers(int level, const char *text, size_t len)
  			continue;
  		con->write(con, text, len);
  	}
@@ -17327,7 +17392,7 @@ index c099b08..6062a04 100644
  }
  
  /*
-@@ -1476,6 +1503,15 @@ static inline int can_use_console(unsigned int cpu)
+@@ -1473,6 +1500,15 @@ static inline int can_use_console(unsigned int cpu)
  static int console_trylock_for_printk(void)
  {
  	unsigned int cpu = smp_processor_id();
@@ -17343,7 +17408,7 @@ index c099b08..6062a04 100644
  
  	if (!console_trylock())
  		return 0;
-@@ -1610,6 +1646,62 @@ static size_t cont_print_text(char *text, size_t size)
+@@ -1607,6 +1643,62 @@ static size_t cont_print_text(char *text, size_t size)
  	return textlen;
  }
  
@@ -17406,7 +17471,7 @@ index c099b08..6062a04 100644
  asmlinkage int vprintk_emit(int facility, int level,
  			    const char *dict, size_t dictlen,
  			    const char *fmt, va_list args)
-@@ -1626,6 +1718,13 @@ asmlinkage int vprintk_emit(int facility, int level,
+@@ -1623,6 +1715,13 @@ asmlinkage int vprintk_emit(int facility, int level,
  	/* cpu currently holding logbuf_lock in this function */
  	static unsigned int logbuf_cpu = UINT_MAX;
  
@@ -17420,7 +17485,7 @@ index c099b08..6062a04 100644
  	if (level == LOGLEVEL_SCHED) {
  		level = LOGLEVEL_DEFAULT;
  		in_sched = true;
-@@ -1767,8 +1866,7 @@ asmlinkage int vprintk_emit(int facility, int level,
+@@ -1764,8 +1863,7 @@ asmlinkage int vprintk_emit(int facility, int level,
  		 * console_sem which would prevent anyone from printing to
  		 * console
  		 */
@@ -17430,7 +17495,7 @@ index c099b08..6062a04 100644
  		/*
  		 * Try to acquire and then immediately release the console
  		 * semaphore.  The release will print out buffers and wake up
-@@ -1776,7 +1874,7 @@ asmlinkage int vprintk_emit(int facility, int level,
+@@ -1773,7 +1871,7 @@ asmlinkage int vprintk_emit(int facility, int level,
  		 */
  		if (console_trylock_for_printk())
  			console_unlock();
@@ -17439,7 +17504,7 @@ index c099b08..6062a04 100644
  		lockdep_on();
  	}
  
-@@ -1905,26 +2003,6 @@ DEFINE_PER_CPU(printk_func_t, printk_func);
+@@ -1902,26 +2000,6 @@ DEFINE_PER_CPU(printk_func_t, printk_func);
  
  #endif /* CONFIG_PRINTK */
  
@@ -17466,7 +17531,7 @@ index c099b08..6062a04 100644
  static int __add_preferred_console(char *name, int idx, char *options,
  				   char *brl_options)
  {
-@@ -2146,11 +2224,16 @@ static void console_cont_flush(char *text, size_t size)
+@@ -2143,11 +2221,16 @@ static void console_cont_flush(char *text, size_t size)
  		goto out;
  
  	len = cont_print_text(text, size);
@@ -17483,7 +17548,7 @@ index c099b08..6062a04 100644
  	return;
  out:
  	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
-@@ -2238,12 +2321,17 @@ skip:
+@@ -2235,12 +2318,17 @@ skip:
  		console_idx = log_next(console_idx);
  		console_seq++;
  		console_prev = msg->flags;
@@ -23987,7 +24052,7 @@ index 0533049..5088d1c 100644
  
  void
 diff --git a/kernel/trace/trace.h b/kernel/trace/trace.h
-index d261201..a6784ca 100644
+index 921691c..c0f3c56 100644
 --- a/kernel/trace/trace.h
 +++ b/kernel/trace/trace.h
 @@ -120,6 +120,7 @@ struct kretprobe_trace_entry_head {
@@ -24903,6 +24968,28 @@ index 547f7f9..8fcdbc2 100644
  
  	db = get_bucket((unsigned long) addr);
  
+diff --git a/lib/dump_stack.c b/lib/dump_stack.c
+index 6745c62..7ccbc6f 100644
+--- a/lib/dump_stack.c
++++ b/lib/dump_stack.c
+@@ -33,7 +33,7 @@ asmlinkage __visible void dump_stack(void)
+ 	 * Permit this cpu to perform nested stack dumps while serialising
+ 	 * against other CPUs
+ 	 */
+-	preempt_disable();
++	migrate_disable();
+ 
+ retry:
+ 	cpu = smp_processor_id();
+@@ -52,7 +52,7 @@ retry:
+ 	if (!was_locked)
+ 		atomic_set(&dump_lock, -1);
+ 
+-	preempt_enable();
++	migrate_enable();
+ }
+ #else
+ asmlinkage __visible void dump_stack(void)
 diff --git a/lib/idr.c b/lib/idr.c
 index 5335c43..d0681a3 100644
 --- a/lib/idr.c
@@ -25324,11 +25411,11 @@ index fe9a325..3a5f2b3 100644
   *
 diff --git a/localversion-rt b/localversion-rt
 new file mode 100644
-index 0000000..1445cd6
+index 0000000..0efe7ba
 --- /dev/null
 +++ b/localversion-rt
 @@ -0,0 +1 @@
-+-rt3
++-rt5
 diff --git a/mm/Kconfig b/mm/Kconfig
 index 390214d..0cc4537 100644
 --- a/mm/Kconfig
@@ -25544,10 +25631,10 @@ index a04225d..8bd68b5 100644
  
  /**
 diff --git a/mm/memory.c b/mm/memory.c
-index 22e037e..17734c3 100644
+index 2a9e098..3fc6efd 100644
 --- a/mm/memory.c
 +++ b/mm/memory.c
-@@ -3737,7 +3737,7 @@ void print_vma_addr(char *prefix, unsigned long ip)
+@@ -3743,7 +3743,7 @@ void print_vma_addr(char *prefix, unsigned long ip)
  }
  
  #if defined(CONFIG_PROVE_LOCKING) || defined(CONFIG_DEBUG_ATOMIC_SLEEP)
@@ -25556,7 +25643,7 @@ index 22e037e..17734c3 100644
  {
  	/*
  	 * Some code (nfs/sunrpc) uses socket ops on kernel memory while
-@@ -3747,21 +3747,15 @@ void might_fault(void)
+@@ -3753,21 +3753,15 @@ void might_fault(void)
  	 */
  	if (segment_eq(get_fs(), KERNEL_DS))
  		return;
@@ -27232,7 +27319,7 @@ index fe1610d..ef1eb20 100644
  		}
  		prb_close_block(pkc, pbd, po, status);
 diff --git a/net/rds/ib_rdma.c b/net/rds/ib_rdma.c
-index 273b8bf..f64b6e8 100644
+index 657ba9f..c8faaf3 100644
 --- a/net/rds/ib_rdma.c
 +++ b/net/rds/ib_rdma.c
 @@ -34,6 +34,7 @@
@@ -27319,7 +27406,7 @@ index 6fdc97e..523e042 100755
  
  # Truncate to maximum length
 diff --git a/sound/core/pcm_native.c b/sound/core/pcm_native.c
-index d126c03..5dce6d8 100644
+index 75888dd..ec8486c 100644
 --- a/sound/core/pcm_native.c
 +++ b/sound/core/pcm_native.c
 @@ -123,7 +123,7 @@ EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock);
@@ -27453,5 +27540,5 @@ index 9097741..de93076 100644
  			if (!kvm_vcpu_eligible_for_directed_yield(vcpu))
  				continue;
 -- 
-2.4.6
+2.5.0
 

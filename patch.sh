@@ -76,14 +76,14 @@ local_patch () {
 
 rt () {
 	echo "dir: rt"
-	rt_patch="4.1.3-rt3"
+	rt_patch="4.1.5-rt5"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/4.1/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1
 		rm -rf patch-${rt_patch}.patch.xz
 
-		sed -i -e 's:rt6:rt3:g' ../patches/rt/0002-rt-we-append-rt-on-our-own.patch
+		sed -i -e 's:rt3:rt5:g' ../patches/rt/0002-rt-we-append-rt-on-our-own.patch
 		exit 2
 	fi
 
@@ -97,11 +97,16 @@ reverts () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
+
 	${git} "${DIR}/patches/reverts/0001-Revert-ARM-dts-am335x-boneblack-disable-RTC-only-sle.patch"
 	${git} "${DIR}/patches/reverts/0002-Revert-spi-spidev-Warn-loudly-if-instantiated-from-D.patch"
+#	#udoo:
+#	${git} "${DIR}/patches/reverts/0003-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
+	#am335x causing random reboots...
+	${git} "${DIR}/patches/reverts/0004-Revert-usb-musb-dsps-just-start-polling-already.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
+		number=4
 		cleanup
 	fi
 }
@@ -234,8 +239,6 @@ fixes () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/fixes/0001-trusty-gcc-4.8-4.8.2-19ubuntu1-has-fix.patch"
-
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=1
 		cleanup
@@ -318,8 +321,12 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0007-nvmem-qfprom-Add-bindings-for-qfprom.patch"
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0008-nvmem-sunxi-Move-the-SID-driver-to-the-nvmem-framewo.patch"
 
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0009-nvmem-make-default-user-binary-file-root-access-only.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0010-nvmem-set-the-size-for-the-nvmem-binary-file.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0011-nvmem-add-permission-flags-in-nvmem_config.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=8
+		number=11
 		cleanup
 	fi
 
@@ -354,21 +361,20 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/0019-doc-ABI-bone_capemgr-sysfs-API.patch"
 	${git} "${DIR}/patches/bbb_overlays/0020-MAINTAINERS-Beaglebone-capemanager-maintainer.patch"
 	${git} "${DIR}/patches/bbb_overlays/0021-arm-dts-Enable-beaglebone-cape-manager.patch"
+	${git} "${DIR}/patches/bbb_overlays/0022-gcl-Fix-resource-linking.patch"
+	${git} "${DIR}/patches/bbb_overlays/0023-of-overlay-Implement-indirect-target-support.patch"
+	${git} "${DIR}/patches/bbb_overlays/0024-of-unittest-Add-indirect-overlay-target-test.patch"
+	${git} "${DIR}/patches/bbb_overlays/0025-doc-dt-Document-the-indirect-overlay-method.patch"
+	${git} "${DIR}/patches/bbb_overlays/0026-of-overlay-Introduce-target-root-capability.patch"
+	${git} "${DIR}/patches/bbb_overlays/0027-of-unittest-Unit-tests-for-target-root-overlays.patch"
+	${git} "${DIR}/patches/bbb_overlays/0028-doc-dt-Document-the-target-root-overlay-method.patch"
+	${git} "${DIR}/patches/bbb_overlays/0029-of-dynamic-Add-__of_node_dupv.patch"
+	${git} "${DIR}/patches/bbb_overlays/0030-of-changesets-Introduce-changeset-helper-methods.patch"
+	${git} "${DIR}/patches/bbb_overlays/0031-RFC-Device-overlay-manager-PCI-USB-DT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-	${git} "${DIR}/patches/bbb_overlays/0022-boneblack-defconfig.patch"
+	${git} "${DIR}/patches/bbb_overlays/0032-boneblack-defconfig.patch"
 	fi
-
-	${git} "${DIR}/patches/bbb_overlays/0023-gcl-Fix-resource-linking.patch"
-	${git} "${DIR}/patches/bbb_overlays/0024-of-overlay-Implement-indirect-target-support.patch"
-	${git} "${DIR}/patches/bbb_overlays/0025-of-unittest-Add-indirect-overlay-target-test.patch"
-	${git} "${DIR}/patches/bbb_overlays/0026-doc-dt-Document-the-indirect-overlay-method.patch"
-	${git} "${DIR}/patches/bbb_overlays/0027-of-overlay-Introduce-target-root-capability.patch"
-	${git} "${DIR}/patches/bbb_overlays/0028-of-unittest-Unit-tests-for-target-root-overlays.patch"
-	${git} "${DIR}/patches/bbb_overlays/0029-doc-dt-Document-the-target-root-overlay-method.patch"
-	${git} "${DIR}/patches/bbb_overlays/0030-of-dynamic-Add-__of_node_dupv.patch"
-	${git} "${DIR}/patches/bbb_overlays/0031-of-changesets-Introduce-changeset-helper-methods.patch"
-	${git} "${DIR}/patches/bbb_overlays/0032-RFC-Device-overlay-manager-PCI-USB-DT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=32
@@ -627,7 +633,7 @@ ti
 #dts
 #wand
 #errata
-fixes
+#fixes
 pru
 bbb_overlays
 beaglebone
