@@ -57,94 +57,32 @@ make_menuconfig () {
 
 make_deb () {
 	cd ${DIR}/KERNEL/
-	echo "-----------------------------"
-	echo "make -j${CORES} ARCH=arm KBUILD_DEBARCH=${DEBARCH} LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" KDEB_PKGVERSION=1${DISTRO} deb-pkg"
-	echo "-----------------------------"
-	fakeroot make -j${CORES} ARCH=arm KBUILD_DEBARCH=${DEBARCH} LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" KDEB_PKGVERSION=1${DISTRO} deb-pkg
-	mv ${DIR}/*.deb ${DIR}/deploy/
 
-	unset DTBS
-	cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs:" >/dev/null 2>&1 && DTBS=enable
-
-	#FIXME: Starting with v3.15-rc0
-	unset has_dtbs_install
-	if [ "x${DTBS}" = "x" ] ; then
-		cat ${DIR}/KERNEL/arch/arm/Makefile | grep "dtbs dtbs_install:" >/dev/null 2>&1 && DTBS=enable
-		if [ "x${DTBS}" = "xenable" ] ; then
-			has_dtbs_install=enable
-		fi
+	deb_distro=$(lsb_release -cs | sed 's/\//_/g')
+	if [ "x${deb_distro}" = "xn_a" ] ; then
+		deb_distro="unstable"
 	fi
 
-	if [ "x${DTBS}" = "xenable" ] ; then
-		echo "-----------------------------"
+	echo "-----------------------------"
+	echo "make -j${CORES} ARCH=arm KBUILD_DEBARCH=${DEBARCH} KDEB_CHANGELOG_DIST=${deb_distro} LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" KDEB_PKGVERSION=1${DISTRO} deb-pkg"
+	echo "-----------------------------"
+	fakeroot make -j${CORES} ARCH=arm KBUILD_DEBARCH=${DEBARCH} KDEB_CHANGELOG_DIST=${deb_distro} LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" KDEB_PKGVERSION=1${DISTRO} deb-pkg
+	mv ${DIR}/*.deb ${DIR}/deploy/
+	mv ${DIR}/*.debian.tar.gz ${DIR}/deploy/
+	mv ${DIR}/*.dsc ${DIR}/deploy/
+	mv ${DIR}/*.changes ${DIR}/deploy/
+	mv ${DIR}/*.orig.tar.gz ${DIR}/deploy/
+
+	if grep -q dtbs "${DIR}/KERNEL/arch/arm/Makefile"; then
 		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs"
 		echo "-----------------------------"
 		make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs
-		ls arch/arm/boot/* | grep dtb >/dev/null 2>&1 || unset DTBS
+		echo "-----------------------------"
 	fi
 
 	KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
 
 	cd ${DIR}/
-}
-
-make_pkg () {
-	cd ${DIR}/KERNEL/
-
-	deployfile="-${pkg}.tar.gz"
-	tar_options="--create --gzip --file"
-
-	if [ -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
-		rm -rf "${DIR}/deploy/${KERNEL_UTS}${deployfile}" || true
-	fi
-
-	if [ -d ${DIR}/deploy/tmp ] ; then
-		rm -rf ${DIR}/deploy/tmp || true
-	fi
-	mkdir -p ${DIR}/deploy/tmp
-
-	echo "-----------------------------"
-	echo "Building ${pkg} archive..."
-
-	case "${pkg}" in
-	modules)
-		make -s ARCH=arm CROSS_COMPILE="${CC}" modules_install INSTALL_MOD_PATH=${DIR}/deploy/tmp
-		;;
-	firmware)
-		make -s ARCH=arm CROSS_COMPILE="${CC}" firmware_install INSTALL_FW_PATH=${DIR}/deploy/tmp
-		;;
-	dtbs)
-		if [ "x${has_dtbs_install}" = "xenable" ] ; then
-			make -s ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs_install INSTALL_DTBS_PATH=${DIR}/deploy/tmp
-		else
-			find ./arch/arm/boot/ -iname "*.dtb" -exec cp -v '{}' ${DIR}/deploy/tmp/ \;
-		fi
-		;;
-	esac
-
-	echo "Compressing ${KERNEL_UTS}${deployfile}..."
-	cd ${DIR}/deploy/tmp
-	tar ${tar_options} ../${KERNEL_UTS}${deployfile} *
-
-	cd ${DIR}/
-	rm -rf ${DIR}/deploy/tmp || true
-
-	if [ ! -f "${DIR}/deploy/${KERNEL_UTS}${deployfile}" ] ; then
-		export ERROR_MSG="File Generation Failure: [${KERNEL_UTS}${deployfile}]"
-		/bin/sh -e "${DIR}/scripts/error.sh" && { exit 1 ; }
-	else
-		ls -lh "${DIR}/deploy/${KERNEL_UTS}${deployfile}"
-	fi
-}
-
-make_firmware_pkg () {
-	pkg="firmware"
-	make_pkg
-}
-
-make_dtbs_pkg () {
-	pkg="dtbs"
-	make_pkg
 }
 
 /bin/sh -e ${DIR}/tools/host_det.sh || { exit 1 ; }
@@ -204,7 +142,7 @@ if [ ! ${AUTO_BUILD} ] ; then
 	make_menuconfig
 fi
 make_deb
-make_firmware_pkg
-if [ "x${DTBS}" = "xenable" ] ; then
-	make_dtbs_pkg
-fi
+echo "-----------------------------"
+echo "Script Complete"
+echo "${KERNEL_UTS}" > kernel_version
+echo "-----------------------------"
