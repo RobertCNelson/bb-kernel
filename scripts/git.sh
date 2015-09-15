@@ -270,17 +270,10 @@ if [ "x${git_has_local}" = "xenable" ] ; then
 	fi
 fi
 
-if [ "${GIT_OVER_HTTP}" ] ; then
-	torvalds_linux="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-	linux_stable="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
-	xenomai_ipipe="https://git.xenomai.org/ipipe.git"
-	xenomai_2_6="https://git.xenomai.org/xenomai-2.6.git"
-else
-	torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-	linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
-	xenomai_ipipe="git://git.xenomai.org/ipipe.git"
-	xenomai_2_6="git://git.xenomai.org/xenomai-2.6.git"
-fi
+torvalds_linux="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+xenomai_ipipe="https://git.xenomai.org/ipipe.git"
+xenomai_2_6="https://git.xenomai.org/xenomai-2.6.git"
 
 git_kernel
 git_xenomai
