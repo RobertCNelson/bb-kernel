@@ -945,9 +945,12 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0010-modified-drivers-tty-serial-omap-serial.c-the-change.patch"
 	${git} "${DIR}/patches/fixes/0011-PWM-period-control.patch"
 	${git} "${DIR}/patches/fixes/0012-PWM-period-control.patch"
+	${git} "${DIR}/patches/fixes/0013-Add-MODULE_ALIAS.patch"
+	${git} "${DIR}/patches/fixes/0014-Add-MODULE_ALIAS.patch"
+	${git} "${DIR}/patches/fixes/0015-Add-MODULE_ALIAS.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=12
+		number=15
 		cleanup
 	fi
 
