@@ -60,6 +60,14 @@ cleanup () {
 	exit 2
 }
 
+pick () {
+	if [ ! -d ../patches/${pick_dir} ] ; then
+		mkdir -p ../patches/${pick_dir}
+	fi
+	git format-patch -1 ${SHA} --start-number ${num} -o ../patches/${pick_dir}
+	num=$(($num+1))
+}
+
 external_git () {
 	git_tag=""
 	echo "pulling: ${git_tag}"
@@ -1107,19 +1115,9 @@ packaging () {
 		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
 		git commit -a -m 'packaging: sync builddeb changes' -s
 		git format-patch -1 -o "${DIR}/patches/packaging"
+		exit 2
 	else
 		${git} "${DIR}/patches/packaging/0001-packaging-sync-builddeb-changes.patch"
-	fi
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/packaging/0002-deb-pkg-no-dtbs_install.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
-		cleanup
 	fi
 }
 
