@@ -943,9 +943,11 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0008-deb-pkg-sync-with-v3.14.patch"
 	${git} "${DIR}/patches/fixes/0009-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
 	${git} "${DIR}/patches/fixes/0010-modified-drivers-tty-serial-omap-serial.c-the-change.patch"
+	${git} "${DIR}/patches/fixes/0011-PWM-period-control.patch"
+	${git} "${DIR}/patches/fixes/0012-PWM-period-control.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=10
+		number=12
 		cleanup
 	fi
 
