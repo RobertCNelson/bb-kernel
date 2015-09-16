@@ -949,9 +949,10 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0013-Add-MODULE_ALIAS.patch"
 	${git} "${DIR}/patches/fixes/0014-Add-MODULE_ALIAS.patch"
 	${git} "${DIR}/patches/fixes/0015-Add-MODULE_ALIAS.patch"
+	${git} "${DIR}/patches/fixes/0016-Updated-defines-to-fully-work-with-BeagleBone.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=15
+		number=16
 		cleanup
 	fi
 
