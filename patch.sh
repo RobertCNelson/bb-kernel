@@ -1082,6 +1082,22 @@ treewide () {
 	fi
 }
 
+gcc5 () {
+	echo "dir: gcc5"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/gcc5/0001-kernel-add-support-for-gcc-5.patch"
+	${git} "${DIR}/patches/gcc5/0002-kernel-use-the-gnu89-standard-explicitly.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=2
+		cleanup
+	fi
+}
+
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
 	echo "dir: bb_view_lcd"
@@ -1111,6 +1127,7 @@ probotix
 pcm512x
 beagleboy
 treewide
+gcc5
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
