@@ -1050,7 +1050,7 @@ pcm512x () {
 }
 
 beagleboy () {
-	echo "dir: beagleboy"
+	echo "dir: BeagleBoy"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
