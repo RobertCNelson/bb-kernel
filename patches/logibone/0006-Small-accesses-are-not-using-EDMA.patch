@@ -1,0 +1,64 @@
+From 8215c646ae861eec3c6b6f0ad3c461a6dda34037 Mon Sep 17 00:00:00 2001
+From: Jonathan Piat <piat.jonathan@gmail.com>
+Date: Tue, 17 Mar 2015 09:24:45 +0100
+Subject: [PATCH] Small accesses are not using EDMA
+
+---
+ drivers/misc/cape/beaglebone/logibone/main_dma.c |   24 ++++++++++++++--------
+ 1 file changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/misc/cape/beaglebone/logibone/main_dma.c b/drivers/misc/cape/beaglebone/logibone/main_dma.c
+index a86e779..17efa92 100644
+--- a/drivers/misc/cape/beaglebone/logibone/main_dma.c
++++ b/drivers/misc/cape/beaglebone/logibone/main_dma.c
+@@ -107,6 +107,10 @@ ssize_t writeMem(struct file *filp, const char *buf, size_t count, loff_t *f_pos
+ 	trgt_addr = (unsigned long) &(mem_to_write->base_addr[(*f_pos)]);
+ 	src_addr = (unsigned long) dmaphysbuf;
+ 
++	if(transfer_size <= 256){
++		if(copy_from_user(&(mem_to_write->virt_addr[(*f_pos)]), buf, transfer_size)) return -1; // could not copy all buffer
++		return transfer_size ;
++	}
+ 	if (copy_from_user(mem_to_write->dma_buf, buf, transfer_size)) {
+ 		return -1;
+ 	}
+@@ -116,8 +120,7 @@ ssize_t writeMem(struct file *filp, const char *buf, size_t count, loff_t *f_pos
+ #ifdef PROFILE
+ 		printk("Write \n");
+ 		start_profile();
+-#endif
+-
++#endif	
+ 		if (edma_memtomemcpy(transfer_size, src_addr, trgt_addr, mem_to_write->dma_chan) < 0) {
+ 			printk("%s: write: Failed to trigger EDMA transfer.\n", DEVICE_NAME);
+ 
+@@ -181,16 +184,19 @@ ssize_t readMem(struct file *filp, char *buf, size_t count, loff_t *f_pos)
+ 		printk("Read \n");
+ 		start_profile();
+ #endif
++		if(transfer_size <= 256){
++			if(copy_to_user(&buf[transferred], &(mem_to_read->virt_addr[(*f_pos)+transferred]), transfer_size)) return -1 ; // could not copy all buffer
++		}else{
++			if (edma_memtomemcpy(transfer_size, src_addr, trgt_addr, mem_to_read->dma_chan) < 0) {
+ 
+-		if (edma_memtomemcpy(transfer_size, src_addr, trgt_addr, mem_to_read->dma_chan) < 0) {
++				printk("%s: read: Failed to trigger EDMA transfer.\n", DEVICE_NAME);
+ 
+-			printk("%s: read: Failed to trigger EDMA transfer.\n", DEVICE_NAME);
++				return -1;
++			}
+ 
+-			return -1;
+-		}
+-
+-		if (copy_to_user(&buf[transferred], mem_to_read->dma_buf, transfer_size)) {
+-			return -1;
++			if (copy_to_user(&buf[transferred], mem_to_read->dma_buf, transfer_size)) {
++				return -1;
++			}
+ 		}
+ 
+ #ifdef PROFILE
+-- 
+1.7.9.5
+

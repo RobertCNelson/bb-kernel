@@ -363,6 +363,7 @@ am33x_after () {
 	${git} "${DIR}/patches/net/0007-net-cpsw-fix-irq_disable-with-threaded-interrupts.patch"
 	${git} "${DIR}/patches/net/0008-wireless-rtl8192cu-v4.0.2_9000.20130911.patch"
 	${git} "${DIR}/patches/net/0009-cpsw-search-for-phy.patch"
+	${git} "${DIR}/patches/net/0010-backport-patch-to-fix-kernel-panic-caused-by-c_can-driver.patch"
 
 	echo "dir: drm"
 	${git} "${DIR}/patches/drm/0001-am33xx-Add-clock-for-the-lcdc-DRM-driver.patch"
@@ -896,14 +897,19 @@ am33x_after () {
 	${git} "${DIR}/patches/capes/0034-cape-add-BB-BONE-AUDI-02-00A0-from-http-elinux.org-C.patch"
 	${git} "${DIR}/patches/capes/0035-cape-universaln-remove-P9_31.patch"
 	${git} "${DIR}/patches/capes/0036-cape-add-BB-BONE-HAS-00R1.patch"
+	${git} "${DIR}/patches/capes/0037-cape-add-BB-BONE-SERL-01-00A2.patch"
+	${git} "${DIR}/patches/capes/0038-cape-add-NL-AB-BBBC-00D0.patch"
+	${git} "${DIR}/patches/capes/0039-add-cape-MT-CAPE-01-still-needs-gpiolib-mtctrl-patch.patch"
+	${git} "${DIR}/patches/capes/0040-cape-LCD4-Fix-GPIO-buttons-Correct-errant-GPIO-setti.patch"
+	${git} "${DIR}/patches/capes/0041-capes-HDMI-Fix-incorrect-pinmux-register-for-GPIO1_2.patch"
+	${git} "${DIR}/patches/capes/0042-beaglebone-universal-io-sync-with-master-of-https-gi.patch"
+	${git} "${DIR}/patches/capes/0043-nimbelink-add-missing-ids.patch"
+	${git} "${DIR}/patches/capes/0044-capes-add-BB-MIKROBUS-01-00A1.patch"
 
-	${git} "${DIR}/patches/capes/0038-cape-add-BB-BONE-SERL-01-00A2.patch"
-	${git} "${DIR}/patches/capes/0039-cape-add-NL-AB-BBBC-00D0.patch"
-	${git} "${DIR}/patches/capes/0040-add-cape-MT-CAPE-01-still-needs-gpiolib-mtctrl-patch.patch"
-	${git} "${DIR}/patches/capes/0041-cape-LCD4-Fix-GPIO-buttons.patch"
-	${git} "${DIR}/patches/capes/0042-capes-HDMI-Fix-incorrect-pinmux-register-for-GPIO1_2.patch"
-	${git} "${DIR}/patches/capes/0043-beaglebone-universal-io-sync-with-master-of-https-gi.patch"
-	${git} "${DIR}/patches/capes/0044-nimbelink-add-missing-ids.patch"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=44
+		cleanup
+	fi
 
 	echo "dir: proto"
 	${git} "${DIR}/patches/proto/0001-add-new-default-pinmux-based-on-Proto-Cape.patch"
@@ -913,7 +919,8 @@ am33x_after () {
 	${git} "${DIR}/patches/logibone/0002-Adding-DTS-support-for-Logibone.patch"
 	${git} "${DIR}/patches/logibone/0003-Moving-from-bit-banged-configuration-to-SPI.patch"
 	${git} "${DIR}/patches/logibone/0004-removing-fpga-loading-interface-from-kernel-space.patch"
-
+	${git} "${DIR}/patches/logibone/0005-adding-pin-exlusive-property-to-device-tree-file.patch"
+#	${git} "${DIR}/patches/logibone/0006-Small-accesses-are-not-using-EDMA.patch"
 	echo "dir: BeagleLogic"
 	${git} "${DIR}/patches/BeagleLogic/0001-Add-DTS-for-BeagleLogic.patch"
 	${git} "${DIR}/patches/BeagleLogic/0002-Add-BeagleLogic-binding-functions-to-pru_rproc.patch"
@@ -935,11 +942,17 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0006-ti_am335x_tsc-touchscreen-jitter-fix.patch"
 	${git} "${DIR}/patches/fixes/0007-omap-RS485-support-by-Michael-Musset.patch"
 	${git} "${DIR}/patches/fixes/0008-deb-pkg-sync-with-v3.14.patch"
-
-	${git} "${DIR}/patches/fixes/0010-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
+	${git} "${DIR}/patches/fixes/0009-Fix-for-a-part-of-video-got-flipped-from-bottom-to-t.patch"
+	${git} "${DIR}/patches/fixes/0010-modified-drivers-tty-serial-omap-serial.c-the-change.patch"
+	${git} "${DIR}/patches/fixes/0011-PWM-period-control.patch"
+	${git} "${DIR}/patches/fixes/0012-PWM-period-control.patch"
+	${git} "${DIR}/patches/fixes/0013-Add-MODULE_ALIAS.patch"
+	${git} "${DIR}/patches/fixes/0014-Add-MODULE_ALIAS.patch"
+	${git} "${DIR}/patches/fixes/0015-Add-MODULE_ALIAS.patch"
+	${git} "${DIR}/patches/fixes/0016-Updated-defines-to-fully-work-with-BeagleBone.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=8
+		number=16
 		cleanup
 	fi
 
@@ -1010,10 +1023,78 @@ probotix () {
 	${git} "${DIR}/patches/probotix/0001-Add-Probotix-custom-LCD-device-tree-overlay.patch"
 }
 
+pcm512x () {
+	echo "dir: pcm512x"
+	${git} "${DIR}/patches/pcm512x/0001-ASoC-pcm512x-Add-PCM512x-driver.patch"
+	${git} "${DIR}/patches/pcm512x/0002-ASoC-pcm512x-More-constification.patch"
+	${git} "${DIR}/patches/pcm512x/0003-ASoC-pcm512x-Implement-paging-support.patch"
+	${git} "${DIR}/patches/pcm512x/0004-ASoC-pcm512x-Implement-analogue-volume-control.patch"
+	${git} "${DIR}/patches/pcm512x/0005-ASoC-pcm512x-Split-out-bus-drivers.patch"
+	${git} "${DIR}/patches/pcm512x/0006-ASoC-pcm512x-Fix-duplicate-const-warning.patch"
+	${git} "${DIR}/patches/pcm512x/0007-ASoC-pcm512x-Use-CONFIG_PM_RUNTIME-macro.patch"
+	${git} "${DIR}/patches/pcm512x/0008-ASoC-pcm512x-Replace-usage-deprecated-SOC_VALUE_ENUM.patch"
+	${git} "${DIR}/patches/pcm512x/0009-ASoC-pcm512x-Correct-Digital-Playback-control-names.patch"
+	${git} "${DIR}/patches/pcm512x/0010-ASoC-pcm512x-Trigger-auto-increment-of-register-addr.patch"
+	${git} "${DIR}/patches/pcm512x/0011-ASoC-pcm512x-Also-support-PCM514x-devices.patch"
+	${git} "${DIR}/patches/pcm512x/0012-ASoC-pcm512x-Fix-DSP-program-selection.patch"
+	${git} "${DIR}/patches/pcm512x/0013-ALSA-pcm-Add-snd_interval_ranges-and-snd_pcm_hw_cons.patch"
+	${git} "${DIR}/patches/pcm512x/0014-ASoC-pcm512x-Fix-spelling-of-register-field-names.patch"
+	${git} "${DIR}/patches/pcm512x/0015-ASoC-pcm512x-Support-mastering-BCLK-LRCLK-without-us.patch"
+	${git} "${DIR}/patches/pcm512x/0016-ASoC-pcm512x-Support-mastering-BCLK-LRCLK-using-the-.patch"
+	${git} "${DIR}/patches/pcm512x/0017-ASoC-pcm512x-Avoid-the-PLL-for-the-DAC-clock-if-poss.patch"
+	${git} "${DIR}/patches/pcm512x/0018-ASoC-pcm512x-Support-SND_SOC_DAIFMT_CBM_CFS.patch"
+	${git} "${DIR}/patches/pcm512x/0019-ASoC-pcm512x-Fixup-warning-splat.patch"
+	${git} "${DIR}/patches/pcm512x/0020-ASoC-pcm512x-Use-the-correct-range-constraints-for-S.patch"
+}
+
+beagleboy () {
+	echo "dir: BeagleBoy"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/BeagleBoy/0001-ST-lsm303dlhc-driver-added.patch"
+	${git} "${DIR}/patches/BeagleBoy/0002-ST-lsm303dlhc-header-file-moved-to-correct-location.patch"
+	${git} "${DIR}/patches/BeagleBoy/0003-ST-lsm303dlhc-patched-for-build-against-3.8-kernel.patch"
+	${git} "${DIR}/patches/BeagleBoy/0004-ST-lsm330-driver.patch"
+	${git} "${DIR}/patches/BeagleBoy/0005-ST-lsm330-added-to-build.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=5
+		cleanup
+	fi
+}
+
+treewide () {
+	#anything that touches every cape....
+	echo "dir: tree-wide"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+	${git} "${DIR}/patches/tree-wide/0001-add-am335x-bonegreen.patch"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+}
+
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
-	${git} "${DIR}/patches/capes/0037-capes-element14_bb_view_lcd_capes.patch"
-	${git} "${DIR}/patches/fixes/0009-sitara_red_blue_swap_workaround.patch"
+	echo "dir: bb_view_lcd"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/bb_view_lcd/0001-capes-element14_bb_view_lcd_capes.patch"
+	${git} "${DIR}/patches/bb_view_lcd/0002-sitara_red_blue_swap_workaround.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=2
+		cleanup
+	fi
 }
 
 xenomai () {
@@ -1074,6 +1155,10 @@ xenomai () {
 		number=4
 		cleanup
 	fi
+
+	${git} "${DIR}/patches/backports/0003-ARM-OMAP-Add-function-to-request-timer-by-node.patch"
+	${git} "${DIR}/patches/backports/0004-pps-use-an-external-clock-source-on-pin-P9.41-TCLKIN.patch"
+	${git} "${DIR}/patches/backports/0005-add-pps-gmtimer-from-https-github.com-ddrown-pps-gmt.patch"
 }
 
 am33x
@@ -1086,6 +1171,9 @@ sgx
 backports
 probotix
 xenomai
+pcm512x
+beagleboy
+treewide
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
