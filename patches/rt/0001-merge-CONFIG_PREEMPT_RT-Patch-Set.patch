@@ -1,6 +1,6 @@
-From def18baa41946db3912583ee87cceefe9eb4bb73 Mon Sep 17 00:00:00 2001
+From 062d178db54b19fe3bdc43a85f62a00ac281cff3 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 10 Sep 2015 11:37:23 -0500
+Date: Mon, 21 Sep 2015 13:04:29 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -21,6 +21,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm/kernel/entry-armv.S                       |   13 +-
  arch/arm/kernel/process.c                          |   24 +
  arch/arm/kernel/signal.c                           |    3 +-
+ arch/arm/kernel/smp.c                              |    5 +-
  arch/arm/kernel/unwind.c                           |   14 +-
  arch/arm/kvm/arm.c                                 |    4 +-
  arch/arm/kvm/psci.c                                |    4 +-
@@ -181,7 +182,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/misc/Makefile                              |    1 +
  drivers/misc/hwlat_detector.c                      | 1240 ++++++++++++++++++++
  drivers/mmc/host/mmci.c                            |    5 -
- drivers/mmc/host/sdhci.c                           |   32 +-
  drivers/net/ethernet/3com/3c59x.c                  |    8 +-
  drivers/net/ethernet/atheros/atl1c/atl1c_main.c    |    6 +-
  drivers/net/ethernet/atheros/atl1e/atl1e_main.c    |    3 +-
@@ -218,6 +218,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/namespace.c                                     |    8 +-
  fs/ntfs/aops.c                                     |   14 +-
  fs/timerfd.c                                       |    5 +-
+ fs/xfs/xfs_inode.c                                 |   68 +-
+ fs/xfs/xfs_inode.h                                 |   85 +-
  include/acpi/platform/aclinux.h                    |   15 +
  include/asm-generic/bug.h                          |   14 +
  include/asm-generic/futex.h                        |    7 +-
@@ -234,7 +236,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/hrtimer.h                            |   16 +
  include/linux/idr.h                                |    4 +
  include/linux/init_task.h                          |   10 +-
- include/linux/interrupt.h                          |   57 +-
+ include/linux/interrupt.h                          |   59 +-
  include/linux/io-mapping.h                         |    2 +
  include/linux/irq.h                                |    4 +-
  include/linux/irq_work.h                           |    1 +
@@ -311,7 +313,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/fork.c                                      |   40 +-
  kernel/futex.c                                     |  149 ++-
  kernel/irq/handle.c                                |    8 +-
- kernel/irq/manage.c                                |  100 +-
+ kernel/irq/manage.c                                |  260 +++-
  kernel/irq/settings.h                              |   12 +
  kernel/irq/spurious.c                              |    8 +
  kernel/irq_work.c                                  |   47 +-
@@ -414,7 +416,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/soc/intel/atom/sst/sst.c                     |    4 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 409 files changed, 11681 insertions(+), 2014 deletions(-)
+ 411 files changed, 11887 insertions(+), 2096 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -820,7 +822,7 @@ index 6a2e006..d948e4e 100644
  
  	if (user_mode(regs))
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
-index 45df48b..bfaeed7 100644
+index 19f4cc6..e16a259 100644
 --- a/arch/arm/Kconfig
 +++ b/arch/arm/Kconfig
 @@ -31,7 +31,7 @@ config ARM
@@ -1047,6 +1049,29 @@ index 423663e..365934f 100644
  			schedule();
  		} else {
  			if (unlikely(!user_mode(regs)))
+diff --git a/arch/arm/kernel/smp.c b/arch/arm/kernel/smp.c
+index f11d825..e561aef 100644
+--- a/arch/arm/kernel/smp.c
++++ b/arch/arm/kernel/smp.c
+@@ -213,8 +213,6 @@ int __cpu_disable(void)
+ 	flush_cache_louis();
+ 	local_flush_tlb_all();
+ 
+-	clear_tasks_mm_cpumask(cpu);
+-
+ 	return 0;
+ }
+ 
+@@ -230,6 +228,9 @@ void __cpu_die(unsigned int cpu)
+ 		pr_err("CPU%u: cpu didn't die\n", cpu);
+ 		return;
+ 	}
++
++	clear_tasks_mm_cpumask(cpu);
++
+ 	pr_notice("CPU%u: shutdown\n", cpu);
+ 
+ 	/*
 diff --git a/arch/arm/kernel/unwind.c b/arch/arm/kernel/unwind.c
 index 0bee233..314cfb2 100644
 --- a/arch/arm/kernel/unwind.c
@@ -1298,7 +1323,7 @@ index 280f3f1..bc2ed95 100644
  
  static void __naked hip04_mcpm_power_up_setup(unsigned int affinity_level)
 diff --git a/arch/arm/mach-omap2/omap-smp.c b/arch/arm/mach-omap2/omap-smp.c
-index 5305ec7..19732b5 100644
+index 5305ec7..19732b56 100644
 --- a/arch/arm/mach-omap2/omap-smp.c
 +++ b/arch/arm/mach-omap2/omap-smp.c
 @@ -43,7 +43,7 @@
@@ -1848,7 +1873,7 @@ index bddd04d..6515be3 100644
  	ldr	x2, [sp, #S_PSTATE]
  	mov	x0, sp				// 'regs'
 diff --git a/arch/arm64/kernel/perf_event.c b/arch/arm64/kernel/perf_event.c
-index cce18c8..702591f 100644
+index 7778453..fd26e57 100644
 --- a/arch/arm64/kernel/perf_event.c
 +++ b/arch/arm64/kernel/perf_event.c
 @@ -488,7 +488,7 @@ armpmu_reserve_hardware(struct arm_pmu *armpmu)
@@ -4807,10 +4832,10 @@ index 8ed2106..3a70713 100644
  	 * Leave lazy mode, flushing any hypercalls made here.
  	 * This must be done before restoring TLS segments so
 diff --git a/arch/x86/kernel/signal.c b/arch/x86/kernel/signal.c
-index 1ea14fd..74c44c4 100644
+index e0fd5f47..12c28f7 100644
 --- a/arch/x86/kernel/signal.c
 +++ b/arch/x86/kernel/signal.c
-@@ -727,6 +727,14 @@ do_notify_resume(struct pt_regs *regs, void *unused, __u32 thread_info_flags)
+@@ -723,6 +723,14 @@ do_notify_resume(struct pt_regs *regs, void *unused, __u32 thread_info_flags)
  {
  	user_exit();
  
@@ -5008,7 +5033,7 @@ index 67d07e0..525db8b 100644
  
  /*
 diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
-index ea306ad..6cceb2c 100644
+index 47a32f7..37d79a0 100644
 --- a/arch/x86/kvm/x86.c
 +++ b/arch/x86/kvm/x86.c
 @@ -5813,6 +5813,13 @@ int kvm_arch_init(void *opaque)
@@ -6640,7 +6665,7 @@ index b232397..a0ace27 100644
  	return 0;
  }
 diff --git a/drivers/gpu/drm/i915/i915_gem_execbuffer.c b/drivers/gpu/drm/i915/i915_gem_execbuffer.c
-index a3190e79..a3eadb9 100644
+index 479024a..a67a351 100644
 --- a/drivers/gpu/drm/i915/i915_gem_execbuffer.c
 +++ b/drivers/gpu/drm/i915/i915_gem_execbuffer.c
 @@ -32,6 +32,7 @@
@@ -6684,7 +6709,7 @@ index f7929e7..8ea68ad 100644
  #else
  	/* Since UP may be pre-empted, we cannot assume that we own the lock */
 diff --git a/drivers/gpu/drm/i915/intel_display.c b/drivers/gpu/drm/i915/intel_display.c
-index 57c8878..4021633 100644
+index f208bbc..338d1de 100644
 --- a/drivers/gpu/drm/i915/intel_display.c
 +++ b/drivers/gpu/drm/i915/intel_display.c
 @@ -10086,7 +10086,7 @@ void intel_check_page_flip(struct drm_device *dev, int pipe)
@@ -8380,63 +8405,6 @@ index fb26674..d42fc08 100644
  	/*
  	 * If we have less than the fifo 'half-full' threshold to transfer,
  	 * trigger a PIO interrupt as soon as any data is available.
-diff --git a/drivers/mmc/host/sdhci.c b/drivers/mmc/host/sdhci.c
-index bec8a30..acd8c62 100644
---- a/drivers/mmc/host/sdhci.c
-+++ b/drivers/mmc/host/sdhci.c
-@@ -2691,6 +2691,31 @@ static irqreturn_t sdhci_thread_irq(int irq, void *dev_id)
- 	return isr ? IRQ_HANDLED : IRQ_NONE;
- }
- 
-+#ifdef CONFIG_PREEMPT_RT_BASE
-+static irqreturn_t sdhci_rt_irq(int irq, void *dev_id)
-+{
-+	irqreturn_t ret;
-+
-+	local_bh_disable();
-+	ret = sdhci_irq(irq, dev_id);
-+	local_bh_enable();
-+	if (ret == IRQ_WAKE_THREAD)
-+		ret = sdhci_thread_irq(irq, dev_id);
-+	return ret;
-+}
-+#endif
-+
-+static int sdhci_req_irq(struct sdhci_host *host)
-+{
-+#ifdef CONFIG_PREEMPT_RT_BASE
-+	return request_threaded_irq(host->irq, NULL, sdhci_rt_irq,
-+				    IRQF_SHARED, mmc_hostname(host->mmc), host);
-+#else
-+	return request_threaded_irq(host->irq, sdhci_irq, sdhci_thread_irq,
-+				    IRQF_SHARED, mmc_hostname(host->mmc), host);
-+#endif
-+}
-+
- /*****************************************************************************\
-  *                                                                           *
-  * Suspend/resume                                                            *
-@@ -2758,9 +2783,7 @@ int sdhci_resume_host(struct sdhci_host *host)
- 	}
- 
- 	if (!device_may_wakeup(mmc_dev(host->mmc))) {
--		ret = request_threaded_irq(host->irq, sdhci_irq,
--					   sdhci_thread_irq, IRQF_SHARED,
--					   mmc_hostname(host->mmc), host);
-+		ret = sdhci_req_irq(host);
- 		if (ret)
- 			return ret;
- 	} else {
-@@ -3421,8 +3444,7 @@ int sdhci_add_host(struct sdhci_host *host)
- 
- 	sdhci_init(host, 0);
- 
--	ret = request_threaded_irq(host->irq, sdhci_irq, sdhci_thread_irq,
--				   IRQF_SHARED,	mmc_hostname(mmc), host);
-+	ret = sdhci_req_irq(host);
- 	if (ret) {
- 		pr_err("%s: Failed to request IRQ %d: %d\n",
- 		       mmc_hostname(mmc), host->irq, ret);
 diff --git a/drivers/net/ethernet/3com/3c59x.c b/drivers/net/ethernet/3com/3c59x.c
 index 41095eb..b0a0cb22 100644
 --- a/drivers/net/ethernet/3com/3c59x.c
@@ -8669,10 +8637,10 @@ index 91f0544..8fb1c92 100644
  		}
  		break;
 diff --git a/drivers/pci/access.c b/drivers/pci/access.c
-index d9b64a1..1d0f6f8 100644
+index b965c12..5908d6e 100644
 --- a/drivers/pci/access.c
 +++ b/drivers/pci/access.c
-@@ -521,7 +521,7 @@ void pci_cfg_access_unlock(struct pci_dev *dev)
+@@ -580,7 +580,7 @@ void pci_cfg_access_unlock(struct pci_dev *dev)
  	WARN_ON(!dev->block_cfg_access);
  
  	dev->block_cfg_access = 0;
@@ -8771,10 +8739,10 @@ index 34a1b1f..d911312 100644
  	list_for_each_entry_safe(fcf, next, &del_list, list) {
  		/* Removes fcf from current list */
 diff --git a/drivers/scsi/libfc/fc_exch.c b/drivers/scsi/libfc/fc_exch.c
-index 1b3a094..50af66a 100644
+index 30f9ef0..6c686bc 100644
 --- a/drivers/scsi/libfc/fc_exch.c
 +++ b/drivers/scsi/libfc/fc_exch.c
-@@ -816,10 +816,10 @@ static struct fc_exch *fc_exch_em_alloc(struct fc_lport *lport,
+@@ -814,10 +814,10 @@ static struct fc_exch *fc_exch_em_alloc(struct fc_lport *lport,
  	}
  	memset(ep, 0, sizeof(*ep));
  
@@ -9454,6 +9422,236 @@ index b94fa6c..64fb860 100644
  	}
  
  	/*
+diff --git a/fs/xfs/xfs_inode.c b/fs/xfs/xfs_inode.c
+index 539a85f..fec4bfb 100644
+--- a/fs/xfs/xfs_inode.c
++++ b/fs/xfs/xfs_inode.c
+@@ -164,7 +164,7 @@ xfs_ilock(
+ 	       (XFS_MMAPLOCK_SHARED | XFS_MMAPLOCK_EXCL));
+ 	ASSERT((lock_flags & (XFS_ILOCK_SHARED | XFS_ILOCK_EXCL)) !=
+ 	       (XFS_ILOCK_SHARED | XFS_ILOCK_EXCL));
+-	ASSERT((lock_flags & ~(XFS_LOCK_MASK | XFS_LOCK_DEP_MASK)) == 0);
++	ASSERT((lock_flags & ~(XFS_LOCK_MASK | XFS_LOCK_SUBCLASS_MASK)) == 0);
+ 
+ 	if (lock_flags & XFS_IOLOCK_EXCL)
+ 		mrupdate_nested(&ip->i_iolock, XFS_IOLOCK_DEP(lock_flags));
+@@ -212,7 +212,7 @@ xfs_ilock_nowait(
+ 	       (XFS_MMAPLOCK_SHARED | XFS_MMAPLOCK_EXCL));
+ 	ASSERT((lock_flags & (XFS_ILOCK_SHARED | XFS_ILOCK_EXCL)) !=
+ 	       (XFS_ILOCK_SHARED | XFS_ILOCK_EXCL));
+-	ASSERT((lock_flags & ~(XFS_LOCK_MASK | XFS_LOCK_DEP_MASK)) == 0);
++	ASSERT((lock_flags & ~(XFS_LOCK_MASK | XFS_LOCK_SUBCLASS_MASK)) == 0);
+ 
+ 	if (lock_flags & XFS_IOLOCK_EXCL) {
+ 		if (!mrtryupdate(&ip->i_iolock))
+@@ -281,7 +281,7 @@ xfs_iunlock(
+ 	       (XFS_MMAPLOCK_SHARED | XFS_MMAPLOCK_EXCL));
+ 	ASSERT((lock_flags & (XFS_ILOCK_SHARED | XFS_ILOCK_EXCL)) !=
+ 	       (XFS_ILOCK_SHARED | XFS_ILOCK_EXCL));
+-	ASSERT((lock_flags & ~(XFS_LOCK_MASK | XFS_LOCK_DEP_MASK)) == 0);
++	ASSERT((lock_flags & ~(XFS_LOCK_MASK | XFS_LOCK_SUBCLASS_MASK)) == 0);
+ 	ASSERT(lock_flags != 0);
+ 
+ 	if (lock_flags & XFS_IOLOCK_EXCL)
+@@ -364,30 +364,38 @@ int xfs_lock_delays;
+ 
+ /*
+  * Bump the subclass so xfs_lock_inodes() acquires each lock with a different
+- * value. This shouldn't be called for page fault locking, but we also need to
+- * ensure we don't overrun the number of lockdep subclasses for the iolock or
+- * mmaplock as that is limited to 12 by the mmap lock lockdep annotations.
++ * value. This can be called for any type of inode lock combination, including
++ * parent locking. Care must be taken to ensure we don't overrun the subclass
++ * storage fields in the class mask we build.
+  */
+ static inline int
+ xfs_lock_inumorder(int lock_mode, int subclass)
+ {
++	int	class = 0;
++
++	ASSERT(!(lock_mode & (XFS_ILOCK_PARENT | XFS_ILOCK_RTBITMAP |
++			      XFS_ILOCK_RTSUM)));
++
+ 	if (lock_mode & (XFS_IOLOCK_SHARED|XFS_IOLOCK_EXCL)) {
+-		ASSERT(subclass + XFS_LOCK_INUMORDER <
+-			(1 << (XFS_MMAPLOCK_SHIFT - XFS_IOLOCK_SHIFT)));
+-		lock_mode |= (subclass + XFS_LOCK_INUMORDER) << XFS_IOLOCK_SHIFT;
++		ASSERT(subclass <= XFS_IOLOCK_MAX_SUBCLASS);
++		ASSERT(subclass + XFS_IOLOCK_PARENT_VAL <
++						MAX_LOCKDEP_SUBCLASSES);
++		class += subclass << XFS_IOLOCK_SHIFT;
++		if (lock_mode & XFS_IOLOCK_PARENT)
++			class += XFS_IOLOCK_PARENT_VAL << XFS_IOLOCK_SHIFT;
+ 	}
+ 
+ 	if (lock_mode & (XFS_MMAPLOCK_SHARED|XFS_MMAPLOCK_EXCL)) {
+-		ASSERT(subclass + XFS_LOCK_INUMORDER <
+-			(1 << (XFS_ILOCK_SHIFT - XFS_MMAPLOCK_SHIFT)));
+-		lock_mode |= (subclass + XFS_LOCK_INUMORDER) <<
+-							XFS_MMAPLOCK_SHIFT;
++		ASSERT(subclass <= XFS_MMAPLOCK_MAX_SUBCLASS);
++		class += subclass << XFS_MMAPLOCK_SHIFT;
+ 	}
+ 
+-	if (lock_mode & (XFS_ILOCK_SHARED|XFS_ILOCK_EXCL))
+-		lock_mode |= (subclass + XFS_LOCK_INUMORDER) << XFS_ILOCK_SHIFT;
++	if (lock_mode & (XFS_ILOCK_SHARED|XFS_ILOCK_EXCL)) {
++		ASSERT(subclass <= XFS_ILOCK_MAX_SUBCLASS);
++		class += subclass << XFS_ILOCK_SHIFT;
++	}
+ 
+-	return lock_mode;
++	return (lock_mode & ~XFS_LOCK_SUBCLASS_MASK) | class;
+ }
+ 
+ /*
+@@ -399,6 +407,11 @@ xfs_lock_inumorder(int lock_mode, int subclass)
+  * transaction (such as truncate). This can result in deadlock since the long
+  * running trans might need to wait for the inode we just locked in order to
+  * push the tail and free space in the log.
++ *
++ * xfs_lock_inodes() can only be used to lock one type of lock at a time -
++ * the iolock, the mmaplock or the ilock, but not more than one at a time. If we
++ * lock more than one at a time, lockdep will report false positives saying we
++ * have violated locking orders.
+  */
+ void
+ xfs_lock_inodes(
+@@ -409,8 +422,29 @@ xfs_lock_inodes(
+ 	int		attempts = 0, i, j, try_lock;
+ 	xfs_log_item_t	*lp;
+ 
+-	/* currently supports between 2 and 5 inodes */
++	/*
++	 * Currently supports between 2 and 5 inodes with exclusive locking.  We
++	 * support an arbitrary depth of locking here, but absolute limits on
++	 * inodes depend on the the type of locking and the limits placed by
++	 * lockdep annotations in xfs_lock_inumorder.  These are all checked by
++	 * the asserts.
++	 */
+ 	ASSERT(ips && inodes >= 2 && inodes <= 5);
++	ASSERT(lock_mode & (XFS_IOLOCK_EXCL | XFS_MMAPLOCK_EXCL |
++			    XFS_ILOCK_EXCL));
++	ASSERT(!(lock_mode & (XFS_IOLOCK_SHARED | XFS_MMAPLOCK_SHARED |
++			      XFS_ILOCK_SHARED)));
++	ASSERT(!(lock_mode & XFS_IOLOCK_EXCL) ||
++		inodes <= XFS_IOLOCK_MAX_SUBCLASS + 1);
++	ASSERT(!(lock_mode & XFS_MMAPLOCK_EXCL) ||
++		inodes <= XFS_MMAPLOCK_MAX_SUBCLASS + 1);
++	ASSERT(!(lock_mode & XFS_ILOCK_EXCL) ||
++		inodes <= XFS_ILOCK_MAX_SUBCLASS + 1);
++
++	if (lock_mode & XFS_IOLOCK_EXCL) {
++		ASSERT(!(lock_mode & (XFS_MMAPLOCK_EXCL | XFS_ILOCK_EXCL)));
++	} else if (lock_mode & XFS_MMAPLOCK_EXCL)
++		ASSERT(!(lock_mode & XFS_ILOCK_EXCL));
+ 
+ 	try_lock = 0;
+ 	i = 0;
+diff --git a/fs/xfs/xfs_inode.h b/fs/xfs/xfs_inode.h
+index 8f22d20..ee26a60 100644
+--- a/fs/xfs/xfs_inode.h
++++ b/fs/xfs/xfs_inode.h
+@@ -284,9 +284,9 @@ static inline int xfs_isiflocked(struct xfs_inode *ip)
+  * Flags for lockdep annotations.
+  *
+  * XFS_LOCK_PARENT - for directory operations that require locking a
+- * parent directory inode and a child entry inode.  The parent gets locked
+- * with this flag so it gets a lockdep subclass of 1 and the child entry
+- * lock will have a lockdep subclass of 0.
++ * parent directory inode and a child entry inode. IOLOCK requires nesting,
++ * MMAPLOCK does not support this class, ILOCK requires a single subclass
++ * to differentiate parent from child.
+  *
+  * XFS_LOCK_RTBITMAP/XFS_LOCK_RTSUM - the realtime device bitmap and summary
+  * inodes do not participate in the normal lock order, and thus have their
+@@ -295,30 +295,63 @@ static inline int xfs_isiflocked(struct xfs_inode *ip)
+  * XFS_LOCK_INUMORDER - for locking several inodes at the some time
+  * with xfs_lock_inodes().  This flag is used as the starting subclass
+  * and each subsequent lock acquired will increment the subclass by one.
+- * So the first lock acquired will have a lockdep subclass of 4, the
+- * second lock will have a lockdep subclass of 5, and so on. It is
+- * the responsibility of the class builder to shift this to the correct
+- * portion of the lock_mode lockdep mask.
++ * However, MAX_LOCKDEP_SUBCLASSES == 8, which means we are greatly
++ * limited to the subclasses we can represent via nesting. We need at least
++ * 5 inodes nest depth for the ILOCK through rename, and we also have to support
++ * XFS_ILOCK_PARENT, which gives 6 subclasses. Then we have XFS_ILOCK_RTBITMAP
++ * and XFS_ILOCK_RTSUM, which are another 2 unique subclasses, so that's all
++ * 8 subclasses supported by lockdep.
++ *
++ * This also means we have to number the sub-classes in the lowest bits of
++ * the mask we keep, and we have to ensure we never exceed 3 bits of lockdep
++ * mask and we can't use bit-masking to build the subclasses. What a mess.
++ *
++ * Bit layout:
++ *
++ * Bit		Lock Region
++ * 16-19	XFS_IOLOCK_SHIFT dependencies
++ * 20-23	XFS_MMAPLOCK_SHIFT dependencies
++ * 24-31	XFS_ILOCK_SHIFT dependencies
++ *
++ * IOLOCK values
++ *
++ * 0-3		subclass value
++ * 4-7		PARENT subclass values
++ *
++ * MMAPLOCK values
++ *
++ * 0-3		subclass value
++ * 4-7		unused
++ *
++ * ILOCK values
++ * 0-4		subclass values
++ * 5		PARENT subclass (not nestable)
++ * 6		RTBITMAP subclass (not nestable)
++ * 7		RTSUM subclass (not nestable)
++ *
+  */
+-#define XFS_LOCK_PARENT		1
+-#define XFS_LOCK_RTBITMAP	2
+-#define XFS_LOCK_RTSUM		3
+-#define XFS_LOCK_INUMORDER	4
+-
+-#define XFS_IOLOCK_SHIFT	16
+-#define	XFS_IOLOCK_PARENT	(XFS_LOCK_PARENT << XFS_IOLOCK_SHIFT)
+-
+-#define XFS_MMAPLOCK_SHIFT	20
+-
+-#define XFS_ILOCK_SHIFT		24
+-#define	XFS_ILOCK_PARENT	(XFS_LOCK_PARENT << XFS_ILOCK_SHIFT)
+-#define	XFS_ILOCK_RTBITMAP	(XFS_LOCK_RTBITMAP << XFS_ILOCK_SHIFT)
+-#define	XFS_ILOCK_RTSUM		(XFS_LOCK_RTSUM << XFS_ILOCK_SHIFT)
+-
+-#define XFS_IOLOCK_DEP_MASK	0x000f0000
+-#define XFS_MMAPLOCK_DEP_MASK	0x00f00000
+-#define XFS_ILOCK_DEP_MASK	0xff000000
+-#define XFS_LOCK_DEP_MASK	(XFS_IOLOCK_DEP_MASK | \
++#define XFS_IOLOCK_SHIFT		16
++#define XFS_IOLOCK_PARENT_VAL		4
++#define XFS_IOLOCK_MAX_SUBCLASS		(XFS_IOLOCK_PARENT_VAL - 1)
++#define XFS_IOLOCK_DEP_MASK		0x000f0000
++#define	XFS_IOLOCK_PARENT		(XFS_IOLOCK_PARENT_VAL << XFS_IOLOCK_SHIFT)
++
++#define XFS_MMAPLOCK_SHIFT		20
++#define XFS_MMAPLOCK_NUMORDER		0
++#define XFS_MMAPLOCK_MAX_SUBCLASS	3
++#define XFS_MMAPLOCK_DEP_MASK		0x00f00000
++
++#define XFS_ILOCK_SHIFT			24
++#define XFS_ILOCK_PARENT_VAL		5
++#define XFS_ILOCK_MAX_SUBCLASS		(XFS_ILOCK_PARENT_VAL - 1)
++#define XFS_ILOCK_RTBITMAP_VAL		6
++#define XFS_ILOCK_RTSUM_VAL		7
++#define XFS_ILOCK_DEP_MASK		0xff000000
++#define	XFS_ILOCK_PARENT		(XFS_ILOCK_PARENT_VAL << XFS_ILOCK_SHIFT)
++#define	XFS_ILOCK_RTBITMAP		(XFS_ILOCK_RTBITMAP_VAL << XFS_ILOCK_SHIFT)
++#define	XFS_ILOCK_RTSUM			(XFS_ILOCK_RTSUM_VAL << XFS_ILOCK_SHIFT)
++
++#define XFS_LOCK_SUBCLASS_MASK	(XFS_IOLOCK_DEP_MASK | \
+ 				 XFS_MMAPLOCK_DEP_MASK | \
+ 				 XFS_ILOCK_DEP_MASK)
+ 
 diff --git a/include/acpi/platform/aclinux.h b/include/acpi/platform/aclinux.h
 index 74ba46c..ccde2a9 100644
 --- a/include/acpi/platform/aclinux.h
@@ -9786,7 +9984,7 @@ index f9ecf63..2ef42aa 100644
  
  #define FTRACE_MAX_EVENT						\
 diff --git a/include/linux/highmem.h b/include/linux/highmem.h
-index 9286a46..d89b5e0 100644
+index 9286a46..06bae5a 100644
 --- a/include/linux/highmem.h
 +++ b/include/linux/highmem.h
 @@ -7,6 +7,7 @@
@@ -9801,7 +9999,7 @@ index 9286a46..d89b5e0 100644
  
  static inline void *kmap_atomic(struct page *page)
  {
-+	preempt_disable();
++	preempt_disable_nort();
  	pagefault_disable();
  	return page_address(page);
  }
@@ -9809,7 +10007,7 @@ index 9286a46..d89b5e0 100644
  static inline void __kunmap_atomic(void *addr)
  {
  	pagefault_enable();
-+	preempt_enable();
++	preempt_enable_nort();
  }
  
  #define kmap_atomic_pfn(pfn)	kmap_atomic(pfn_to_page(pfn))
@@ -9967,7 +10165,7 @@ index 696d223..4a77d39 100644
  		[PIDTYPE_PID]  = INIT_PID_LINK(PIDTYPE_PID),		\
  		[PIDTYPE_PGID] = INIT_PID_LINK(PIDTYPE_PGID),		\
 diff --git a/include/linux/interrupt.h b/include/linux/interrupt.h
-index 950ae45..67f2af8 100644
+index 950ae45..fe25455 100644
 --- a/include/linux/interrupt.h
 +++ b/include/linux/interrupt.h
 @@ -61,6 +61,7 @@
@@ -9986,7 +10184,23 @@ index 950ae45..67f2af8 100644
  
  #define IRQF_TIMER		(__IRQF_TIMER | IRQF_NO_SUSPEND | IRQF_NO_THREAD)
  
-@@ -184,7 +186,7 @@ extern void devm_free_irq(struct device *dev, unsigned int irq, void *dev_id);
+@@ -102,6 +104,7 @@ typedef irqreturn_t (*irq_handler_t)(int, void *);
+  * @flags:	flags (see IRQF_* above)
+  * @thread_fn:	interrupt handler function for threaded interrupts
+  * @thread:	thread pointer for threaded interrupts
++ * @secondary:	pointer to secondary irqaction (force threading)
+  * @thread_flags:	flags related to @thread
+  * @thread_mask:	bitmask for keeping track of @thread activity
+  * @dir:	pointer to the proc/irq/NN/name entry
+@@ -113,6 +116,7 @@ struct irqaction {
+ 	struct irqaction	*next;
+ 	irq_handler_t		thread_fn;
+ 	struct task_struct	*thread;
++	struct irqaction	*secondary;
+ 	unsigned int		irq;
+ 	unsigned int		flags;
+ 	unsigned long		thread_flags;
+@@ -184,7 +188,7 @@ extern void devm_free_irq(struct device *dev, unsigned int irq, void *dev_id);
  #ifdef CONFIG_LOCKDEP
  # define local_irq_enable_in_hardirq()	do { } while (0)
  #else
@@ -9995,7 +10209,7 @@ index 950ae45..67f2af8 100644
  #endif
  
  extern void disable_irq_nosync(unsigned int irq);
-@@ -215,6 +217,7 @@ struct irq_affinity_notify {
+@@ -215,6 +219,7 @@ struct irq_affinity_notify {
  	unsigned int irq;
  	struct kref kref;
  	struct work_struct work;
@@ -10003,7 +10217,7 @@ index 950ae45..67f2af8 100644
  	void (*notify)(struct irq_affinity_notify *, const cpumask_t *mask);
  	void (*release)(struct kref *ref);
  };
-@@ -377,9 +380,13 @@ extern int irq_set_irqchip_state(unsigned int irq, enum irqchip_irq_state which,
+@@ -377,9 +382,13 @@ extern int irq_set_irqchip_state(unsigned int irq, enum irqchip_irq_state which,
  				 bool state);
  
  #ifdef CONFIG_IRQ_FORCED_THREADING
@@ -10018,7 +10232,7 @@ index 950ae45..67f2af8 100644
  #endif
  
  #ifndef __ARCH_SET_SOFTIRQ_PENDING
-@@ -435,9 +442,10 @@ struct softirq_action
+@@ -435,9 +444,10 @@ struct softirq_action
  	void	(*action)(struct softirq_action *);
  };
  
@@ -10030,7 +10244,7 @@ index 950ae45..67f2af8 100644
  #ifdef __ARCH_HAS_DO_SOFTIRQ
  void do_softirq_own_stack(void);
  #else
-@@ -446,6 +454,9 @@ static inline void do_softirq_own_stack(void)
+@@ -446,6 +456,9 @@ static inline void do_softirq_own_stack(void)
  	__do_softirq();
  }
  #endif
@@ -10040,7 +10254,7 @@ index 950ae45..67f2af8 100644
  
  extern void open_softirq(int nr, void (*action)(struct softirq_action *));
  extern void softirq_init(void);
-@@ -453,6 +464,7 @@ extern void __raise_softirq_irqoff(unsigned int nr);
+@@ -453,6 +466,7 @@ extern void __raise_softirq_irqoff(unsigned int nr);
  
  extern void raise_softirq_irqoff(unsigned int nr);
  extern void raise_softirq(unsigned int nr);
@@ -10048,7 +10262,7 @@ index 950ae45..67f2af8 100644
  
  DECLARE_PER_CPU(struct task_struct *, ksoftirqd);
  
-@@ -474,8 +486,9 @@ static inline struct task_struct *this_cpu_ksoftirqd(void)
+@@ -474,8 +488,9 @@ static inline struct task_struct *this_cpu_ksoftirqd(void)
       to be executed on some cpu at least once after this.
     * If the tasklet is already scheduled, but its execution is still not
       started, it will be executed only once.
@@ -10060,7 +10274,7 @@ index 950ae45..67f2af8 100644
     * Tasklet is strictly serialized wrt itself, but not
       wrt another tasklets. If client needs some intertask synchronization,
       he makes it with spinlocks.
-@@ -500,27 +513,36 @@ struct tasklet_struct name = { NULL, 0, ATOMIC_INIT(1), func, data }
+@@ -500,27 +515,36 @@ struct tasklet_struct name = { NULL, 0, ATOMIC_INIT(1), func, data }
  enum
  {
  	TASKLET_STATE_SCHED,	/* Tasklet is scheduled for execution */
@@ -10103,7 +10317,7 @@ index 950ae45..67f2af8 100644
  #define tasklet_unlock_wait(t) do { } while (0)
  #define tasklet_unlock(t) do { } while (0)
  #endif
-@@ -569,12 +591,7 @@ static inline void tasklet_disable(struct tasklet_struct *t)
+@@ -569,12 +593,7 @@ static inline void tasklet_disable(struct tasklet_struct *t)
  	smp_mb();
  }
  
@@ -10117,7 +10331,7 @@ index 950ae45..67f2af8 100644
  extern void tasklet_kill(struct tasklet_struct *t);
  extern void tasklet_kill_immediate(struct tasklet_struct *t, unsigned int cpu);
  extern void tasklet_init(struct tasklet_struct *t,
-@@ -605,6 +622,12 @@ void tasklet_hrtimer_cancel(struct tasklet_hrtimer *ttimer)
+@@ -605,6 +624,12 @@ void tasklet_hrtimer_cancel(struct tasklet_hrtimer *ttimer)
  	tasklet_kill(&ttimer->tasklet);
  }
  
@@ -10151,7 +10365,7 @@ index 657fab4..c27dde7 100644
  
  /* Non-atomic map/unmap */
 diff --git a/include/linux/irq.h b/include/linux/irq.h
-index 62c6901..7ec31b55 100644
+index 3532dca..38ecc0c 100644
 --- a/include/linux/irq.h
 +++ b/include/linux/irq.h
 @@ -72,6 +72,7 @@ enum irqchip_irq_state;
@@ -13892,10 +14106,10 @@ index 2b6fdbb..cedbf5f 100644
  }
  
 diff --git a/ipc/sem.c b/ipc/sem.c
-index d1a6edd..8f99bac 100644
+index c50aa57..d6261be 100644
 --- a/ipc/sem.c
 +++ b/ipc/sem.c
-@@ -680,6 +680,13 @@ undo:
+@@ -690,6 +690,13 @@ undo:
  static void wake_up_sem_queue_prepare(struct list_head *pt,
  				struct sem_queue *q, int error)
  {
@@ -13909,7 +14123,7 @@ index d1a6edd..8f99bac 100644
  	if (list_empty(pt)) {
  		/*
  		 * Hold preempt off so that we don't get preempted and have the
-@@ -691,6 +698,7 @@ static void wake_up_sem_queue_prepare(struct list_head *pt,
+@@ -701,6 +708,7 @@ static void wake_up_sem_queue_prepare(struct list_head *pt,
  	q->pid = error;
  
  	list_add_tail(&q->list, pt);
@@ -13917,7 +14131,7 @@ index d1a6edd..8f99bac 100644
  }
  
  /**
-@@ -704,6 +712,7 @@ static void wake_up_sem_queue_prepare(struct list_head *pt,
+@@ -714,6 +722,7 @@ static void wake_up_sem_queue_prepare(struct list_head *pt,
   */
  static void wake_up_sem_queue_do(struct list_head *pt)
  {
@@ -13925,7 +14139,7 @@ index d1a6edd..8f99bac 100644
  	struct sem_queue *q, *t;
  	int did_something;
  
-@@ -716,6 +725,7 @@ static void wake_up_sem_queue_do(struct list_head *pt)
+@@ -726,6 +735,7 @@ static void wake_up_sem_queue_do(struct list_head *pt)
  	}
  	if (did_something)
  		preempt_enable();
@@ -14008,10 +14222,10 @@ index 3f9c974..11dbe26 100644
  
  config PREEMPT_COUNT
 diff --git a/kernel/cgroup.c b/kernel/cgroup.c
-index e8a5491..2a7a0fe 100644
+index 4d65b66..21f5bdf 100644
 --- a/kernel/cgroup.c
 +++ b/kernel/cgroup.c
-@@ -4421,10 +4421,10 @@ static void css_free_rcu_fn(struct rcu_head *rcu_head)
+@@ -4422,10 +4422,10 @@ static void css_free_rcu_fn(struct rcu_head *rcu_head)
  	queue_work(cgroup_destroy_wq, &css->destroy_work);
  }
  
@@ -14024,7 +14238,7 @@ index e8a5491..2a7a0fe 100644
  	struct cgroup_subsys *ss = css->ss;
  	struct cgroup *cgrp = css->cgroup;
  
-@@ -4463,8 +4463,8 @@ static void css_release(struct percpu_ref *ref)
+@@ -4464,8 +4464,8 @@ static void css_release(struct percpu_ref *ref)
  	struct cgroup_subsys_state *css =
  		container_of(ref, struct cgroup_subsys_state, refcnt);
  
@@ -14035,7 +14249,7 @@ index e8a5491..2a7a0fe 100644
  }
  
  static void init_and_link_css(struct cgroup_subsys_state *css,
-@@ -5068,6 +5068,7 @@ static int __init cgroup_wq_init(void)
+@@ -5069,6 +5069,7 @@ static int __init cgroup_wq_init(void)
  	 */
  	cgroup_destroy_wq = alloc_workqueue("cgroup_destroy", 0, 1);
  	BUG_ON(!cgroup_destroy_wq);
@@ -14469,10 +14683,10 @@ index fc1ef73..83c6665 100644
  	return r;
  }
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index 0ceb386..e05d1dd 100644
+index 9481749..5146610 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
-@@ -6890,6 +6890,7 @@ static void perf_swevent_init_hrtimer(struct perf_event *event)
+@@ -6933,6 +6933,7 @@ static void perf_swevent_init_hrtimer(struct perf_event *event)
  
  	hrtimer_init(&hwc->hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
  	hwc->hrtimer.function = perf_swevent_hrtimer;
@@ -14953,7 +15167,7 @@ index 6354802..26a6367 100644
  	if (!noirqdebug)
  		note_interrupt(irq, desc, retval);
 diff --git a/kernel/irq/manage.c b/kernel/irq/manage.c
-index e68932b..1b5c50a 100644
+index e68932b..79c55c2 100644
 --- a/kernel/irq/manage.c
 +++ b/kernel/irq/manage.c
 @@ -22,6 +22,7 @@
@@ -15088,7 +15302,30 @@ index e68932b..1b5c50a 100644
  	}
  
  	raw_spin_lock_irqsave(&desc->lock, flags);
-@@ -825,7 +900,15 @@ irq_forced_thread_fn(struct irq_desc *desc, struct irqaction *action)
+@@ -697,6 +772,12 @@ static irqreturn_t irq_nested_primary_handler(int irq, void *dev_id)
+ 	return IRQ_NONE;
+ }
+ 
++static irqreturn_t irq_forced_secondary_handler(int irq, void *dev_id)
++{
++	WARN(1, "Secondary action handler called for irq %d\n", irq);
++	return IRQ_NONE;
++}
++
+ static int irq_wait_for_interrupt(struct irqaction *action)
+ {
+ 	set_current_state(TASK_INTERRUPTIBLE);
+@@ -723,7 +804,8 @@ static int irq_wait_for_interrupt(struct irqaction *action)
+ static void irq_finalize_oneshot(struct irq_desc *desc,
+ 				 struct irqaction *action)
+ {
+-	if (!(desc->istate & IRQS_ONESHOT))
++	if (!(desc->istate & IRQS_ONESHOT) ||
++	    action->handler == irq_forced_secondary_handler)
+ 		return;
+ again:
+ 	chip_bus_lock(desc);
+@@ -825,7 +907,15 @@ irq_forced_thread_fn(struct irq_desc *desc, struct irqaction *action)
  	local_bh_disable();
  	ret = action->thread_fn(action->irq, action->dev_id);
  	irq_finalize_oneshot(desc, action);
@@ -15105,10 +15342,33 @@ index e68932b..1b5c50a 100644
  	return ret;
  }
  
-@@ -908,6 +991,12 @@ static int irq_thread(void *data)
+@@ -877,6 +967,18 @@ static void irq_thread_dtor(struct callback_head *unused)
+ 	irq_finalize_oneshot(desc, action);
+ }
+ 
++static void irq_wake_secondary(struct irq_desc *desc, struct irqaction *action)
++{
++	struct irqaction *secondary = action->secondary;
++
++	if (WARN_ON_ONCE(!secondary))
++		return;
++
++	raw_spin_lock_irq(&desc->lock);
++	__irq_wake_thread(desc, secondary);
++	raw_spin_unlock_irq(&desc->lock);
++}
++
+ /*
+  * Interrupt handler thread
+  */
+@@ -907,7 +1009,15 @@ static int irq_thread(void *data)
+ 		action_ret = handler_fn(desc, action);
  		if (action_ret == IRQ_HANDLED)
  			atomic_inc(&desc->threads_handled);
- 
+-
++		if (action_ret == IRQ_WAKE_THREAD)
++			irq_wake_secondary(desc, action);
++
 +#ifdef CONFIG_PREEMPT_RT_FULL
 +		migrate_disable();
 +		add_interrupt_randomness(action->irq, 0,
@@ -15118,7 +15378,167 @@ index e68932b..1b5c50a 100644
  		wake_threads_waitq(desc);
  	}
  
-@@ -1221,6 +1310,9 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
+@@ -951,20 +1061,36 @@ void irq_wake_thread(unsigned int irq, void *dev_id)
+ }
+ EXPORT_SYMBOL_GPL(irq_wake_thread);
+ 
+-static void irq_setup_forced_threading(struct irqaction *new)
++static int irq_setup_forced_threading(struct irqaction *new)
+ {
+ 	if (!force_irqthreads)
+-		return;
++		return 0;
+ 	if (new->flags & (IRQF_NO_THREAD | IRQF_PERCPU | IRQF_ONESHOT))
+-		return;
++		return 0;
+ 
+ 	new->flags |= IRQF_ONESHOT;
+ 
+-	if (!new->thread_fn) {
+-		set_bit(IRQTF_FORCED_THREAD, &new->thread_flags);
+-		new->thread_fn = new->handler;
+-		new->handler = irq_default_primary_handler;
++	/*
++	 * Handle the case where we have a real primary handler and a
++	 * thread handler. We force thread them as well by creating a
++	 * secondary action.
++	 */
++	if (new->handler != irq_default_primary_handler && new->thread_fn) {
++		/* Allocate the secondary action */
++		new->secondary = kzalloc(sizeof(struct irqaction), GFP_KERNEL);
++		if (!new->secondary)
++			return -ENOMEM;
++		new->secondary->handler = irq_forced_secondary_handler;
++		new->secondary->thread_fn = new->thread_fn;
++		new->secondary->dev_id = new->dev_id;
++		new->secondary->irq = new->irq;
++		new->secondary->name = new->name;
+ 	}
++	/* Deal with the primary handler */
++	set_bit(IRQTF_FORCED_THREAD, &new->thread_flags);
++	new->thread_fn = new->handler;
++	new->handler = irq_default_primary_handler;
++	return 0;
+ }
+ 
+ static int irq_request_resources(struct irq_desc *desc)
+@@ -984,6 +1110,48 @@ static void irq_release_resources(struct irq_desc *desc)
+ 		c->irq_release_resources(d);
+ }
+ 
++static int
++setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
++{
++	struct task_struct *t;
++	struct sched_param param = {
++		.sched_priority = MAX_USER_RT_PRIO/2,
++	};
++
++	if (!secondary) {
++		t = kthread_create(irq_thread, new, "irq/%d-%s", irq,
++				   new->name);
++	} else {
++		t = kthread_create(irq_thread, new, "irq/%d-s-%s", irq,
++				   new->name);
++		param.sched_priority += 1;
++	}
++
++	if (IS_ERR(t))
++		return PTR_ERR(t);
++
++	sched_setscheduler_nocheck(t, SCHED_FIFO, &param);
++
++	/*
++	 * We keep the reference to the task struct even if
++	 * the thread dies to avoid that the interrupt code
++	 * references an already freed task_struct.
++	 */
++	get_task_struct(t);
++	new->thread = t;
++	/*
++	 * Tell the thread to set its affinity. This is
++	 * important for shared interrupt handlers as we do
++	 * not invoke setup_affinity() for the secondary
++	 * handlers as everything is already set up. Even for
++	 * interrupts marked with IRQF_NO_BALANCE this is
++	 * correct as we want the thread to move to the cpu(s)
++	 * on which the requesting code placed the interrupt.
++	 */
++	set_bit(IRQTF_AFFINITY, &new->thread_flags);
++	return 0;
++}
++
+ /*
+  * Internal function to register an irqaction - typically used to
+  * allocate special interrupts that are part of the architecture.
+@@ -1004,6 +1172,8 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
+ 	if (!try_module_get(desc->owner))
+ 		return -ENODEV;
+ 
++	new->irq = irq;
++
+ 	/*
+ 	 * Check whether the interrupt nests into another interrupt
+ 	 * thread.
+@@ -1021,8 +1191,11 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
+ 		 */
+ 		new->handler = irq_nested_primary_handler;
+ 	} else {
+-		if (irq_settings_can_thread(desc))
+-			irq_setup_forced_threading(new);
++		if (irq_settings_can_thread(desc)) {
++			ret = irq_setup_forced_threading(new);
++			if (ret)
++				goto out_mput;
++		}
+ 	}
+ 
+ 	/*
+@@ -1031,37 +1204,14 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
+ 	 * thread.
+ 	 */
+ 	if (new->thread_fn && !nested) {
+-		struct task_struct *t;
+-		static const struct sched_param param = {
+-			.sched_priority = MAX_USER_RT_PRIO/2,
+-		};
+-
+-		t = kthread_create(irq_thread, new, "irq/%d-%s", irq,
+-				   new->name);
+-		if (IS_ERR(t)) {
+-			ret = PTR_ERR(t);
++		ret = setup_irq_thread(new, irq, false);
++		if (ret)
+ 			goto out_mput;
++		if (new->secondary) {
++			ret = setup_irq_thread(new->secondary, irq, true);
++			if (ret)
++				goto out_thread;
+ 		}
+-
+-		sched_setscheduler_nocheck(t, SCHED_FIFO, &param);
+-
+-		/*
+-		 * We keep the reference to the task struct even if
+-		 * the thread dies to avoid that the interrupt code
+-		 * references an already freed task_struct.
+-		 */
+-		get_task_struct(t);
+-		new->thread = t;
+-		/*
+-		 * Tell the thread to set its affinity. This is
+-		 * important for shared interrupt handlers as we do
+-		 * not invoke setup_affinity() for the secondary
+-		 * handlers as everything is already set up. Even for
+-		 * interrupts marked with IRQF_NO_BALANCE this is
+-		 * correct as we want the thread to move to the cpu(s)
+-		 * on which the requesting code placed the interrupt.
+-		 */
+-		set_bit(IRQTF_AFFINITY, &new->thread_flags);
+ 	}
+ 
+ 	if (!alloc_cpumask_var(&mask, GFP_KERNEL)) {
+@@ -1221,6 +1371,9 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
  			irqd_set(&desc->irq_data, IRQD_NO_BALANCING);
  		}
  
@@ -15128,6 +15548,64 @@ index e68932b..1b5c50a 100644
  		/* Set default affinity mask once everything is setup */
  		setup_affinity(irq, desc, mask);
  
+@@ -1234,7 +1387,6 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
+ 				   irq, nmsk, omsk);
+ 	}
+ 
+-	new->irq = irq;
+ 	*old_ptr = new;
+ 
+ 	irq_pm_install_action(desc, new);
+@@ -1260,6 +1412,8 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
+ 	 */
+ 	if (new->thread)
+ 		wake_up_process(new->thread);
++	if (new->secondary)
++		wake_up_process(new->secondary->thread);
+ 
+ 	register_irq_proc(irq, desc);
+ 	new->dir = NULL;
+@@ -1290,6 +1444,13 @@ out_thread:
+ 		kthread_stop(t);
+ 		put_task_struct(t);
+ 	}
++	if (new->secondary && new->secondary->thread) {
++		struct task_struct *t = new->secondary->thread;
++
++		new->secondary->thread = NULL;
++		kthread_stop(t);
++		put_task_struct(t);
++	}
+ out_mput:
+ 	module_put(desc->owner);
+ 	return ret;
+@@ -1397,9 +1558,14 @@ static struct irqaction *__free_irq(unsigned int irq, void *dev_id)
+ 	if (action->thread) {
+ 		kthread_stop(action->thread);
+ 		put_task_struct(action->thread);
++		if (action->secondary && action->secondary->thread) {
++			kthread_stop(action->secondary->thread);
++			put_task_struct(action->secondary->thread);
++		}
+ 	}
+ 
+ 	module_put(desc->owner);
++	kfree(action->secondary);
+ 	return action;
+ }
+ 
+@@ -1543,8 +1709,10 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
+ 	retval = __setup_irq(irq, desc, action);
+ 	chip_bus_sync_unlock(desc);
+ 
+-	if (retval)
++	if (retval) {
++		kfree(action->secondary);
+ 		kfree(action);
++	}
+ 
+ #ifdef CONFIG_DEBUG_SHIRQ_FIXME
+ 	if (!retval && (irqflags & IRQF_SHARED)) {
 diff --git a/kernel/irq/settings.h b/kernel/irq/settings.h
 index 3320b84..34b803b 100644
 --- a/kernel/irq/settings.h
@@ -18442,7 +18920,7 @@ index 8d0f35d..45ebcff 100644
  }
  EXPORT_SYMBOL(completion_done);
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 1236732..392aad4 100644
+index e691052..799b75b 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -282,7 +282,11 @@ late_initcall(sched_init_debug);
@@ -19163,7 +19641,7 @@ index 1236732..392aad4 100644
  		break;
  #endif
  	}
-@@ -7266,7 +7610,8 @@ void __init sched_init(void)
+@@ -7274,7 +7618,8 @@ void __init sched_init(void)
  #ifdef CONFIG_DEBUG_ATOMIC_SLEEP
  static inline int preempt_count_equals(int preempt_offset)
  {
@@ -24083,7 +24561,7 @@ index c4de47f..711529b 100644
  	return ret;
  }
 diff --git a/kernel/trace/trace_irqsoff.c b/kernel/trace/trace_irqsoff.c
-index 8523ea3..aaade2e 100644
+index 8523ea3..d0e1d0e 100644
 --- a/kernel/trace/trace_irqsoff.c
 +++ b/kernel/trace/trace_irqsoff.c
 @@ -13,6 +13,7 @@
@@ -24112,7 +24590,7 @@ index 8523ea3..aaade2e 100644
  #ifdef CONFIG_PROVE_LOCKING
  void time_hardirqs_on(unsigned long a0, unsigned long a1)
  {
-+	trace_preemptirqsoff_hist(IRQS_ON, 0);
++	trace_preemptirqsoff_hist_rcuidle(IRQS_ON, 0);
  	if (!preempt_trace() && irq_trace())
  		stop_critical_timing(a0, a1);
  }
@@ -24120,7 +24598,7 @@ index 8523ea3..aaade2e 100644
  {
  	if (!preempt_trace() && irq_trace())
  		start_critical_timing(a0, a1);
-+	trace_preemptirqsoff_hist(IRQS_OFF, 1);
++	trace_preemptirqsoff_hist_rcuidle(IRQS_OFF, 1);
  }
  
  #else /* !CONFIG_PROVE_LOCKING */
