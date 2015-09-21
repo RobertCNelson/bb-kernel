@@ -63,22 +63,25 @@ make_deb () {
 		deb_distro="unstable"
 	fi
 
-	echo "-----------------------------"
-	echo "make -j${CORES} ARCH=arm KBUILD_DEBARCH=${DEBARCH} KDEB_CHANGELOG_DIST=${deb_distro} LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" KDEB_PKGVERSION=1${DISTRO} deb-pkg"
-	echo "-----------------------------"
-	fakeroot make -j${CORES} ARCH=arm KBUILD_DEBARCH=${DEBARCH} KDEB_CHANGELOG_DIST=${deb_distro} LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" KDEB_PKGVERSION=1${DISTRO} deb-pkg
-	mv ${DIR}/*.deb ${DIR}/deploy/
-	mv ${DIR}/*.debian.tar.gz ${DIR}/deploy/
-	mv ${DIR}/*.dsc ${DIR}/deploy/
-	mv ${DIR}/*.changes ${DIR}/deploy/
-	mv ${DIR}/*.orig.tar.gz ${DIR}/deploy/
+	build_opts="-j${CORES}"
+	build_opts="${build_opts} ARCH=arm"
+	build_opts="${build_opts} KBUILD_DEBARCH=${DEBARCH}"
+	build_opts="${build_opts} LOCALVERSION=-${BUILD}"
+	build_opts="${build_opts} KDEB_CHANGELOG_DIST=${deb_distro}"
+	build_opts="${build_opts} KDEB_PKGVERSION=1${DISTRO}"
+	#Just use "linux-upstream"...
+	#https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/scripts/package/builddeb?id=3716001bcb7f5822382ac1f2f54226b87312cc6b
+	build_opts="${build_opts} KDEB_SOURCENAME=linux-upstream"
 
-	if grep -q dtbs "${DIR}/KERNEL/arch/arm/Makefile"; then
-		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs"
-		echo "-----------------------------"
-		make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs
-		echo "-----------------------------"
-	fi
+	echo "-----------------------------"
+	echo "make ${build_opts} CROSS_COMPILE="${CC}" deb-pkg"
+	echo "-----------------------------"
+	fakeroot make ${build_opts} CROSS_COMPILE="${CC}" deb-pkg
+	mv ${DIR}/*.deb ${DIR}/deploy/ || true
+	mv ${DIR}/*.debian.tar.gz ${DIR}/deploy/ || true
+	mv ${DIR}/*.dsc ${DIR}/deploy/ || true
+	mv ${DIR}/*.changes ${DIR}/deploy/ || true
+	mv ${DIR}/*.orig.tar.gz ${DIR}/deploy/ || true
 
 	KERNEL_UTS=$(cat ${DIR}/KERNEL/include/generated/utsrelease.h | awk '{print $3}' | sed 's/\"//g' )
 
