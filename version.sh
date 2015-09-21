@@ -17,7 +17,7 @@ KERNEL_TAG=${KERNEL_REL}.7
 BUILD=bone-rt-r16
 kernel_rt=".5-rt5"
 
-#v3.X-rcX + upto SHA
+#v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
