@@ -16,7 +16,7 @@ KERNEL_REL=3.8
 KERNEL_TAG=${KERNEL_REL}.13
 BUILD=xenomai-r76
 
-#v3.X-rcX + upto SHA
+#v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
