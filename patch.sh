@@ -119,7 +119,7 @@ reverts () {
 	#udoo:
 	${git} "${DIR}/patches/reverts/0003-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
 	#am335x causing random reboots...
-	${git} "${DIR}/patches/reverts/0004-Revert-usb-musb-dsps-just-start-polling-already.patch"
+#	${git} "${DIR}/patches/reverts/0004-Revert-usb-musb-dsps-just-start-polling-already.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=4
@@ -191,15 +191,15 @@ dts () {
 	${git} "${DIR}/patches/dts/0002-ARM-dts-omap3-beagle-xm-spidev.patch"
 	${git} "${DIR}/patches/dts/0003-ARM-DTS-omap3-beagle.dts-enable-twl4030-power-reset.patch"
 	${git} "${DIR}/patches/dts/0004-arm-dts-omap4-move-emif-so-panda-es-b3-now-boots.patch"
-	${git} "${DIR}/patches/dts/0005-ARM-dts-omap3-beagle-ddc-i2c-bus-is-not-responding-d.patch"
 	${git} "${DIR}/patches/dts/0006-first-pass-imx6q-ccimx6sbc.patch"
 	${git} "${DIR}/patches/dts/0007-imx6-wl1835-base-boards.patch"
 	${git} "${DIR}/patches/dts/0008-imx6q-sabresd-add-support-for-wilink8-wlan-and-bluet.patch"
 	${git} "${DIR}/patches/dts/0009-imx6sl-evk-add-support-for-wilink8-wlan-and-bluetoot.patch"
-	${git} "${DIR}/patches/dts/0001-arm-obvious.patch"
+	${git} "${DIR}/patches/dts/0010-arm-obvious.patch"
+	${git} "${DIR}/patches/dts/0011-dts-am57xx-beagle-x15-make-sure-vdd_sd-is-on-fixex-v.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=9
+		number=11
 		cleanup
 	fi
 }
@@ -365,19 +365,19 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/0019-doc-ABI-bone_capemgr-sysfs-API.patch"
 	${git} "${DIR}/patches/bbb_overlays/0020-MAINTAINERS-Beaglebone-capemanager-maintainer.patch"
 	${git} "${DIR}/patches/bbb_overlays/0021-arm-dts-Enable-beaglebone-cape-manager.patch"
-	${git} "${DIR}/patches/bbb_overlays/0022-gcl-Fix-resource-linking.patch"
-	${git} "${DIR}/patches/bbb_overlays/0023-of-overlay-Implement-indirect-target-support.patch"
-	${git} "${DIR}/patches/bbb_overlays/0024-of-unittest-Add-indirect-overlay-target-test.patch"
-	${git} "${DIR}/patches/bbb_overlays/0025-doc-dt-Document-the-indirect-overlay-method.patch"
-	${git} "${DIR}/patches/bbb_overlays/0026-of-overlay-Introduce-target-root-capability.patch"
-	${git} "${DIR}/patches/bbb_overlays/0027-of-unittest-Unit-tests-for-target-root-overlays.patch"
-	${git} "${DIR}/patches/bbb_overlays/0028-doc-dt-Document-the-target-root-overlay-method.patch"
-	${git} "${DIR}/patches/bbb_overlays/0029-of-dynamic-Add-__of_node_dupv.patch"
-	${git} "${DIR}/patches/bbb_overlays/0030-of-changesets-Introduce-changeset-helper-methods.patch"
-	${git} "${DIR}/patches/bbb_overlays/0031-RFC-Device-overlay-manager-PCI-USB-DT.patch"
+	${git} "${DIR}/patches/bbb_overlays/0022-of-overlay-Implement-indirect-target-support.patch"
+	${git} "${DIR}/patches/bbb_overlays/0023-of-unittest-Add-indirect-overlay-target-test.patch"
+	${git} "${DIR}/patches/bbb_overlays/0024-doc-dt-Document-the-indirect-overlay-method.patch"
+	${git} "${DIR}/patches/bbb_overlays/0025-of-overlay-Introduce-target-root-capability.patch"
+	${git} "${DIR}/patches/bbb_overlays/0026-of-unittest-Unit-tests-for-target-root-overlays.patch"
+	${git} "${DIR}/patches/bbb_overlays/0027-doc-dt-Document-the-target-root-overlay-method.patch"
+	${git} "${DIR}/patches/bbb_overlays/0028-of-dynamic-Add-__of_node_dupv.patch"
+	${git} "${DIR}/patches/bbb_overlays/0029-of-changesets-Introduce-changeset-helper-methods.patch"
+	${git} "${DIR}/patches/bbb_overlays/0030-RFC-Device-overlay-manager-PCI-USB-DT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-	${git} "${DIR}/patches/bbb_overlays/0032-boneblack-defconfig.patch"
+	${git} "${DIR}/patches/bbb_overlays/0031-boneblack-defconfig.patch"
+	${git} "${DIR}/patches/bbb_overlays/0032-connector-wip.patch"
 	fi
 
 	if [ "x${regenerate}" = "xenable" ] ; then

@@ -13,7 +13,7 @@ toolchain="gcc_linaro_gnueabihf_4_9"
 
 #Kernel/Build
 KERNEL_REL=4.3
-KERNEL_TAG=${KERNEL_REL}-rc2
+KERNEL_TAG=${KERNEL_REL}-rc3
 BUILD=bone0
 kernel_rt=".X-rtY"
 
