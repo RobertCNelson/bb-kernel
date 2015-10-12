@@ -114,15 +114,14 @@ reverts () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/reverts/0001-Revert-spi-spidev-add-compatible-value-for-LTC2488.patch"
-	${git} "${DIR}/patches/reverts/0002-Revert-spi-spidev-Warn-loudly-if-instantiated-from-D.patch"
+	${git} "${DIR}/patches/reverts/0001-Revert-spi-spidev-Warn-loudly-if-instantiated-from-D.patch"
 	#udoo:
-	${git} "${DIR}/patches/reverts/0003-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
+	${git} "${DIR}/patches/reverts/0002-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
 	#am335x causing random reboots...
 #	${git} "${DIR}/patches/reverts/0004-Revert-usb-musb-dsps-just-start-polling-already.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=4
+		number=2
 		cleanup
 	fi
 }
@@ -195,11 +194,10 @@ dts () {
 	${git} "${DIR}/patches/dts/0006-imx6-wl1835-base-boards.patch"
 	${git} "${DIR}/patches/dts/0007-imx6q-sabresd-add-support-for-wilink8-wlan-and-bluet.patch"
 	${git} "${DIR}/patches/dts/0008-imx6sl-evk-add-support-for-wilink8-wlan-and-bluetoot.patch"
-	${git} "${DIR}/patches/dts/0009-arm-obvious.patch"
-	${git} "${DIR}/patches/dts/0010-dts-am57xx-beagle-x15-make-sure-vdd_sd-is-on-fixex-v.patch"
+	${git} "${DIR}/patches/dts/0009-dts-am57xx-beagle-x15-make-sure-vdd_sd-is-on-fixex-v.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=10
+		number=9
 		cleanup
 	fi
 }
@@ -315,6 +313,10 @@ bbb_overlays () {
 		SHA="4ab11996b489ad65092216315484824ed32018f8" ; num="6" ; mainline
 		SHA="b470d6d7a5dfe41112d55c39eac67ddc5afac80d" ; num="7" ; mainline
 		SHA="3d0b16a66c8a9d10294572c6f79df4f15a27825d" ; num="8" ; mainline
+		SHA="7c806883e143dc60439e6bdb3589700ebed1efaa" ; num="9" ; mainline
+		SHA="cbf854ab36870b931aeba4edd954015b7c3005a2" ; num="10" ; mainline
+		SHA="ace22170655f61d82fff95e57d673bf847a32a03" ; num="11" ; mainline
+		SHA="fb727077b04f768d0c79d9aa29e958262a9e3d9e" ; num="12" ; mainline
 		exit 2
 	fi
 
@@ -323,14 +325,23 @@ bbb_overlays () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0009-nvmem-make-default-user-binary-file-root-access-only.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0010-nvmem-set-the-size-for-the-nvmem-binary-file.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0011-nvmem-add-permission-flags-in-nvmem_config.patch"
+#linux-next:
 
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0012-nvmem-core-fix-a-copy-paste-error.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0013-nvmem-Add-Vybrid-OCOTP-support.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0014-nvmem-imx-ocotp-Add-i.MX6-OCOTP-driver.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0015-nvmem-add-driver-for-ocotp-in-i.MX23-and-i.MX28.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0016-nvmem-Adding-bindings-for-rockchip-efuse.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0017-nvmem-rockchip_efuse_regmap_config-can-be-static.patch"
+
+#email...
+
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0018-nvmem-make-default-user-binary-file-root-access-only.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0019-nvmem-set-the-size-for-the-nvmem-binary-file.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0020-nvmem-add-permission-flags-in-nvmem_config.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0021-nvmem-fix-permissions-of-readonly-nvmem-binattr.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=12
+		number=21
 		cleanup
 	fi
 
