@@ -1061,9 +1061,10 @@ beagleboy () {
 	${git} "${DIR}/patches/BeagleBoy/0003-ST-lsm303dlhc-patched-for-build-against-3.8-kernel.patch"
 	${git} "${DIR}/patches/BeagleBoy/0004-ST-lsm330-driver.patch"
 	${git} "${DIR}/patches/BeagleBoy/0005-ST-lsm330-added-to-build.patch"
+	${git} "${DIR}/patches/BeagleBoy/0006-cape-BEAGLEBOY-0013.dts.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=5
+		number=6
 		cleanup
 	fi
 }
