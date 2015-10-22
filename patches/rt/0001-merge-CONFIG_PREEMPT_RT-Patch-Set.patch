@@ -1,6 +1,6 @@
-From 1f9a316696d69fbeb7976e2b6f6027bc9db3b537 Mon Sep 17 00:00:00 2001
+From c6c06bc3c787dddd76df3d4fc7361bb54728c74d Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 29 Sep 2015 17:07:53 -0500
+Date: Thu, 22 Oct 2015 18:55:51 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -36,11 +36,13 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm/mm/fault.c                                |    8 +-
  arch/arm/mm/highmem.c                              |   45 +-
  arch/arm/plat-versatile/platsmp.c                  |   10 +-
- arch/arm64/Kconfig                                 |    2 +
+ arch/arm64/Kconfig                                 |    4 +-
  arch/arm64/include/asm/futex.h                     |    4 +-
  arch/arm64/include/asm/thread_info.h               |    3 +
  arch/arm64/kernel/asm-offsets.c                    |    1 +
+ arch/arm64/kernel/debug-monitors.c                 |   21 +-
  arch/arm64/kernel/entry.S                          |   13 +-
+ arch/arm64/kernel/insn.c                           |    6 +-
  arch/arm64/kernel/perf_event.c                     |    2 +-
  arch/arm64/mm/fault.c                              |    2 +-
  arch/avr32/include/asm/uaccess.h                   |   12 +-
@@ -348,7 +350,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/sched/rt.c                                  |    2 +
  kernel/sched/sched.h                               |   10 +
  kernel/sched/wait-simple.c                         |  115 ++
- kernel/sched/work-simple.c                         |  172 +++
+ kernel/sched/work-simple.c                         |  173 +++
  kernel/signal.c                                    |  135 ++-
  kernel/softirq.c                                   |  724 +++++++++---
  kernel/stop_machine.c                              |   98 +-
@@ -400,7 +402,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/vmalloc.c                                       |   13 +-
  mm/vmstat.c                                        |    6 +
  mm/workingset.c                                    |   23 +-
- net/core/dev.c                                     |  106 +-
+ net/core/dev.c                                     |  108 +-
  net/core/skbuff.c                                  |    6 +-
  net/core/sock.c                                    |    3 +-
  net/ipv4/icmp.c                                    |   30 +
@@ -416,7 +418,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/soc/intel/atom/sst/sst.c                     |    4 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 411 files changed, 11887 insertions(+), 2096 deletions(-)
+ 413 files changed, 11904 insertions(+), 2111 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -1036,10 +1038,10 @@ index f192a2a..649247a 100644
  /*
   * The vectors page is always readable from user space for the
 diff --git a/arch/arm/kernel/signal.c b/arch/arm/kernel/signal.c
-index 423663e..365934f 100644
+index 586eef2..25bd12e 100644
 --- a/arch/arm/kernel/signal.c
 +++ b/arch/arm/kernel/signal.c
-@@ -563,7 +563,8 @@ asmlinkage int
+@@ -568,7 +568,8 @@ asmlinkage int
  do_work_pending(struct pt_regs *regs, unsigned int thread_flags, int syscall)
  {
  	do {
@@ -1756,7 +1758,7 @@ index 53feb90..b4a8d54 100644
  	return pen_release != -1 ? -ENOSYS : 0;
  }
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index 6f0a3b4..2cc65a6 100644
+index 6f0a3b4..09a4125 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
 @@ -69,8 +69,10 @@ config ARM64
@@ -1770,6 +1772,15 @@ index 6f0a3b4..2cc65a6 100644
  	select MODULES_USE_ELF_RELA
  	select NO_BOOTMEM
  	select OF
+@@ -599,7 +601,7 @@ config XEN_DOM0
+ 
+ config XEN
+ 	bool "Xen guest support on ARM64"
+-	depends on ARM64 && OF
++	depends on ARM64 && OF && !PREEMPT_RT_FULL
+ 	select SWIOTLB_XEN
+ 	help
+ 	  Say Y if you want to run Linux in a Virtual Machine on Xen on ARM64.
 diff --git a/arch/arm64/include/asm/futex.h b/arch/arm64/include/asm/futex.h
 index 5f750dc..74069b3 100644
 --- a/arch/arm64/include/asm/futex.h
@@ -1832,6 +1843,54 @@ index da675cc..c73e2ae 100644
    DEFINE(TI_ADDR_LIMIT,		offsetof(struct thread_info, addr_limit));
    DEFINE(TI_TASK,		offsetof(struct thread_info, task));
    DEFINE(TI_CPU,		offsetof(struct thread_info, cpu));
+diff --git a/arch/arm64/kernel/debug-monitors.c b/arch/arm64/kernel/debug-monitors.c
+index b056369..70654d84 100644
+--- a/arch/arm64/kernel/debug-monitors.c
++++ b/arch/arm64/kernel/debug-monitors.c
+@@ -271,20 +271,21 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
+  * Use reader/writer locks instead of plain spinlock.
+  */
+ static LIST_HEAD(break_hook);
+-static DEFINE_RWLOCK(break_hook_lock);
++static DEFINE_SPINLOCK(break_hook_lock);
+ 
+ void register_break_hook(struct break_hook *hook)
+ {
+-	write_lock(&break_hook_lock);
+-	list_add(&hook->node, &break_hook);
+-	write_unlock(&break_hook_lock);
++	spin_lock(&break_hook_lock);
++	list_add_rcu(&hook->node, &break_hook);
++	spin_unlock(&break_hook_lock);
+ }
+ 
+ void unregister_break_hook(struct break_hook *hook)
+ {
+-	write_lock(&break_hook_lock);
+-	list_del(&hook->node);
+-	write_unlock(&break_hook_lock);
++	spin_lock(&break_hook_lock);
++	list_del_rcu(&hook->node);
++	spin_unlock(&break_hook_lock);
++	synchronize_rcu();
+ }
+ 
+ static int call_break_hook(struct pt_regs *regs, unsigned int esr)
+@@ -292,11 +293,11 @@ static int call_break_hook(struct pt_regs *regs, unsigned int esr)
+ 	struct break_hook *hook;
+ 	int (*fn)(struct pt_regs *regs, unsigned int esr) = NULL;
+ 
+-	read_lock(&break_hook_lock);
+-	list_for_each_entry(hook, &break_hook, node)
++	rcu_read_lock();
++	list_for_each_entry_rcu(hook, &break_hook, node)
+ 		if ((esr & hook->esr_mask) == hook->esr_val)
+ 			fn = hook->fn;
+-	read_unlock(&break_hook_lock);
++	rcu_read_unlock();
+ 
+ 	return fn ? fn(regs, esr) : DBG_HOOK_ERROR;
+ }
 diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
 index bddd04d..6515be3 100644
 --- a/arch/arm64/kernel/entry.S
@@ -1872,6 +1931,35 @@ index bddd04d..6515be3 100644
  	/* TIF_SIGPENDING, TIF_NOTIFY_RESUME or TIF_FOREIGN_FPSTATE case */
  	ldr	x2, [sp, #S_PSTATE]
  	mov	x0, sp				// 'regs'
+diff --git a/arch/arm64/kernel/insn.c b/arch/arm64/kernel/insn.c
+index 9249020..30eb88e 100644
+--- a/arch/arm64/kernel/insn.c
++++ b/arch/arm64/kernel/insn.c
+@@ -77,7 +77,7 @@ bool __kprobes aarch64_insn_is_nop(u32 insn)
+ 	}
+ }
+ 
+-static DEFINE_SPINLOCK(patch_lock);
++static DEFINE_RAW_SPINLOCK(patch_lock);
+ 
+ static void __kprobes *patch_map(void *addr, int fixmap)
+ {
+@@ -124,13 +124,13 @@ static int __kprobes __aarch64_insn_write(void *addr, u32 insn)
+ 	unsigned long flags = 0;
+ 	int ret;
+ 
+-	spin_lock_irqsave(&patch_lock, flags);
++	raw_spin_lock_irqsave(&patch_lock, flags);
+ 	waddr = patch_map(addr, FIX_TEXT_POKE0);
+ 
+ 	ret = probe_kernel_write(waddr, &insn, AARCH64_INSN_SIZE);
+ 
+ 	patch_unmap(FIX_TEXT_POKE0);
+-	spin_unlock_irqrestore(&patch_lock, flags);
++	raw_spin_unlock_irqrestore(&patch_lock, flags);
+ 
+ 	return ret;
+ }
 diff --git a/arch/arm64/kernel/perf_event.c b/arch/arm64/kernel/perf_event.c
 index 7778453..fd26e57 100644
 --- a/arch/arm64/kernel/perf_event.c
@@ -1886,7 +1974,7 @@ index 7778453..fd26e57 100644
  			if (err) {
  				pr_err("unable to request IRQ%d for ARM PMU counters\n",
 diff --git a/arch/arm64/mm/fault.c b/arch/arm64/mm/fault.c
-index 96da131..0948d32 100644
+index fa5efaa..1fdbb37 100644
 --- a/arch/arm64/mm/fault.c
 +++ b/arch/arm64/mm/fault.c
 @@ -211,7 +211,7 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
@@ -4689,7 +4777,7 @@ index 1c30976..8612b31 100644
  
  work_notifysig:				# deal with pending signals and
 diff --git a/arch/x86/kernel/entry_64.S b/arch/x86/kernel/entry_64.S
-index 4bd6c19..8a3445b 100644
+index 6c9cb60..db2a15c 100644
 --- a/arch/x86/kernel/entry_64.S
 +++ b/arch/x86/kernel/entry_64.S
 @@ -370,8 +370,8 @@ GLOBAL(int_with_check)
@@ -6987,7 +7075,7 @@ index 4d20088..98b64ed 100644
  	Allows a block device to be used as cache for other devices; uses
  	a btree for indexing and the layout is optimized for SSDs.
 diff --git a/drivers/md/dm.c b/drivers/md/dm.c
-index 697f34f..98347e2 100644
+index 8b72cee..cffdd9a 100644
 --- a/drivers/md/dm.c
 +++ b/drivers/md/dm.c
 @@ -2132,7 +2132,7 @@ static void dm_request_fn(struct request_queue *q)
@@ -8637,10 +8725,10 @@ index 91f0544..8fb1c92 100644
  		}
  		break;
 diff --git a/drivers/pci/access.c b/drivers/pci/access.c
-index b965c12..5908d6e 100644
+index 502a82c..6bb46e0 100644
 --- a/drivers/pci/access.c
 +++ b/drivers/pci/access.c
-@@ -580,7 +580,7 @@ void pci_cfg_access_unlock(struct pci_dev *dev)
+@@ -561,7 +561,7 @@ void pci_cfg_access_unlock(struct pci_dev *dev)
  	WARN_ON(!dev->block_cfg_access);
  
  	dev->block_cfg_access = 0;
@@ -8903,7 +8991,7 @@ index 9ea3d9d..9e68706 100644
  		cancel_delayed_work_sync(
  			&per_cpu(pkg_temp_thermal_threshold_work, i));
 diff --git a/drivers/tty/serial/8250/8250_core.c b/drivers/tty/serial/8250/8250_core.c
-index 4506e40..822a2e1 100644
+index b4fd8de..2098d5f 100644
 --- a/drivers/tty/serial/8250/8250_core.c
 +++ b/drivers/tty/serial/8250/8250_core.c
 @@ -36,6 +36,7 @@
@@ -8932,7 +9020,7 @@ index 4506e40..822a2e1 100644
  
  #define BOTH_EMPTY 	(UART_LSR_TEMT | UART_LSR_THRE)
  
-@@ -3364,7 +3374,7 @@ static void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3372,7 +3382,7 @@ static void serial8250_console_write(struct uart_8250_port *up, const char *s,
  
  	if (port->sysrq)
  		locked = 0;
@@ -8942,7 +9030,7 @@ index 4506e40..822a2e1 100644
  	else
  		spin_lock_irqsave(&port->lock, flags);
 diff --git a/drivers/tty/serial/amba-pl011.c b/drivers/tty/serial/amba-pl011.c
-index 763eb20..841c42a 100644
+index 0cc622a..52f45f3 100644
 --- a/drivers/tty/serial/amba-pl011.c
 +++ b/drivers/tty/serial/amba-pl011.c
 @@ -2000,13 +2000,19 @@ pl011_console_write(struct console *co, const char *s, unsigned int count)
@@ -9236,7 +9324,7 @@ index c7a5602..2907544 100644
  		__this_cpu_inc(bh_accounting.nr);
  		recalc_bh_state();
 diff --git a/fs/dcache.c b/fs/dcache.c
-index 5d03eb0..c1dad92 100644
+index 0046ab7..c235bd8 100644
 --- a/fs/dcache.c
 +++ b/fs/dcache.c
 @@ -19,6 +19,7 @@
@@ -9256,7 +9344,7 @@ index 5d03eb0..c1dad92 100644
  	return dentry; /* try again with same dentry */
  }
  
-@@ -2395,7 +2396,7 @@ again:
+@@ -2398,7 +2399,7 @@ again:
  	if (dentry->d_lockref.count == 1) {
  		if (!spin_trylock(&inode->i_lock)) {
  			spin_unlock(&dentry->d_lock);
@@ -14053,7 +14141,7 @@ index c3fc5c2..161a180 100644
  	}
  	if (ret == 0) {
 diff --git a/ipc/msg.c b/ipc/msg.c
-index 2b6fdbb..cedbf5f 100644
+index 6525406..9ad6991 100644
 --- a/ipc/msg.c
 +++ b/ipc/msg.c
 @@ -188,6 +188,12 @@ static void expunge_all(struct msg_queue *msq, int res)
@@ -14683,10 +14771,10 @@ index fc1ef73..83c6665 100644
  	return r;
  }
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index 9481749..5146610 100644
+index e1af58e..1e7392d 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
-@@ -6933,6 +6933,7 @@ static void perf_swevent_init_hrtimer(struct perf_event *event)
+@@ -6925,6 +6925,7 @@ static void perf_swevent_init_hrtimer(struct perf_event *event)
  
  	hrtimer_init(&hwc->hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
  	hwc->hrtimer.function = perf_swevent_hrtimer;
@@ -18920,7 +19008,7 @@ index 8d0f35d..45ebcff 100644
  }
  EXPORT_SYMBOL(completion_done);
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index e691052..799b75b 100644
+index 8476206..f61482e 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -282,7 +282,11 @@ late_initcall(sched_init_debug);
@@ -19231,7 +19319,7 @@ index e691052..799b75b 100644
  	if (unlikely(prev_state == TASK_DEAD)) {
  		if (prev->sched_class->task_dead)
  			prev->sched_class->task_dead(prev);
-@@ -2650,6 +2748,133 @@ static inline void schedule_debug(struct task_struct *prev)
+@@ -2657,6 +2755,133 @@ static inline void schedule_debug(struct task_struct *prev)
  	schedstat_inc(this_rq(), sched_count);
  }
  
@@ -19365,7 +19453,7 @@ index e691052..799b75b 100644
  /*
   * Pick up the highest-prio task:
   */
-@@ -2756,6 +2981,8 @@ static void __sched __schedule(void)
+@@ -2763,6 +2988,8 @@ static void __sched __schedule(void)
  	smp_mb__before_spinlock();
  	raw_spin_lock_irq(&rq->lock);
  
@@ -19374,7 +19462,7 @@ index e691052..799b75b 100644
  	rq->clock_skip_update <<= 1; /* promote REQ to ACT */
  
  	switch_count = &prev->nivcsw;
-@@ -2765,19 +2992,6 @@ static void __sched __schedule(void)
+@@ -2772,19 +2999,6 @@ static void __sched __schedule(void)
  		} else {
  			deactivate_task(rq, prev, DEQUEUE_SLEEP);
  			prev->on_rq = 0;
@@ -19394,7 +19482,7 @@ index e691052..799b75b 100644
  		}
  		switch_count = &prev->nvcsw;
  	}
-@@ -2787,6 +3001,7 @@ static void __sched __schedule(void)
+@@ -2794,6 +3008,7 @@ static void __sched __schedule(void)
  
  	next = pick_next_task(rq, prev);
  	clear_tsk_need_resched(prev);
@@ -19402,7 +19490,7 @@ index e691052..799b75b 100644
  	clear_preempt_need_resched();
  	rq->clock_skip_update = 0;
  
-@@ -2807,9 +3022,20 @@ static void __sched __schedule(void)
+@@ -2814,9 +3029,20 @@ static void __sched __schedule(void)
  
  static inline void sched_submit_work(struct task_struct *tsk)
  {
@@ -19424,7 +19512,7 @@ index e691052..799b75b 100644
  	 * If we are going to sleep and we have plugged IO queued,
  	 * make sure to submit it to avoid deadlocks.
  	 */
-@@ -2817,6 +3043,12 @@ static inline void sched_submit_work(struct task_struct *tsk)
+@@ -2824,6 +3050,12 @@ static inline void sched_submit_work(struct task_struct *tsk)
  		blk_schedule_flush_plug(tsk);
  }
  
@@ -19437,7 +19525,7 @@ index e691052..799b75b 100644
  asmlinkage __visible void __sched schedule(void)
  {
  	struct task_struct *tsk = current;
-@@ -2825,6 +3057,7 @@ asmlinkage __visible void __sched schedule(void)
+@@ -2832,6 +3064,7 @@ asmlinkage __visible void __sched schedule(void)
  	do {
  		__schedule();
  	} while (need_resched());
@@ -19445,7 +19533,7 @@ index e691052..799b75b 100644
  }
  EXPORT_SYMBOL(schedule);
  
-@@ -2916,6 +3149,14 @@ asmlinkage __visible void __sched notrace preempt_schedule_context(void)
+@@ -2923,6 +3156,14 @@ asmlinkage __visible void __sched notrace preempt_schedule_context(void)
  	if (likely(!preemptible()))
  		return;
  
@@ -19460,7 +19548,7 @@ index e691052..799b75b 100644
  	do {
  		__preempt_count_add(PREEMPT_ACTIVE);
  		/*
-@@ -2924,7 +3165,16 @@ asmlinkage __visible void __sched notrace preempt_schedule_context(void)
+@@ -2931,7 +3172,16 @@ asmlinkage __visible void __sched notrace preempt_schedule_context(void)
  		 * an infinite recursion.
  		 */
  		prev_ctx = exception_enter();
@@ -19477,7 +19565,7 @@ index e691052..799b75b 100644
  		exception_exit(prev_ctx);
  
  		__preempt_count_sub(PREEMPT_ACTIVE);
-@@ -4261,6 +4511,7 @@ int __cond_resched_lock(spinlock_t *lock)
+@@ -4268,6 +4518,7 @@ int __cond_resched_lock(spinlock_t *lock)
  }
  EXPORT_SYMBOL(__cond_resched_lock);
  
@@ -19485,7 +19573,7 @@ index e691052..799b75b 100644
  int __sched __cond_resched_softirq(void)
  {
  	BUG_ON(!in_softirq());
-@@ -4274,6 +4525,7 @@ int __sched __cond_resched_softirq(void)
+@@ -4281,6 +4532,7 @@ int __sched __cond_resched_softirq(void)
  	return 0;
  }
  EXPORT_SYMBOL(__cond_resched_softirq);
@@ -19493,7 +19581,7 @@ index e691052..799b75b 100644
  
  /**
   * yield - yield the current processor to other threads.
-@@ -4628,7 +4880,9 @@ void init_idle(struct task_struct *idle, int cpu)
+@@ -4635,7 +4887,9 @@ void init_idle(struct task_struct *idle, int cpu)
  
  	/* Set the preempt count _outside_ the spinlocks! */
  	init_idle_preempt_count(idle, cpu);
@@ -19504,7 +19592,7 @@ index e691052..799b75b 100644
  	/*
  	 * The idle tasks have their own, simple scheduling class:
  	 */
-@@ -4748,11 +5002,91 @@ static struct rq *move_queued_task(struct task_struct *p, int new_cpu)
+@@ -4755,11 +5009,91 @@ static struct rq *move_queued_task(struct task_struct *p, int new_cpu)
  
  void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
  {
@@ -19599,7 +19687,7 @@ index e691052..799b75b 100644
  }
  
  /*
-@@ -4798,7 +5132,7 @@ int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
+@@ -4805,7 +5139,7 @@ int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
  	do_set_cpus_allowed(p, new_mask);
  
  	/* Can the task run on the task's current CPU? If so, we're done */
@@ -19608,7 +19696,7 @@ index e691052..799b75b 100644
  		goto out;
  
  	dest_cpu = cpumask_any_and(cpu_active_mask, new_mask);
-@@ -4938,6 +5272,8 @@ static int migration_cpu_stop(void *data)
+@@ -4945,6 +5279,8 @@ static int migration_cpu_stop(void *data)
  
  #ifdef CONFIG_HOTPLUG_CPU
  
@@ -19617,7 +19705,7 @@ index e691052..799b75b 100644
  /*
   * Ensures that the idle task is using init_mm right before its cpu goes
   * offline.
-@@ -4952,7 +5288,11 @@ void idle_task_exit(void)
+@@ -4959,7 +5295,11 @@ void idle_task_exit(void)
  		switch_mm(mm, &init_mm, current);
  		finish_arch_post_lock_switch();
  	}
@@ -19630,7 +19718,7 @@ index e691052..799b75b 100644
  }
  
  /*
-@@ -5295,6 +5635,10 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
+@@ -5302,6 +5642,10 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
  
  	case CPU_DEAD:
  		calc_load_migrate(rq);
@@ -19641,7 +19729,7 @@ index e691052..799b75b 100644
  		break;
  #endif
  	}
-@@ -7274,7 +7618,8 @@ void __init sched_init(void)
+@@ -7281,7 +7625,8 @@ void __init sched_init(void)
  #ifdef CONFIG_DEBUG_ATOMIC_SLEEP
  static inline int preempt_count_equals(int preempt_offset)
  {
@@ -19846,7 +19934,7 @@ index a245c1f..34b0000 100644
  #undef __PN
  #undef P
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index c2980e8..92c53d0 100644
+index 77690b6..7aae8d2 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
 @@ -3201,7 +3201,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
@@ -19903,7 +19991,7 @@ index c2980e8..92c53d0 100644
  	/*
  	 * Only set the backward buddy when the current task is still
  	 * on the rq. This can happen when a wakeup gets interleaved
-@@ -7866,7 +7866,7 @@ static void task_fork_fair(struct task_struct *p)
+@@ -7869,7 +7869,7 @@ static void task_fork_fair(struct task_struct *p)
  		 * 'current' within the tree based on its new key value.
  		 */
  		swap(curr->vruntime, se->vruntime);
@@ -19912,7 +20000,7 @@ index c2980e8..92c53d0 100644
  	}
  
  	se->vruntime -= cfs_rq->min_vruntime;
-@@ -7891,7 +7891,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
+@@ -7894,7 +7894,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
  	 */
  	if (rq->curr == p) {
  		if (p->prio > oldprio)
@@ -19966,10 +20054,10 @@ index 575da76..637aa20 100644
  #endif /* CONFIG_SMP */
  	/* We start is dequeued state, because no RT tasks are queued */
 diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
-index e0e1299..308f664 100644
+index aa1f059..1bdd1e5 100644
 --- a/kernel/sched/sched.h
 +++ b/kernel/sched/sched.h
-@@ -1092,6 +1092,7 @@ static inline void finish_lock_switch(struct rq *rq, struct task_struct *prev)
+@@ -1093,6 +1093,7 @@ static inline void finish_lock_switch(struct rq *rq, struct task_struct *prev)
  #define WF_SYNC		0x01		/* waker goes to sleep after wakeup */
  #define WF_FORK		0x02		/* child wakeup after fork */
  #define WF_MIGRATED	0x4		/* internal use, task got migrated */
@@ -19977,7 +20065,7 @@ index e0e1299..308f664 100644
  
  /*
   * To aid in avoiding the subversion of "niceness" due to uneven distribution
-@@ -1289,6 +1290,15 @@ extern void init_sched_dl_class(void);
+@@ -1290,6 +1291,15 @@ extern void init_sched_dl_class(void);
  extern void resched_curr(struct rq *rq);
  extern void resched_cpu(int cpu);
  
@@ -20116,10 +20204,10 @@ index 0000000..7dfa86d
 +EXPORT_SYMBOL(__swait_wake);
 diff --git a/kernel/sched/work-simple.c b/kernel/sched/work-simple.c
 new file mode 100644
-index 0000000..c996f75
+index 0000000..e57a052
 --- /dev/null
 +++ b/kernel/sched/work-simple.c
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,173 @@
 +/*
 + * Copyright (C) 2014 BMW Car IT GmbH, Daniel Wagner daniel.wagner@bmw-carit.de
 + *
@@ -20132,6 +20220,7 @@ index 0000000..c996f75
 +#include <linux/kthread.h>
 +#include <linux/slab.h>
 +#include <linux/spinlock.h>
++#include <linux/export.h>
 +
 +#define SWORK_EVENT_PENDING     (1 << 0)
 +
@@ -22893,7 +22982,7 @@ index 9142591..b3841ba 100644
  
  	/* Get the next period (per cpu) */
 diff --git a/kernel/time/timekeeping.c b/kernel/time/timekeeping.c
-index 946acb7..17d4a89 100644
+index 414d9df..7df1e00 100644
 --- a/kernel/time/timekeeping.c
 +++ b/kernel/time/timekeeping.c
 @@ -2065,8 +2065,10 @@ EXPORT_SYMBOL(hardpps);
@@ -27310,7 +27399,7 @@ index aa01713..263d019 100644
  	return ret;
  }
 diff --git a/net/core/dev.c b/net/core/dev.c
-index a42b232..4969c0d 100644
+index a42b232..f8c23de 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -184,6 +184,7 @@ static unsigned int napi_gen_id;
@@ -27569,7 +27658,7 @@ index a42b232..4969c0d 100644
  }
  EXPORT_SYMBOL(__napi_schedule);
  
-@@ -7167,6 +7210,7 @@ static int dev_cpu_callback(struct notifier_block *nfb,
+@@ -7167,16 +7210,20 @@ static int dev_cpu_callback(struct notifier_block *nfb,
  
  	raise_softirq_irqoff(NET_TX_SOFTIRQ);
  	local_irq_enable();
@@ -27577,7 +27666,11 @@ index a42b232..4969c0d 100644
  
  	/* Process offline CPU's input_pkt_queue */
  	while ((skb = __skb_dequeue(&oldsd->process_queue))) {
-@@ -7177,6 +7221,9 @@ static int dev_cpu_callback(struct notifier_block *nfb,
+ 		netif_rx_ni(skb);
+ 		input_queue_head_incr(oldsd);
+ 	}
+-	while ((skb = skb_dequeue(&oldsd->input_pkt_queue))) {
++	while ((skb = __skb_dequeue(&oldsd->input_pkt_queue))) {
  		netif_rx_ni(skb);
  		input_queue_head_incr(oldsd);
  	}
@@ -27736,7 +27829,7 @@ index 5793f75..f6f8d98 100644
  	if (WARN_ON(status->band >= IEEE80211_NUM_BANDS))
  		goto drop;
 diff --git a/net/netfilter/core.c b/net/netfilter/core.c
-index e616301..f0adf70 100644
+index 5d0c6fd..e814897 100644
 --- a/net/netfilter/core.c
 +++ b/net/netfilter/core.c
 @@ -22,11 +22,17 @@
@@ -27945,7 +28038,7 @@ index 44660ae..cbcabb9 100644
  	mmput(mm);
  	kvm_put_kvm(vcpu->kvm);
 diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
-index 9097741..de93076 100644
+index 8542298..7f843c4 100644
 --- a/virt/kvm/kvm_main.c
 +++ b/virt/kvm/kvm_main.c
 @@ -218,7 +218,7 @@ int kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
@@ -28009,5 +28102,5 @@ index 9097741..de93076 100644
  			if (!kvm_vcpu_eligible_for_directed_yield(vcpu))
  				continue;
 -- 
-2.5.3
+2.6.1
 
