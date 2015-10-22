@@ -119,7 +119,7 @@ reverts () {
 	#udoo:
 	${git} "${DIR}/patches/reverts/0003-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
 	#am335x causing random reboots...
-	${git} "${DIR}/patches/reverts/0004-Revert-usb-musb-dsps-just-start-polling-already.patch"
+#	${git} "${DIR}/patches/reverts/0004-Revert-usb-musb-dsps-just-start-polling-already.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=4
