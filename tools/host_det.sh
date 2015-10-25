@@ -195,6 +195,16 @@ debian_regs () {
 			deb_distro="precise"
 		fi
 
+		if [ "x${deb_distro}" = "xfreya" ] ; then
+			#http://distrowatch.com/table.php?distribution=elementary
+			#lsb_release -a
+			#Distributor ID: elementary OS
+			#Description:    elementary OS Freya
+			#Release:        0.3.1
+			#Codename:       freya
+			deb_distro="trusty"
+		fi
+
 		if [ "x${deb_distro}" = "xtoutatis" ] ; then
 			#http://listas.trisquel.info/pipermail/trisquel-announce/2013-March/000014.html
 			#lsb_release -a
@@ -248,19 +258,19 @@ debian_regs () {
 			deb_distro="jessie"
 			;;
 		isadora)
-			#eol
+			#9
 			deb_distro="lucid"
 			;;
 		julia)
-			#eol
+			#10
 			deb_distro="maverick"
 			;;
 		katya)
-			#eol
+			#11
 			deb_distro="natty"
 			;;
 		lisa)
-			#eol
+			#12
 			deb_distro="oneiric"
 			;;
 		maya)
@@ -268,15 +278,15 @@ debian_regs () {
 			deb_distro="precise"
 			;;
 		nadia)
-			#eol
+			#14
 			deb_distro="quantal"
 			;;
 		olivia)
-			#eol
+			#15
 			deb_distro="raring"
 			;;
 		petra)
-			#eol
+			#16
 			deb_distro="saucy"
 			;;
 		qiana)
@@ -311,6 +321,10 @@ debian_regs () {
 			#9 stretch: https://wiki.debian.org/DebianStretch
 			unset warn_eol_distro
 			;;
+		xenial)
+			#16.04 trusty: (EOL: April 20xx) lts: xenial -> xyz
+			unset warn_eol_distro
+			;;
 		vivid|wily)
 			#15.04 vivid: (EOL: January 2016)
 			#15.10 wily: (EOL: July 2016)
@@ -322,7 +336,7 @@ debian_regs () {
 			stop_pkg_search=1
 			;;
 		trusty)
-			#14.04 trusty: (EOL: April 2019) lts: trusty -> xyz
+			#14.04 trusty: (EOL: April 2019) lts: trusty -> xenial
 			unset warn_eol_distro
 			;;
 		quantal|raring|saucy)
