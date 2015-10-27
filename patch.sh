@@ -84,6 +84,14 @@ rt () {
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
+		git revert --no-edit 57293d164ce7c9cc91dd27050f6622edabbe0c02 -s
+		git revert --no-edit d906a24a7ab60868a191c25e437f92f48948b5ca -s
+		git revert --no-edit 98197d3de58a62785be3e421864d6145955f197d -s
+		git revert --no-edit 3905f7abd0410acdd497661e84c7f6ef672c1e04 -s
+
+		mkdir -p ${DIR}/patches/rt/reverts/
+		git format-patch -4 -o ../patches/rt/reverts/
+
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz
@@ -94,6 +102,11 @@ rt () {
 
 		exit 2
 	fi
+
+	${git} "${DIR}/patches/rt/reverts/0001-Revert-sched-preempt-powerpc-kvm-Use-need_resched-in.patch"
+	${git} "${DIR}/patches/rt/reverts/0002-Revert-sched-preempt-xen-Use-need_resched-instead-of.patch"
+	${git} "${DIR}/patches/rt/reverts/0003-Revert-sched-preempt-Fix-cond_resched_lock-and-cond_.patch"
+	${git} "${DIR}/patches/rt/reverts/0004-Revert-sched-preempt-Rename-PREEMPT_CHECK_OFFSET-to-.patch"
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
 }
@@ -118,11 +131,9 @@ reverts () {
 	${git} "${DIR}/patches/reverts/0002-Revert-spi-spidev-Warn-loudly-if-instantiated-from-D.patch"
 #	#udoo:
 #	${git} "${DIR}/patches/reverts/0003-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
-	#am335x causing random reboots...
-#	${git} "${DIR}/patches/reverts/0004-Revert-usb-musb-dsps-just-start-polling-already.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=4
+		number=3
 		cleanup
 	fi
 }
@@ -212,14 +223,14 @@ dts () {
 	${git} "${DIR}/patches/dts/0005-ARM-DTS-omap3-beagle.dts-enable-twl4030-power-reset.patch"
 	${git} "${DIR}/patches/dts/0006-arm-dts-omap4-move-emif-so-panda-es-b3-now-boots.patch"
 	${git} "${DIR}/patches/dts/0007-omap3-beagle-xm-ehci-works-again.patch"
-#	${git} "${DIR}/patches/dts/0008-ARM-dts-omap3-beagle-ddc-i2c-bus-is-not-responding-d.patch"
-	${git} "${DIR}/patches/dts/0009-first-pass-imx6q-ccimx6sbc.patch"
-	${git} "${DIR}/patches/dts/0010-imx6-wl1835-base-boards.patch"
-	${git} "${DIR}/patches/dts/0011-imx6q-sabresd-add-support-for-wilink8-wlan-and-bluet.patch"
-	${git} "${DIR}/patches/dts/0012-imx6sl-evk-add-support-for-wilink8-wlan-and-bluetoot.patch"
-	${git} "${DIR}/patches/dts/0013-drm-imx-tve-fix-media-bus-format-for-VGA-output.patch"
-	${git} "${DIR}/patches/dts/0014-ARM-dts-imx53-qsb-fix-TVE-entry.patch"
-	${git} "${DIR}/patches/dts/0015-ARM-dts-imx53-qsb-select-open-drain-mode-for-i2c1-pa.patch"
+	${git} "${DIR}/patches/dts/0008-first-pass-imx6q-ccimx6sbc.patch"
+	${git} "${DIR}/patches/dts/0009-imx6-wl1835-base-boards.patch"
+	${git} "${DIR}/patches/dts/0010-imx6q-sabresd-add-support-for-wilink8-wlan-and-bluet.patch"
+	${git} "${DIR}/patches/dts/0011-imx6sl-evk-add-support-for-wilink8-wlan-and-bluetoot.patch"
+	${git} "${DIR}/patches/dts/0012-drm-imx-tve-fix-media-bus-format-for-VGA-output.patch"
+	${git} "${DIR}/patches/dts/0013-ARM-dts-imx53-qsb-fix-TVE-entry.patch"
+	${git} "${DIR}/patches/dts/0014-ARM-dts-imx53-qsb-select-open-drain-mode-for-i2c1-pa.patch"
+	${git} "${DIR}/patches/dts/0015-dts-imx6-fix-sd-card-gpio-polarity-specified-in-devi.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=15
@@ -415,9 +426,10 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0003-arm-dts-am335x-bone-common-add-collision-and-carrier.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0004-add-am335x-bonegreen.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0005-add-overlay-dtb.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0006-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=5
+		number=6
 		cleanup
 	fi
 

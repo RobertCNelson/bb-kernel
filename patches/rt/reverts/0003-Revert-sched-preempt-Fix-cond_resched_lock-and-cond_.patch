@@ -1,0 +1,162 @@
+From e7621a7aa50684f91308bf4ffa333ea089cfbf61 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Tue, 27 Oct 2015 18:34:22 -0500
+Subject: [PATCH 3/4] Revert "sched/preempt: Fix cond_resched_lock() and
+ cond_resched_softirq()"
+
+This reverts commit 98197d3de58a62785be3e421864d6145955f197d.
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ arch/x86/include/asm/preempt.h |  4 ++--
+ include/asm-generic/preempt.h  |  5 ++---
+ include/linux/preempt.h        |  5 ++---
+ include/linux/preempt_mask.h   | 14 +++-----------
+ include/linux/sched.h          |  6 ++++++
+ kernel/sched/core.c            |  6 +++---
+ 6 files changed, 18 insertions(+), 22 deletions(-)
+
+diff --git a/arch/x86/include/asm/preempt.h b/arch/x86/include/asm/preempt.h
+index 67b6cd0..8f327184 100644
+--- a/arch/x86/include/asm/preempt.h
++++ b/arch/x86/include/asm/preempt.h
+@@ -90,9 +90,9 @@ static __always_inline bool __preempt_count_dec_and_test(void)
+ /*
+  * Returns true when we need to resched and can (barring IRQ state).
+  */
+-static __always_inline bool should_resched(int preempt_offset)
++static __always_inline bool should_resched(void)
+ {
+-	return unlikely(raw_cpu_read_4(__preempt_count) == preempt_offset);
++	return unlikely(!raw_cpu_read_4(__preempt_count));
+ }
+ 
+ #ifdef CONFIG_PREEMPT
+diff --git a/include/asm-generic/preempt.h b/include/asm-generic/preempt.h
+index b6a53e8..eb6f9e6 100644
+--- a/include/asm-generic/preempt.h
++++ b/include/asm-generic/preempt.h
+@@ -71,10 +71,9 @@ static __always_inline bool __preempt_count_dec_and_test(void)
+ /*
+  * Returns true when we need to resched and can (barring IRQ state).
+  */
+-static __always_inline bool should_resched(int preempt_offset)
++static __always_inline bool should_resched(void)
+ {
+-	return unlikely(preempt_count() == preempt_offset &&
+-			tif_need_resched());
++	return unlikely(!preempt_count() && tif_need_resched());
+ }
+ 
+ #ifdef CONFIG_PREEMPT
+diff --git a/include/linux/preempt.h b/include/linux/preempt.h
+index 8cd6725..de83b4e 100644
+--- a/include/linux/preempt.h
++++ b/include/linux/preempt.h
+@@ -20,8 +20,7 @@
+ #if defined(CONFIG_DEBUG_PREEMPT) || defined(CONFIG_PREEMPT_TRACER)
+ extern void preempt_count_add(int val);
+ extern void preempt_count_sub(int val);
+-#define preempt_count_dec_and_test() \
+-	({ preempt_count_sub(1); should_resched(0); })
++#define preempt_count_dec_and_test() ({ preempt_count_sub(1); should_resched(); })
+ #else
+ #define preempt_count_add(val)	__preempt_count_add(val)
+ #define preempt_count_sub(val)	__preempt_count_sub(val)
+@@ -60,7 +59,7 @@ do { \
+ 
+ #define preempt_check_resched() \
+ do { \
+-	if (should_resched(0)) \
++	if (should_resched()) \
+ 		__preempt_schedule(); \
+ } while (0)
+ 
+diff --git a/include/linux/preempt_mask.h b/include/linux/preempt_mask.h
+index 5cb25f1..1f654ee 100644
+--- a/include/linux/preempt_mask.h
++++ b/include/linux/preempt_mask.h
+@@ -71,21 +71,13 @@
+  */
+ #define in_nmi()	(preempt_count() & NMI_MASK)
+ 
+-/*
+- * The preempt_count offset after preempt_disable();
+- */
+ #if defined(CONFIG_PREEMPT_COUNT)
+-# define PREEMPT_DISABLE_OFFSET	PREEMPT_OFFSET
++# define PREEMPT_DISABLE_OFFSET 1
+ #else
+-# define PREEMPT_DISABLE_OFFSET	0
++# define PREEMPT_DISABLE_OFFSET 0
+ #endif
+ 
+ /*
+- * The preempt_count offset after spin_lock()
+- */
+-#define PREEMPT_LOCK_OFFSET	PREEMPT_DISABLE_OFFSET
+-
+-/*
+  * The preempt_count offset needed for things like:
+  *
+  *  spin_lock_bh()
+@@ -98,7 +90,7 @@
+  *
+  * Work as expected.
+  */
+-#define SOFTIRQ_LOCK_OFFSET (SOFTIRQ_DISABLE_OFFSET + PREEMPT_LOCK_OFFSET)
++#define SOFTIRQ_LOCK_OFFSET (SOFTIRQ_DISABLE_OFFSET + PREEMPT_DISABLE_OFFSET)
+ 
+ /*
+  * Are we running in atomic context?  WARNING: this macro cannot
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index 61f4f2d..26a2e61 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -2834,6 +2834,12 @@ extern int _cond_resched(void);
+ 
+ extern int __cond_resched_lock(spinlock_t *lock);
+ 
++#ifdef CONFIG_PREEMPT_COUNT
++#define PREEMPT_LOCK_OFFSET	PREEMPT_OFFSET
++#else
++#define PREEMPT_LOCK_OFFSET	0
++#endif
++
+ #define cond_resched_lock(lock) ({				\
+ 	___might_sleep(__FILE__, __LINE__, PREEMPT_LOCK_OFFSET);\
+ 	__cond_resched_lock(lock);				\
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index 4d870eb..8476206 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -4232,7 +4232,7 @@ SYSCALL_DEFINE0(sched_yield)
+ 
+ int __sched _cond_resched(void)
+ {
+-	if (should_resched(0)) {
++	if (should_resched()) {
+ 		preempt_schedule_common();
+ 		return 1;
+ 	}
+@@ -4250,7 +4250,7 @@ EXPORT_SYMBOL(_cond_resched);
+  */
+ int __cond_resched_lock(spinlock_t *lock)
+ {
+-	int resched = should_resched(PREEMPT_LOCK_OFFSET);
++	int resched = should_resched();
+ 	int ret = 0;
+ 
+ 	lockdep_assert_held(lock);
+@@ -4272,7 +4272,7 @@ int __sched __cond_resched_softirq(void)
+ {
+ 	BUG_ON(!in_softirq());
+ 
+-	if (should_resched(SOFTIRQ_DISABLE_OFFSET)) {
++	if (should_resched()) {
+ 		local_bh_enable();
+ 		preempt_schedule_common();
+ 		local_bh_disable();
+-- 
+2.6.1
+
