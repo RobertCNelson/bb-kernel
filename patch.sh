@@ -311,7 +311,6 @@ sgx () {
 }
 
 ###
-rt
 dt
 #dts
 #wand
