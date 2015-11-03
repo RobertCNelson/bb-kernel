@@ -74,30 +74,38 @@ external_git () {
 	git pull ${git_opts} ${git_patchset} ${git_tag}
 }
 
+rt_cleanup () {
+	echo "rt: needs fixup"
+	exit 2
+}
+
+rt () {
+	echo "dir: rt"
+	rt_patch="${KERNEL_REL}${kernel_rt}"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
+		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
+		rm -f patch-${rt_patch}.patch.xz
+		rm -f localversion-rt
+		git add .
+		git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
+		git format-patch -1 -o ../patches/rt/
+
+		exit 2
+	fi
+
+	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
+}
+
 local_patch () {
 	echo "dir: dir"
 	${git} "${DIR}/patches/dir/0001-patch.patch"
 }
 
 #external_git
+rt
 #local_patch
-
-rt () {
-	echo "dir: rt"
-	rt_patch="4.0.8-rt6"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/4.0/patch-${rt_patch}.patch.xz
-		xzcat patch-${rt_patch}.patch.xz | patch -p1
-		rm -rf patch-${rt_patch}.patch.xz
-
-		sed -i -e 's:rt5:rt6:g' ../patches/rt/0002-rt-we-append-rt-on-our-own.patch
-		exit 2
-	fi
-
-	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
-	${git} "${DIR}/patches/rt/0002-rt-we-append-rt-on-our-own.patch"
-}
 
 dt () {
 	echo "dir: dt/gpiohog"
