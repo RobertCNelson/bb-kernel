@@ -23,24 +23,30 @@
 ARCH=$(uname -m)
 DIR=$PWD
 
-. ${DIR}/system.sh
+. "${DIR}/system.sh"
 
 #For:
 #toolchain
-. ${DIR}/version.sh
+. "${DIR}/version.sh"
+
+if [ -d $HOME/dl/gcc/ ] ; then
+	gcc_dir="$HOME/dl/gcc"
+else
+	gcc_dir="${DIR}/dl"
+fi
 
 dl_gcc_generic () {
-	WGET="wget -c --directory-prefix=${DIR}/dl/"
-	if [ ! -f ${DIR}/dl/${directory}/${datestamp} ] ; then
+	WGET="wget -c --directory-prefix=${gcc_dir}/"
+	if [ ! -f "${gcc_dir}/${directory}/${datestamp}" ] ; then
 		echo "Installing: ${toolchain_name}"
 		echo "-----------------------------"
-		${WGET} ${site}/${version}/${filename}
-		if [ -d ${DIR}/dl/${directory} ] ; then
-			rm -rf ${DIR}/dl/${directory} || true
+		${WGET} "${site}/${version}/${filename}" || ${WGET} "${archive_site}/${version}/${filename}"
+		if [ -d "${gcc_dir}/${directory}" ] ; then
+			rm -rf "${gcc_dir}/${directory}" || true
 		fi
-		tar -xf ${DIR}/dl/${filename} -C ${DIR}/dl/
-		if [ -f ${DIR}/dl/${directory}/${binary}gcc ] ; then
-			touch ${DIR}/dl/${directory}/${datestamp}
+		tar -xf "${gcc_dir}/${filename}" -C "${gcc_dir}/"
+		if [ -f "${gcc_dir}/${directory}/${binary}gcc" ] ; then
+			touch "${gcc_dir}/${directory}/${datestamp}"
 		fi
 	fi
 
@@ -48,12 +54,13 @@ dl_gcc_generic () {
 		#using native gcc
 		CC=
 	else
-		CC="${DIR}/dl/${directory}/${binary}"
+		CC="${gcc_dir}/${directory}/${binary}"
 	fi
 }
 
 gcc_toolchain () {
 	site="https://releases.linaro.org"
+	archive_site="https://releases.linaro.org/archive"
 	case "${toolchain}" in
 	gcc_linaro_eabi_4_8)
 		#
@@ -85,24 +92,42 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_eabi_4_9)
 		#
-		#https://releases.linaro.org/15.02/components/toolchain/binaries/arm-none-eabi/gcc-linaro-4.9-2015.02-3-x86_64_arm-eabi.tar.xz
+		#https://releases.linaro.org/15.05/components/toolchain/binaries/arm-eabi/gcc-linaro-4.9-2015.05-x86_64_arm-eabi.tar.xz
 		#
 
 		gcc_version="4.9"
-		release="15.02"
-		target="arm-none-eabi"
+		release="15.05"
+		target="arm-eabi"
 
 		version="${release}/components/toolchain/binaries/${target}"
-		filename="gcc-linaro-${gcc_version}-20${release}-3-x86_64_arm-eabi.tar.xz"
-		directory="gcc-linaro-${gcc_version}-20${release}-3-x86_64_arm-eabi"
+		filename="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi.tar.xz"
+		directory="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi"
 
-		datestamp="${gcc_version}-20${release}-3-${target}"
+		datestamp="${gcc_version}-20${release}-${target}"
+
+		binary="bin/arm-eabi-"
+		;;
+	gcc_linaro_eabi_5)
+		#
+		#https://releases.linaro.org/components/toolchain/binaries/5.1-2015.08/arm-eabi/gcc-linaro-5.1-2015.08-x86_64_arm-eabi.tar.xz
+		#
+
+		gcc_version="5.1"
+		release="15.08"
+		target="arm-eabi"
+
+		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
+		filename="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi.tar.xz"
+		directory="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi"
+
+		datestamp="${gcc_version}-20${release}-${target}"
 
 		binary="bin/arm-eabi-"
 		;;
 	gcc_linaro_gnueabi_4_6)
 		#
 		#https://releases.linaro.org/12.03/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabi-2012.03-20120326_linux.tar.bz2
+		#https://releases.linaro.org/archive/12.03/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabi-2012.03-20120326_linux.tar.bz2
 		#
 		release="2012.03"
 		toolchain_name="gcc-linaro-arm-linux-gnueabi"
@@ -117,6 +142,7 @@ gcc_toolchain () {
 	gcc_linaro_gnueabihf_4_7)
 		#
 		#https://releases.linaro.org/13.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
+		#https://releases.linaro.org/archive/13.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
 		#
 		gcc_version="4.7"
 		release="2013.04"
@@ -159,18 +185,35 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_gnueabihf_4_9)
 		#
-		#https://releases.linaro.org/15.02/components/toolchain/binaries/arm-linux-gnueabihf/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf.tar.xz
+		#https://releases.linaro.org/15.05/components/toolchain/binaries/arm-linux-gnueabihf/gcc-linaro-4.9-2015.05-x86_64_arm-linux-gnueabihf.tar.xz
 		#
 
 		gcc_version="4.9"
-		release="15.02"
+		release="15.05"
 		target="arm-linux-gnueabihf"
 
 		version="${release}/components/toolchain/binaries/${target}"
-		filename="gcc-linaro-${gcc_version}-20${release}-3-x86_64_${target}.tar.xz"
-		directory="gcc-linaro-${gcc_version}-20${release}-3-x86_64_${target}"
+		filename="gcc-linaro-${gcc_version}-20${release}-x86_64_${target}.tar.xz"
+		directory="gcc-linaro-${gcc_version}-20${release}-x86_64_${target}"
 
-		datestamp="${gcc_version}-20${release}-3-${target}"
+		datestamp="${gcc_version}-20${release}-${target}"
+
+		binary="bin/${target}-"
+		;;
+	gcc_linaro_gnueabihf_5)
+		#
+		#https://releases.linaro.org/components/toolchain/binaries/5.1-2015.08/arm-linux-gnueabihf/gcc-linaro-5.1-2015.08-x86_64_arm-linux-gnueabihf.tar.xz
+		#
+
+		gcc_version="5.1"
+		release="15.08"
+		target="arm-linux-gnueabihf"
+
+		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
+		filename="gcc-linaro-${gcc_version}-20${release}-x86_64_${target}.tar.xz"
+		directory="gcc-linaro-${gcc_version}-20${release}-x86_64_${target}"
+
+		datestamp="${gcc_version}-20${release}-${target}"
 
 		binary="bin/${target}-"
 		;;
@@ -206,7 +249,7 @@ if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] ; then
 	gcc_toolchain
 fi
 
-GCC_TEST=$(LC_ALL=C ${CC}gcc -v 2>&1 | grep "Target:" | grep arm || true)
+GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep arm || true)
 
 if [ "x${GCC_TEST}" = "x" ] ; then
 	echo "-----------------------------"
@@ -216,6 +259,6 @@ if [ "x${GCC_TEST}" = "x" ] ; then
 fi
 
 echo "-----------------------------"
-echo "scripts/gcc: Using: `LC_ALL=C ${CC}gcc --version`"
+echo "scripts/gcc: Using: $(LC_ALL=C "${CC}"gcc --version)"
 echo "-----------------------------"
-echo "CC=${CC}" > ${DIR}/.CC
+echo "CC=${CC}" > "${DIR}/.CC"

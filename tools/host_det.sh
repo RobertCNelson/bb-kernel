@@ -30,7 +30,7 @@ detect_host () {
 }
 
 check_rpm () {
-	pkg_test=$(LC_ALL=C rpm -q ${pkg})
+	pkg_test=$(LC_ALL=C rpm -q "${pkg}")
 	if [ "x${pkg_test}" = "xpackage ${pkg} is not installed" ] ; then
 		rpm_pkgs="${rpm_pkgs}${pkg} "
 	fi
@@ -54,6 +54,8 @@ redhat_reqs () {
 
 	arch=$(uname -m)
 	if [ "x${arch}" = "xx86_64" ] ; then
+		pkg="ncurses-devel.x86_64"
+		check_rpm
 		pkg="ncurses-devel.i686"
 		check_rpm
 		pkg="libstdc++.i686"
@@ -62,50 +64,13 @@ redhat_reqs () {
 		check_rpm
 	fi
 
-	if [ $(which lsb_release) ] ; then
+	if [ "$(which lsb_release)" ] ; then
 		rpm_distro=$(lsb_release -rs)
 		echo "RPM distro version: [${rpm_distro}]"
 
 		case "${rpm_distro}" in
-		6.4|6.5|6.6|6.7)
-			echo "-----------------------------"
-			echo "Warning: RHEL/CentOS [${rpm_distro}] has no [uboot-tools] pkg by default"
-			echo "add: [EPEL] repo: https://fedoraproject.org/wiki/EPEL"
-			echo "http://download.fedoraproject.org/pub/epel/6/i386/repoview/epel-release.html"
-			echo "-----------------------------"
-			pkg="uboot-tools"
-			check_rpm
-			;;
-		7.0|7.1)
-			echo "-----------------------------"
-			echo "Warning: RHEL/CentOS [${rpm_distro}] has no [uboot-tools] pkg by default"
-			echo "add: [EPEL] repo: https://fedoraproject.org/wiki/EPEL"
-			echo "http://download.fedoraproject.org/pub/epel/7/x86_64/repoview/epel-release.html"
-			echo "-----------------------------"
-			pkg="uboot-tools"
-			check_rpm
-			;;
-		22)
+		22|23)
 			pkgtool="dnf"
-			pkg="uboot-tools"
-			check_rpm
-			;;
-		20|21)
-			pkg="uboot-tools"
-			check_rpm
-			;;
-		17|18|19)
-			#end of life...
-			pkg="uboot-tools"
-			check_rpm
-			;;
-		*)
-			echo "Warning: [uboot-tools] package check still in development"
-			echo "Please email to: bugs@rcn-ee.com"
-			echo "Success/Failure of [${pkgtool} install uboot-tools]"
-			echo "RPM distro version: [${rpm_distro}]"
-			pkg="uboot-tools"
-			check_rpm
 			;;
 		esac
 	fi
@@ -136,7 +101,7 @@ Missing /etc/SuSE-release file
 
 
 # --- patch ---
-    if [ ! $( which patch ) ]
+    if [ ! "$( which patch )" ]
     then
         cat >&2 <<@@
 Missing patch command,
@@ -144,25 +109,6 @@ Missing patch command,
  installed simply using:
 
     zypper install patch
-
-@@
-        return 1
-    fi
-
-# --- mkimage ---
-    if [ ! $( which mkimage ) ]
-    then
-        cat >&2 <<@@
-Missing mkimage command.
- This command is part of a package not provided directly from
- opensuse. It can be found under several places for suse.
- There are two ways to install the package: either using a rpm
- or using a repo.
- In the second case these are the command to issue in order to 
- install it:
-
-    zypper addrepo -f http://download.opensuse.org/repositories/home:/jblunck:/beagleboard/openSUSE_11.2
-    zypper install uboot-mkimage
 
 @@
         return 1
@@ -196,7 +142,7 @@ debian_regs () {
 	unset warn_dpkg_ia32
 	unset stop_pkg_search
 	#lsb_release might not be installed...
-	if [ $(which lsb_release) ] ; then
+	if [ "$(which lsb_release)" ] ; then
 		deb_distro=$(lsb_release -cs | sed 's/\//_/g')
 
 		if [ "x${deb_distro}" = "xn_a" ] ; then
@@ -249,6 +195,16 @@ debian_regs () {
 			deb_distro="precise"
 		fi
 
+		if [ "x${deb_distro}" = "xfreya" ] ; then
+			#http://distrowatch.com/table.php?distribution=elementary
+			#lsb_release -a
+			#Distributor ID: elementary OS
+			#Description:    elementary OS Freya
+			#Release:        0.3.1
+			#Codename:       freya
+			deb_distro="trusty"
+		fi
+
 		if [ "x${deb_distro}" = "xtoutatis" ] ; then
 			#http://listas.trisquel.info/pipermail/trisquel-announce/2013-March/000014.html
 			#lsb_release -a
@@ -279,6 +235,15 @@ debian_regs () {
 			deb_distro="wheezy"
 		fi
 
+		if [ "x${deb_distro}" = "xsana" ] ; then
+			#lsb_release -a
+			#Distributor ID:    Kali
+			#Description:    Kali GNU/Linux 2.0
+			#Release:    2.0
+			#Codename:    sana
+			deb_distro="jessie"
+		fi
+
 		#Linux Mint: Compatibility Matrix
 		#http://www.linuxmint.com/download_all.php (lists current versions)
 		#http://www.linuxmint.com/oldreleases.php
@@ -293,19 +258,19 @@ debian_regs () {
 			deb_distro="jessie"
 			;;
 		isadora)
-			#eol
+			#9
 			deb_distro="lucid"
 			;;
 		julia)
-			#eol
+			#10
 			deb_distro="maverick"
 			;;
 		katya)
-			#eol
+			#11
 			deb_distro="natty"
 			;;
 		lisa)
-			#eol
+			#12
 			deb_distro="oneiric"
 			;;
 		maya)
@@ -313,15 +278,15 @@ debian_regs () {
 			deb_distro="precise"
 			;;
 		nadia)
-			#eol
+			#14
 			deb_distro="quantal"
 			;;
 		olivia)
-			#eol
+			#15
 			deb_distro="raring"
 			;;
 		petra)
-			#eol
+			#16
 			deb_distro="saucy"
 			;;
 		qiana)
@@ -350,6 +315,14 @@ debian_regs () {
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
 		squeeze|wheezy|jessie|stretch|sid)
+			#6 squeeze: 2016-02-06 https://wiki.debian.org/DebianSqueeze
+			#7 wheezy: https://wiki.debian.org/DebianWheezy
+			#8 jessie: https://wiki.debian.org/DebianJessie
+			#9 stretch: https://wiki.debian.org/DebianStretch
+			unset warn_eol_distro
+			;;
+		xenial)
+			#16.04 trusty: (EOL: April 20xx) lts: xenial -> xyz
 			unset warn_eol_distro
 			;;
 		vivid|wily)
@@ -363,33 +336,26 @@ debian_regs () {
 			stop_pkg_search=1
 			;;
 		trusty)
-			#14.04 (EOL: April 2019) lts: trusty -> xyz
+			#14.04 trusty: (EOL: April 2019) lts: trusty -> xenial
 			unset warn_eol_distro
 			;;
 		quantal|raring|saucy)
-			#12.10 (EOL: May 16, 2014)
-			#13.04 (EOL: January 27, 2014)
-			#13.10 (EOL: July 17, 2014)
+			#12.10 quantal: (EOL: May 16, 2014)
+			#13.04 raring: (EOL: January 27, 2014)
+			#13.10 saucy: (EOL: July 17, 2014)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
 		precise)
-			#12.04 (EOL: April 2017) lts: precise -> trusty
+			#12.04 precise: (EOL: April 2017) lts: precise -> trusty
 			unset warn_eol_distro
 			;;
-		maverick|natty|oneiric)
-			#10.10 (EOL: April 10, 2012)
-			#11.04 (EOL: October 28, 2012)
-			#11.10 (EOL: May 9, 2013)
-			warn_eol_distro=1
-			stop_pkg_search=1
-			;;
-		lucid)
-			#10.04 (EOL: April 2015) lts: lucid -> precise
-			unset warn_eol_distro
-			;;
-		hardy)
-			#8.04 (EOL: May 2013) lts: hardy -> lucid
+		hardy|lucid|maverick|natty|oneiric)
+			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
+			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
+			#10.10 maverick: (EOL: April 10, 2012)
+			#11.04 natty: (EOL: October 28, 2012)
+			#11.10 oneiric: (EOL: May 9, 2013)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -401,24 +367,12 @@ debian_regs () {
 		esac
 	fi
 
-	if [ $(which lsb_release) ] && [ ! "${stop_pkg_search}" ] ; then
+	if [ "$(which lsb_release)" ] && [ ! "${stop_pkg_search}" ] ; then
 		deb_arch=$(LC_ALL=C dpkg --print-architecture)
 		
-		#pkg: mkimage
-		case "${deb_distro}" in
-		squeeze|lucid)
-			pkg="uboot-mkimage"
-			check_dpkg
-			;;
-		*)
-			pkg="u-boot-tools"
-			check_dpkg
-			;;
-		esac
-
 		#Libs; starting with jessie/sid, lib<pkg_name>-dev:<arch>
 		case "${deb_distro}" in
-		squeeze|wheezy|lucid|precise)
+		squeeze|wheezy|precise)
 			pkg="libncurses5-dev"
 			check_dpkg
 			;;
@@ -432,7 +386,7 @@ debian_regs () {
 		if [ "x${deb_arch}" = "xamd64" ] ; then
 			unset dpkg_multiarch
 			case "${deb_distro}" in
-			squeeze|lucid|precise)
+			squeeze|precise)
 				pkg="ia32-libs"
 				check_dpkg
 				;;
@@ -475,9 +429,9 @@ debian_regs () {
 		echo "-----------------------------"
 		echo "Please cut, paste and email to: bugs@rcn-ee.com"
 		echo "-----------------------------"
-		echo "git: [`git rev-parse HEAD`]"
-		echo "git: [`cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g'`]"
-		echo "uname -m: [`uname -m`]"
+		echo "git: [$(git rev-parse HEAD)]"
+		echo "git: [$(cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g')]"
+		echo "uname -m: [$(uname -m)]"
 		echo "lsb_release -a:"
 		lsb_release -a
 		echo "-----------------------------"
@@ -498,14 +452,14 @@ debian_regs () {
 }
 
 BUILD_HOST=${BUILD_HOST:="$( detect_host )"}
-if [ $(which lsb_release) ] ; then
-	info "Detected build host [`lsb_release -sd`]"
-	info "host: [`uname -m`]"
-	info "git HEAD commit: [`git rev-parse HEAD`]"
+if [ "$(which lsb_release)" ] ; then
+	info "Detected build host [$(lsb_release -sd)]"
+	info "host: [$(uname -m)]"
+	info "git HEAD commit: [$(git rev-parse HEAD)]"
 else
 	info "Detected build host [$BUILD_HOST]"
-	info "host: [`uname -m`]"
-	info "git HEAD commit: [`git rev-parse HEAD`]"
+	info "host: [$(uname -m)]"
+	info "git HEAD commit: [$(git rev-parse HEAD)]"
 fi
 case "$BUILD_HOST" in
     redhat*)
