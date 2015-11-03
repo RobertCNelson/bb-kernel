@@ -288,6 +288,8 @@ beaglebone () {
 		number=3
 		cleanup
 	fi
+
+	${git} "${DIR}/patches/beaglebone/0001-am335x-boneblack-spi0.dtb.patch"
 }
 
 sgx () {
