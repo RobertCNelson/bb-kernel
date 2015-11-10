@@ -400,9 +400,10 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0004-add-am335x-bonegreen.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0005-add-overlay-dtb.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0006-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0007-spi-omap2-mcspi-ti-pio-mode.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=6
+		number=7
 		cleanup
 	fi
 
