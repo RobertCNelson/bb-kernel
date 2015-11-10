@@ -217,7 +217,6 @@ dts () {
 	${git} "${DIR}/patches/dts/0012-drm-imx-tve-fix-media-bus-format-for-VGA-output.patch"
 	${git} "${DIR}/patches/dts/0013-ARM-dts-imx53-qsb-fix-TVE-entry.patch"
 	${git} "${DIR}/patches/dts/0014-ARM-dts-imx53-qsb-select-open-drain-mode-for-i2c1-pa.patch"
-	${git} "${DIR}/patches/dts/0015-dts-imx6-fix-sd-card-gpio-polarity-specified-in-devi.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=15
@@ -414,9 +413,10 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0004-add-am335x-bonegreen.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0005-add-overlay-dtb.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0006-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0007-spi-omap2-mcspi-ti-pio-mode.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=6
+		number=7
 		cleanup
 	fi
 
