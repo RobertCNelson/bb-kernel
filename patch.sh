@@ -310,10 +310,19 @@ bbb_overlays () {
 		SHA="4ab11996b489ad65092216315484824ed32018f8" ; num="6" ; mainline
 		SHA="b470d6d7a5dfe41112d55c39eac67ddc5afac80d" ; num="7" ; mainline
 		SHA="3d0b16a66c8a9d10294572c6f79df4f15a27825d" ; num="8" ; mainline
-		SHA="7c806883e143dc60439e6bdb3589700ebed1efaa" ; num="9" ; mainline
-		SHA="cbf854ab36870b931aeba4edd954015b7c3005a2" ; num="10" ; mainline
-		SHA="ace22170655f61d82fff95e57d673bf847a32a03" ; num="11" ; mainline
-		SHA="fb727077b04f768d0c79d9aa29e958262a9e3d9e" ; num="12" ; mainline
+		SHA="6230699469523337d65bb5e2f47279dfcf3eea17" ; num="9" ; mainline
+		SHA="22dbdb7cbf7214befd3a449ba7959c8cf4038e6c" ; num="10" ; mainline
+		SHA="5380a9a6acd990833f76c52c1327a289d09d88aa" ; num="11" ; mainline
+		SHA="3edba6b47e4265948db3a77a0137157c033d69e2" ; num="12" ; mainline
+		SHA="fb86de91c2a48e320bfa3767802d9a1fb204a230" ; num="13" ; mainline
+		SHA="c01e9a11ab6f3096a54574c3224d8732a374f135" ; num="14" ; mainline
+		SHA="faf25a9089fc9bdc277b30dbdef8ea7ad7c9083b" ; num="15" ; mainline
+		SHA="03a69568e07e1150e1cfdb862892798f88dafd17" ; num="16" ; mainline
+		SHA="7e532f7925f1758369c7963297baceac3cbaefc1" ; num="17" ; mainline
+		SHA="7c806883e143dc60439e6bdb3589700ebed1efaa" ; num="18" ; mainline
+		SHA="cbf854ab36870b931aeba4edd954015b7c3005a2" ; num="19" ; mainline
+		SHA="ace22170655f61d82fff95e57d673bf847a32a03" ; num="20" ; mainline
+		SHA="fb727077b04f768d0c79d9aa29e958262a9e3d9e" ; num="21" ; mainline
 		exit 2
 	fi
 
@@ -322,59 +331,41 @@ bbb_overlays () {
 		start_cleanup
 	fi
 
-#linux-next:
-
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0013-nvmem-Add-Vybrid-OCOTP-support.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0014-nvmem-imx-ocotp-Add-i.MX6-OCOTP-driver.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0015-nvmem-add-driver-for-ocotp-in-i.MX23-and-i.MX28.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0016-nvmem-Adding-bindings-for-rockchip-efuse.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0017-nvmem-rockchip_efuse_regmap_config-can-be-static.patch"
-
-#email...
-
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0018-nvmem-make-default-user-binary-file-root-access-only.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0019-nvmem-set-the-size-for-the-nvmem-binary-file.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0020-nvmem-add-permission-flags-in-nvmem_config.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0021-nvmem-fix-permissions-of-readonly-nvmem-binattr.patch"
+	#email...
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0022-nvmem-make-default-user-binary-file-root-access-only.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0023-nvmem-set-the-size-for-the-nvmem-binary-file.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0024-nvmem-add-permission-flags-in-nvmem_config.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0025-nvmem-fix-permissions-of-readonly-nvmem-binattr.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=21
+		number=25
 		cleanup
 	fi
 
 	echo "dir: bbb_overlays/configfs"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/bbb_overlays/configfs/0001-configfs-add-show-and-store-methods-to-struct-config.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0002-usb-gadget-use-per-attribute-show-and-store-methods.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0003-usb-gadget-uvc-use-per-attribute-show-and-store-meth.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0004-usb-gadget-f_hid-use-per-attribute-show-and-store-me.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0005-usb-gadget-f_acm-use-per-attribute-show-and-store-me.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0006-usb-gadget-ether-use-per-attribute-show-and-store-me.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0007-usb-gadget-f_loopback-use-per-attribute-show-and-sto.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0008-usb-gadget-f_midi-use-per-attribute-show-and-store-m.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0009-usb-gadget-f_printer-use-per-attribute-show-and-stor.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0010-usb-gadget-f_sourcesink-use-per-attribute-show-and-s.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0011-usb-gadget-f_mass_storage-use-per-attribute-show-and.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0012-usb-gadget-f_uac1-use-per-attribute-show-and-store-m.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0013-usb-gadget-f_uac2-use-per-attribute-show-and-store-m.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0014-usb-gadget-f_obex-use-per-attribute-show-and-store-m.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0015-usb-gadget-f_phonet-use-per-attribute-show-and-store.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0016-usb-gadget-f_serial-use-per-attribute-show-and-store.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0017-dlm-use-per-attribute-show-and-store-methods.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0018-spear13xx_pcie_gadget-use-per-attribute-show-and-sto.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0019-target-use-per-attribute-show-and-store-methods.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0020-netconsole-use-per-attribute-show-and-store-methods.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0021-ocfs2-cluster-move-locking-into-attribute-store-meth.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0022-ocfs2-cluster-use-per-attribute-show-and-store-metho.patch"
-	${git} "${DIR}/patches/bbb_overlays/configfs/0023-configfs-remove-old-API.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=23
-		cleanup
+		directory="bbb_overlays/configfs"
+		SHA="870823e629ea194e6cf8e82a9694ac62cad49512" ; num="1" ; mainline
+		SHA="45b6a73f62ebcf3ff067895fb8030e67f4c7b67f" ; num="2" ; mainline
+		SHA="76e0da34c7cec5a7dc94667326a948de2e9c8c8d" ; num="3" ; mainline
+		SHA="da4e527cd8850712bb705f4c41f0839705ab7c98" ; num="4" ; mainline
+		SHA="ea6bd6b14ec67eb22e3eb8b2a2b979b5ea800a3a" ; num="5" ; mainline
+		SHA="f9a63da33d3f86acadc14c5cb66e9ad06860892f" ; num="6" ; mainline
+		SHA="75ab2256a7d05128f8aa088cdde961d8029bcd55" ; num="7" ; mainline
+		SHA="3755a273db8f523f8be6c18df9e1506faa93c664" ; num="8" ; mainline
+		SHA="aa48a415270f7cf16ec0ef825d19b4f8bd1a875e" ; num="9" ; mainline
+		SHA="208e61ac7c0a2c3e4b23e74a66ddc2ea471d251e" ; num="10" ; mainline
+		SHA="4a90cb203836e4989cc50121b13ff0fb7f671fcb" ; num="11" ; mainline
+		SHA="c6f89f1cca1cfd81cc27307595ebddee29cc84d3" ; num="12" ; mainline
+		SHA="495702bcc12fb2c51997088befe37145a34e5e3a" ; num="13" ; mainline
+		SHA="3da5e4c10cbacf5f3da043498299ae631a6dfc9c" ; num="14" ; mainline
+		SHA="0736390bea65cac63bed9671a957031c068a60e7" ; num="15" ; mainline
+		SHA="0b4be4fa878780a15a953577499eb69839942956" ; num="16" ; mainline
+		SHA="9ae0f367df5d0d7be09fad1e2e5b080f6a45ca6b" ; num="17" ; mainline
+		SHA="2eafd72939fda6118e27d3ee859684987f43921b" ; num="18" ; mainline
+		SHA="517982229f78b2aebf00a8a337e84e8eeea70b8e" ; num="19" ; mainline
+		exit 2
 	fi
 
 	echo "dir: bbb_overlays"
@@ -452,13 +443,12 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0001-hack-bbb-enable-1ghz-operation.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0002-dts-am335x-bone-common-fixup-leds-to-match-3.8.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0003-arm-dts-am335x-bone-common-add-collision-and-carrier.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0004-add-am335x-bonegreen.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0005-add-overlay-dtb.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0006-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0007-spi-omap2-mcspi-ti-pio-mode.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0004-add-overlay-dtb.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0005-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0006-spi-omap2-mcspi-ti-pio-mode.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=7
+		number=6
 		cleanup
 	fi
 
@@ -546,10 +536,9 @@ beaglebone () {
 		device="am335x-boneblack-nhdmi-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-replicape.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-spi0.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-universal.dtb" ; dtb_makefile_append
-
-		device="am335x-bonegreen.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
