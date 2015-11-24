@@ -116,7 +116,7 @@ reverts () {
 
 	${git} "${DIR}/patches/reverts/0001-Revert-spi-spidev-Warn-loudly-if-instantiated-from-D.patch"
 	#udoo:
-	${git} "${DIR}/patches/reverts/0002-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
+#	${git} "${DIR}/patches/reverts/0002-Revert-usb-chipidea-usbmisc_imx-delete-clock-informa.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=2
@@ -604,11 +604,11 @@ etnaviv () {
 	fi
 	#http://ftp.arm.linux.org.uk/cgit/linux-arm.git/log/?h=drm-etnaviv-devel
 	#cd ~/linux-src
-	#git checkout v4.2 -b testing
+	#git checkout v4.3 -b testing
 	#git pull --no-edit git://ftp.arm.linux.org.uk/~rmk/linux-arm.git drm-etnaviv-devel
 
-	#git format-patch -149 | grep 4.2 ; rm *.patch
-	#git format-patch -148 -o /opt/github/linux-dev/patches/etnaviv/
+	#git format-patch -163 | grep 4.3 ; rm *.patch
+	#git format-patch -162 -o /opt/github/linux-dev/patches/etnaviv/
 	#git checkout master -f
 	#git branch -D testing
 
@@ -760,9 +760,23 @@ etnaviv () {
 	${git} "${DIR}/patches/etnaviv/0146-staging-etnaviv-avoid-dumping-non-3d-and-non-2d-core.patch"
 	${git} "${DIR}/patches/etnaviv/0147-staging-etnaviv-fix-pipe-selection-cache-flush.patch"
 	${git} "${DIR}/patches/etnaviv/0148-staging-etnaviv-add-devcoredump-support.patch"
+	${git} "${DIR}/patches/etnaviv/0149-staging-etnaviv-switch-to-a-per-GPU-fence-allocation.patch"
+	${git} "${DIR}/patches/etnaviv/0150-staging-etnaviv-improve-command-parser-checking.patch"
+	${git} "${DIR}/patches/etnaviv/0151-staging-etnaviv-move-ownership-transfer-from-buffer-.patch"
+	${git} "${DIR}/patches/etnaviv/0152-staging-etnaviv-move-exec_state-into-etnaviv_cmdbuf-.patch"
+	${git} "${DIR}/patches/etnaviv/0153-staging-etnaviv-associate-user-context-with-command-.patch"
+	${git} "${DIR}/patches/etnaviv/0154-staging-etnaviv-pass-command-buffer-into-etnaviv_buf.patch"
+	${git} "${DIR}/patches/etnaviv/0155-staging-etnaviv-pass-command-buffer-into-etnaviv_gpu.patch"
+	${git} "${DIR}/patches/etnaviv/0156-staging-etnaviv-split-submitted_fence.patch"
+	${git} "${DIR}/patches/etnaviv/0157-staging-etnaviv-remove-unused-etnaviv_gem_get_iova.patch"
+	${git} "${DIR}/patches/etnaviv/0158-staging-etnaviv-refcount-IOVA-allocations.patch"
+	${git} "${DIR}/patches/etnaviv/0159-staging-etnaviv-remove-submit_entry-and-bo_list.patch"
+	${git} "${DIR}/patches/etnaviv/0160-staging-etnaviv-split-pin-unpin-from-locking-operati.patch"
+	${git} "${DIR}/patches/etnaviv/0161-staging-etnaviv-move-bulk-of-submission-out-of-DRM-s.patch"
+	${git} "${DIR}/patches/etnaviv/0162-staging-etnaviv-move-command-stream-validation-outsi.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=148
+		number=162
 		cleanup
 	fi
 }
