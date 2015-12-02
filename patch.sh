@@ -84,6 +84,7 @@ rt () {
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
+
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz
@@ -136,6 +137,21 @@ backports () {
 
 	#careful around: https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/drivers/net/wireless/mediatek?id=30686bf7f5b3c30831761e188a6e3cb33580fa48
 	${git} "${DIR}/patches/backports/mediatek/0001-backport-mediatek-mt7601u-from-v4.2-rc3.patch"
+	${git} "${DIR}/patches/backports/0002-backport-drivers-staging-fbtft-v4.3.0.patch"
+	${git} "${DIR}/patches/backports/0003-backport-fbtft-v4.4-rc1.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=3
+		cleanup
+	fi
+}
+
+fixes () {
+	echo "dir: fixes"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=1
@@ -196,77 +212,15 @@ ti () {
 	fi
 }
 
-dts () {
-	echo "dir: dts"
+pru_uio () {
+	echo "dir: pru_uio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/dts/0001-ARM-dts-omap3-beagle-add-i2c2.patch"
-	${git} "${DIR}/patches/dts/0002-ARM-dts-omap3-beagle-xm-spidev.patch"
-	${git} "${DIR}/patches/dts/0003-ARM-dts-beagle-xm-make-sure-dvi-is-enabled.patch"
-	${git} "${DIR}/patches/dts/0004-ARM-DTS-omap3-beagle-xm-disable-powerdown-gpios.patch"
-	${git} "${DIR}/patches/dts/0005-ARM-DTS-omap3-beagle.dts-enable-twl4030-power-reset.patch"
-	${git} "${DIR}/patches/dts/0006-arm-dts-omap4-move-emif-so-panda-es-b3-now-boots.patch"
-	${git} "${DIR}/patches/dts/0007-omap3-beagle-xm-ehci-works-again.patch"
-	${git} "${DIR}/patches/dts/0008-first-pass-imx6q-ccimx6sbc.patch"
-	${git} "${DIR}/patches/dts/0009-imx6-wl1835-base-boards.patch"
-	${git} "${DIR}/patches/dts/0010-imx6q-sabresd-add-support-for-wilink8-wlan-and-bluet.patch"
-	${git} "${DIR}/patches/dts/0011-imx6sl-evk-add-support-for-wilink8-wlan-and-bluetoot.patch"
-	${git} "${DIR}/patches/dts/0012-drm-imx-tve-fix-media-bus-format-for-VGA-output.patch"
-	${git} "${DIR}/patches/dts/0013-ARM-dts-imx53-qsb-fix-TVE-entry.patch"
-	${git} "${DIR}/patches/dts/0014-ARM-dts-imx53-qsb-select-open-drain-mode-for-i2c1-pa.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=15
-		cleanup
-	fi
-}
-
-wand () {
-	echo "dir: wand"
-	${git} "${DIR}/patches/wand/0001-ARM-i.MX6-Wandboard-add-wifi-bt-rfkill-driver.patch"
-	${git} "${DIR}/patches/wand/0002-ARM-dts-wandboard-add-binding-for-wand-rfkill-driver.patch"
-}
-
-errata () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-	echo "dir: errata"
-
-	${git} "${DIR}/patches/errata/0001-hack-omap-clockk-dpll5-apply-sprz319e-2.1-erratum.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
-		cleanup
-	fi
-}
-
-fixes () {
-	echo "dir: fixes"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
-		cleanup
-	fi
-}
-
-pru () {
-	echo "dir: pru"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/pru/0001-Making-the-uio-pruss-driver-work.patch"
-	${git} "${DIR}/patches/pru/0002-Cleaned-up-error-reporting.patch"
+	${git} "${DIR}/patches/pru_uio/0001-Making-the-uio-pruss-driver-work.patch"
+	${git} "${DIR}/patches/pru_uio/0002-Cleaned-up-error-reporting.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=2
@@ -333,13 +287,29 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0006-nvmem-qfprom-Add-Qualcomm-QFPROM-support.patch"
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0007-nvmem-qfprom-Add-bindings-for-qfprom.patch"
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0008-nvmem-sunxi-Move-the-SID-driver-to-the-nvmem-framewo.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0009-nvmem-Add-DT-binding-documentation-for-Vybrid-OCOTP-.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0010-nvmem-Add-Vybrid-OCOTP-support.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0011-nvmem-Add-i.MX6-OCOTP-device-tree-binding-documentat.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0012-nvmem-imx-ocotp-Add-i.MX6-OCOTP-driver.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0013-nvmem-add-binding-for-mxs-ocotp.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0014-nvmem-add-driver-for-ocotp-in-i.MX23-and-i.MX28.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0015-nvmem-rockchip-efuse-describe-the-usage-of-eFuse.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0016-nvmem-Adding-bindings-for-rockchip-efuse.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0017-nvmem-rockchip_efuse_regmap_config-can-be-static.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0018-nvmem-core-fix-the-out-of-range-leak-in-read-write.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0019-nvmem-core-Handle-shift-bits-in-place-if-cell-nbits-.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0020-nvmem-core-Fix-memory-leak-in-nvmem_cell_write.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0021-nvmem-sunxi-Check-for-memory-allocation-failure.patch"
 
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0009-nvmem-make-default-user-binary-file-root-access-only.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0010-nvmem-set-the-size-for-the-nvmem-binary-file.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0011-nvmem-add-permission-flags-in-nvmem_config.patch"
+#email...
+
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0022-nvmem-make-default-user-binary-file-root-access-only.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0023-nvmem-set-the-size-for-the-nvmem-binary-file.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0024-nvmem-add-permission-flags-in-nvmem_config.patch"
+	${git} "${DIR}/patches/bbb_overlays/nvmem/0025-nvmem-fix-permissions-of-readonly-nvmem-binattr.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=11
+		number=25
 		cleanup
 	fi
 
@@ -374,23 +344,22 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/0019-doc-ABI-bone_capemgr-sysfs-API.patch"
 	${git} "${DIR}/patches/bbb_overlays/0020-MAINTAINERS-Beaglebone-capemanager-maintainer.patch"
 	${git} "${DIR}/patches/bbb_overlays/0021-arm-dts-Enable-beaglebone-cape-manager.patch"
-	${git} "${DIR}/patches/bbb_overlays/0022-gcl-Fix-resource-linking.patch"
-	${git} "${DIR}/patches/bbb_overlays/0023-of-overlay-Implement-indirect-target-support.patch"
-	${git} "${DIR}/patches/bbb_overlays/0024-of-unittest-Add-indirect-overlay-target-test.patch"
-	${git} "${DIR}/patches/bbb_overlays/0025-doc-dt-Document-the-indirect-overlay-method.patch"
-	${git} "${DIR}/patches/bbb_overlays/0026-of-overlay-Introduce-target-root-capability.patch"
-	${git} "${DIR}/patches/bbb_overlays/0027-of-unittest-Unit-tests-for-target-root-overlays.patch"
-	${git} "${DIR}/patches/bbb_overlays/0028-doc-dt-Document-the-target-root-overlay-method.patch"
-	${git} "${DIR}/patches/bbb_overlays/0029-of-dynamic-Add-__of_node_dupv.patch"
-	${git} "${DIR}/patches/bbb_overlays/0030-of-changesets-Introduce-changeset-helper-methods.patch"
-	${git} "${DIR}/patches/bbb_overlays/0031-RFC-Device-overlay-manager-PCI-USB-DT.patch"
+	${git} "${DIR}/patches/bbb_overlays/0022-of-overlay-Implement-indirect-target-support.patch"
+	${git} "${DIR}/patches/bbb_overlays/0023-of-unittest-Add-indirect-overlay-target-test.patch"
+	${git} "${DIR}/patches/bbb_overlays/0024-doc-dt-Document-the-indirect-overlay-method.patch"
+	${git} "${DIR}/patches/bbb_overlays/0025-of-overlay-Introduce-target-root-capability.patch"
+	${git} "${DIR}/patches/bbb_overlays/0026-of-unittest-Unit-tests-for-target-root-overlays.patch"
+	${git} "${DIR}/patches/bbb_overlays/0027-doc-dt-Document-the-target-root-overlay-method.patch"
+	${git} "${DIR}/patches/bbb_overlays/0028-of-dynamic-Add-__of_node_dupv.patch"
+	${git} "${DIR}/patches/bbb_overlays/0029-of-changesets-Introduce-changeset-helper-methods.patch"
+	${git} "${DIR}/patches/bbb_overlays/0030-RFC-Device-overlay-manager-PCI-USB-DT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-	${git} "${DIR}/patches/bbb_overlays/0032-boneblack-defconfig.patch"
+	${git} "${DIR}/patches/bbb_overlays/0031-boneblack-defconfig.patch"
 	fi
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=32
+		number=31
 		cleanup
 	fi
 }
@@ -499,13 +468,15 @@ beaglebone () {
 		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-can0.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-cape-bone-argus.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-replicape.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-emmc-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-hdmi-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-nhdmi-overlay.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-overlay.dtb" ; dtb_makefile_append
+
+		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-replicape.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
@@ -646,11 +617,8 @@ sgx () {
 reverts
 backports
 ti
-#dts
-#wand
-#errata
 #fixes
-pru
+pru_uio
 bbb_overlays
 beaglebone
 quieter
