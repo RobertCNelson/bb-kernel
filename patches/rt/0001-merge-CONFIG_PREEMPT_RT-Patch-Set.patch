@@ -1,6 +1,6 @@
-From d2e44c70e5242bb7a2f8818cec9647871ba13834 Mon Sep 17 00:00:00 2001
+From 9fdbc9edd82d52b5c80a67813793b38901bf4f6f Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 9 Nov 2015 20:11:45 -0600
+Date: Wed, 9 Dec 2015 16:46:05 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -241,7 +241,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/interrupt.h                          |   59 +-
  include/linux/io-mapping.h                         |    2 +
  include/linux/irq.h                                |    4 +-
- include/linux/irq_work.h                           |    1 +
+ include/linux/irq_work.h                           |    7 +
  include/linux/irqdesc.h                            |    1 +
  include/linux/irqflags.h                           |   29 +-
  include/linux/jbd_common.h                         |   24 +
@@ -320,7 +320,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/irq/manage.c                                |  260 +++-
  kernel/irq/settings.h                              |   12 +
  kernel/irq/spurious.c                              |    8 +
- kernel/irq_work.c                                  |   47 +-
+ kernel/irq_work.c                                  |   56 +-
  kernel/ksysfs.c                                    |   12 +
  kernel/locking/Makefile                            |    9 +-
  kernel/locking/lglock.c                            |   79 +-
@@ -366,7 +366,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/time/tick-sched.c                           |   35 +-
  kernel/time/timekeeping.c                          |    6 +-
  kernel/time/timekeeping.h                          |    3 +-
- kernel/time/timer.c                                |   97 +-
+ kernel/time/timer.c                                |   95 +-
  kernel/trace/Kconfig                               |  104 ++
  kernel/trace/Makefile                              |    4 +
  kernel/trace/latency_hist.c                        | 1178 +++++++++++++++++++
@@ -422,7 +422,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/soc/intel/atom/sst/sst.c                     |    4 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 417 files changed, 11938 insertions(+), 2133 deletions(-)
+ 417 files changed, 11951 insertions(+), 2133 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -3354,7 +3354,7 @@ index d64a7a6..9dd4cc4 100644
   * Get the size of a NUL-terminated string in user space.
   *
 diff --git a/arch/s390/kvm/interrupt.c b/arch/s390/kvm/interrupt.c
-index b745a10..140a1131 100644
+index 3dbba9a..1501670 100644
 --- a/arch/s390/kvm/interrupt.c
 +++ b/arch/s390/kvm/interrupt.c
 @@ -875,13 +875,13 @@ no_timer:
@@ -5021,10 +5021,10 @@ index 324ab52..ebae118 100644
  
  exit:
 diff --git a/arch/x86/kvm/lapic.c b/arch/x86/kvm/lapic.c
-index 67d07e0..525db8b 100644
+index 7dd9a8d..192de59 100644
 --- a/arch/x86/kvm/lapic.c
 +++ b/arch/x86/kvm/lapic.c
-@@ -1104,7 +1104,7 @@ static void apic_update_lvtt(struct kvm_lapic *apic)
+@@ -1106,7 +1106,7 @@ static void apic_update_lvtt(struct kvm_lapic *apic)
  static void apic_timer_expired(struct kvm_lapic *apic)
  {
  	struct kvm_vcpu *vcpu = apic->vcpu;
@@ -5033,7 +5033,7 @@ index 67d07e0..525db8b 100644
  	struct kvm_timer *ktimer = &apic->lapic_timer;
  
  	if (atomic_read(&apic->lapic_timer.pending))
-@@ -1113,8 +1113,8 @@ static void apic_timer_expired(struct kvm_lapic *apic)
+@@ -1115,8 +1115,8 @@ static void apic_timer_expired(struct kvm_lapic *apic)
  	atomic_inc(&apic->lapic_timer.pending);
  	kvm_set_pending_timer(vcpu);
  
@@ -5044,7 +5044,7 @@ index 67d07e0..525db8b 100644
  
  	if (apic_lvtt_tscdeadline(apic))
  		ktimer->expired_tscdeadline = ktimer->tscdeadline;
-@@ -1167,8 +1167,36 @@ void wait_lapic_expire(struct kvm_vcpu *vcpu)
+@@ -1169,8 +1169,36 @@ void wait_lapic_expire(struct kvm_vcpu *vcpu)
  		__delay(tsc_deadline - guest_tsc);
  }
  
@@ -5081,7 +5081,7 @@ index 67d07e0..525db8b 100644
  	ktime_t now;
  
  	atomic_set(&apic->lapic_timer.pending, 0);
-@@ -1199,9 +1227,11 @@ static void start_apic_timer(struct kvm_lapic *apic)
+@@ -1201,9 +1229,11 @@ static void start_apic_timer(struct kvm_lapic *apic)
  			}
  		}
  
@@ -5094,7 +5094,7 @@ index 67d07e0..525db8b 100644
  
  		apic_debug("%s: bus cycle is %" PRId64 "ns, now 0x%016"
  			   PRIx64 ", "
-@@ -1233,8 +1263,10 @@ static void start_apic_timer(struct kvm_lapic *apic)
+@@ -1235,8 +1265,10 @@ static void start_apic_timer(struct kvm_lapic *apic)
  			do_div(ns, this_tsc_khz);
  			expire = ktime_add_ns(now, ns);
  			expire = ktime_sub_ns(expire, lapic_timer_advance_ns);
@@ -5106,7 +5106,7 @@ index 67d07e0..525db8b 100644
  		} else
  			apic_timer_expired(apic);
  
-@@ -1707,6 +1739,7 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
+@@ -1709,6 +1741,7 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
  	hrtimer_init(&apic->lapic_timer.timer, CLOCK_MONOTONIC,
  		     HRTIMER_MODE_ABS);
  	apic->lapic_timer.timer.function = apic_timer_fn;
@@ -5114,7 +5114,7 @@ index 67d07e0..525db8b 100644
  
  	/*
  	 * APIC is created enabled. This will prevent kvm_lapic_set_base from
-@@ -1834,7 +1867,8 @@ void __kvm_migrate_apic_timer(struct kvm_vcpu *vcpu)
+@@ -1836,7 +1869,8 @@ void __kvm_migrate_apic_timer(struct kvm_vcpu *vcpu)
  
  	timer = &vcpu->arch.apic->lapic_timer.timer;
  	if (hrtimer_cancel(timer))
@@ -10507,7 +10507,7 @@ index 3532dca..38ecc0c 100644
  #define IRQ_NO_BALANCING_MASK	(IRQ_PER_CPU | IRQ_NO_BALANCING)
  
 diff --git a/include/linux/irq_work.h b/include/linux/irq_work.h
-index 47b9ebd..0e427a9 100644
+index 47b9ebd..2543aab 100644
 --- a/include/linux/irq_work.h
 +++ b/include/linux/irq_work.h
 @@ -16,6 +16,7 @@
@@ -10518,6 +10518,17 @@ index 47b9ebd..0e427a9 100644
  
  struct irq_work {
  	unsigned long flags;
+@@ -51,4 +52,10 @@ static inline bool irq_work_needs_cpu(void) { return false; }
+ static inline void irq_work_run(void) { }
+ #endif
+ 
++#if defined(CONFIG_IRQ_WORK) && defined(CONFIG_PREEMPT_RT_FULL)
++void irq_work_tick_soft(void);
++#else
++static inline void irq_work_tick_soft(void) { }
++#endif
++
+ #endif /* _LINUX_IRQ_WORK_H */
 diff --git a/include/linux/irqdesc.h b/include/linux/irqdesc.h
 index dd1109f..9d97cd5 100644
 --- a/include/linux/irqdesc.h
@@ -10706,7 +10717,7 @@ index 3a5b48e..8ecfe3c 100644
  
  #define TAINT_PROPRIETARY_MODULE	0
 diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
-index ad45054..84df94a 100644
+index 29a57a5..a081a03 100644
 --- a/include/linux/kvm_host.h
 +++ b/include/linux/kvm_host.h
 @@ -230,7 +230,7 @@ struct kvm_vcpu {
@@ -10718,7 +10729,7 @@ index ad45054..84df94a 100644
  	struct pid *pid;
  	int sigset_active;
  	sigset_t sigset;
-@@ -690,7 +690,7 @@ static inline bool kvm_arch_has_noncoherent_dma(struct kvm *kvm)
+@@ -701,7 +701,7 @@ static inline bool kvm_arch_has_noncoherent_dma(struct kvm *kvm)
  }
  #endif
  
@@ -15913,7 +15924,7 @@ index e2514b0..903a69c 100644
  	printk(KERN_WARNING "Misrouted IRQ fixup and polling support "
  				"enabled\n");
 diff --git a/kernel/irq_work.c b/kernel/irq_work.c
-index cbf9fb8..5a0f452 100644
+index cbf9fb8..58cf466 100644
 --- a/kernel/irq_work.c
 +++ b/kernel/irq_work.c
 @@ -17,6 +17,7 @@
@@ -16019,6 +16030,24 @@ index cbf9fb8..5a0f452 100644
  }
  EXPORT_SYMBOL_GPL(irq_work_run);
  
+@@ -179,8 +200,17 @@ void irq_work_tick(void)
+ 
+ 	if (!llist_empty(raised) && !arch_irq_work_has_interrupt())
+ 		irq_work_run_list(raised);
++
++	if (!IS_ENABLED(CONFIG_PREEMPT_RT_FULL))
++		irq_work_run_list(this_cpu_ptr(&lazy_list));
++}
++
++#if defined(CONFIG_IRQ_WORK) && defined(CONFIG_PREEMPT_RT_FULL)
++void irq_work_tick_soft(void)
++{
+ 	irq_work_run_list(this_cpu_ptr(&lazy_list));
+ }
++#endif
+ 
+ /*
+  * Synchronize against the irq_work @entry, ensures the entry is not
 diff --git a/kernel/ksysfs.c b/kernel/ksysfs.c
 index 6683cce..d6fc8ee 100644
 --- a/kernel/ksysfs.c
@@ -23169,7 +23198,7 @@ index ead8794..d7a9120 100644
  #define CS_NAME_LEN	32
  
 diff --git a/kernel/time/timer.c b/kernel/time/timer.c
-index 2ece3aa..adb1d82 100644
+index 2ece3aa..c68ba87 100644
 --- a/kernel/time/timer.c
 +++ b/kernel/time/timer.c
 @@ -78,6 +78,9 @@ struct tvec_root {
@@ -23326,7 +23355,7 @@ index 2ece3aa..adb1d82 100644
  	run_local_timers();
  	rcu_check_callbacks(user_tick);
 -#ifdef CONFIG_IRQ_WORK
-+#if defined(CONFIG_IRQ_WORK) && !defined(CONFIG_PREEMPT_RT_FULL)
++#if defined(CONFIG_IRQ_WORK)
  	if (in_irq())
  		irq_work_tick();
  #endif
@@ -23334,18 +23363,16 @@ index 2ece3aa..adb1d82 100644
  	run_posix_cpu_timers(p);
  }
  
-@@ -1411,6 +1471,10 @@ static void run_timer_softirq(struct softirq_action *h)
+@@ -1411,6 +1471,8 @@ static void run_timer_softirq(struct softirq_action *h)
  
  	hrtimer_run_pending();
  
-+#if defined(CONFIG_IRQ_WORK) && defined(CONFIG_PREEMPT_RT_FULL)
-+	irq_work_tick();
-+#endif
++	irq_work_tick_soft();
 +
  	if (time_after_eq(jiffies, base->timer_jiffies))
  		__run_timers(base);
  }
-@@ -1566,7 +1630,7 @@ static void migrate_timers(int cpu)
+@@ -1566,7 +1628,7 @@ static void migrate_timers(int cpu)
  
  	BUG_ON(cpu_online(cpu));
  	old_base = per_cpu(tvec_bases, cpu);
@@ -23354,7 +23381,7 @@ index 2ece3aa..adb1d82 100644
  	/*
  	 * The caller is globally serialized and nobody else
  	 * takes two locks at once, deadlock is not possible.
-@@ -1590,7 +1654,7 @@ static void migrate_timers(int cpu)
+@@ -1590,7 +1652,7 @@ static void migrate_timers(int cpu)
  
  	spin_unlock(&old_base->lock);
  	spin_unlock_irq(&new_base->lock);
@@ -23363,7 +23390,7 @@ index 2ece3aa..adb1d82 100644
  }
  
  static int timer_cpu_notify(struct notifier_block *self,
-@@ -1625,6 +1689,9 @@ static void __init init_timer_cpu(struct tvec_base *base, int cpu)
+@@ -1625,6 +1687,9 @@ static void __init init_timer_cpu(struct tvec_base *base, int cpu)
  	base->cpu = cpu;
  	per_cpu(tvec_bases, cpu) = base;
  	spin_lock_init(&base->lock);
@@ -27989,7 +28016,7 @@ index f5203fb..be5fd9b 100644
  	/* should there be an ICMP stat for ignored echos? */
  	return true;
 diff --git a/net/ipv4/sysctl_net_ipv4.c b/net/ipv4/sysctl_net_ipv4.c
-index c3852a7..143f5f38 100644
+index f0e8297..aff60d4 100644
 --- a/net/ipv4/sysctl_net_ipv4.c
 +++ b/net/ipv4/sysctl_net_ipv4.c
 @@ -779,6 +779,13 @@ static struct ctl_table ipv4_net_table[] = {
@@ -28042,7 +28069,7 @@ index 5d0c6fd..e814897 100644
  
  const struct nf_afinfo __rcu *nf_afinfo[NFPROTO_NUMPROTO] __read_mostly;
 diff --git a/net/packet/af_packet.c b/net/packet/af_packet.c
-index e1ea5d4..f9f2592 100644
+index 686e601..f9d3a56 100644
 --- a/net/packet/af_packet.c
 +++ b/net/packet/af_packet.c
 @@ -63,6 +63,7 @@
