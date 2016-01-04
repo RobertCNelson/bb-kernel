@@ -603,7 +603,7 @@ sgx
 
 packaging () {
 	echo "dir: packaging"
-	regenerate="enable"
+	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
 		git commit -a -m 'packaging: sync builddeb changes' -s
