@@ -21,15 +21,15 @@ toolchain="gcc_linaro_gnueabihf_5"
 #Kernel/Build
 KERNEL_REL=4.4
 KERNEL_TAG=${KERNEL_REL}-rc8
-BUILD=bone1
-kernel_rt=".X-rtY"
+BUILD=bone-rt-r1
+kernel_rt="-rc6-rt1"
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="am33x-v4.4"
+BRANCH="am33x-rt-v4.4"
 
 DISTRO=cross
 DEBARCH=armhf
