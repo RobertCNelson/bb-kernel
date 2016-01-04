@@ -651,10 +651,11 @@ sgx () {
 	${git} "${DIR}/patches/sgx/0003-drm-tilcdc-fix-the-ping-pong-dma-tearing-issue-seen-.patch"
 	${git} "${DIR}/patches/sgx/0004-ARM-OMAP2-Use-pdata-quirks-for-sgx-deassert_hardrese.patch"
 	${git} "${DIR}/patches/sgx/0005-ARM-dts-am33xx-add-DT-node-for-gpu.patch"
-	${git} "${DIR}/patches/sgx/0006-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
+	${git} "${DIR}/patches/sgx/0006-Revert-ARM-reduce-visibility-of-dmac_-functions.patch"
+	${git} "${DIR}/patches/sgx/0007-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=6
+		number=7
 		cleanup
 	fi
 }
@@ -671,7 +672,7 @@ bbb_overlays
 beaglebone
 #etnaviv
 quieter
-#sgx
+sgx
 
 packaging () {
 	echo "dir: packaging"
