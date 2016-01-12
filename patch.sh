@@ -382,10 +382,9 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0004-add-am335x-bonegreen.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0005-add-overlay-dtb.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0006-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0007-spi-omap2-mcspi-ti-pio-mode.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=7
+		number=6
 		cleanup
 	fi
 
@@ -461,20 +460,18 @@ beaglebone () {
 
 		device="am335x-arduino-tre.dtb" ; dtb_makefile_append
 
-		device="am335x-bone-can0.dtb" ; dtb_makefile_append
 		device="am335x-bone-cape-bone-argus.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-can0.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-cape-bone-argus.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-emmc-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-hdmi-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-nhdmi-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-overlay.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-replicape.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
 
