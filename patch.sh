@@ -115,11 +115,26 @@ lts44_backports () {
 		cherrypick_dir="lts44_backports/fixes"
 		SHA="d20313b2c407a90fb60eca99d73c47a75bb42e08" ; num="1" ; cherrypick
 
+		echo "dir: lts44_backports/dmtimer"
+		cherrypick_dir="lts44_backports/dmtimer"
+		SHA="6604c6556db9e41c85f2839f66bd9d617bcf9f87" ; num="1" ; cherrypick
+		SHA="074726402b82f14ca377da0b4a4767674c3d1ff8" ; cherrypick
+
 		exit 2
 	fi
 
-	#4.5.0-rc0
-	${git} "${DIR}/patches/lts44_backports/fixes/0001-dmaengine-edma-Fix-paRAM-slot-allocation-for-entry-c.patch"
+	is_44="enable"
+	if [ "x${is_44}" = "xenable" ] ; then
+		echo "dir: lts44_backports/fixes"
+		#4.5.0-rc0
+		${git} "${DIR}/patches/lts44_backports/fixes/0001-dmaengine-edma-Fix-paRAM-slot-allocation-for-entry-c.patch"
+
+		echo "dir: lts44_backports/dmtimer"
+		#4.5.0-rc0
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0001-pwm-Add-PWM-driver-for-OMAP-using-dual-mode-timers.patch"
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0002-pwm-omap-dmtimer-Potential-NULL-dereference-on-error.patch"
+	fi
+	unset is_44
 }
 
 reverts () {
@@ -283,8 +298,12 @@ bbb_overlays () {
 		exit 2
 	fi
 
-	#(< 4.5.0-rc0)
-	${git} "${DIR}/patches/bbb_overlays/configfs/0001-configfs-implement-binary-attributes.patch"
+	is_44="enable"
+	if [ "x${is_44}" = "xenable" ] ; then
+		#(< 4.5.0-rc0)
+		${git} "${DIR}/patches/bbb_overlays/configfs/0001-configfs-implement-binary-attributes.patch"
+	fi
+	unset is_44
 
 
 	echo "dir: bbb_overlays/of"
@@ -296,8 +315,12 @@ bbb_overlays () {
 		exit 2
 	fi
 
-	#(< 4.5.0-rc0)
-	${git} "${DIR}/patches/bbb_overlays/of/0001-drivers-of-Export-OF-changeset-functions.patch"
+	is_44="enable"
+	if [ "x${is_44}" = "xenable" ] ; then
+		#(< 4.5.0-rc0)
+		${git} "${DIR}/patches/bbb_overlays/of/0001-drivers-of-Export-OF-changeset-functions.patch"
+	fi
+	unset is_44
 
 	echo "dir: bbb_overlays"
 	#regenerate="enable"
@@ -389,26 +412,10 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0001-hack-bbb-enable-1ghz-operation.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0002-dts-am335x-bone-common-fixup-leds-to-match-3.8.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0003-arm-dts-am335x-bone-common-add-collision-and-carrier.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0004-add-overlay-dtb.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0005-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0004-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=5
-		cleanup
-	fi
-
-	echo "dir: beaglebone/capes"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/beaglebone/capes/0001-cape-Argus-UPS-cape-support.patch"
-	${git} "${DIR}/patches/beaglebone/capes/0002-Added-support-for-Replicape.patch"
-	${git} "${DIR}/patches/beaglebone/capes/0003-ARM-dts-am335x-boneblack-enable-wl1835mod-cape-suppo.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=3
+		number=4
 		cleanup
 	fi
 
@@ -453,6 +460,19 @@ beaglebone () {
 		cleanup
 	fi
 
+	echo "dir: beaglebone/overlays"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/overlays/0001-am335x-overlays.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+
 	echo "dir: beaglebone/abbbi"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -488,11 +508,41 @@ beaglebone () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/beaglebone/bbgw/0001-update-am335x-bonegreen-wl1835.dtsi.patch"
-	${git} "${DIR}/patches/beaglebone/bbgw/0002-add-beaglebone-green-wireless.patch"
+	${git} "${DIR}/patches/beaglebone/bbgw/0001-add-beaglebone-green-wireless.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
+		number=1
+		cleanup
+	fi
+
+	echo "dir: beaglebone/tre"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/tre/0001-add-am335x-arduino-tre.dts.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+
+	echo "dir: beaglebone/capes"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/capes/0001-cape-Argus-UPS-cape-support.patch"
+	${git} "${DIR}/patches/beaglebone/capes/0002-ARM-dts-am335x-boneblack-enable-wl1835mod-cape-suppo.patch"
+	${git} "${DIR}/patches/beaglebone/capes/0003-add-am335x-boneblack-bbbmini.dts.patch"
+	${git} "${DIR}/patches/beaglebone/capes/0004-add-lcd-am335x-boneblack-bbb-exp-c.dtb-am335x-bonebl.patch"
+
+	#Replicape use am335x-boneblack-overlay.dtb???
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=4
 		cleanup
 	fi
 
@@ -537,29 +587,27 @@ beaglebone () {
 	echo "dir: beaglebone/generated"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		device="am335x-abbbi.dtb" ; dtb_makefile_append
-
-		device="am335x-arduino-tre.dtb" ; dtb_makefile_append
-
-		device="am335x-bone-cape-bone-argus.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-cape-bone-argus.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-emmc-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-hdmi-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-nhdmi-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-overlay.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-replicape.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
-
-		device="am335x-bonegreen-wireless.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-overlay.dtb" ; dtb_makefile_append
 
+		device="am335x-abbbi.dtb" ; dtb_makefile_append
+
 		device="am335x-olimex-som.dtb" ; dtb_makefile_append
+
+		device="am335x-bonegreen-wireless.dtb" ; dtb_makefile_append
+
+		device="am335x-arduino-tre.dtb" ; dtb_makefile_append
+
+		device="am335x-bone-cape-bone-argus.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-cape-bone-argus.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
