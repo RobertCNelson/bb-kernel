@@ -712,7 +712,7 @@ pru_rpmsg
 bbb_overlays
 beaglebone
 quieter
-#sgx
+sgx
 
 packaging () {
 	echo "dir: packaging"
