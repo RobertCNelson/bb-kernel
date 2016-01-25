@@ -96,8 +96,6 @@ rt () {
 	fi
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
-	${git} "${DIR}/patches/rt/0002-kernel-sched-core.c-UP-fix-implicit-declaration-of-f.patch"
-	${git} "${DIR}/patches/rt/0003-kernel-time-timer.c-UP-fix-undefined-reference-to-de.patch"
 }
 
 local_patch () {
