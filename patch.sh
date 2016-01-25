@@ -123,7 +123,7 @@ lts44_backports () {
 		exit 2
 	fi
 
-	is_44="enable"
+	#is_44="enable"
 	if [ "x${is_44}" = "xenable" ] ; then
 		echo "dir: lts44_backports/fixes"
 		#4.5.0-rc0
@@ -298,7 +298,7 @@ bbb_overlays () {
 		exit 2
 	fi
 
-	is_44="enable"
+	#is_44="enable"
 	if [ "x${is_44}" = "xenable" ] ; then
 		#(< 4.5.0-rc0)
 		${git} "${DIR}/patches/bbb_overlays/configfs/0001-configfs-implement-binary-attributes.patch"
@@ -315,7 +315,7 @@ bbb_overlays () {
 		exit 2
 	fi
 
-	is_44="enable"
+	#is_44="enable"
 	if [ "x${is_44}" = "xenable" ] ; then
 		#(< 4.5.0-rc0)
 		${git} "${DIR}/patches/bbb_overlays/of/0001-drivers-of-Export-OF-changeset-functions.patch"
@@ -712,7 +712,7 @@ pru_rpmsg
 bbb_overlays
 beaglebone
 quieter
-sgx
+#sgx
 
 packaging () {
 	echo "dir: packaging"
