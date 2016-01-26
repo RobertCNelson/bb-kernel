@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,11 +23,9 @@
 unset KERNEL_UTS
 unset MMC
 
-BOOT_PARITION="1"
-
 DIR=$PWD
 
-. ${DIR}/version.sh
+. "${DIR}/version.sh"
 
 mmc_write_rootfs () {
 	echo "Installing ${KERNEL_UTS}-modules.tar.gz to ${partition}"
@@ -46,17 +44,10 @@ mmc_write_rootfs () {
 		sudo cp -v "${DIR}/deploy/config-${KERNEL_UTS}" "${location}/boot/config-${KERNEL_UTS}"
 		sync
 	fi
-
-	if [ -f "${DIR}/deploy/GFX_5.01.01.01.tar.gz" ] ; then
-		if [ ! -d "${location}/opt/" ] ; then
-			sudo mkdir -p "${location}/opt/"
-		fi
-		sudo cp -v "${DIR}/deploy/GFX_5.01.01.01.tar.gz" "${location}/opt/"
-	fi
 	echo "info: [${KERNEL_UTS}] now installed..."
 }
 
-mmc_write_boot_uname () {
+mmc_write_boot_pre () {
 	echo "Installing ${KERNEL_UTS} to ${partition}"
 
 	if [ -f "${location}/vmlinuz-${KERNEL_UTS}_bak" ] ; then
@@ -88,6 +79,10 @@ mmc_write_boot_uname () {
 		sudo tar xf "${DIR}/deploy/${KERNEL_UTS}-dtbs.tar.gz" -C "${location}/dtbs/${KERNEL_UTS}/"
 		sync
 	fi
+}
+
+mmc_write_boot_uname () {
+	mmc_write_boot_pre
 
 	unset older_kernel
 	older_kernel=$(grep uname_r "${location}/uEnv.txt" | grep -v '#' | awk -F"=" '{print $2}' || true)
@@ -96,11 +91,29 @@ mmc_write_boot_uname () {
 		if [ ! "x${older_kernel}" = "x${KERNEL_UTS}" ] ; then
 			sudo sed -i -e 's:uname_r='${older_kernel}':uname_r='${KERNEL_UTS}':g' "${location}/uEnv.txt"
 		fi
-		echo "info: /boot/uEnv.txt: `grep uname_r ${location}/uEnv.txt`"
+		echo "info: /boot/uEnv.txt: $(grep uname_r ${location}/uEnv.txt)"
+	fi
+}
+
+mmc_write_boot_extlinux () {
+	mmc_write_boot_pre
+
+	unset older_kernel
+	older_kernel=$(grep /boot/vmlinuz- "${location}/extlinux/extlinux.conf" | awk -F"/boot/vmlinuz-" '{print $2}' || true)
+
+	if [ ! "x${older_kernel}" = "x" ] ; then
+		if [ ! "x${older_kernel}" = "x${KERNEL_UTS}" ] ; then
+			sudo sed -i -e 's:'${older_kernel}':'${KERNEL_UTS}':g' "${location}/extlinux/extlinux.conf"
+		fi
+		echo "info: /boot/extlinux/extlinux.conf: $(grep /boot/vmlinuz- ${location}/extlinux/extlinux.conf)"
 	fi
 }
 
 mmc_write_boot () {
+	if [ ! -f "${location}/zImage" ] ; then
+		echo "Error: no current ${location}/zImage, this might not boot..."
+	fi
+
 	echo "Installing ${KERNEL_UTS} to ${partition}"
 
 	if [ -f "${location}/zImage_bak" ] ; then
@@ -129,41 +142,75 @@ mmc_write_boot () {
 }
 
 mmc_partition_discover () {
+	boot_written="false"
 	if [ -f "${DIR}/deploy/disk/uEnv.txt" ] ; then
+		echo "found: /uEnv.txt"
 		location="${DIR}/deploy/disk"
 		mmc_write_boot
+		boot_written="true"
 	fi
 
-	if [ -f "${DIR}/deploy/disk/boot/uEnv.txt" ] ; then
-		location="${DIR}/deploy/disk/boot"
-		test_uname=$(grep uname_r "${DIR}/deploy/disk/boot/uEnv.txt" | awk -F"=" '{print $2}' || true)
-		if [ ! "x${test_uname}" = "x" ] ; then
-			mmc_write_boot_uname
-		else
+	if [ "x${boot_written}" = "xfalse" ] ; then
+		if [ -f "${DIR}/deploy/disk/boot/uEnv.txt" ] ; then
+			echo "found: /boot/uEnv.txt"
+			location="${DIR}/deploy/disk/boot"
+			test_uname=$(grep uname_r "${DIR}/deploy/disk/boot/uEnv.txt" | awk -F"=" '{print $2}' || true)
+			if [ ! "x${test_uname}" = "x" ] ; then
+				echo "info: ${test_uname} was installed"
+				mmc_write_boot_uname
+			else
+				mmc_write_boot
+			fi
+			boot_written="true"
+		fi
+	fi
+
+	if [ "x${boot_written}" = "xfalse" ] ; then
+		if [ -f "${DIR}/deploy/disk/boot/extlinux/extlinux.conf" ] ; then
+			echo "found: /boot/extlinux/extlinux.conf"
+			location="${DIR}/deploy/disk/boot"
+			test_uname=$(grep /boot/vmlinuz- "${DIR}/deploy/disk/boot/extlinux/extlinux.conf" | awk -F"/boot/vmlinuz-" '{print $2}' || true)
+			if [ ! "x${test_uname}" = "x" ] ; then
+				echo "info: ${test_uname} was installed"
+				mmc_write_boot_extlinux
+			else
+				mmc_write_boot
+			fi
+			boot_written="true"
+		fi
+	fi
+
+	if [ "x${boot_written}" = "xfalse" ] ; then
+		#Atmel: mmc 0:1: zImage /dtbs/*
+		if [ -f "${DIR}/deploy/disk/BOOT.BIN" ] ; then
+			echo "found: Atmel: /BOOT.BIN"
+			location="${DIR}/deploy/disk"
 			mmc_write_boot
+			boot_written="true"
 		fi
 	fi
 
 	if [ -f "${DIR}/deploy/disk/etc/fstab" ] ; then
+		echo "found: /etc/fstab"
 		location="${DIR}/deploy/disk"
 		mmc_write_rootfs
 	fi
 }
 
 mmc_unmount () {
-	cd "${DIR}/deploy/disk"
+	cd "${DIR}/deploy/disk" || exit
 	sync
 	sync
-	cd -
+	cd - || exit
 	sudo umount "${DIR}/deploy/disk" || true
 }
 
 mmc_detect_n_mount () {
 	echo "Starting Partition Search"
 	echo "-----------------------------"
-	num_partitions=$(LC_ALL=C sudo fdisk -l 2>/dev/null | grep "^${MMC}" | grep -v "DM6" | grep -v "Extended" | grep -v "swap" | wc -l)
+	num_partitions=$(LC_ALL=C sudo fdisk -l 2>/dev/null | grep -v "DM6" | grep -v "Extended" | grep -v "swap" | grep -c "^${MMC}")
 
-	i=0 ; while test $i -le ${num_partitions} ; do
+	i=0 ; while test $i -le "${num_partitions}" ; do
 		partition=$(LC_ALL=C sudo fdisk -l 2>/dev/null | grep "^${MMC}" | grep -v "DM6" | grep -v "Extended" | grep -v "swap" | head -${i} | tail -1 | awk '{print $1}')
 		if [ ! "x${partition}" = "x" ] ; then
 			echo "Trying: [${partition}]"
@@ -173,12 +220,12 @@ mmc_detect_n_mount () {
 			fi
 
 			echo "Partition: [${partition}] trying: [vfat], [ext4]"
-			if sudo mount -t vfat ${partition} "${DIR}/deploy/disk/" 2>/dev/null ; then
+			if sudo mount -t vfat "${partition}" "${DIR}/deploy/disk/" 2>/dev/null ; then
 				echo "Partition: [vfat]"
 				UNTAR="xfo"
 				mmc_partition_discover
 				mmc_unmount
-			elif sudo mount -t ext4 ${partition} "${DIR}/deploy/disk/" 2>/dev/null ; then
+			elif sudo mount -t ext4 "${partition}" "${DIR}/deploy/disk/" 2>/dev/null ; then
 				echo "Partition: [extX]"
 				UNTAR="xf"
 				mmc_partition_discover
@@ -197,7 +244,7 @@ unmount_partitions () {
 	echo ""
 	echo "Debug: Existing Partition on drive:"
 	echo "-----------------------------"
-	LC_ALL=C sudo fdisk -l ${MMC}
+	LC_ALL=C sudo fdisk -l "${MMC}"
 
 	echo ""
 	echo "Unmounting Partitions"
@@ -205,9 +252,9 @@ unmount_partitions () {
 
 	NUM_MOUNTS=$(mount | grep -v none | grep "${MMC}" | wc -l)
 
-	i=0 ; while test $i -le ${NUM_MOUNTS} ; do
+	i=0 ; while test $i -le "${NUM_MOUNTS}" ; do
 		DRIVE=$(mount | grep -v none | grep "${MMC}" | tail -1 | awk '{print $1}')
-		sudo umount ${DRIVE} >/dev/null 2>&1 || true
+		sudo umount "${DRIVE}" >/dev/null 2>&1 || true
 	i=$(($i+1))
 	done
 
@@ -247,7 +294,7 @@ check_mmc () {
 }
 
 if [ -f "${DIR}/system.sh" ] ; then
-	. ${DIR}/system.sh
+	. "${DIR}/system.sh"
 
 	if [ -f "${DIR}/KERNEL/arch/arm/boot/zImage" ] ; then
 		KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
@@ -259,7 +306,7 @@ if [ -f "${DIR}/system.sh" ] ; then
 			echo "ERROR: MMC is not defined in system.sh"
 		else
 			unset PARTITION_PREFIX
-			echo ${MMC} | grep mmcblk >/dev/null && PARTITION_PREFIX="p"
+			echo "${MMC}" | grep mmcblk >/dev/null && PARTITION_PREFIX="p"
 			check_mmc
 			sync
 		fi

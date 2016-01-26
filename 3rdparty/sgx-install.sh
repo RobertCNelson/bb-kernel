@@ -48,118 +48,72 @@ if [ -d /opt/gfxlibraries/gfx_rel_es8.x/ ] ; then
 
 	# Install the standard libraries
 	#
-	file=libGLES_CM.so
-	install_lib
+	file="libGLES_CM.so" ; install_lib
 
-	file=libusc.so
-	install_lib
+	file="libusc.so" ; install_lib
 
-	file=libGLESv2.so
-	install_lib_n_system
+	file="libGLESv2.so" ; install_lib_n_system
 
-	file=libglslcompiler.so
-	install_lib
+	file="libglslcompiler.so" ; install_lib
 
-	file=libIMGegl.so
-	install_lib
-	file=libEGL.so
-	install_lib_n_system
-	file=libpvr2d.so
-	install_lib
+	file="libIMGegl.so" ; install_lib
+	file="libEGL.so" ; install_lib_n_system
+	file="libpvr2d.so" ; install_lib
 
-	file=libpvrPVR2D_BLITWSEGL.so
-	install_lib
-	file=libpvrPVR2D_FLIPWSEGL.so
-	install_lib
-	file=libpvrPVR2D_FRONTWSEGL.so
-	install_lib
-	file=libpvrPVR2D_LINUXFBWSEGL.so
-	install_lib
+	file="libpvrPVR2D_BLITWSEGL.so" ; install_lib
+	file="libpvrPVR2D_FLIPWSEGL.so" ; install_lib
+	file="libpvrPVR2D_FRONTWSEGL.so" ; install_lib
+	file="libpvrPVR2D_LINUXFBWSEGL.so" ; install_lib
 
-	file=libpvrEWS_WSEGL.so
-	install_lib
-	file=libpvrEWS_REMWSEGL.so
-	install_lib
+	file="libpvrEWS_WSEGL.so" ; install_lib
+	file="libpvrEWS_REMWSEGL.so" ; install_lib
 
-	file=libsrv_um.so
-	install_lib
-	file=libsrv_init.so
-	install_lib
-	file=libPVRScopeServices.so
-	install_lib
+	file="libsrv_um.so" ; install_lib
+	file="libsrv_init.so" ; install_lib
+	file="libPVRScopeServices.so" ; install_lib
 
-	file=libews.so
-	install_lib
+	file="libews.so" ; install_lib
 
 	# Install the standard executables
 	#
-	file=pvrsrvctl
-	install_bin
-	file=sgx_init_test
-	install_bin
+	file="pvrsrvctl" ; install_bin
+	file="sgx_init_test" ; install_bin
 
-	file=ews_server
-	install_bin
-	file=ews_server_es2
-	install_bin
+	file="ews_server" ; install_bin
+	file="ews_server_es2" ; install_bin
 
 	# Install the standard unittests
 	#
 
-	file=services_test
-	install_bin
-	file=sgx_blit_test
-	install_bin
-	file=sgx_clipblit_test
-	install_bin
-	file=sgx_flip_test
-	install_bin
-	file=sgx_render_flip_test
-	install_bin
-	file=pvr2d_test
-	install_bin
+	file="services_test" ; install_bin
+	file="sgx_blit_test" ; install_bin
+	file="sgx_clipblit_test" ; install_bin
+	file="sgx_flip_test" ; install_bin
+	file="sgx_render_flip_test" ; install_bin
+	file="pvr2d_test" ; install_bin
 
-	file=gles1test1
-	install_bin
-	file=gles1_texture_stream
-	install_bin
+	file="gles1test1" ; install_bin
+	file="gles1_texture_stream" ; install_bin
 
-	file=gles2test1
-	install_bin
-	file=glsltest1_vertshader.txt
-	install_bin
-	file=glsltest1_fragshaderA.txt
-	install_bin
-	file=glsltest1_fragshaderB.txt
-	install_bin
-	file=gles2_texture_stream
-	install_bin
-	file=eglinfo
-	install_bin
+	file="gles2test1" ; install_bin
+	file="glsltest1_vertshader.txt" ; install_bin
+	file="glsltest1_fragshaderA.txt" ; install_bin
+	file="glsltest1_fragshaderB.txt" ; install_bin
+	file="gles2_texture_stream" ; install_bin
+	file="eglinfo" ; install_bin
 
-	file=ews_test_gles1
-	install_bin
-	file=ews_test_gles1_egl_image_external
-	install_bin
+	file="ews_test_gles1" ; install_bin
+	file="ews_test_gles1_egl_image_external" ; install_bin
 
-	file=ews_test_gles2
-	install_bin
-	file=ews_test_gles2_main.vert
-	install_bin
-	file=ews_test_gles2_main.frag
-	install_bin
-	file=ews_test_gles2_pp.vert
-	install_bin
-	file=ews_test_gles2_pp.frag
-	install_bin
-	file=ews_test_gles2_egl_image_external
-	install_bin
-	file=ews_test_gles2_egl_image_external.vert
-	install_bin
-	file=ews_test_gles2_egl_image_external.frag
-	install_bin
-	file=ews_test_swrender
-	install_bin
+	file="ews_test_gles2" ; install_bin
+	file="ews_test_gles2_main.vert" ; install_bin
+	file="ews_test_gles2_main.frag" ; install_bin
+	file="ews_test_gles2_pp.vert" ; install_bin
+	file="ews_test_gles2_pp.frag" ; install_bin
+	file="ews_test_gles2_egl_image_external" ; install_bin
+	file="ews_test_gles2_egl_image_external.vert" ; install_bin
+	file="ews_test_gles2_egl_image_external.frag" ; install_bin
+	file="ews_test_swrender" ; install_bin
 fi
 
 case "${distro}" in
