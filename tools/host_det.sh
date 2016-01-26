@@ -301,6 +301,15 @@ debian_regs () {
 			#17.2
 			deb_distro="trusty"
 			;;
+		rosa)
+			#17.3
+			deb_distro="trusty"
+			;;
+		sarah)
+			#18
+			#http://blog.linuxmint.com/?p=2975
+			deb_distro="xenial"
+			;;
 		esac
 
 		#Future Debian Code names:
@@ -326,7 +335,7 @@ debian_regs () {
 			unset warn_eol_distro
 			;;
 		vivid|wily)
-			#15.04 vivid: (EOL: January 2016)
+			#15.04 vivid: (EOL: February 4, 2016)
 			#15.10 wily: (EOL: July 2016)
 			unset warn_eol_distro
 			;;
