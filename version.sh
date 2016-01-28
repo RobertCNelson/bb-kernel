@@ -6,6 +6,7 @@ config="omap2plus_defconfig"
 
 build_prefix="bone-rt-r"
 branch_prefix="am33x-rt-v"
+branch_postfix=""
 
 #arm
 KERNEL_ARCH=arm
@@ -24,7 +25,7 @@ toolchain="gcc_linaro_gnueabihf_5"
 #Kernel/Build
 KERNEL_REL=4.4
 KERNEL_TAG=${KERNEL_REL}
-BUILD=${build_prefix}3
+BUILD=${build_prefix}3.1
 kernel_rt="-rt3"
 
 #v4.X-rcX + upto SHA
@@ -32,7 +33,7 @@ kernel_rt="-rt3"
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="${branch_prefix}${KERNEL_REL}"
+BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=cross
 DEBARCH=armhf
