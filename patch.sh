@@ -135,6 +135,8 @@ lts44_backports () {
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0002-pwm-omap-dmtimer-Potential-NULL-dereference-on-error.patch"
 	fi
 	unset is_44
+
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0003-ARM-OMAP-Add-PWM-dmtimer-platform-data-quirks.patch"
 }
 
 reverts () {
@@ -153,6 +155,10 @@ reverts () {
 }
 
 ti () {
+
+	#is_not_broken="enable"
+	if [ "x${is_not_broken}" = "xenable" ] ; then
+
 	echo "dir: ti/cpu_freq/"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -183,11 +189,14 @@ ti () {
 	${git} "${DIR}/patches/ti/cpu_freq/0022-ARM-dts-dra7-add-voltage-domains.patch"
 	${git} "${DIR}/patches/ti/cpu_freq/0023-ARM-dts-dra7-evm-Add-vdd-regulators-for-voltage-doma.patch"
 	${git} "${DIR}/patches/ti/cpu_freq/0024-ARM-dts-dra72-evm-Add-mapping-of-voltage-domains-to-.patch"
+	${git} "${DIR}/patches/ti/cpu_freq/0025-ARM-dts-am57xx-beagle-x15-Map-regulators-to-voltage-.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=24
+		number=25
 		cleanup
 	fi
+	fi
+	unset is_not_broken
 
 	echo "dir: ti/iodelay/"
 	#regenerate="enable"
@@ -195,12 +204,11 @@ ti () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/ti/iodelay/0001-ARM-dts-am57xx-beagle-x15-Map-regulators-to-voltage-.patch"
-	${git} "${DIR}/patches/ti/iodelay/0002-pinctrl-bindings-pinctrl-Add-support-for-TI-s-IODela.patch"
-	${git} "${DIR}/patches/ti/iodelay/0003-pinctrl-Introduce-TI-IOdelay-configuration-driver.patch"
+	${git} "${DIR}/patches/ti/iodelay/0001-pinctrl-bindings-pinctrl-Add-support-for-TI-s-IODela.patch"
+	${git} "${DIR}/patches/ti/iodelay/0002-pinctrl-Introduce-TI-IOdelay-configuration-driver.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=3
+		number=2
 		cleanup
 	fi
 }
@@ -408,8 +416,7 @@ beaglebone () {
 		start_cleanup
 	fi
 
-	#${git} "${DIR}/patches/beaglebone/dts/0001-am335x-boneblack-add-cpu0-opp-points.patch"
-	${git} "${DIR}/patches/beaglebone/dts/0001-hack-bbb-enable-1ghz-operation.patch"
+	#${git} "${DIR}/patches/beaglebone/dts/0001-hack-bbb-enable-1ghz-operation.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0002-dts-am335x-bone-common-fixup-leds-to-match-3.8.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0003-arm-dts-am335x-bone-common-add-collision-and-carrier.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0004-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
@@ -481,10 +488,18 @@ beaglebone () {
 
 	${git} "${DIR}/patches/beaglebone/abbbi/0001-gpu-drm-i2c-add-alternative-adv7511-driver-with-audi.patch"
 	${git} "${DIR}/patches/beaglebone/abbbi/0002-gpu-drm-i2c-adihdmi-componentize-driver-and-huge-ref.patch"
-	${git} "${DIR}/patches/beaglebone/abbbi/0003-ARM-dts-add-Arrow-BeagleBone-Black-Industrial-dts.patch"
+
+	#is_45="enable"
+	if [ "x${is_45}" = "xenable" ] ; then
+		${git} "${DIR}/patches/beaglebone/abbbi/0003-drm-adihdmi-Drop-dummy-save-restore-hooks.patch"
+		${git} "${DIR}/patches/beaglebone/abbbi/0004-drm-adihdmi-Pass-name-to-drm_encoder_init.patch"
+	fi
+	unset is_45
+
+	${git} "${DIR}/patches/beaglebone/abbbi/0005-ARM-dts-add-Arrow-BeagleBone-Black-Industrial-dts.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=3
+		number=5
 		cleanup
 	fi
 
@@ -495,7 +510,7 @@ beaglebone () {
 	fi
 
 	${git} "${DIR}/patches/beaglebone/am335x_olimex_som/0001-ARM-dts-Add-support-for-Olimex-AM3352-SOM.patch"
-	${git} "${DIR}/patches/beaglebone/am335x_olimex_som/0002-am335x-olimex-som-no-regulator-for-voltdm.patch"
+	#${git} "${DIR}/patches/beaglebone/am335x_olimex_som/0002-am335x-olimex-som-no-regulator-for-voltdm.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=2
@@ -576,6 +591,19 @@ beaglebone () {
 	fi
 
 	${git} "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+
+	echo "dir: beaglebone/broken-voltdm"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/broken-voltdm/0001-am335x-broken-voltdm.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=1
