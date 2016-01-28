@@ -6,6 +6,7 @@ config="omap2plus_defconfig"
 
 build_prefix="bone"
 branch_prefix="am33x-v"
+branch_postfix=""
 
 #arm
 KERNEL_ARCH=arm
@@ -32,7 +33,7 @@ kernel_rt=".X-rtY"
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="${branch_prefix}${KERNEL_REL}"
+BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=cross
 DEBARCH=armhf
