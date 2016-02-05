@@ -1,14 +1,15 @@
-From d9bb049712de43b1e9814a29c02ca04d33ff929b Mon Sep 17 00:00:00 2001
+From 8eaceaed394bbbc88e7ad7963eece55ec5208fe6 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 31 Jan 2016 18:22:19 -0600
+Date: Fri, 5 Feb 2016 09:58:27 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  Documentation/hwlat_detector.txt                   |   64 +
+ Documentation/kernel-parameters.txt                |    9 +
  Documentation/sysrq.txt                            |   11 +-
  Documentation/trace/histograms.txt                 |  186 +++
- arch/Kconfig                                       |    1 +
+ arch/Kconfig                                       |    2 +
  arch/arm/Kconfig                                   |    3 +-
  arch/arm/include/asm/switch_to.h                   |    8 +
  arch/arm/include/asm/thread_info.h                 |    8 +-
@@ -246,11 +247,12 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/cgroup.c                                    |    9 +-
  kernel/cpu.c                                       |  325 ++++-
  kernel/debug/kdb/kdb_io.c                          |    6 +-
- kernel/events/core.c                               |    1 +
+ kernel/events/core.c                               |    2 +
  kernel/exit.c                                      |    2 +-
  kernel/fork.c                                      |   37 +-
  kernel/futex.c                                     |   89 +-
  kernel/irq/handle.c                                |    8 +-
+ kernel/irq/irqdesc.c                               |   21 +-
  kernel/irq/manage.c                                |  100 +-
  kernel/irq/settings.h                              |   12 +
  kernel/irq/spurious.c                              |    8 +
@@ -268,7 +270,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/panic.c                                     |    2 +
  kernel/power/hibernate.c                           |    7 +
  kernel/power/suspend.c                             |    4 +
- kernel/printk/printk.c                             |  136 ++-
+ kernel/printk/printk.c                             |  139 ++-
  kernel/ptrace.c                                    |    9 +-
  kernel/rcu/tree.c                                  |  156 ++-
  kernel/rcu/tree.h                                  |   14 +-
@@ -277,7 +279,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/relay.c                                     |   14 +-
  kernel/sched/Makefile                              |    2 +-
  kernel/sched/completion.c                          |   32 +-
- kernel/sched/core.c                                |  412 +++++--
+ kernel/sched/core.c                                |  411 +++++--
  kernel/sched/cpudeadline.c                         |    4 +-
  kernel/sched/cpupri.c                              |    4 +-
  kernel/sched/cputime.c                             |   62 +-
@@ -354,7 +356,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/core/pcm_native.c                            |    8 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 349 files changed, 11288 insertions(+), 1833 deletions(-)
+ 351 files changed, 11320 insertions(+), 1835 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -446,6 +448,26 @@ index 0000000..cb61516
 +observe any latencies that exceed the threshold (initially 100 usecs),
 +then we write to a global sample ring buffer of 8K samples, which is
 +consumed by reading from the "sample" (pipe) debugfs file interface.
+diff --git a/Documentation/kernel-parameters.txt b/Documentation/kernel-parameters.txt
+index 742f69d..bcaf28e 100644
+--- a/Documentation/kernel-parameters.txt
++++ b/Documentation/kernel-parameters.txt
+@@ -1629,6 +1629,15 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
+ 	ip=		[IP_PNP]
+ 			See Documentation/filesystems/nfs/nfsroot.txt.
+ 
++	irqaffinity=	[SMP] Set the default irq affinity mask
++			Format:
++			<cpu number>,...,<cpu number>
++			or
++			<cpu number>-<cpu number>
++			(must be a positive range in ascending order)
++			or a mixture
++			<cpu number>,...,<cpu number>-<cpu number>
++
+ 	irqfixup	[HW]
+ 			When an interrupt is not handled search all handlers
+ 			for it. Intended to get systems with badly broken
 diff --git a/Documentation/sysrq.txt b/Documentation/sysrq.txt
 index 13f5619..f64d075 100644
 --- a/Documentation/sysrq.txt
@@ -663,7 +685,7 @@ index 0000000..6f2aeab
 +
 +These data are also reset when the wakeup histogram is reset.
 diff --git a/arch/Kconfig b/arch/Kconfig
-index 4e949e5..81592b3 100644
+index 4e949e5..3b26d76 100644
 --- a/arch/Kconfig
 +++ b/arch/Kconfig
 @@ -9,6 +9,7 @@ config OPROFILE
@@ -674,6 +696,14 @@ index 4e949e5..81592b3 100644
  	select RING_BUFFER
  	select RING_BUFFER_ALLOW_SWAP
  	help
+@@ -52,6 +53,7 @@ config KPROBES
+ config JUMP_LABEL
+        bool "Optimize very unlikely/likely branches"
+        depends on HAVE_ARCH_JUMP_LABEL
++       depends on (!INTERRUPT_OFF_HIST && !PREEMPT_OFF_HIST && !WAKEUP_LATENCY_HIST && !MISSED_TIMER_OFFSETS_HIST)
+        help
+          This option enables a transparent branch optimization that
+ 	 makes certain almost-always-true or almost-always-false branch
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index 34e1569..79c4603 100644
 --- a/arch/arm/Kconfig
@@ -12175,10 +12205,18 @@ index fc1ef73..83c6665 100644
  	return r;
  }
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index cfc227c..6430e41 100644
+index cfc227c..fa32b9b7 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
-@@ -7228,6 +7228,7 @@ static void perf_swevent_init_hrtimer(struct perf_event *event)
+@@ -802,6 +802,7 @@ static void __perf_mux_hrtimer_init(struct perf_cpu_context *cpuctx, int cpu)
+ 	raw_spin_lock_init(&cpuctx->hrtimer_lock);
+ 	hrtimer_init(timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_PINNED);
+ 	timer->function = perf_mux_hrtimer_handler;
++	timer->irqsafe = 1;
+ }
+ 
+ static int perf_mux_hrtimer_restart(struct perf_cpu_context *cpuctx)
+@@ -7228,6 +7229,7 @@ static void perf_swevent_init_hrtimer(struct perf_event *event)
  
  	hrtimer_init(&hwc->hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
  	hwc->hrtimer.function = perf_swevent_hrtimer;
@@ -12483,6 +12521,40 @@ index a302cf9..5c1824a 100644
  
  	if (!noirqdebug)
  		note_interrupt(desc, retval);
+diff --git a/kernel/irq/irqdesc.c b/kernel/irq/irqdesc.c
+index 239e2ae..0b73349 100644
+--- a/kernel/irq/irqdesc.c
++++ b/kernel/irq/irqdesc.c
+@@ -24,10 +24,27 @@
+ static struct lock_class_key irq_desc_lock_class;
+ 
+ #if defined(CONFIG_SMP)
++static int __init irq_affinity_setup(char *str)
++{
++	zalloc_cpumask_var(&irq_default_affinity, GFP_NOWAIT);
++	cpulist_parse(str, irq_default_affinity);
++	/*
++	 * Set at least the boot cpu. We don't want to end up with
++	 * bugreports caused by random comandline masks
++	 */
++	cpumask_set_cpu(smp_processor_id(), irq_default_affinity);
++	return 1;
++}
++__setup("irqaffinity=", irq_affinity_setup);
++
+ static void __init init_irq_default_affinity(void)
+ {
+-	alloc_cpumask_var(&irq_default_affinity, GFP_NOWAIT);
+-	cpumask_setall(irq_default_affinity);
++#ifdef CONFIG_CPUMASK_OFFSTACK
++	if (!irq_default_affinity)
++		zalloc_cpumask_var(&irq_default_affinity, GFP_NOWAIT);
++#endif
++	if (cpumask_empty(irq_default_affinity))
++		cpumask_setall(irq_default_affinity);
+ }
+ #else
+ static void __init init_irq_default_affinity(void)
 diff --git a/kernel/irq/manage.c b/kernel/irq/manage.c
 index 6ead200..ba2a42a 100644
 --- a/kernel/irq/manage.c
@@ -14899,106 +14971,12 @@ index f9fe133..80ebc07 100644
  	BUG_ON(irqs_disabled());
  
 diff --git a/kernel/printk/printk.c b/kernel/printk/printk.c
-index 2ce8826..079a3af 100644
+index 2ce8826..88995de 100644
 --- a/kernel/printk/printk.c
 +++ b/kernel/printk/printk.c
-@@ -1203,6 +1203,7 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
- {
- 	char *text;
- 	int len = 0;
-+	int attempts = 0;
- 
- 	text = kmalloc(LOG_LINE_MAX + PREFIX_MAX, GFP_KERNEL);
- 	if (!text)
-@@ -1214,7 +1215,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
- 		u64 seq;
- 		u32 idx;
- 		enum log_flags prev;
--
-+		int num_msg;
-+try_again:
-+		attempts++;
-+		if (attempts > 10) {
-+			len = -EBUSY;
-+			goto out;
-+		}
-+		num_msg = 0;
- 		if (clear_seq < log_first_seq) {
- 			/* messages are gone, move to first available one */
- 			clear_seq = log_first_seq;
-@@ -1235,6 +1243,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
- 			prev = msg->flags;
- 			idx = log_next(idx);
- 			seq++;
-+			num_msg++;
-+			if (num_msg > 5) {
-+				num_msg = 0;
-+				raw_spin_unlock_irq(&logbuf_lock);
-+				raw_spin_lock_irq(&logbuf_lock);
-+				if (clear_seq < log_first_seq)
-+					goto try_again;
-+			}
- 		}
- 
- 		/* move first record forward until length fits into the buffer */
-@@ -1248,6 +1264,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
- 			prev = msg->flags;
- 			idx = log_next(idx);
- 			seq++;
-+			num_msg++;
-+			if (num_msg > 5) {
-+				num_msg = 0;
-+				raw_spin_unlock_irq(&logbuf_lock);
-+				raw_spin_lock_irq(&logbuf_lock);
-+				if (clear_seq < log_first_seq)
-+					goto try_again;
-+			}
- 		}
- 
- 		/* last message fitting into this dump */
-@@ -1288,6 +1312,7 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
- 		clear_seq = log_next_seq;
- 		clear_idx = log_next_idx;
- 	}
-+out:
- 	raw_spin_unlock_irq(&logbuf_lock);
- 
- 	kfree(text);
-@@ -1443,6 +1468,7 @@ static void call_console_drivers(int level,
- 	if (!console_drivers)
- 		return;
- 
-+	migrate_disable();
- 	for_each_console(con) {
- 		if (exclusive_console && con != exclusive_console)
- 			continue;
-@@ -1458,6 +1484,7 @@ static void call_console_drivers(int level,
- 		else
- 			con->write(con, text, len);
- 	}
-+	migrate_enable();
- }
- 
- /*
-@@ -1518,6 +1545,15 @@ static inline int can_use_console(unsigned int cpu)
- static int console_trylock_for_printk(void)
- {
- 	unsigned int cpu = smp_processor_id();
-+#ifdef CONFIG_PREEMPT_RT_FULL
-+	int lock = !early_boot_irqs_disabled && (preempt_count() == 0) &&
-+		!irqs_disabled();
-+#else
-+	int lock = 1;
-+#endif
-+
-+	if (!lock)
-+		return 0;
- 
- 	if (!console_trylock())
- 		return 0;
-@@ -1656,6 +1692,62 @@ static size_t cont_print_text(char *text, size_t size)
- 	return textlen;
- }
+@@ -241,6 +241,65 @@ struct printk_log {
+  */
+ static DEFINE_RAW_SPINLOCK(logbuf_lock);
  
 +#ifdef CONFIG_EARLY_PRINTK
 +struct console *early_console;
@@ -15042,6 +15020,7 @@ index 2ce8826..079a3af 100644
 +	printk_killswitch = true;
 +}
 +
++#ifdef CONFIG_PRINTK
 +static int forced_early_printk(const char *fmt, va_list ap)
 +{
 +	if (!printk_killswitch)
@@ -15049,6 +15028,8 @@ index 2ce8826..079a3af 100644
 +	early_vprintk(fmt, ap);
 +	return 1;
 +}
++#endif
++
 +#else
 +static inline int forced_early_printk(const char *fmt, va_list ap)
 +{
@@ -15056,10 +15037,104 @@ index 2ce8826..079a3af 100644
 +}
 +#endif
 +
- asmlinkage int vprintk_emit(int facility, int level,
- 			    const char *dict, size_t dictlen,
- 			    const char *fmt, va_list args)
-@@ -1672,6 +1764,13 @@ asmlinkage int vprintk_emit(int facility, int level,
+ #ifdef CONFIG_PRINTK
+ DECLARE_WAIT_QUEUE_HEAD(log_wait);
+ /* the next printk record to read by syslog(READ) or /proc/kmsg */
+@@ -1203,6 +1262,7 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+ {
+ 	char *text;
+ 	int len = 0;
++	int attempts = 0;
+ 
+ 	text = kmalloc(LOG_LINE_MAX + PREFIX_MAX, GFP_KERNEL);
+ 	if (!text)
+@@ -1214,7 +1274,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+ 		u64 seq;
+ 		u32 idx;
+ 		enum log_flags prev;
+-
++		int num_msg;
++try_again:
++		attempts++;
++		if (attempts > 10) {
++			len = -EBUSY;
++			goto out;
++		}
++		num_msg = 0;
+ 		if (clear_seq < log_first_seq) {
+ 			/* messages are gone, move to first available one */
+ 			clear_seq = log_first_seq;
+@@ -1235,6 +1302,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+ 			prev = msg->flags;
+ 			idx = log_next(idx);
+ 			seq++;
++			num_msg++;
++			if (num_msg > 5) {
++				num_msg = 0;
++				raw_spin_unlock_irq(&logbuf_lock);
++				raw_spin_lock_irq(&logbuf_lock);
++				if (clear_seq < log_first_seq)
++					goto try_again;
++			}
+ 		}
+ 
+ 		/* move first record forward until length fits into the buffer */
+@@ -1248,6 +1323,14 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+ 			prev = msg->flags;
+ 			idx = log_next(idx);
+ 			seq++;
++			num_msg++;
++			if (num_msg > 5) {
++				num_msg = 0;
++				raw_spin_unlock_irq(&logbuf_lock);
++				raw_spin_lock_irq(&logbuf_lock);
++				if (clear_seq < log_first_seq)
++					goto try_again;
++			}
+ 		}
+ 
+ 		/* last message fitting into this dump */
+@@ -1288,6 +1371,7 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
+ 		clear_seq = log_next_seq;
+ 		clear_idx = log_next_idx;
+ 	}
++out:
+ 	raw_spin_unlock_irq(&logbuf_lock);
+ 
+ 	kfree(text);
+@@ -1443,6 +1527,7 @@ static void call_console_drivers(int level,
+ 	if (!console_drivers)
+ 		return;
+ 
++	migrate_disable();
+ 	for_each_console(con) {
+ 		if (exclusive_console && con != exclusive_console)
+ 			continue;
+@@ -1458,6 +1543,7 @@ static void call_console_drivers(int level,
+ 		else
+ 			con->write(con, text, len);
+ 	}
++	migrate_enable();
+ }
+ 
+ /*
+@@ -1518,6 +1604,15 @@ static inline int can_use_console(unsigned int cpu)
+ static int console_trylock_for_printk(void)
+ {
+ 	unsigned int cpu = smp_processor_id();
++#ifdef CONFIG_PREEMPT_RT_FULL
++	int lock = !early_boot_irqs_disabled && (preempt_count() == 0) &&
++		!irqs_disabled();
++#else
++	int lock = 1;
++#endif
++
++	if (!lock)
++		return 0;
+ 
+ 	if (!console_trylock())
+ 		return 0;
+@@ -1672,6 +1767,13 @@ asmlinkage int vprintk_emit(int facility, int level,
  	/* cpu currently holding logbuf_lock in this function */
  	static unsigned int logbuf_cpu = UINT_MAX;
  
@@ -15073,7 +15148,7 @@ index 2ce8826..079a3af 100644
  	if (level == LOGLEVEL_SCHED) {
  		level = LOGLEVEL_DEFAULT;
  		in_sched = true;
-@@ -1813,8 +1912,7 @@ asmlinkage int vprintk_emit(int facility, int level,
+@@ -1813,8 +1915,7 @@ asmlinkage int vprintk_emit(int facility, int level,
  		 * console_sem which would prevent anyone from printing to
  		 * console
  		 */
@@ -15083,7 +15158,7 @@ index 2ce8826..079a3af 100644
  		/*
  		 * Try to acquire and then immediately release the console
  		 * semaphore.  The release will print out buffers and wake up
-@@ -1822,7 +1920,7 @@ asmlinkage int vprintk_emit(int facility, int level,
+@@ -1822,7 +1923,7 @@ asmlinkage int vprintk_emit(int facility, int level,
  		 */
  		if (console_trylock_for_printk())
  			console_unlock();
@@ -15092,7 +15167,7 @@ index 2ce8826..079a3af 100644
  		lockdep_on();
  	}
  
-@@ -1961,26 +2059,6 @@ DEFINE_PER_CPU(printk_func_t, printk_func);
+@@ -1961,26 +2062,6 @@ DEFINE_PER_CPU(printk_func_t, printk_func);
  
  #endif /* CONFIG_PRINTK */
  
@@ -15119,7 +15194,7 @@ index 2ce8826..079a3af 100644
  static int __add_preferred_console(char *name, int idx, char *options,
  				   char *brl_options)
  {
-@@ -2202,11 +2280,16 @@ static void console_cont_flush(char *text, size_t size)
+@@ -2202,11 +2283,16 @@ static void console_cont_flush(char *text, size_t size)
  		goto out;
  
  	len = cont_print_text(text, size);
@@ -15136,7 +15211,7 @@ index 2ce8826..079a3af 100644
  	return;
  out:
  	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
-@@ -2305,12 +2388,17 @@ skip:
+@@ -2305,12 +2391,17 @@ skip:
  		console_idx = log_next(console_idx);
  		console_seq++;
  		console_prev = msg->flags;
@@ -16085,7 +16160,7 @@ index 8d0f35d..45ebcff 100644
  }
  EXPORT_SYMBOL(completion_done);
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 732e993..7a13fbc 100644
+index 732e993..1217926 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -260,7 +260,11 @@ late_initcall(sched_init_debug);
@@ -16483,7 +16558,7 @@ index 732e993..7a13fbc 100644
  	if (unlikely(prev_state == TASK_DEAD)) {
  		if (prev->sched_class->task_dead)
  			prev->sched_class->task_dead(prev);
-@@ -3022,6 +3151,78 @@ static inline void schedule_debug(struct task_struct *prev)
+@@ -3022,6 +3151,77 @@ static inline void schedule_debug(struct task_struct *prev)
  	schedstat_inc(this_rq(), sched_count);
  }
  
@@ -16516,7 +16591,6 @@ index 732e993..7a13fbc 100644
 +	preempt_lazy_disable();
 +	pin_current_cpu();
 +	p->migrate_disable = 1;
-+	p->nr_cpus_allowed = 1;
 +	preempt_enable();
 +}
 +EXPORT_SYMBOL(migrate_disable);
@@ -16562,7 +16636,7 @@ index 732e993..7a13fbc 100644
  /*
   * Pick up the highest-prio task:
   */
-@@ -3146,19 +3347,6 @@ static void __sched notrace __schedule(bool preempt)
+@@ -3146,19 +3346,6 @@ static void __sched notrace __schedule(bool preempt)
  		} else {
  			deactivate_task(rq, prev, DEQUEUE_SLEEP);
  			prev->on_rq = 0;
@@ -16582,7 +16656,7 @@ index 732e993..7a13fbc 100644
  		}
  		switch_count = &prev->nvcsw;
  	}
-@@ -3168,6 +3356,7 @@ static void __sched notrace __schedule(bool preempt)
+@@ -3168,6 +3355,7 @@ static void __sched notrace __schedule(bool preempt)
  
  	next = pick_next_task(rq, prev);
  	clear_tsk_need_resched(prev);
@@ -16590,7 +16664,7 @@ index 732e993..7a13fbc 100644
  	clear_preempt_need_resched();
  	rq->clock_skip_update = 0;
  
-@@ -3189,9 +3378,20 @@ static void __sched notrace __schedule(bool preempt)
+@@ -3189,9 +3377,20 @@ static void __sched notrace __schedule(bool preempt)
  
  static inline void sched_submit_work(struct task_struct *tsk)
  {
@@ -16612,7 +16686,7 @@ index 732e993..7a13fbc 100644
  	 * If we are going to sleep and we have plugged IO queued,
  	 * make sure to submit it to avoid deadlocks.
  	 */
-@@ -3199,6 +3399,12 @@ static inline void sched_submit_work(struct task_struct *tsk)
+@@ -3199,6 +3398,12 @@ static inline void sched_submit_work(struct task_struct *tsk)
  		blk_schedule_flush_plug(tsk);
  }
  
@@ -16625,7 +16699,7 @@ index 732e993..7a13fbc 100644
  asmlinkage __visible void __sched schedule(void)
  {
  	struct task_struct *tsk = current;
-@@ -3209,6 +3415,7 @@ asmlinkage __visible void __sched schedule(void)
+@@ -3209,6 +3414,7 @@ asmlinkage __visible void __sched schedule(void)
  		__schedule(false);
  		sched_preempt_enable_no_resched();
  	} while (need_resched());
@@ -16633,7 +16707,7 @@ index 732e993..7a13fbc 100644
  }
  EXPORT_SYMBOL(schedule);
  
-@@ -3257,6 +3464,30 @@ static void __sched notrace preempt_schedule_common(void)
+@@ -3257,6 +3463,30 @@ static void __sched notrace preempt_schedule_common(void)
  	} while (need_resched());
  }
  
@@ -16664,7 +16738,7 @@ index 732e993..7a13fbc 100644
  #ifdef CONFIG_PREEMPT
  /*
   * this is the entry point to schedule() from in-kernel preemption
-@@ -3271,6 +3502,8 @@ asmlinkage __visible void __sched notrace preempt_schedule(void)
+@@ -3271,6 +3501,8 @@ asmlinkage __visible void __sched notrace preempt_schedule(void)
  	 */
  	if (likely(!preemptible()))
  		return;
@@ -16673,7 +16747,7 @@ index 732e993..7a13fbc 100644
  
  	preempt_schedule_common();
  }
-@@ -3297,6 +3530,8 @@ asmlinkage __visible void __sched notrace preempt_schedule_notrace(void)
+@@ -3297,6 +3529,8 @@ asmlinkage __visible void __sched notrace preempt_schedule_notrace(void)
  
  	if (likely(!preemptible()))
  		return;
@@ -16682,7 +16756,7 @@ index 732e993..7a13fbc 100644
  
  	do {
  		preempt_disable_notrace();
-@@ -3306,7 +3541,16 @@ asmlinkage __visible void __sched notrace preempt_schedule_notrace(void)
+@@ -3306,7 +3540,16 @@ asmlinkage __visible void __sched notrace preempt_schedule_notrace(void)
  		 * an infinite recursion.
  		 */
  		prev_ctx = exception_enter();
@@ -16699,7 +16773,7 @@ index 732e993..7a13fbc 100644
  		exception_exit(prev_ctx);
  
  		preempt_enable_no_resched_notrace();
-@@ -4650,6 +4894,7 @@ int __cond_resched_lock(spinlock_t *lock)
+@@ -4650,6 +4893,7 @@ int __cond_resched_lock(spinlock_t *lock)
  }
  EXPORT_SYMBOL(__cond_resched_lock);
  
@@ -16707,7 +16781,7 @@ index 732e993..7a13fbc 100644
  int __sched __cond_resched_softirq(void)
  {
  	BUG_ON(!in_softirq());
-@@ -4663,6 +4908,7 @@ int __sched __cond_resched_softirq(void)
+@@ -4663,6 +4907,7 @@ int __sched __cond_resched_softirq(void)
  	return 0;
  }
  EXPORT_SYMBOL(__cond_resched_softirq);
@@ -16715,7 +16789,7 @@ index 732e993..7a13fbc 100644
  
  /**
   * yield - yield the current processor to other threads.
-@@ -5027,7 +5273,9 @@ void init_idle(struct task_struct *idle, int cpu)
+@@ -5027,7 +5272,9 @@ void init_idle(struct task_struct *idle, int cpu)
  
  	/* Set the preempt count _outside_ the spinlocks! */
  	init_idle_preempt_count(idle, cpu);
@@ -16726,7 +16800,7 @@ index 732e993..7a13fbc 100644
  	/*
  	 * The idle tasks have their own, simple scheduling class:
  	 */
-@@ -5168,6 +5416,8 @@ void sched_setnuma(struct task_struct *p, int nid)
+@@ -5168,6 +5415,8 @@ void sched_setnuma(struct task_struct *p, int nid)
  #endif /* CONFIG_NUMA_BALANCING */
  
  #ifdef CONFIG_HOTPLUG_CPU
@@ -16735,7 +16809,7 @@ index 732e993..7a13fbc 100644
  /*
   * Ensures that the idle task is using init_mm right before its cpu goes
   * offline.
-@@ -5182,7 +5432,11 @@ void idle_task_exit(void)
+@@ -5182,7 +5431,11 @@ void idle_task_exit(void)
  		switch_mm(mm, &init_mm, current);
  		finish_arch_post_lock_switch();
  	}
@@ -16748,7 +16822,7 @@ index 732e993..7a13fbc 100644
  }
  
  /*
-@@ -5554,6 +5808,10 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
+@@ -5554,6 +5807,10 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
  
  	case CPU_DEAD:
  		calc_load_migrate(rq);
@@ -16759,7 +16833,7 @@ index 732e993..7a13fbc 100644
  		break;
  #endif
  	}
-@@ -7537,7 +7795,7 @@ void __init sched_init(void)
+@@ -7537,7 +7794,7 @@ void __init sched_init(void)
  #ifdef CONFIG_DEBUG_ATOMIC_SLEEP
  static inline int preempt_count_equals(int preempt_offset)
  {
@@ -24495,7 +24569,7 @@ index aa01713..263d019 100644
  	return ret;
  }
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 7f00f24..e902501 100644
+index 7f00f24..c82f163 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -186,6 +186,7 @@ static unsigned int napi_gen_id;
@@ -24650,7 +24724,7 @@ index 7f00f24..e902501 100644
 +	__this_cpu_inc(xmit_recursion);
 +}
 +
-+static inline int xmit_rec_dec(void)
++static inline void xmit_rec_dec(void)
 +{
 +	__this_cpu_dec(xmit_recursion);
 +}
