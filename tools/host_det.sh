@@ -236,12 +236,22 @@ debian_regs () {
 		fi
 
 		if [ "x${deb_distro}" = "xsana" ] ; then
+			#EOL: 15th of April 2016.
 			#lsb_release -a
 			#Distributor ID:    Kali
 			#Description:    Kali GNU/Linux 2.0
 			#Release:    2.0
 			#Codename:    sana
 			deb_distro="jessie"
+		fi
+
+		if [ "x${deb_distro}" = "xkali-rolling" ] ; then
+			#lsb_release -a:
+			#Distributor ID:    Kali
+			#Description:    Kali GNU/Linux Rolling
+			#Release:    kali-rolling
+			#Codename:    kali-rolling
+			deb_distro="stretch"
 		fi
 
 		#Linux Mint: Compatibility Matrix
@@ -334,13 +344,13 @@ debian_regs () {
 			#16.04 trusty: (EOL: April 20xx) lts: xenial -> xyz
 			unset warn_eol_distro
 			;;
-		vivid|wily)
-			#15.04 vivid: (EOL: February 4, 2016)
+		wily)
 			#15.10 wily: (EOL: July 2016)
 			unset warn_eol_distro
 			;;
-		utopic)
+		utopic|vivid)
 			#14.10 utopic: (EOL: July 23, 2015)
+			#15.04 vivid: (EOL: February 4, 2016)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
