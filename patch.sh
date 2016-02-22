@@ -81,6 +81,11 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
+
+	#v4.4.1 -> v4.4.2
+	git revert --no-edit dd0d511548ea1ad8f233e9fa4a4acfb83af9bd29 -s
+	git revert --no-edit a623f87a72de35096a9eae7cc7764d0c9533c2e9 -s
+
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -119,6 +124,7 @@ lts44_backports () {
 		cherrypick_dir="lts44_backports/dmtimer"
 		SHA="6604c6556db9e41c85f2839f66bd9d617bcf9f87" ; num="1" ; cherrypick
 		SHA="074726402b82f14ca377da0b4a4767674c3d1ff8" ; cherrypick
+		SHA="20437f79f6627a31752f422688a6047c25cefcf1" ; cherrypick
 
 		exit 2
 	fi
@@ -133,10 +139,9 @@ lts44_backports () {
 		#4.5.0-rc0
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0001-pwm-Add-PWM-driver-for-OMAP-using-dual-mode-timers.patch"
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0002-pwm-omap-dmtimer-Potential-NULL-dereference-on-error.patch"
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0003-ARM-OMAP-Add-PWM-dmtimer-platform-data-quirks.patch"
 	fi
 	unset is_44
-
-		${git} "${DIR}/patches/lts44_backports/dmtimer/0003-ARM-OMAP-Add-PWM-dmtimer-platform-data-quirks.patch"
 }
 
 reverts () {
@@ -244,7 +249,7 @@ bbb_overlays () {
 		start_cleanup
 	fi
 
-	#[PATCH 0/7] Convert exiting EEPROM drivers to NVMEM
+	#[PATCHv6 0/7] Convert exiting EEPROM drivers to NVMEM
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0001-nvmem-Add-flag-to-export-NVMEM-to-root-only.patch"
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0002-nvmem-Add-backwards-compatibility-support-for-older-.patch"
 	${git} "${DIR}/patches/bbb_overlays/nvmem/0003-eeprom-at24-extend-driver-to-plug-into-the-NVMEM-fra.patch"
@@ -379,9 +384,10 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dts/0001-dts-am335x-bone-common-fixup-leds-to-match-3.8.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0002-arm-dts-am335x-bone-common-add-collision-and-carrier.patch"
 	${git} "${DIR}/patches/beaglebone/dts/0003-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
+	${git} "${DIR}/patches/beaglebone/dts/0004-am335x-bone-common-disable-default-clkout2_pin.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=3
+		number=4
 		cleanup
 	fi
 
@@ -525,7 +531,7 @@ beaglebone () {
 		start_cleanup
 	fi
 
-	#[PATCH v7 0/3] tty: Introduce software RS485 direction control support
+	#[PATCH v8 0/3] tty: Introduce software RS485 direction control support
 	${git} "${DIR}/patches/beaglebone/rs485/0001-tty-Move-serial8250_stop_rx-in-front-of-serial8250_s.patch"
 	${git} "${DIR}/patches/beaglebone/rs485/0002-tty-Add-software-emulated-RS485-support-for-8250.patch"
 	${git} "${DIR}/patches/beaglebone/rs485/0003-tty-8250_omap-Use-software-emulated-RS485-direction-.patch"
