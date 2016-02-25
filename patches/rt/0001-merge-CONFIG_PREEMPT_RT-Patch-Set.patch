@@ -1,6 +1,6 @@
-From acf529b5bf4017067f68a21b09ba66acbd3a84a2 Mon Sep 17 00:00:00 2001
+From 59b82aa18a479912df6b49288adbee29484c2981 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 21 Feb 2016 18:56:21 -0600
+Date: Thu, 25 Feb 2016 14:22:13 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -271,7 +271,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/panic.c                                     |    2 +
  kernel/power/hibernate.c                           |    7 +
  kernel/power/suspend.c                             |    4 +
- kernel/printk/printk.c                             |  139 ++-
+ kernel/printk/printk.c                             |  140 ++-
  kernel/ptrace.c                                    |    9 +-
  kernel/rcu/tree.c                                  |  162 ++-
  kernel/rcu/tree.h                                  |   16 +-
@@ -358,7 +358,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/core/pcm_native.c                            |    8 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 353 files changed, 11428 insertions(+), 1915 deletions(-)
+ 353 files changed, 11428 insertions(+), 1916 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -6823,7 +6823,7 @@ index 899a771..3ff6363 100644
  	clk_disable(uap->clk);
  }
 diff --git a/drivers/tty/serial/omap-serial.c b/drivers/tty/serial/omap-serial.c
-index 9d4c84f..29ad4a2 100644
+index 24280d9..9745fb8 100644
 --- a/drivers/tty/serial/omap-serial.c
 +++ b/drivers/tty/serial/omap-serial.c
 @@ -1257,13 +1257,10 @@ serial_omap_console_write(struct console *co, const char *s,
@@ -7009,7 +7009,7 @@ index 1cebc3c..d487fa2 100644
  			}
  			spin_unlock(&p->d_lock);
 diff --git a/fs/btrfs/volumes.c b/fs/btrfs/volumes.c
-index a23399e..1fc2e13 100644
+index 9e08447..9c62a6f 100644
 --- a/fs/btrfs/volumes.c
 +++ b/fs/btrfs/volumes.c
 @@ -232,6 +232,7 @@ static struct btrfs_device *__alloc_device(void)
@@ -7250,7 +7250,7 @@ index 7521e11..f0de4b6 100644
  
  /**
 diff --git a/fs/timerfd.c b/fs/timerfd.c
-index b94fa6c..64fb860 100644
+index 053818d..c4bc14f 100644
 --- a/fs/timerfd.c
 +++ b/fs/timerfd.c
 @@ -450,7 +450,10 @@ static int do_timerfd_settime(int ufd, int flags,
@@ -7643,7 +7643,7 @@ index bb3f329..a117a33 100644
  }
  
 diff --git a/include/linux/hrtimer.h b/include/linux/hrtimer.h
-index 76dd4f0..27933e4 100644
+index 2ead22d..8fbcdfa 100644
 --- a/include/linux/hrtimer.h
 +++ b/include/linux/hrtimer.h
 @@ -87,6 +87,9 @@ enum hrtimer_restart {
@@ -7653,22 +7653,22 @@ index 76dd4f0..27933e4 100644
 + * @cb_entry:	list entry to defer timers from hardirq context
 + * @irqsafe:	timer can run in hardirq context
 + * @praecox:	timer expiry time if expired at the time of programming
-  * @start_pid: timer statistics field to store the pid of the task which
+  * @is_rel:	Set if the timer was armed relative
+  * @start_pid:  timer statistics field to store the pid of the task which
   *		started the timer
-  * @start_site:	timer statistics field to store the site where the timer
-@@ -102,6 +105,11 @@ struct hrtimer {
+@@ -103,6 +106,11 @@ struct hrtimer {
  	enum hrtimer_restart		(*function)(struct hrtimer *);
  	struct hrtimer_clock_base	*base;
- 	unsigned long			state;
+ 	u8				state;
 +	struct list_head		cb_entry;
 +	int				irqsafe;
 +#ifdef CONFIG_MISSED_TIMER_OFFSETS_HIST
 +	ktime_t				praecox;
 +#endif
+ 	u8				is_rel;
  #ifdef CONFIG_TIMER_STATS
  	int				start_pid;
- 	void				*start_site;
-@@ -121,11 +129,7 @@ struct hrtimer_sleeper {
+@@ -123,11 +131,7 @@ struct hrtimer_sleeper {
  	struct task_struct *task;
  };
  
@@ -7680,7 +7680,7 @@ index 76dd4f0..27933e4 100644
  
  /**
   * struct hrtimer_clock_base - the timer base for a specific clock
-@@ -134,6 +138,7 @@ struct hrtimer_sleeper {
+@@ -136,6 +140,7 @@ struct hrtimer_sleeper {
   *			timer to a base on another cpu.
   * @clockid:		clock id for per_cpu support
   * @active:		red black tree root node for the active timers
@@ -7688,7 +7688,7 @@ index 76dd4f0..27933e4 100644
   * @get_time:		function to retrieve the current time of the clock
   * @offset:		offset of this clock to the monotonic base
   */
-@@ -142,6 +147,7 @@ struct hrtimer_clock_base {
+@@ -144,6 +149,7 @@ struct hrtimer_clock_base {
  	int			index;
  	clockid_t		clockid;
  	struct timerqueue_head	active;
@@ -7696,7 +7696,7 @@ index 76dd4f0..27933e4 100644
  	ktime_t			(*get_time)(void);
  	ktime_t			offset;
  } __attribute__((__aligned__(HRTIMER_CLOCK_BASE_ALIGN)));
-@@ -185,6 +191,7 @@ struct hrtimer_cpu_base {
+@@ -187,6 +193,7 @@ struct hrtimer_cpu_base {
  	raw_spinlock_t			lock;
  	seqcount_t			seq;
  	struct hrtimer			*running;
@@ -7704,7 +7704,7 @@ index 76dd4f0..27933e4 100644
  	unsigned int			cpu;
  	unsigned int			active_bases;
  	unsigned int			clock_was_set_seq;
-@@ -201,6 +208,9 @@ struct hrtimer_cpu_base {
+@@ -203,6 +210,9 @@ struct hrtimer_cpu_base {
  	unsigned int			nr_hangs;
  	unsigned int			max_hang_time;
  #endif
@@ -7714,7 +7714,7 @@ index 76dd4f0..27933e4 100644
  	struct hrtimer_clock_base	clock_base[HRTIMER_MAX_CLOCK_BASES];
  } ____cacheline_aligned;
  
-@@ -389,6 +399,13 @@ static inline void hrtimer_restart(struct hrtimer *timer)
+@@ -412,6 +422,13 @@ static inline void hrtimer_restart(struct hrtimer *timer)
  	hrtimer_start_expires(timer, HRTIMER_MODE_ABS);
  }
  
@@ -7726,9 +7726,9 @@ index 76dd4f0..27933e4 100644
 +#endif
 +
  /* Query timers: */
- extern ktime_t hrtimer_get_remaining(const struct hrtimer *timer);
+ extern ktime_t __hrtimer_get_remaining(const struct hrtimer *timer, bool adjust);
  
-@@ -408,7 +425,7 @@ static inline int hrtimer_is_queued(struct hrtimer *timer)
+@@ -436,7 +453,7 @@ static inline int hrtimer_is_queued(struct hrtimer *timer)
   * Helper function to check, whether the timer is running the callback
   * function
   */
@@ -9150,7 +9150,7 @@ index 9729565..9cdca69 100644
  
  typedef __printf(1, 0) int (*printk_func_t)(const char *fmt, va_list args);
 diff --git a/include/linux/radix-tree.h b/include/linux/radix-tree.h
-index 33170db..933ff69 100644
+index 5d5174b..8ddbd6e 100644
 --- a/include/linux/radix-tree.h
 +++ b/include/linux/radix-tree.h
 @@ -277,8 +277,13 @@ radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
@@ -12275,7 +12275,7 @@ index fc1ef73..83c6665 100644
  	return r;
  }
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index cfc227c..fa32b9b7 100644
+index 1087bbe..760f41d 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
 @@ -802,6 +802,7 @@ static void __perf_mux_hrtimer_init(struct perf_cpu_context *cpuctx, int cpu)
@@ -12398,7 +12398,7 @@ index 1155eac..46c1e83 100644
  	p->vtime_snap_whence = VTIME_SLEEPING;
  #endif
 diff --git a/kernel/futex.c b/kernel/futex.c
-index 684d754..af4f1b4 100644
+index 495a1d0..532e42c 100644
 --- a/kernel/futex.c
 +++ b/kernel/futex.c
 @@ -815,7 +815,9 @@ void exit_pi_state_list(struct task_struct *curr)
@@ -15434,10 +15434,10 @@ index 0374a59..9497033 100644
 +
 +#endif
 diff --git a/kernel/panic.c b/kernel/panic.c
-index 4b150bc..d74f25d 100644
+index 41e2b54..50d4ae2 100644
 --- a/kernel/panic.c
 +++ b/kernel/panic.c
-@@ -401,9 +401,11 @@ static u64 oops_id;
+@@ -400,9 +400,11 @@ static u64 oops_id;
  
  static int init_oops_id(void)
  {
@@ -15525,7 +15525,7 @@ index f9fe133..80ebc07 100644
  	BUG_ON(irqs_disabled());
  
 diff --git a/kernel/printk/printk.c b/kernel/printk/printk.c
-index 2ce8826..88995de 100644
+index c048e34..f75e4b0 100644
 --- a/kernel/printk/printk.c
 +++ b/kernel/printk/printk.c
 @@ -241,6 +241,65 @@ struct printk_log {
@@ -15765,7 +15765,7 @@ index 2ce8826..88995de 100644
  	return;
  out:
  	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
-@@ -2305,12 +2391,17 @@ skip:
+@@ -2316,13 +2402,17 @@ skip:
  		console_idx = log_next(console_idx);
  		console_seq++;
  		console_prev = msg->flags;
@@ -15779,12 +15779,13 @@ index 2ce8826..88995de 100644
  		call_console_drivers(level, ext_text, ext_len, text, len);
  		start_critical_timings();
  		local_irq_restore(flags);
+-
 +#endif
+ 		if (do_cond_resched)
+ 			cond_resched();
  	}
- 	console_locked = 0;
- 
 diff --git a/kernel/ptrace.c b/kernel/ptrace.c
-index b760bae..2856b43 100644
+index 3189e51..1004af7 100644
 --- a/kernel/ptrace.c
 +++ b/kernel/ptrace.c
 @@ -129,7 +129,14 @@ static bool ptrace_freeze_traced(struct task_struct *task)
@@ -19709,7 +19710,7 @@ index a3bbaee..f84d3b4 100644
  
  	/* Busy wait for completion. */
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index 435b885..27c198e 100644
+index fa909f9..2cc3675 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
 @@ -48,11 +48,13 @@
@@ -19838,7 +19839,7 @@ index 435b885..27c198e 100644
  	if (!timerqueue_del(&base->active, &timer->node))
  		cpu_base->active_bases &= ~(1 << base->index);
  
-@@ -994,7 +1063,16 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
+@@ -1001,7 +1070,16 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
  	new_base = switch_hrtimer_base(timer, base, mode & HRTIMER_MODE_PINNED);
  
  	timer_stats_hrtimer_set_start_info(timer);
@@ -19855,7 +19856,7 @@ index 435b885..27c198e 100644
  	leftmost = enqueue_hrtimer(timer, new_base);
  	if (!leftmost)
  		goto unlock;
-@@ -1066,7 +1144,7 @@ int hrtimer_cancel(struct hrtimer *timer)
+@@ -1073,7 +1151,7 @@ int hrtimer_cancel(struct hrtimer *timer)
  
  		if (ret >= 0)
  			return ret;
@@ -19864,7 +19865,7 @@ index 435b885..27c198e 100644
  	}
  }
  EXPORT_SYMBOL_GPL(hrtimer_cancel);
-@@ -1126,6 +1204,7 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
+@@ -1137,6 +1215,7 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
  
  	base = hrtimer_clockid_to_base(clock_id);
  	timer->base = &cpu_base->clock_base[base];
@@ -19872,7 +19873,7 @@ index 435b885..27c198e 100644
  	timerqueue_init(&timer->node);
  
  #ifdef CONFIG_TIMER_STATS
-@@ -1166,6 +1245,7 @@ bool hrtimer_active(const struct hrtimer *timer)
+@@ -1177,6 +1256,7 @@ bool hrtimer_active(const struct hrtimer *timer)
  		seq = raw_read_seqcount_begin(&cpu_base->seq);
  
  		if (timer->state != HRTIMER_STATE_INACTIVE ||
@@ -19880,7 +19881,7 @@ index 435b885..27c198e 100644
  		    cpu_base->running == timer)
  			return true;
  
-@@ -1256,10 +1336,112 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
+@@ -1275,10 +1355,112 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  	cpu_base->running = NULL;
  }
  
@@ -19993,7 +19994,7 @@ index 435b885..27c198e 100644
  
  	for (; active; base++, active >>= 1) {
  		struct timerqueue_node *node;
-@@ -1275,6 +1457,15 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
+@@ -1294,6 +1476,15 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
  
  			timer = container_of(node, struct hrtimer, node);
  
@@ -20009,7 +20010,7 @@ index 435b885..27c198e 100644
  			/*
  			 * The immediate goal for using the softexpires is
  			 * minimizing wakeups, not running timers at the
-@@ -1290,9 +1481,14 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
+@@ -1309,9 +1500,14 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
  			if (basenow.tv64 < hrtimer_get_softexpires_tv64(timer))
  				break;
  
@@ -20025,7 +20026,7 @@ index 435b885..27c198e 100644
  }
  
  #ifdef CONFIG_HIGH_RES_TIMERS
-@@ -1455,16 +1651,18 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
+@@ -1474,16 +1670,18 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
  void hrtimer_init_sleeper(struct hrtimer_sleeper *sl, struct task_struct *task)
  {
  	sl->timer.function = hrtimer_wakeup;
@@ -20046,7 +20047,7 @@ index 435b885..27c198e 100644
  		hrtimer_start_expires(&t->timer, mode);
  
  		if (likely(t->task))
-@@ -1506,7 +1704,8 @@ long __sched hrtimer_nanosleep_restart(struct restart_block *restart)
+@@ -1525,7 +1723,8 @@ long __sched hrtimer_nanosleep_restart(struct restart_block *restart)
  				HRTIMER_MODE_ABS);
  	hrtimer_set_expires_tv64(&t.timer, restart->nanosleep.expires);
  
@@ -20056,7 +20057,7 @@ index 435b885..27c198e 100644
  		goto out;
  
  	rmtp = restart->nanosleep.rmtp;
-@@ -1523,8 +1722,10 @@ out:
+@@ -1542,8 +1741,10 @@ out:
  	return ret;
  }
  
@@ -20069,7 +20070,7 @@ index 435b885..27c198e 100644
  {
  	struct restart_block *restart;
  	struct hrtimer_sleeper t;
-@@ -1537,7 +1738,7 @@ long hrtimer_nanosleep(struct timespec *rqtp, struct timespec __user *rmtp,
+@@ -1556,7 +1757,7 @@ long hrtimer_nanosleep(struct timespec *rqtp, struct timespec __user *rmtp,
  
  	hrtimer_init_on_stack(&t.timer, clockid, mode);
  	hrtimer_set_expires_range_ns(&t.timer, timespec_to_ktime(*rqtp), slack);
@@ -20078,7 +20079,7 @@ index 435b885..27c198e 100644
  		goto out;
  
  	/* Absolute timers do not update the rmtp value and restart: */
-@@ -1564,6 +1765,12 @@ out:
+@@ -1583,6 +1784,12 @@ out:
  	return ret;
  }
  
@@ -20091,7 +20092,7 @@ index 435b885..27c198e 100644
  SYSCALL_DEFINE2(nanosleep, struct timespec __user *, rqtp,
  		struct timespec __user *, rmtp)
  {
-@@ -1578,6 +1785,26 @@ SYSCALL_DEFINE2(nanosleep, struct timespec __user *, rqtp,
+@@ -1597,6 +1804,26 @@ SYSCALL_DEFINE2(nanosleep, struct timespec __user *, rqtp,
  	return hrtimer_nanosleep(&tu, rmtp, HRTIMER_MODE_REL, CLOCK_MONOTONIC);
  }
  
@@ -20118,7 +20119,7 @@ index 435b885..27c198e 100644
  /*
   * Functions related to boot-time initialization:
   */
-@@ -1589,10 +1816,14 @@ static void init_hrtimers_cpu(int cpu)
+@@ -1608,10 +1835,14 @@ static void init_hrtimers_cpu(int cpu)
  	for (i = 0; i < HRTIMER_MAX_CLOCK_BASES; i++) {
  		cpu_base->clock_base[i].cpu_base = cpu_base;
  		timerqueue_init_head(&cpu_base->clock_base[i].active);
@@ -20133,7 +20134,7 @@ index 435b885..27c198e 100644
  }
  
  #ifdef CONFIG_HOTPLUG_CPU
-@@ -1690,11 +1921,21 @@ static struct notifier_block hrtimers_nb = {
+@@ -1709,11 +1940,21 @@ static struct notifier_block hrtimers_nb = {
  	.notifier_call = hrtimer_cpu_notify,
  };
  
@@ -20156,7 +20157,7 @@ index 435b885..27c198e 100644
  
  /**
 diff --git a/kernel/time/itimer.c b/kernel/time/itimer.c
-index 8d262b4..d051390 100644
+index 1d5c720..184de67 100644
 --- a/kernel/time/itimer.c
 +++ b/kernel/time/itimer.c
 @@ -213,6 +213,7 @@ again:
@@ -20496,7 +20497,7 @@ index f5e86d2..bf28ef6 100644
   * Set one of the process-wide special case CPU timers or RLIMIT_CPU.
   * The tsk->sighand->siglock must be held by the caller.
 diff --git a/kernel/time/posix-timers.c b/kernel/time/posix-timers.c
-index 31d11ac..7d0f1382 100644
+index f2826c3..464a981 100644
 --- a/kernel/time/posix-timers.c
 +++ b/kernel/time/posix-timers.c
 @@ -506,6 +506,7 @@ static enum hrtimer_restart posix_timer_fn(struct hrtimer *timer)
@@ -23663,7 +23664,7 @@ index 6d40944..822a2c0 100644
  }
  EXPORT_SYMBOL_GPL(percpu_ida_for_each_free);
 diff --git a/lib/radix-tree.c b/lib/radix-tree.c
-index fcf5d98..1ee5b26 100644
+index 6b79e90..f27e0bc 100644
 --- a/lib/radix-tree.c
 +++ b/lib/radix-tree.c
 @@ -196,13 +196,14 @@ radix_tree_node_alloc(struct radix_tree_root *root)
@@ -23878,7 +23879,7 @@ index 123bcd3..16e8cf2 100644
  unsigned int nr_free_highpages (void)
  {
 diff --git a/mm/memcontrol.c b/mm/memcontrol.c
-index fc10620..4a8fac1 100644
+index ee6acd2..095d20f 100644
 --- a/mm/memcontrol.c
 +++ b/mm/memcontrol.c
 @@ -67,6 +67,8 @@
@@ -23936,7 +23937,7 @@ index fc10620..4a8fac1 100644
  	put_online_cpus();
  	mutex_unlock(&percpu_charge_mutex);
  }
-@@ -4615,12 +4621,12 @@ static int mem_cgroup_move_account(struct page *page,
+@@ -4616,12 +4622,12 @@ static int mem_cgroup_move_account(struct page *page,
  
  	ret = 0;
  
@@ -23951,7 +23952,7 @@ index fc10620..4a8fac1 100644
  out_unlock:
  	unlock_page(page);
  out:
-@@ -5373,10 +5379,10 @@ void mem_cgroup_commit_charge(struct page *page, struct mem_cgroup *memcg,
+@@ -5374,10 +5380,10 @@ void mem_cgroup_commit_charge(struct page *page, struct mem_cgroup *memcg,
  		VM_BUG_ON_PAGE(!PageTransHuge(page), page);
  	}
  
@@ -23964,7 +23965,7 @@ index fc10620..4a8fac1 100644
  
  	if (do_swap_account && PageSwapCache(page)) {
  		swp_entry_t entry = { .val = page_private(page) };
-@@ -5432,14 +5438,14 @@ static void uncharge_batch(struct mem_cgroup *memcg, unsigned long pgpgout,
+@@ -5433,14 +5439,14 @@ static void uncharge_batch(struct mem_cgroup *memcg, unsigned long pgpgout,
  		memcg_oom_recover(memcg);
  	}
  
@@ -23981,7 +23982,7 @@ index fc10620..4a8fac1 100644
  
  	if (!mem_cgroup_is_root(memcg))
  		css_put_many(&memcg->css, nr_pages);
-@@ -5631,6 +5637,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
+@@ -5632,6 +5638,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
  {
  	struct mem_cgroup *memcg;
  	unsigned short oldid;
@@ -23989,7 +23990,7 @@ index fc10620..4a8fac1 100644
  
  	VM_BUG_ON_PAGE(PageLRU(page), page);
  	VM_BUG_ON_PAGE(page_count(page), page);
-@@ -5659,9 +5666,13 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
+@@ -5660,9 +5667,13 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
  	 * important here to have the interrupts disabled because it is the
  	 * only synchronisation we have for udpating the per-CPU variables.
  	 */
@@ -25821,10 +25822,10 @@ index 6fdc97e..523e042 100755
  
  # Truncate to maximum length
 diff --git a/sound/core/pcm_native.c b/sound/core/pcm_native.c
-index a8b27cd..1dce7d3 100644
+index 4ba64fd..34e5018 100644
 --- a/sound/core/pcm_native.c
 +++ b/sound/core/pcm_native.c
-@@ -123,7 +123,7 @@ EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock);
+@@ -135,7 +135,7 @@ EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock);
  void snd_pcm_stream_lock_irq(struct snd_pcm_substream *substream)
  {
  	if (!substream->pcm->nonatomic)
@@ -25833,7 +25834,7 @@ index a8b27cd..1dce7d3 100644
  	snd_pcm_stream_lock(substream);
  }
  EXPORT_SYMBOL_GPL(snd_pcm_stream_lock_irq);
-@@ -138,7 +138,7 @@ void snd_pcm_stream_unlock_irq(struct snd_pcm_substream *substream)
+@@ -150,7 +150,7 @@ void snd_pcm_stream_unlock_irq(struct snd_pcm_substream *substream)
  {
  	snd_pcm_stream_unlock(substream);
  	if (!substream->pcm->nonatomic)
@@ -25842,7 +25843,7 @@ index a8b27cd..1dce7d3 100644
  }
  EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock_irq);
  
-@@ -146,7 +146,7 @@ unsigned long _snd_pcm_stream_lock_irqsave(struct snd_pcm_substream *substream)
+@@ -158,7 +158,7 @@ unsigned long _snd_pcm_stream_lock_irqsave(struct snd_pcm_substream *substream)
  {
  	unsigned long flags = 0;
  	if (!substream->pcm->nonatomic)
@@ -25851,7 +25852,7 @@ index a8b27cd..1dce7d3 100644
  	snd_pcm_stream_lock(substream);
  	return flags;
  }
-@@ -164,7 +164,7 @@ void snd_pcm_stream_unlock_irqrestore(struct snd_pcm_substream *substream,
+@@ -176,7 +176,7 @@ void snd_pcm_stream_unlock_irqrestore(struct snd_pcm_substream *substream,
  {
  	snd_pcm_stream_unlock(substream);
  	if (!substream->pcm->nonatomic)
