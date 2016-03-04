@@ -82,9 +82,8 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 
-	#v4.4.2 -> v4.4.3
-	git revert --no-edit e31e4672559674b0950885465a42968a86865d42 -s
-	git revert --no-edit acaf84251f8d49d0e7ee41d654f987dbd441f991 -s
+	#v4.4.3 -> v4.4.4
+	git revert --no-edit e59ba555b270e1ab41efb6d632642dd3e5443303 -s
 
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
