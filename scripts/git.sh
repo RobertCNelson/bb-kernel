@@ -130,7 +130,11 @@ git_kernel () {
 	git commit --allow-empty -a -m 'empty cleanup commit'
 
 	git reset --hard HEAD
-	git checkout master -f
+	if [ ! "`git branch -l | grep master`" ] ; then
+		git checkout -b master -f
+	else
+		git checkout master -f
+	fi
 
 	git pull "${git_opts}" || true
 
