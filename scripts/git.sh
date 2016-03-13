@@ -130,10 +130,14 @@ git_kernel () {
 	git commit --allow-empty -a -m 'empty cleanup commit'
 
 	git reset --hard HEAD
-	if [ ! "`git branch -l | grep master`" ] ; then
-		git checkout -b master -f
+
+	#CentOS 6.4: git version 1.7.1 (no --list option)
+	unset git_branch_has_list
+	LC_ALL=C git help branch | grep -m 1 -e "--list" >/dev/null 2>&1 && git_branch_has_list=enable
+	if [ "x${git_branch_has_list}" = "xenable" ] && [ ! "`git branch --list master`" ] ; then
+	    git checkout -b master -f
 	else
-		git checkout master -f
+	    git checkout master -f
 	fi
 
 	git pull "${git_opts}" || true
@@ -144,9 +148,6 @@ git_kernel () {
 		git_kernel_torvalds
 	fi
 
-	#CentOS 6.4: git version 1.7.1 (no --list option)
-	unset git_branch_has_list
-	LC_ALL=C git help branch | grep -m 1 -e "--list" >/dev/null 2>&1 && git_branch_has_list=enable
 	if [ "x${git_branch_has_list}" = "xenable" ] ; then
 		test_for_branch=$(git branch --list "v${KERNEL_TAG}-${BUILD}")
 		if [ "x${test_for_branch}" != "x" ] ; then
