@@ -135,9 +135,9 @@ git_kernel () {
 	unset git_branch_has_list
 	LC_ALL=C git help branch | grep -m 1 -e "--list" >/dev/null 2>&1 && git_branch_has_list=enable
 	if [ "x${git_branch_has_list}" = "xenable" ] && [ ! "`git branch --list master`" ] ; then
-	    git checkout -b master -f
+		git checkout -b master -f
 	else
-	    git checkout master -f
+		git checkout master -f
 	fi
 
 	git pull "${git_opts}" || true
