@@ -403,6 +403,7 @@ bbb_overlays () {
 		#merged in 4.5.0-rc0
 		${git} "${DIR}/patches/bbb_overlays/configfs/0001-configfs-implement-binary-attributes.patch"
 	fi
+	${git} "${DIR}/patches/bbb_overlays/configfs/0001-Revert-configfs-switch-default-groups-to-a-linked-li.patch"
 
 	echo "dir: bbb_overlays/of"
 	#regenerate="enable"
