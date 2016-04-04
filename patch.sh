@@ -44,6 +44,11 @@ fi
 
 echo "Starting patch.sh"
 
+merged_in_4_5="enable"
+#unset merged_in_4_5
+merged_in_4_6="enable"
+#unset merged_in_4_6
+
 git_add () {
 	git add .
 	git commit -a -m 'testing patchset'
@@ -149,9 +154,10 @@ aufs4 () {
 	fi
 
 	${git} "${DIR}/patches/aufs4/0005-merge-aufs4.patch"
+	${git} "${DIR}/patches/aufs4/0006-aufs-call-mutex.owner-only-when-DEBUG_MUTEXES-or-MUT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=5
+		number=6
 		cleanup
 	fi
 }
@@ -186,7 +192,7 @@ local_patch () {
 }
 
 #external_git
-#aufs4
+aufs4
 #rt
 #local_patch
 
