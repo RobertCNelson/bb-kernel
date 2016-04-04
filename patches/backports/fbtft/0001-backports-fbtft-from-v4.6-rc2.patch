@@ -1,0 +1,2632 @@
+From 1d1a6fafd12fd4300856bd20406a9300cb691cb6 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Mon, 4 Apr 2016 10:39:52 -0500
+Subject: [PATCH] backports: fbtft: from: v4.6-rc2
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/staging/fbtft/Kconfig          |  12 ++
+ drivers/staging/fbtft/Makefile         |   2 +
+ drivers/staging/fbtft/fb_agm1264k-fl.c |   4 +-
+ drivers/staging/fbtft/fb_hx8340bn.c    | 144 ++++++++++++----------
+ drivers/staging/fbtft/fb_hx8347d.c     |   9 +-
+ drivers/staging/fbtft/fb_hx8353d.c     |  52 ++++----
+ drivers/staging/fbtft/fb_hx8357d.c     | 144 +++++++++++-----------
+ drivers/staging/fbtft/fb_hx8357d.h     |  60 +++------
+ drivers/staging/fbtft/fb_ili9163.c     | 189 +++++++++++++----------------
+ drivers/staging/fbtft/fb_ili9320.c     |  13 +-
+ drivers/staging/fbtft/fb_ili9325.c     |  81 +++++++------
+ drivers/staging/fbtft/fb_ili9340.c     |  34 +++---
+ drivers/staging/fbtft/fb_ili9341.c     |  69 +++++------
+ drivers/staging/fbtft/fb_ili9481.c     |  33 ++---
+ drivers/staging/fbtft/fb_ili9486.c     |  35 +++---
+ drivers/staging/fbtft/fb_ra8875.c      |   6 +-
+ drivers/staging/fbtft/fb_s6d02a1.c     |  42 ++++---
+ drivers/staging/fbtft/fb_ssd1305.c     | 216 +++++++++++++++++++++++++++++++++
+ drivers/staging/fbtft/fb_ssd1325.c     | 205 +++++++++++++++++++++++++++++++
+ drivers/staging/fbtft/fb_st7735r.c     |  42 +++----
+ drivers/staging/fbtft/fb_tinylcd.c     |  28 ++---
+ drivers/staging/fbtft/fb_uc1611.c      |   4 +-
+ drivers/staging/fbtft/fb_uc1701.c      |  27 +----
+ drivers/staging/fbtft/fbtft-bus.c      |   8 +-
+ drivers/staging/fbtft/fbtft-core.c     |  36 +++---
+ drivers/staging/fbtft/fbtft.h          |   8 --
+ drivers/staging/fbtft/fbtft_device.c   |  75 ++++++++----
+ 27 files changed, 988 insertions(+), 590 deletions(-)
+ create mode 100644 drivers/staging/fbtft/fb_ssd1305.c
+ create mode 100644 drivers/staging/fbtft/fb_ssd1325.c
+
+diff --git a/drivers/staging/fbtft/Kconfig b/drivers/staging/fbtft/Kconfig
+index 883ff5b..6f5e824 100644
+--- a/drivers/staging/fbtft/Kconfig
++++ b/drivers/staging/fbtft/Kconfig
+@@ -117,12 +117,24 @@ config FB_TFT_SSD1289
+ 	help
+ 	  Framebuffer support for SSD1289
+ 
++config FB_TFT_SSD1305
++        tristate "FB driver for the SSD1305 OLED Controller"
++        depends on FB_TFT
++        help
++          Framebuffer support for SSD1305
++
+ config FB_TFT_SSD1306
+ 	tristate "FB driver for the SSD1306 OLED Controller"
+ 	depends on FB_TFT
+ 	help
+ 	  Framebuffer support for SSD1306
+ 
++config FB_TFT_SSD1325
++        tristate "FB driver for the SSD1325 OLED Controller"
++        depends on FB_TFT
++        help
++          Framebuffer support for SSD1305
++
+ config FB_TFT_SSD1331
+ 	tristate "FB driver for the SSD1331 LCD Controller"
+ 	depends on FB_TFT
+diff --git a/drivers/staging/fbtft/Makefile b/drivers/staging/fbtft/Makefile
+index 4f9071d..2725ea9 100644
+--- a/drivers/staging/fbtft/Makefile
++++ b/drivers/staging/fbtft/Makefile
+@@ -21,7 +21,9 @@ obj-$(CONFIG_FB_TFT_RA8875)      += fb_ra8875.o
+ obj-$(CONFIG_FB_TFT_S6D02A1)     += fb_s6d02a1.o
+ obj-$(CONFIG_FB_TFT_S6D1121)     += fb_s6d1121.o
+ obj-$(CONFIG_FB_TFT_SSD1289)     += fb_ssd1289.o
++obj-$(CONFIG_FB_TFT_SSD1305)     += fb_ssd1305.o
+ obj-$(CONFIG_FB_TFT_SSD1306)     += fb_ssd1306.o
++obj-$(CONFIG_FB_TFT_SSD1305)     += fb_ssd1325.o
+ obj-$(CONFIG_FB_TFT_SSD1331)     += fb_ssd1331.o
+ obj-$(CONFIG_FB_TFT_SSD1351)     += fb_ssd1351.o
+ obj-$(CONFIG_FB_TFT_ST7735R)     += fb_st7735r.o
+diff --git a/drivers/staging/fbtft/fb_agm1264k-fl.c b/drivers/staging/fbtft/fb_agm1264k-fl.c
+index 2a50cf9..ba9fc44 100644
+--- a/drivers/staging/fbtft/fb_agm1264k-fl.c
++++ b/drivers/staging/fbtft/fb_agm1264k-fl.c
+@@ -272,8 +272,8 @@ static int write_vmem(struct fbtft_par *par, size_t offset, size_t len)
+ 	int ret = 0;
+ 
+ 	/* buffer to convert RGB565 -> grayscale16 -> Dithered image 1bpp */
+-	signed short *convert_buf = kmalloc(par->info->var.xres *
+-		par->info->var.yres * sizeof(signed short), GFP_NOIO);
++	signed short *convert_buf = kmalloc_array(par->info->var.xres *
++		par->info->var.yres, sizeof(signed short), GFP_NOIO);
+ 
+ 	if (!convert_buf)
+ 		return -ENOMEM;
+diff --git a/drivers/staging/fbtft/fb_hx8340bn.c b/drivers/staging/fbtft/fb_hx8340bn.c
+index e1ed177..9970ed7 100644
+--- a/drivers/staging/fbtft/fb_hx8340bn.c
++++ b/drivers/staging/fbtft/fb_hx8340bn.c
+@@ -25,6 +25,7 @@
+ #include <linux/vmalloc.h>
+ #include <linux/spi/spi.h>
+ #include <linux/delay.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -45,56 +46,70 @@ static int init_display(struct fbtft_par *par)
+ 
+ 	/* BTL221722-276L startup sequence, from datasheet */
+ 
+-	/* SETEXTCOM: Set extended command set (C1h)
+-	   This command is used to set extended command set access enable.
+-	   Enable: After command (C1h), must write: ffh,83h,40h */
++	/*
++	 * SETEXTCOM: Set extended command set (C1h)
++	 * This command is used to set extended command set access enable.
++	 * Enable: After command (C1h), must write: ffh,83h,40h
++	 */
+ 	write_reg(par, 0xC1, 0xFF, 0x83, 0x40);
+ 
+-	/* Sleep out
+-	   This command turns off sleep mode.
+-	   In this mode the DC/DC converter is enabled, Internal oscillator
+-	   is started, and panel scanning is started. */
++	/*
++	 * Sleep out
++	 * This command turns off sleep mode.
++	 * In this mode the DC/DC converter is enabled, Internal oscillator
++	 * is started, and panel scanning is started.
++	 */
+ 	write_reg(par, 0x11);
+ 	mdelay(150);
+ 
+ 	/* Undoc'd register? */
+ 	write_reg(par, 0xCA, 0x70, 0x00, 0xD9);
+ 
+-	/* SETOSC: Set Internal Oscillator (B0h)
+-	   This command is used to set internal oscillator related settings */
+-	/*	OSC_EN: Enable internal oscillator */
+-	/*	Internal oscillator frequency: 125% x 2.52MHz */
++	/*
++	 * SETOSC: Set Internal Oscillator (B0h)
++	 * This command is used to set internal oscillator related settings
++	 *	OSC_EN: Enable internal oscillator
++	 *	Internal oscillator frequency: 125% x 2.52MHz
++	 */
+ 	write_reg(par, 0xB0, 0x01, 0x11);
+ 
+ 	/* Drive ability setting */
+ 	write_reg(par, 0xC9, 0x90, 0x49, 0x10, 0x28, 0x28, 0x10, 0x00, 0x06);
+ 	mdelay(20);
+ 
+-	/* SETPWCTR5: Set Power Control 5(B5h)
+-	   This command is used to set VCOM Low and VCOM High Voltage */
+-	/* VCOMH 0110101 :  3.925 */
+-	/* VCOML 0100000 : -1.700 */
+-	/* 45h=69  VCOMH: "VMH" + 5d   VCOML: "VMH" + 5d */
++	/*
++	 * SETPWCTR5: Set Power Control 5(B5h)
++	 * This command is used to set VCOM Low and VCOM High Voltage
++	 * VCOMH 0110101 :  3.925
++	 * VCOML 0100000 : -1.700
++	 * 45h=69  VCOMH: "VMH" + 5d   VCOML: "VMH" + 5d
++	 */
+ 	write_reg(par, 0xB5, 0x35, 0x20, 0x45);
+ 
+-	/* SETPWCTR4: Set Power Control 4(B4h)
+-		VRH[4:0]:	Specify the VREG1 voltage adjusting.
+-				VREG1 voltage is for gamma voltage setting.
+-		BT[2:0]:	Switch the output factor of step-up circuit 2
+-				for VGH and VGL voltage generation. */
++	/*
++	 * SETPWCTR4: Set Power Control 4(B4h)
++	 *	VRH[4:0]:	Specify the VREG1 voltage adjusting.
++	 *			VREG1 voltage is for gamma voltage setting.
++	 *	BT[2:0]:	Switch the output factor of step-up circuit 2
++	 *			for VGH and VGL voltage generation.
++	 */
+ 	write_reg(par, 0xB4, 0x33, 0x25, 0x4C);
+ 	mdelay(10);
+ 
+-	/* Interface Pixel Format (3Ah)
+-	   This command is used to define the format of RGB picture data,
+-	   which is to be transfer via the system and RGB interface. */
+-	/* RGB interface: 16 Bit/Pixel	*/
+-	write_reg(par, 0x3A, 0x05);
+-
+-	/* Display on (29h)
+-	   This command is used to recover from DISPLAY OFF mode.
+-	   Output from the Frame Memory is enabled. */
+-	write_reg(par, 0x29);
++	/*
++	 * Interface Pixel Format (3Ah)
++	 * This command is used to define the format of RGB picture data,
++	 * which is to be transfer via the system and RGB interface.
++	 * RGB interface: 16 Bit/Pixel
++	 */
++	write_reg(par, MIPI_DCS_SET_PIXEL_FORMAT, MIPI_DCS_PIXEL_FMT_16BIT);
++
++	/*
++	 * Display on (29h)
++	 * This command is used to recover from DISPLAY OFF mode.
++	 * Output from the Frame Memory is enabled.
++	 */
++	write_reg(par, MIPI_DCS_SET_DISPLAY_ON);
+ 	mdelay(10);
+ 
+ 	return 0;
+@@ -102,9 +117,9 @@ static int init_display(struct fbtft_par *par)
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	write_reg(par, FBTFT_CASET, 0x00, xs, 0x00, xe);
+-	write_reg(par, FBTFT_RASET, 0x00, ys, 0x00, ye);
+-	write_reg(par, FBTFT_RAMWR);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS, 0x00, xs, 0x00, xe);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS, 0x00, ys, 0x00, ye);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ static int set_var(struct fbtft_par *par)
+@@ -116,16 +131,19 @@ static int set_var(struct fbtft_par *par)
+ #define MV BIT(5)
+ 	switch (par->info->var.rotate) {
+ 	case 0:
+-		write_reg(par, 0x36, par->bgr << 3);
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, par->bgr << 3);
+ 		break;
+ 	case 270:
+-		write_reg(par, 0x36, MX | MV | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MX | MV | (par->bgr << 3));
+ 		break;
+ 	case 180:
+-		write_reg(par, 0x36, MX | MY | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MX | MY | (par->bgr << 3));
+ 		break;
+ 	case 90:
+-		write_reg(par, 0x36, MY | MV | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MY | MV | (par->bgr << 3));
+ 		break;
+ 	}
+ 
+@@ -133,12 +151,12 @@ static int set_var(struct fbtft_par *par)
+ }
+ 
+ /*
+-  Gamma Curve selection, GC (only GC0 can be customized):
+-    0 = 2.2, 1 = 1.8, 2 = 2.5, 3 = 1.0
+-  Gamma string format:
+-    OP0 OP1 CP0 CP1 CP2 CP3 CP4 MP0 MP1 MP2 MP3 MP4 MP5 CGM0 CGM1
+-    ON0 ON1 CN0 CN1 CN2 CN3 CN4 MN0 MN1 MN2 MN3 MN4 MN5 XXXX  GC
+-*/
++ * Gamma Curve selection, GC (only GC0 can be customized):
++ *   0 = 2.2, 1 = 1.8, 2 = 2.5, 3 = 1.0
++ * Gamma string format:
++ *   OP0 OP1 CP0 CP1 CP2 CP3 CP4 MP0 MP1 MP2 MP3 MP4 MP5 CGM0 CGM1
++ *   ON0 ON1 CN0 CN1 CN2 CN3 CN4 MN0 MN1 MN2 MN3 MN4 MN5 XXXX  GC
++ */
+ #define CURVE(num, idx)  curves[num * par->gamma.num_values + idx]
+ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ {
+@@ -154,36 +172,38 @@ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ 		for (j = 0; j < par->gamma.num_values; j++)
+ 			CURVE(i, j) &= mask[i * par->gamma.num_values + j];
+ 
+-	write_reg(par, 0x26, 1 << CURVE(1, 14)); /* Gamma Set (26h) */
++	/* Gamma Set (26h) */
++	write_reg(par, MIPI_DCS_SET_GAMMA_CURVE, 1 << CURVE(1, 14));
+ 
+ 	if (CURVE(1, 14))
+ 		return 0; /* only GC0 can be customized */
+ 
+ 	write_reg(par, 0xC2,
+-		(CURVE(0, 8) << 4) | CURVE(0, 7),
+-		(CURVE(0, 10) << 4) | CURVE(0, 9),
+-		(CURVE(0, 12) << 4) | CURVE(0, 11),
+-		CURVE(0, 2),
+-		(CURVE(0, 4) << 4) | CURVE(0, 3),
+-		CURVE(0, 5),
+-		CURVE(0, 6),
+-		(CURVE(0, 1) << 4) | CURVE(0, 0),
+-		(CURVE(0, 14) << 2) | CURVE(0, 13));
++		  (CURVE(0, 8) << 4) | CURVE(0, 7),
++		  (CURVE(0, 10) << 4) | CURVE(0, 9),
++		  (CURVE(0, 12) << 4) | CURVE(0, 11),
++		  CURVE(0, 2),
++		  (CURVE(0, 4) << 4) | CURVE(0, 3),
++		  CURVE(0, 5),
++		  CURVE(0, 6),
++		  (CURVE(0, 1) << 4) | CURVE(0, 0),
++		  (CURVE(0, 14) << 2) | CURVE(0, 13));
+ 
+ 	write_reg(par, 0xC3,
+-		(CURVE(1, 8) << 4) | CURVE(1, 7),
+-		(CURVE(1, 10) << 4) | CURVE(1, 9),
+-		(CURVE(1, 12) << 4) | CURVE(1, 11),
+-		CURVE(1, 2),
+-		(CURVE(1, 4) << 4) | CURVE(1, 3),
+-		CURVE(1, 5),
+-		CURVE(1, 6),
+-		(CURVE(1, 1) << 4) | CURVE(1, 0));
++		  (CURVE(1, 8) << 4) | CURVE(1, 7),
++		  (CURVE(1, 10) << 4) | CURVE(1, 9),
++		  (CURVE(1, 12) << 4) | CURVE(1, 11),
++		  CURVE(1, 2),
++		  (CURVE(1, 4) << 4) | CURVE(1, 3),
++		  CURVE(1, 5),
++		  CURVE(1, 6),
++		  (CURVE(1, 1) << 4) | CURVE(1, 0));
+ 
+ 	mdelay(10);
+ 
+ 	return 0;
+ }
++
+ #undef CURVE
+ 
+ static struct fbtft_display display = {
+diff --git a/drivers/staging/fbtft/fb_hx8347d.c b/drivers/staging/fbtft/fb_hx8347d.c
+index 6ff76e5..450a61e 100644
+--- a/drivers/staging/fbtft/fb_hx8347d.c
++++ b/drivers/staging/fbtft/fb_hx8347d.c
+@@ -97,10 +97,10 @@ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ }
+ 
+ /*
+-  Gamma string format:
+-    VRP0 VRP1 VRP2 VRP3 VRP4 VRP5 PRP0 PRP1 PKP0 PKP1 PKP2 PKP3 PKP4 CGM
+-    VRN0 VRN1 VRN2 VRN3 VRN4 VRN5 PRN0 PRN1 PKN0 PKN1 PKN2 PKN3 PKN4 CGM
+-*/
++ * Gamma string format:
++ *   VRP0 VRP1 VRP2 VRP3 VRP4 VRP5 PRP0 PRP1 PKP0 PKP1 PKP2 PKP3 PKP4 CGM
++ *   VRN0 VRN1 VRN2 VRN3 VRN4 VRN5 PRN0 PRN1 PKN0 PKN1 PKN2 PKN3 PKN4 CGM
++ */
+ #define CURVE(num, idx)  curves[num * par->gamma.num_values + idx]
+ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ {
+@@ -140,6 +140,7 @@ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ 
+ 	return 0;
+ }
++
+ #undef CURVE
+ 
+ static struct fbtft_display display = {
+diff --git a/drivers/staging/fbtft/fb_hx8353d.c b/drivers/staging/fbtft/fb_hx8353d.c
+index 8552411..72e4ff8 100644
+--- a/drivers/staging/fbtft/fb_hx8353d.c
++++ b/drivers/staging/fbtft/fb_hx8353d.c
+@@ -19,6 +19,7 @@
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+ #include <linux/delay.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -27,7 +28,6 @@
+ 
+ static int init_display(struct fbtft_par *par)
+ {
+-
+ 	par->fbtftops.reset(par);
+ 	mdelay(150);
+ 
+@@ -47,18 +47,18 @@ static int init_display(struct fbtft_par *par)
+ 	write_reg(par, 0x3A, 0x05);
+ 
+ 	/* MEM ACCESS */
+-	write_reg(par, 0x36, 0xC0);
++	write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, 0xC0);
+ 
+ 	/* SLPOUT - Sleep out & booster on */
+-	write_reg(par, 0x11);
++	write_reg(par, MIPI_DCS_EXIT_SLEEP_MODE);
+ 	mdelay(150);
+ 
+ 	/* DISPON - Display On */
+-	write_reg(par, 0x29);
++	write_reg(par, MIPI_DCS_SET_DISPLAY_ON);
+ 
+ 	/* RGBSET */
+-	write_reg(par, 0x2D,
+-		 0,  2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
++	write_reg(par, MIPI_DCS_WRITE_LUT,
++		  0,  2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
+ 		32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62,
+ 		 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+ 		16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+@@ -87,41 +87,45 @@ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ #define mv BIT(5)
+ static int set_var(struct fbtft_par *par)
+ {
+-	/* madctl - memory data access control
+-	     rgb/bgr:
+-	     1. mode selection pin srgb
+-		rgb h/w pin for color filter setting: 0=rgb, 1=bgr
+-	     2. madctl rgb bit
+-		rgb-bgr order color filter panel: 0=rgb, 1=bgr */
++	/*
++	 * madctl - memory data access control
++	 *   rgb/bgr:
++	 *   1. mode selection pin srgb
++	 *	rgb h/w pin for color filter setting: 0=rgb, 1=bgr
++	 *   2. madctl rgb bit
++	 *	rgb-bgr order color filter panel: 0=rgb, 1=bgr
++	 */
+ 	switch (par->info->var.rotate) {
+ 	case 0:
+-		write_reg(par, 0x36, mx | my | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  mx | my | (par->bgr << 3));
+ 		break;
+ 	case 270:
+-		write_reg(par, 0x36, my | mv | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  my | mv | (par->bgr << 3));
+ 		break;
+ 	case 180:
+-		write_reg(par, 0x36, par->bgr << 3);
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  par->bgr << 3);
+ 		break;
+ 	case 90:
+-		write_reg(par, 0x36, mx | mv | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  mx | mv | (par->bgr << 3));
+ 		break;
+ 	}
+ 
+ 	return 0;
+ }
+ 
+-/*
+-  gamma string format:
+-*/
++/* gamma string format: */
+ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ {
+ 	write_reg(par, 0xE0,
+-		curves[0], curves[1], curves[2], curves[3],
+-		curves[4], curves[5], curves[6], curves[7],
+-		curves[8], curves[9], curves[10], curves[11],
+-		curves[12], curves[13], curves[14], curves[15],
+-		curves[16], curves[17], curves[18]);
++		  curves[0], curves[1], curves[2], curves[3],
++		  curves[4], curves[5], curves[6], curves[7],
++		  curves[8], curves[9], curves[10], curves[11],
++		  curves[12], curves[13], curves[14], curves[15],
++		  curves[16], curves[17], curves[18]);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/staging/fbtft/fb_hx8357d.c b/drivers/staging/fbtft/fb_hx8357d.c
+index a381dbc..32e6efe 100644
+--- a/drivers/staging/fbtft/fb_hx8357d.c
++++ b/drivers/staging/fbtft/fb_hx8357d.c
+@@ -22,6 +22,7 @@
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+ #include <linux/delay.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ #include "fb_hx8357d.h"
+@@ -35,7 +36,7 @@ static int init_display(struct fbtft_par *par)
+ 	par->fbtftops.reset(par);
+ 
+ 	/* Reset things like Gamma */
+-	write_reg(par, HX8357B_SWRESET);
++	write_reg(par, MIPI_DCS_SOFT_RESET);
+ 	usleep_range(5000, 7000);
+ 
+ 	/* setextc */
+@@ -55,83 +56,83 @@ static int init_display(struct fbtft_par *par)
+ 	write_reg(par, HX8357_SETPANEL, 0x05);
+ 
+ 	write_reg(par, HX8357_SETPWR1,
+-		0x00,  /* Not deep standby */
+-		0x15,  /* BT */
+-		0x1C,  /* VSPR */
+-		0x1C,  /* VSNR */
+-		0x83,  /* AP */
+-		0xAA);  /* FS */
++		  0x00,  /* Not deep standby */
++		  0x15,  /* BT */
++		  0x1C,  /* VSPR */
++		  0x1C,  /* VSNR */
++		  0x83,  /* AP */
++		  0xAA);  /* FS */
+ 
+ 	write_reg(par, HX8357D_SETSTBA,
+-		0x50,  /* OPON normal */
+-		0x50,  /* OPON idle */
+-		0x01,  /* STBA */
+-		0x3C,  /* STBA */
+-		0x1E,  /* STBA */
+-		0x08);  /* GEN */
++		  0x50,  /* OPON normal */
++		  0x50,  /* OPON idle */
++		  0x01,  /* STBA */
++		  0x3C,  /* STBA */
++		  0x1E,  /* STBA */
++		  0x08);  /* GEN */
+ 
+ 	write_reg(par, HX8357D_SETCYC,
+-		0x02,  /* NW 0x02 */
+-		0x40,  /* RTN */
+-		0x00,  /* DIV */
+-		0x2A,  /* DUM */
+-		0x2A,  /* DUM */
+-		0x0D,  /* GDON */
+-		0x78);  /* GDOFF */
++		  0x02,  /* NW 0x02 */
++		  0x40,  /* RTN */
++		  0x00,  /* DIV */
++		  0x2A,  /* DUM */
++		  0x2A,  /* DUM */
++		  0x0D,  /* GDON */
++		  0x78);  /* GDOFF */
+ 
+ 	write_reg(par, HX8357D_SETGAMMA,
+-		0x02,
+-		0x0A,
+-		0x11,
+-		0x1d,
+-		0x23,
+-		0x35,
+-		0x41,
+-		0x4b,
+-		0x4b,
+-		0x42,
+-		0x3A,
+-		0x27,
+-		0x1B,
+-		0x08,
+-		0x09,
+-		0x03,
+-		0x02,
+-		0x0A,
+-		0x11,
+-		0x1d,
+-		0x23,
+-		0x35,
+-		0x41,
+-		0x4b,
+-		0x4b,
+-		0x42,
+-		0x3A,
+-		0x27,
+-		0x1B,
+-		0x08,
+-		0x09,
+-		0x03,
+-		0x00,
+-		0x01);
++		  0x02,
++		  0x0A,
++		  0x11,
++		  0x1d,
++		  0x23,
++		  0x35,
++		  0x41,
++		  0x4b,
++		  0x4b,
++		  0x42,
++		  0x3A,
++		  0x27,
++		  0x1B,
++		  0x08,
++		  0x09,
++		  0x03,
++		  0x02,
++		  0x0A,
++		  0x11,
++		  0x1d,
++		  0x23,
++		  0x35,
++		  0x41,
++		  0x4b,
++		  0x4b,
++		  0x42,
++		  0x3A,
++		  0x27,
++		  0x1B,
++		  0x08,
++		  0x09,
++		  0x03,
++		  0x00,
++		  0x01);
+ 
+ 	/* 16 bit */
+-	write_reg(par, HX8357_COLMOD, 0x55);
++	write_reg(par, MIPI_DCS_SET_PIXEL_FORMAT, 0x55);
+ 
+-	write_reg(par, HX8357_MADCTL, 0xC0);
++	write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, 0xC0);
+ 
+ 	/* TE off */
+-	write_reg(par, HX8357_TEON, 0x00);
++	write_reg(par, MIPI_DCS_SET_TEAR_ON, 0x00);
+ 
+ 	/* tear line */
+-	write_reg(par, HX8357_TEARLINE, 0x00, 0x02);
++	write_reg(par, MIPI_DCS_SET_TEAR_SCANLINE, 0x00, 0x02);
+ 
+ 	/* Exit Sleep */
+-	write_reg(par, HX8357_SLPOUT);
++	write_reg(par, MIPI_DCS_EXIT_SLEEP_MODE);
+ 	msleep(150);
+ 
+ 	/* display on */
+-	write_reg(par, HX8357_DISPON);
++	write_reg(par, MIPI_DCS_SET_DISPLAY_ON);
+ 	usleep_range(5000, 7000);
+ 
+ 	return 0;
+@@ -139,18 +140,15 @@ static int init_display(struct fbtft_par *par)
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	/* Column addr set */
+-	write_reg(par, HX8357_CASET,
+-		xs >> 8, xs & 0xff,  /* XSTART */
+-		xe >> 8, xe & 0xff); /* XEND */
+-
+-	/* Row addr set */
+-	write_reg(par, HX8357_PASET,
+-		ys >> 8, ys & 0xff,  /* YSTART */
+-		ye >> 8, ye & 0xff); /* YEND */
+-
+-	/* write to RAM */
+-	write_reg(par, HX8357_RAMWR);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  xs >> 8, xs & 0xff,  /* XSTART */
++		  xe >> 8, xe & 0xff); /* XEND */
++
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  ys >> 8, ys & 0xff,  /* YSTART */
++		  ye >> 8, ye & 0xff); /* YEND */
++
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ #define HX8357D_MADCTL_MY  0x80
+@@ -182,7 +180,7 @@ static int set_var(struct fbtft_par *par)
+ 	val |= (par->bgr ? HX8357D_MADCTL_RGB : HX8357D_MADCTL_BGR);
+ 
+ 	/* Memory Access Control */
+-	write_reg(par, HX8357_MADCTL, val);
++	write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, val);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/staging/fbtft/fb_hx8357d.h b/drivers/staging/fbtft/fb_hx8357d.h
+index de05e8c..e281921 100644
+--- a/drivers/staging/fbtft/fb_hx8357d.h
++++ b/drivers/staging/fbtft/fb_hx8357d.h
+@@ -1,17 +1,17 @@
+-/***************************************************
+-  This is our library for the Adafruit  ILI9341 Breakout and Shield
+-  ----> http://www.adafruit.com/products/1651
+-
+-  Check out the links above for our tutorials and wiring diagrams
+-  These displays use SPI to communicate, 4 or 5 pins are required to
+-  interface (RST is optional)
+-  Adafruit invests time and resources providing this open source code,
+-  please support Adafruit and open-source hardware by purchasing
+-  products from Adafruit!
+-
+-  Written by Limor Fried/Ladyada for Adafruit Industries.
+-  MIT license, all text above must be included in any redistribution
+- ****************************************************/
++/*
++ * This is our library for the Adafruit  ILI9341 Breakout and Shield
++ * ----> http://www.adafruit.com/products/1651
++ *
++ * Check out the links above for our tutorials and wiring diagrams
++ * These displays use SPI to communicate, 4 or 5 pins are required to
++ * interface (RST is optional)
++ * Adafruit invests time and resources providing this open source code,
++ * please support Adafruit and open-source hardware by purchasing
++ * products from Adafruit!
++ *
++ * Written by Limor Fried/Ladyada for Adafruit Industries.
++ * MIT license, all text above must be included in any redistribution
++ */
+ 
+ #ifndef __HX8357_H__
+ #define __HX8357_H__
+@@ -22,38 +22,6 @@
+ #define HX8357_TFTWIDTH  320
+ #define HX8357_TFTHEIGHT 480
+ 
+-#define HX8357B_NOP     0x00
+-#define HX8357B_SWRESET 0x01
+-#define HX8357B_RDDID   0x04
+-#define HX8357B_RDDST   0x09
+-
+-#define HX8357B_RDPOWMODE  0x0A
+-#define HX8357B_RDMADCTL  0x0B
+-#define HX8357B_RDCOLMOD  0x0C
+-#define HX8357B_RDDIM  0x0D
+-#define HX8357B_RDDSDR  0x0F
+-
+-#define HX8357_SLPIN   0x10
+-#define HX8357_SLPOUT  0x11
+-#define HX8357B_PTLON   0x12
+-#define HX8357B_NORON   0x13
+-
+-#define HX8357_INVOFF  0x20
+-#define HX8357_INVON   0x21
+-#define HX8357_DISPOFF 0x28
+-#define HX8357_DISPON  0x29
+-
+-#define HX8357_CASET   0x2A
+-#define HX8357_PASET   0x2B
+-#define HX8357_RAMWR   0x2C
+-#define HX8357_RAMRD   0x2E
+-
+-#define HX8357B_PTLAR   0x30
+-#define HX8357_TEON  0x35
+-#define HX8357_TEARLINE  0x44
+-#define HX8357_MADCTL  0x36
+-#define HX8357_COLMOD  0x3A
+-
+ #define HX8357_SETOSC 0xB0
+ #define HX8357_SETPWR1 0xB1
+ #define HX8357B_SETDISPLAY 0xB2
+diff --git a/drivers/staging/fbtft/fb_ili9163.c b/drivers/staging/fbtft/fb_ili9163.c
+index f31b3f4..6b8f8b1 100644
+--- a/drivers/staging/fbtft/fb_ili9163.c
++++ b/drivers/staging/fbtft/fb_ili9163.c
+@@ -22,6 +22,7 @@
+ #include <linux/init.h>
+ #include <linux/gpio.h>
+ #include <linux/delay.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -38,37 +39,11 @@
+ #endif
+ 
+ /* ILI9163C commands */
+-#define CMD_NOP		0x00 /* Non operation*/
+-#define CMD_SWRESET	0x01 /* Soft Reset */
+-#define CMD_SLPIN	0x10 /* Sleep ON */
+-#define CMD_SLPOUT	0x11 /* Sleep OFF */
+-#define CMD_PTLON	0x12 /* Partial Mode ON */
+-#define CMD_NORML	0x13 /* Normal Display ON */
+-#define CMD_DINVOF	0x20 /* Display Inversion OFF */
+-#define CMD_DINVON	0x21 /* Display Inversion ON */
+-#define CMD_GAMMASET	0x26 /* Gamma Set (0x01[1],0x02[2],0x04[3],0x08[4]) */
+-#define CMD_DISPOFF	0x28 /* Display OFF */
+-#define CMD_DISPON	0x29 /* Display ON */
+-#define CMD_IDLEON	0x39 /* Idle Mode ON */
+-#define CMD_IDLEOF	0x38 /* Idle Mode OFF */
+-#define CMD_CLMADRS	0x2A /* Column Address Set */
+-#define CMD_PGEADRS	0x2B /* Page Address Set */
+-
+-#define CMD_RAMWR	0x2C /* Memory Write */
+-#define CMD_RAMRD	0x2E /* Memory Read */
+-#define CMD_CLRSPACE	0x2D /* Color Space : 4K/65K/262K */
+-#define CMD_PARTAREA	0x30 /* Partial Area */
+-#define CMD_VSCLLDEF	0x33 /* Vertical Scroll Definition */
+-#define CMD_TEFXLON	0x34 /* Tearing Effect Line ON */
+-#define CMD_TEFXLOF	0x35 /* Tearing Effect Line OFF */
+-#define CMD_MADCTL	0x36 /* Memory Access Control */
+-
+-#define CMD_PIXFMT	0x3A /* Interface Pixel Format */
+-#define CMD_FRMCTR1	0xB1 /* Frame Rate Control
+-				(In normal mode/Full colors) */
++#define CMD_FRMCTR1	0xB1 /* Frame Rate Control */
++			     /*	(In normal mode/Full colors) */
+ #define CMD_FRMCTR2	0xB2 /* Frame Rate Control (In Idle mode/8-colors) */
+-#define CMD_FRMCTR3	0xB3 /* Frame Rate Control
+-				(In Partial mode/full colors) */
++#define CMD_FRMCTR3	0xB3 /* Frame Rate Control */
++			     /*	(In Partial mode/full colors) */
+ #define CMD_DINVCTR	0xB4 /* Display Inversion Control */
+ #define CMD_RGBBLK	0xB5 /* RGB Interface Blanking Porch setting */
+ #define CMD_DFUNCTR	0xB6 /* Display Function set 5 */
+@@ -88,17 +63,18 @@
+ #define CMD_GAMRSEL	0xF2 /* GAM_R_SEL */
+ 
+ /*
+-This display:
+-http://www.ebay.com/itm/Replace-Nokia-5110-LCD-1-44-Red-Serial-128X128-SPI-Color-TFT-LCD-Display-Module-/271422122271
+-This particular display has a design error! The controller has 3 pins to
+-configure to constrain the memory and resolution to a fixed dimension (in
+-that case 128x128) but they leaved those pins configured for 128x160 so
+-there was several pixel memory addressing problems.
+-I solved by setup several parameters that dinamically fix the resolution as
+-needit so below the parameters for this display. If you have a strain or a
+-correct display (can happen with chinese) you can copy those parameters and
+-create setup for different displays.
+-*/
++ * This display:
++ * http://www.ebay.com/itm/Replace-Nokia-5110-LCD-1-44-Red-Serial-128X128-SPI-
++ * Color-TFT-LCD-Display-Module-/271422122271
++ * This particular display has a design error! The controller has 3 pins to
++ * configure to constrain the memory and resolution to a fixed dimension (in
++ * that case 128x128) but they leaved those pins configured for 128x160 so
++ * there was several pixel memory addressing problems.
++ * I solved by setup several parameters that dinamically fix the resolution as
++ * needit so below the parameters for this display. If you have a strain or a
++ * correct display (can happen with chinese) you can copy those parameters and
++ * create setup for different displays.
++ */
+ 
+ #ifdef RED
+ #define __OFFSET		32 /*see note 2 - this is the red version */
+@@ -113,16 +89,17 @@ static int init_display(struct fbtft_par *par)
+ 	if (par->gpio.cs != -1)
+ 		gpio_set_value(par->gpio.cs, 0);  /* Activate chip */
+ 
+-	write_reg(par, CMD_SWRESET); /* software reset */
++	write_reg(par, MIPI_DCS_SOFT_RESET); /* software reset */
+ 	mdelay(500);
+-	write_reg(par, CMD_SLPOUT); /* exit sleep */
++	write_reg(par, MIPI_DCS_EXIT_SLEEP_MODE); /* exit sleep */
+ 	mdelay(5);
+-	write_reg(par, CMD_PIXFMT, 0x05); /* Set Color Format 16bit */
+-	write_reg(par, CMD_GAMMASET, 0x02); /* default gamma curve 3 */
++	write_reg(par, MIPI_DCS_SET_PIXEL_FORMAT, MIPI_DCS_PIXEL_FMT_16BIT);
++	/* default gamma curve 3 */
++	write_reg(par, MIPI_DCS_SET_GAMMA_CURVE, 0x02);
+ #ifdef GAMMA_ADJ
+ 	write_reg(par, CMD_GAMRSEL, 0x01); /* Enable Gamma adj */
+ #endif
+-	write_reg(par, CMD_NORML);
++	write_reg(par, MIPI_DCS_ENTER_NORMAL_MODE);
+ 	write_reg(par, CMD_DFUNCTR, 0xff, 0x06);
+ 	/* Frame Rate Control (In normal mode/Full colors) */
+ 	write_reg(par, CMD_FRMCTR1, 0x08, 0x02);
+@@ -135,66 +112,67 @@ static int init_display(struct fbtft_par *par)
+ 	write_reg(par, CMD_VCOMCTR1, 0x50, 0x63);
+ 	write_reg(par, CMD_VCOMOFFS, 0);
+ 
+-	write_reg(par, CMD_CLMADRS, 0, 0, 0, WIDTH); /* Set Column Address */
+-	write_reg(par, CMD_PGEADRS, 0, 0, 0, HEIGHT); /* Set Page Address */
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS, 0, 0, 0, WIDTH);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS, 0, 0, 0, HEIGHT);
+ 
+-	write_reg(par, CMD_DISPON); /* display ON */
+-	write_reg(par, CMD_RAMWR); /* Memory Write */
++	write_reg(par, MIPI_DCS_SET_DISPLAY_ON); /* display ON */
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START); /* Memory Write */
+ 
+ 	return 0;
+ }
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys,
+-				int xe, int ye)
++			 int xe, int ye)
+ {
+ 	switch (par->info->var.rotate) {
+ 	case 0:
+-		write_reg(par, CMD_CLMADRS, xs >> 8, xs & 0xff, xe >> 8,
+-				xe & 0xff);
+-		write_reg(par, CMD_PGEADRS,
+-				(ys + __OFFSET) >> 8, (ys + __OFFSET) & 0xff,
+-				(ye + __OFFSET) >> 8, (ye + __OFFSET) & 0xff);
++		write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++			  xs >> 8, xs & 0xff, xe >> 8, xe & 0xff);
++		write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++			  (ys + __OFFSET) >> 8, (ys + __OFFSET) & 0xff,
++			  (ye + __OFFSET) >> 8, (ye + __OFFSET) & 0xff);
+ 		break;
+ 	case 90:
+-		write_reg(par, CMD_CLMADRS,
+-				(xs + __OFFSET) >> 8, (xs + __OFFSET) & 0xff,
+-				(xe + __OFFSET) >> 8, (xe + __OFFSET) & 0xff);
+-		write_reg(par, CMD_PGEADRS, ys >> 8, ys & 0xff, ye >> 8,
+-				ye & 0xff);
++		write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++			  (xs + __OFFSET) >> 8, (xs + __OFFSET) & 0xff,
++			  (xe + __OFFSET) >> 8, (xe + __OFFSET) & 0xff);
++		write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++			  ys >> 8, ys & 0xff, ye >> 8, ye & 0xff);
+ 		break;
+ 	case 180:
+ 	case 270:
+-		write_reg(par, CMD_CLMADRS, xs >> 8, xs & 0xff, xe >> 8,
+-				xe & 0xff);
+-		write_reg(par, CMD_PGEADRS, ys >> 8, ys & 0xff, ye >> 8,
+-				ye & 0xff);
++		write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++			  xs >> 8, xs & 0xff, xe >> 8, xe & 0xff);
++		write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++			  ys >> 8, ys & 0xff, ye >> 8, ye & 0xff);
+ 		break;
+ 	default:
+-		par->info->var.rotate = 0; /* Fix incorrect setting */
++		/* Fix incorrect setting */
++		par->info->var.rotate = 0;
+ 	}
+-	write_reg(par, CMD_RAMWR); /* Write Data to GRAM mode */
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ /*
+-7) MY:  1(bottom to top),	0(top to bottom)    Row Address Order
+-6) MX:  1(R to L),		0(L to R)	    Column Address Order
+-5) MV:  1(Exchanged),		0(normal)	    Row/Column exchange
+-4) ML:  1(bottom to top),	0(top to bottom)    Vertical Refresh Order
+-3) RGB: 1(BGR),			0(RGB)		    Color Space
+-2) MH:  1(R to L),		0(L to R)	    Horizontal Refresh Order
+-1)
+-0)
+-
+-	MY, MX, MV, ML,RGB, MH, D1, D0
+-	0 | 0 | 0 | 0 | 1 | 0 | 0 | 0	//normal
+-	1 | 0 | 0 | 0 | 1 | 0 | 0 | 0	//Y-Mirror
+-	0 | 1 | 0 | 0 | 1 | 0 | 0 | 0	//X-Mirror
+-	1 | 1 | 0 | 0 | 1 | 0 | 0 | 0	//X-Y-Mirror
+-	0 | 0 | 1 | 0 | 1 | 0 | 0 | 0	//X-Y Exchange
+-	1 | 0 | 1 | 0 | 1 | 0 | 0 | 0	//X-Y Exchange, Y-Mirror
+-	0 | 1 | 1 | 0 | 1 | 0 | 0 | 0	//XY exchange
+-	1 | 1 | 1 | 0 | 1 | 0 | 0 | 0
+-*/
++ * 7) MY:  1(bottom to top),	0(top to bottom)    Row Address Order
++ * 6) MX:  1(R to L),		0(L to R)	    Column Address Order
++ * 5) MV:  1(Exchanged),	0(normal)	    Row/Column exchange
++ * 4) ML:  1(bottom to top),	0(top to bottom)    Vertical Refresh Order
++ * 3) RGB: 1(BGR),		0(RGB)		    Color Space
++ * 2) MH:  1(R to L),		0(L to R)	    Horizontal Refresh Order
++ * 1)
++ * 0)
++ *
++ *	MY, MX, MV, ML,RGB, MH, D1, D0
++ *	0 | 0 | 0 | 0 | 1 | 0 | 0 | 0	//normal
++ *	1 | 0 | 0 | 0 | 1 | 0 | 0 | 0	//Y-Mirror
++ *	0 | 1 | 0 | 0 | 1 | 0 | 0 | 0	//X-Mirror
++ *	1 | 1 | 0 | 0 | 1 | 0 | 0 | 0	//X-Y-Mirror
++ *	0 | 0 | 1 | 0 | 1 | 0 | 0 | 0	//X-Y Exchange
++ *	1 | 0 | 1 | 0 | 1 | 0 | 0 | 0	//X-Y Exchange, Y-Mirror
++ *	0 | 1 | 1 | 0 | 1 | 0 | 0 | 0	//XY exchange
++ *	1 | 1 | 1 | 0 | 1 | 0 | 0 | 0
++ */
+ static int set_var(struct fbtft_par *par)
+ {
+ 	u8 mactrl_data = 0; /* Avoid compiler warning */
+@@ -217,8 +195,8 @@ static int set_var(struct fbtft_par *par)
+ 	/* Colorspcae */
+ 	if (par->bgr)
+ 		mactrl_data |= (1 << 2);
+-	write_reg(par, CMD_MADCTL, mactrl_data);
+-	write_reg(par, CMD_RAMWR); /* Write Data to GRAM mode */
++	write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, mactrl_data);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ 	return 0;
+ }
+ 
+@@ -237,27 +215,28 @@ static int gamma_adj(struct fbtft_par *par, unsigned long *curves)
+ 			CURVE(i, j) &= mask[i * par->gamma.num_values + j];
+ 
+ 	write_reg(par, CMD_PGAMMAC,
+-				CURVE(0, 0),
+-				CURVE(0, 1),
+-				CURVE(0, 2),
+-				CURVE(0, 3),
+-				CURVE(0, 4),
+-				CURVE(0, 5),
+-				CURVE(0, 6),
+-				(CURVE(0, 7) << 4) | CURVE(0, 8),
+-				CURVE(0, 9),
+-				CURVE(0, 10),
+-				CURVE(0, 11),
+-				CURVE(0, 12),
+-				CURVE(0, 13),
+-				CURVE(0, 14),
+-				CURVE(0, 15)
+-				);
++		  CURVE(0, 0),
++		  CURVE(0, 1),
++		  CURVE(0, 2),
++		  CURVE(0, 3),
++		  CURVE(0, 4),
++		  CURVE(0, 5),
++		  CURVE(0, 6),
++		  (CURVE(0, 7) << 4) | CURVE(0, 8),
++		  CURVE(0, 9),
++		  CURVE(0, 10),
++		  CURVE(0, 11),
++		  CURVE(0, 12),
++		  CURVE(0, 13),
++		  CURVE(0, 14),
++		  CURVE(0, 15));
+ 
+-	write_reg(par, CMD_RAMWR); /* Write Data to GRAM mode */
++	/* Write Data to GRAM mode */
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ 
+ 	return 0;
+ }
++
+ #undef CURVE
+ #endif
+ 
+diff --git a/drivers/staging/fbtft/fb_ili9320.c b/drivers/staging/fbtft/fb_ili9320.c
+index 3ed50fe..6ff222d 100644
+--- a/drivers/staging/fbtft/fb_ili9320.c
++++ b/drivers/staging/fbtft/fb_ili9320.c
+@@ -47,10 +47,10 @@ static int init_display(struct fbtft_par *par)
+ 
+ 	devcode = read_devicecode(par);
+ 	fbtft_par_dbg(DEBUG_INIT_DISPLAY, par, "Device code: 0x%04X\n",
+-		devcode);
++		      devcode);
+ 	if ((devcode != 0x0000) && (devcode != 0x9320))
+ 		dev_warn(par->info->device,
+-			"Unrecognized Device code: 0x%04X (expected 0x9320)\n",
++			 "Unrecognized Device code: 0x%04X (expected 0x9320)\n",
+ 			devcode);
+ 
+ 	/* Initialization sequence from ILI9320 Application Notes */
+@@ -216,10 +216,10 @@ static int set_var(struct fbtft_par *par)
+ }
+ 
+ /*
+-  Gamma string format:
+-    VRP0 VRP1 RP0 RP1 KP0 KP1 KP2 KP3 KP4 KP5
+-    VRN0 VRN1 RN0 RN1 KN0 KN1 KN2 KN3 KN4 KN5
+-*/
++ * Gamma string format:
++ *  VRP0 VRP1 RP0 RP1 KP0 KP1 KP2 KP3 KP4 KP5
++ *  VRN0 VRN1 RN0 RN1 KN0 KN1 KN2 KN3 KN4 KN5
++ */
+ #define CURVE(num, idx)  curves[num * par->gamma.num_values + idx]
+ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ {
+@@ -248,6 +248,7 @@ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ 
+ 	return 0;
+ }
++
+ #undef CURVE
+ 
+ static struct fbtft_display display = {
+diff --git a/drivers/staging/fbtft/fb_ili9325.c b/drivers/staging/fbtft/fb_ili9325.c
+index 3b3a06d..fdf98d3 100644
+--- a/drivers/staging/fbtft/fb_ili9325.c
++++ b/drivers/staging/fbtft/fb_ili9325.c
+@@ -56,42 +56,42 @@ module_param(vcm, uint, 0);
+ MODULE_PARM_DESC(vcm, "Set the internal VcomH voltage");
+ 
+ /*
+-Verify that this configuration is within the Voltage limits
+-
+-Display module configuration: Vcc = IOVcc = Vci = 3.3V
+-
+- Voltages
+-----------
+-Vci                                =   3.3
+-Vci1           =  Vci * 0.80       =   2.64
+-DDVDH          =  Vci1 * 2         =   5.28
+-VCL            = -Vci1             =  -2.64
+-VREG1OUT       =  Vci * 1.85       =   4.88
+-VCOMH          =  VREG1OUT * 0.735 =   3.59
+-VCOM amplitude =  VREG1OUT * 0.98  =   4.79
+-VGH            =  Vci * 4          =  13.2
+-VGL            = -Vci * 4          = -13.2
+-
+- Limits
+---------
+-Power supplies
+-1.65 < IOVcc < 3.30   =>  1.65 < 3.3 < 3.30
+-2.40 < Vcc   < 3.30   =>  2.40 < 3.3 < 3.30
+-2.50 < Vci   < 3.30   =>  2.50 < 3.3 < 3.30
+-
+-Source/VCOM power supply voltage
+- 4.50 < DDVDH < 6.0   =>  4.50 <  5.28 <  6.0
+--3.0  < VCL   < -2.0  =>  -3.0 < -2.64 < -2.0
+-VCI - VCL < 6.0       =>  5.94 < 6.0
+-
+-Gate driver output voltage
+- 10  < VGH   < 20     =>   10 <  13.2  < 20
+--15  < VGL   < -5     =>  -15 < -13.2  < -5
+-VGH - VGL < 32        =>   26.4 < 32
+-
+-VCOM driver output voltage
+-VCOMH - VCOML < 6.0   =>  4.79 < 6.0
+-*/
++ * Verify that this configuration is within the Voltage limits
++ *
++ * Display module configuration: Vcc = IOVcc = Vci = 3.3V
++ *
++ * Voltages
++ * ----------
++ * Vci                                =   3.3
++ * Vci1           =  Vci * 0.80       =   2.64
++ * DDVDH          =  Vci1 * 2         =   5.28
++ * VCL            = -Vci1             =  -2.64
++ * VREG1OUT       =  Vci * 1.85       =   4.88
++ * VCOMH          =  VREG1OUT * 0.735 =   3.59
++ * VCOM amplitude =  VREG1OUT * 0.98  =   4.79
++ * VGH            =  Vci * 4          =  13.2
++ * VGL            = -Vci * 4          = -13.2
++ *
++ * Limits
++ * --------
++ * Power supplies
++ * 1.65 < IOVcc < 3.30   =>  1.65 < 3.3 < 3.30
++ * 2.40 < Vcc   < 3.30   =>  2.40 < 3.3 < 3.30
++ * 2.50 < Vci   < 3.30   =>  2.50 < 3.3 < 3.30
++ *
++ * Source/VCOM power supply voltage
++ *  4.50 < DDVDH < 6.0   =>  4.50 <  5.28 <  6.0
++ * -3.0  < VCL   < -2.0  =>  -3.0 < -2.64 < -2.0
++ * VCI - VCL < 6.0       =>  5.94 < 6.0
++ *
++ * Gate driver output voltage
++ *  10  < VGH   < 20     =>   10 <  13.2  < 20
++ * -15  < VGL   < -5     =>  -15 < -13.2  < -5
++ * VGH - VGL < 32        =>   26.4 < 32
++ *
++ * VCOM driver output voltage
++ * VCOMH - VCOML < 6.0   =>  4.79 < 6.0
++ */
+ 
+ static int init_display(struct fbtft_par *par)
+ {
+@@ -213,10 +213,10 @@ static int set_var(struct fbtft_par *par)
+ }
+ 
+ /*
+-  Gamma string format:
+-    VRP0 VRP1 RP0 RP1 KP0 KP1 KP2 KP3 KP4 KP5
+-    VRN0 VRN1 RN0 RN1 KN0 KN1 KN2 KN3 KN4 KN5
+-*/
++ * Gamma string format:
++ *  VRP0 VRP1 RP0 RP1 KP0 KP1 KP2 KP3 KP4 KP5
++ *  VRN0 VRN1 RN0 RN1 KN0 KN1 KN2 KN3 KN4 KN5
++ */
+ #define CURVE(num, idx)  curves[num * par->gamma.num_values + idx]
+ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ {
+@@ -245,6 +245,7 @@ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ 
+ 	return 0;
+ }
++
+ #undef CURVE
+ 
+ static struct fbtft_display display = {
+diff --git a/drivers/staging/fbtft/fb_ili9340.c b/drivers/staging/fbtft/fb_ili9340.c
+index e0e2539..0711121 100644
+--- a/drivers/staging/fbtft/fb_ili9340.c
++++ b/drivers/staging/fbtft/fb_ili9340.c
+@@ -19,6 +19,7 @@
+ #include <linux/init.h>
+ #include <linux/gpio.h>
+ #include <linux/delay.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -53,7 +54,7 @@ static int init_display(struct fbtft_par *par)
+ 
+ 	/* COLMOD: Pixel Format Set */
+ 	/* 16 bits/pixel */
+-	write_reg(par, 0x3A, 0x55);
++	write_reg(par, MIPI_DCS_SET_PIXEL_FORMAT, 0x55);
+ 
+ 	/* Frame Rate Control */
+ 	/* Division ratio = fosc, Frame Rate = 79Hz */
+@@ -65,40 +66,37 @@ static int init_display(struct fbtft_par *par)
+ 	/* Gamma Function Disable */
+ 	write_reg(par, 0xF2, 0x00);
+ 
+-	/* Gamma curve selected  */
+-	write_reg(par, 0x26, 0x01);
++	/* Gamma curve selection */
++	write_reg(par, MIPI_DCS_SET_GAMMA_CURVE, 0x01);
+ 
+ 	/* Positive Gamma Correction */
+ 	write_reg(par, 0xE0,
+-		0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1,
+-		0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00);
++		  0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1,
++		  0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00);
+ 
+ 	/* Negative Gamma Correction */
+ 	write_reg(par, 0xE1,
+-		0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1,
+-		0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F);
++		  0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1,
++		  0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F);
+ 
+-	/* Sleep OUT */
+-	write_reg(par, 0x11);
++	write_reg(par, MIPI_DCS_EXIT_SLEEP_MODE);
+ 
+ 	mdelay(120);
+ 
+-	/* Display ON */
+-	write_reg(par, 0x29);
++	write_reg(par, MIPI_DCS_SET_DISPLAY_ON);
+ 
+ 	return 0;
+ }
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	/* Column address */
+-	write_reg(par, 0x2A, xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
+ 
+-	/* Row address */
+-	write_reg(par, 0x2B, ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
+ 
+-	/* Memory write */
+-	write_reg(par, 0x2C);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ #define ILI9340_MADCTL_MV  0x20
+@@ -123,7 +121,7 @@ static int set_var(struct fbtft_par *par)
+ 		break;
+ 	}
+ 	/* Memory Access Control  */
+-	write_reg(par, 0x36, val | (par->bgr << 3));
++	write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, val | (par->bgr << 3));
+ 
+ 	return 0;
+ }
+diff --git a/drivers/staging/fbtft/fb_ili9341.c b/drivers/staging/fbtft/fb_ili9341.c
+index dcee0af..ff35c86 100644
+--- a/drivers/staging/fbtft/fb_ili9341.c
++++ b/drivers/staging/fbtft/fb_ili9341.c
+@@ -24,6 +24,7 @@
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+ #include <linux/delay.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -39,9 +40,9 @@ static int init_display(struct fbtft_par *par)
+ 	par->fbtftops.reset(par);
+ 
+ 	/* startup sequence for MI0283QT-9A */
+-	write_reg(par, 0x01); /* software reset */
++	write_reg(par, MIPI_DCS_SOFT_RESET);
+ 	mdelay(5);
+-	write_reg(par, 0x28); /* display off */
++	write_reg(par, MIPI_DCS_SET_DISPLAY_OFF);
+ 	/* --------------------------------------------------------- */
+ 	write_reg(par, 0xCF, 0x00, 0x83, 0x30);
+ 	write_reg(par, 0xED, 0x64, 0x03, 0x12, 0x81);
+@@ -56,18 +57,18 @@ static int init_display(struct fbtft_par *par)
+ 	write_reg(par, 0xC5, 0x35, 0x3E);
+ 	write_reg(par, 0xC7, 0xBE);
+ 	/* ------------memory access control------------------------ */
+-	write_reg(par, 0x3A, 0x55); /* 16bit pixel */
++	write_reg(par, MIPI_DCS_SET_PIXEL_FORMAT, 0x55); /* 16bit pixel */
+ 	/* ------------frame rate----------------------------------- */
+ 	write_reg(par, 0xB1, 0x00, 0x1B);
+ 	/* ------------Gamma---------------------------------------- */
+ 	/* write_reg(par, 0xF2, 0x08); */ /* Gamma Function Disable */
+-	write_reg(par, 0x26, 0x01);
++	write_reg(par, MIPI_DCS_SET_GAMMA_CURVE, 0x01);
+ 	/* ------------display-------------------------------------- */
+ 	write_reg(par, 0xB7, 0x07); /* entry mode set */
+ 	write_reg(par, 0xB6, 0x0A, 0x82, 0x27, 0x00);
+-	write_reg(par, 0x11); /* sleep out */
++	write_reg(par, MIPI_DCS_EXIT_SLEEP_MODE);
+ 	mdelay(100);
+-	write_reg(par, 0x29); /* display on */
++	write_reg(par, MIPI_DCS_SET_DISPLAY_ON);
+ 	mdelay(20);
+ 
+ 	return 0;
+@@ -75,40 +76,39 @@ static int init_display(struct fbtft_par *par)
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	/* Column address set */
+-	write_reg(par, 0x2A,
+-		(xs >> 8) & 0xFF, xs & 0xFF, (xe >> 8) & 0xFF, xe & 0xFF);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  (xs >> 8) & 0xFF, xs & 0xFF, (xe >> 8) & 0xFF, xe & 0xFF);
+ 
+-	/* Row address set */
+-	write_reg(par, 0x2B,
+-		(ys >> 8) & 0xFF, ys & 0xFF, (ye >> 8) & 0xFF, ye & 0xFF);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  (ys >> 8) & 0xFF, ys & 0xFF, (ye >> 8) & 0xFF, ye & 0xFF);
+ 
+-	/* Memory write */
+-	write_reg(par, 0x2C);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+-#define MEM_Y   (7) /* MY row address order */
+-#define MEM_X   (6) /* MX column address order */
+-#define MEM_V   (5) /* MV row / column exchange */
+-#define MEM_L   (4) /* ML vertical refresh order */
+-#define MEM_H   (2) /* MH horizontal refresh order */
++#define MEM_Y   BIT(7) /* MY row address order */
++#define MEM_X   BIT(6) /* MX column address order */
++#define MEM_V   BIT(5) /* MV row / column exchange */
++#define MEM_L   BIT(4) /* ML vertical refresh order */
++#define MEM_H   BIT(2) /* MH horizontal refresh order */
+ #define MEM_BGR (3) /* RGB-BGR Order */
+ static int set_var(struct fbtft_par *par)
+ {
+ 	switch (par->info->var.rotate) {
+ 	case 0:
+-		write_reg(par, 0x36, (1 << MEM_X) | (par->bgr << MEM_BGR));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MEM_X | (par->bgr << MEM_BGR));
+ 		break;
+ 	case 270:
+-		write_reg(par, 0x36,
+-			(1 << MEM_V) | (1 << MEM_L) | (par->bgr << MEM_BGR));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MEM_V | MEM_L | (par->bgr << MEM_BGR));
+ 		break;
+ 	case 180:
+-		write_reg(par, 0x36, (1 << MEM_Y) | (par->bgr << MEM_BGR));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MEM_Y | (par->bgr << MEM_BGR));
+ 		break;
+ 	case 90:
+-		write_reg(par, 0x36, (1 << MEM_Y) | (1 << MEM_X) |
+-				     (1 << MEM_V) | (par->bgr << MEM_BGR));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MEM_Y | MEM_X | MEM_V | (par->bgr << MEM_BGR));
+ 		break;
+ 	}
+ 
+@@ -116,10 +116,10 @@ static int set_var(struct fbtft_par *par)
+ }
+ 
+ /*
+-  Gamma string format:
+-    Positive: Par1 Par2 [...] Par15
+-    Negative: Par1 Par2 [...] Par15
+-*/
++ * Gamma string format:
++ *  Positive: Par1 Par2 [...] Par15
++ *  Negative: Par1 Par2 [...] Par15
++ */
+ #define CURVE(num, idx)  curves[num * par->gamma.num_values + idx]
+ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ {
+@@ -127,14 +127,15 @@ static int set_gamma(struct fbtft_par *par, unsigned long *curves)
+ 
+ 	for (i = 0; i < par->gamma.num_curves; i++)
+ 		write_reg(par, 0xE0 + i,
+-			CURVE(i, 0), CURVE(i, 1), CURVE(i, 2),
+-			CURVE(i, 3), CURVE(i, 4), CURVE(i, 5),
+-			CURVE(i, 6), CURVE(i, 7), CURVE(i, 8),
+-			CURVE(i, 9), CURVE(i, 10), CURVE(i, 11),
+-			CURVE(i, 12), CURVE(i, 13), CURVE(i, 14));
++			  CURVE(i, 0), CURVE(i, 1), CURVE(i, 2),
++			  CURVE(i, 3), CURVE(i, 4), CURVE(i, 5),
++			  CURVE(i, 6), CURVE(i, 7), CURVE(i, 8),
++			  CURVE(i, 9), CURVE(i, 10), CURVE(i, 11),
++			  CURVE(i, 12), CURVE(i, 13), CURVE(i, 14));
+ 
+ 	return 0;
+ }
++
+ #undef CURVE
+ 
+ static struct fbtft_display display = {
+diff --git a/drivers/staging/fbtft/fb_ili9481.c b/drivers/staging/fbtft/fb_ili9481.c
+index 6368486..242adb3 100644
+--- a/drivers/staging/fbtft/fb_ili9481.c
++++ b/drivers/staging/fbtft/fb_ili9481.c
+@@ -19,6 +19,7 @@
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+ #include <linux/delay.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -27,9 +28,8 @@
+ #define HEIGHT		480
+ 
+ static int default_init_sequence[] = {
+-
+ 	/* SLP_OUT - Sleep out */
+-	-1, 0x11,
++	-1, MIPI_DCS_EXIT_SLEEP_MODE,
+ 	-2, 50,
+ 	/* Power setting */
+ 	-1, 0xD0, 0x07, 0x42, 0x18,
+@@ -42,44 +42,47 @@ static int default_init_sequence[] = {
+ 	/* Frame rate & inv. */
+ 	-1, 0xC5, 0x03,
+ 	/* Pixel format */
+-	-1, 0x3A, 0x55,
++	-1, MIPI_DCS_SET_PIXEL_FORMAT, 0x55,
+ 	/* Gamma */
+ 	-1, 0xC8, 0x00, 0x32, 0x36, 0x45, 0x06, 0x16,
+ 		  0x37, 0x75, 0x77, 0x54, 0x0C, 0x00,
+ 	/* DISP_ON */
+-	-1, 0x29,
++	-1, MIPI_DCS_SET_DISPLAY_ON,
+ 	-3
+ };
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	/* column address */
+-	write_reg(par, 0x2a, xs >> 8, xs & 0xff, xe >> 8, xe & 0xff);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  xs >> 8, xs & 0xff, xe >> 8, xe & 0xff);
+ 
+-	/* Row address */
+-	write_reg(par, 0x2b, ys >> 8, ys & 0xff, ye >> 8, ye & 0xff);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  ys >> 8, ys & 0xff, ye >> 8, ye & 0xff);
+ 
+-	/* memory write */
+-	write_reg(par, 0x2c);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ #define HFLIP 0x01
+ #define VFLIP 0x02
+-#define ROWxCOL 0x20
++#define ROW_X_COL 0x20
+ static int set_var(struct fbtft_par *par)
+ {
+ 	switch (par->info->var.rotate) {
+ 	case 270:
+-		write_reg(par, 0x36, ROWxCOL | HFLIP | VFLIP | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  ROW_X_COL | HFLIP | VFLIP | (par->bgr << 3));
+ 		break;
+ 	case 180:
+-		write_reg(par, 0x36, VFLIP | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  VFLIP | (par->bgr << 3));
+ 		break;
+ 	case 90:
+-		write_reg(par, 0x36, ROWxCOL | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  ROW_X_COL | (par->bgr << 3));
+ 		break;
+ 	default:
+-		write_reg(par, 0x36, HFLIP | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  HFLIP | (par->bgr << 3));
+ 		break;
+ 	}
+ 
+diff --git a/drivers/staging/fbtft/fb_ili9486.c b/drivers/staging/fbtft/fb_ili9486.c
+index d9dfff6..fa38d88 100644
+--- a/drivers/staging/fbtft/fb_ili9486.c
++++ b/drivers/staging/fbtft/fb_ili9486.c
+@@ -17,6 +17,7 @@
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+ #include <linux/init.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -28,11 +29,10 @@
+ static int default_init_sequence[] = {
+ 	/* Interface Mode Control */
+ 	-1, 0xb0, 0x0,
+-	/* Sleep OUT */
+-	-1, 0x11,
++	-1, MIPI_DCS_EXIT_SLEEP_MODE,
+ 	-2, 250,
+ 	/* Interface Pixel Format */
+-	-1, 0x3A, 0x55,
++	-1, MIPI_DCS_SET_PIXEL_FORMAT, 0x55,
+ 	/* Power Control 3 */
+ 	-1, 0xC2, 0x44,
+ 	/* VCOM Control 1 */
+@@ -46,40 +46,41 @@ static int default_init_sequence[] = {
+ 	/* Digital Gamma Control 1 */
+ 	-1, 0xE2, 0x0F, 0x32, 0x2E, 0x0B, 0x0D, 0x05, 0x47, 0x75,
+ 		  0x37, 0x06, 0x10, 0x03, 0x24, 0x20, 0x00,
+-	/* Sleep OUT */
+-	-1, 0x11,
+-	/* Display ON */
+-	-1, 0x29,
++	-1, MIPI_DCS_EXIT_SLEEP_MODE,
++	-1, MIPI_DCS_SET_DISPLAY_ON,
+ 	/* end marker */
+ 	-3
+ };
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	/* Column address */
+-	write_reg(par, 0x2A, xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
+ 
+-	/* Row address */
+-	write_reg(par, 0x2B, ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
+ 
+-	/* Memory write */
+-	write_reg(par, 0x2C);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ static int set_var(struct fbtft_par *par)
+ {
+ 	switch (par->info->var.rotate) {
+ 	case 0:
+-		write_reg(par, 0x36, 0x80 | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  0x80 | (par->bgr << 3));
+ 		break;
+ 	case 90:
+-		write_reg(par, 0x36, 0x20 | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  0x20 | (par->bgr << 3));
+ 		break;
+ 	case 180:
+-		write_reg(par, 0x36, 0x40 | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  0x40 | (par->bgr << 3));
+ 		break;
+ 	case 270:
+-		write_reg(par, 0x36, 0xE0 | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  0xE0 | (par->bgr << 3));
+ 		break;
+ 	default:
+ 		break;
+diff --git a/drivers/staging/fbtft/fb_ra8875.c b/drivers/staging/fbtft/fb_ra8875.c
+index b167c50..308a244 100644
+--- a/drivers/staging/fbtft/fb_ra8875.c
++++ b/drivers/staging/fbtft/fb_ra8875.c
+@@ -257,7 +257,7 @@ static void write_reg8_bus8(struct fbtft_par *par, int len, ...)
+ static int write_vmem16_bus8(struct fbtft_par *par, size_t offset, size_t len)
+ {
+ 	u16 *vmem16;
+-	u16 *txbuf16 = (u16 *)par->txbuf.buf;
++	u16 *txbuf16 = par->txbuf.buf;
+ 	size_t remain;
+ 	size_t to_copy;
+ 	size_t tx_array_size;
+@@ -271,13 +271,13 @@ static int write_vmem16_bus8(struct fbtft_par *par, size_t offset, size_t len)
+ 	remain = len / 2;
+ 	vmem16 = (u16 *)(par->info->screen_buffer + offset);
+ 	tx_array_size = par->txbuf.len / 2;
+-		txbuf16 = (u16 *)(par->txbuf.buf + 1);
++		txbuf16 = par->txbuf.buf + 1;
+ 		tx_array_size -= 2;
+ 		*(u8 *)(par->txbuf.buf) = 0x00;
+ 		startbyte_size = 1;
+ 
+ 	while (remain) {
+-		to_copy = remain > tx_array_size ? tx_array_size : remain;
++		to_copy = min(tx_array_size, remain);
+ 		dev_dbg(par->info->device, "    to_copy=%zu, remain=%zu\n",
+ 			to_copy, remain - to_copy);
+ 
+diff --git a/drivers/staging/fbtft/fb_s6d02a1.c b/drivers/staging/fbtft/fb_s6d02a1.c
+index da85057..3113355 100644
+--- a/drivers/staging/fbtft/fb_s6d02a1.c
++++ b/drivers/staging/fbtft/fb_s6d02a1.c
+@@ -18,6 +18,7 @@
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+ #include <linux/init.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -50,7 +51,7 @@ static int default_init_sequence[] = {
+ 
+ 	-1, 0xf3, 0x00, 0x00,
+ 
+-	-1, 0x11,
++	-1, MIPI_DCS_EXIT_SLEEP_MODE,
+ 	-2, 50,
+ 
+ 	-1, 0xf3, 0x00, 0x01,
+@@ -79,18 +80,18 @@ static int default_init_sequence[] = {
+ 
+ 	/* initializing sequence */
+ 
+-	-1, 0x36, 0x08,
++	-1, MIPI_DCS_SET_ADDRESS_MODE, 0x08,
+ 
+-	-1, 0x35, 0x00,
++	-1, MIPI_DCS_SET_TEAR_ON, 0x00,
+ 
+-	-1, 0x3a, 0x05,
++	-1, MIPI_DCS_SET_PIXEL_FORMAT, 0x05,
+ 
+-	/* gamma setting sequence */
+-	-1, 0x26, 0x01,	/* preset gamma curves, possible values 0x01, 0x02, 0x04, 0x08 */
++	/* gamma setting - possible values 0x01, 0x02, 0x04, 0x08 */
++	-1, MIPI_DCS_SET_GAMMA_CURVE, 0x01,
+ 
+ 	-2, 150,
+-	-1, 0x29,
+-	-1, 0x2c,
++	-1, MIPI_DCS_SET_DISPLAY_ON,
++	-1, MIPI_DCS_WRITE_MEMORY_START,
+ 	/* end marker */
+ 	-3
+ 
+@@ -98,14 +99,13 @@ static int default_init_sequence[] = {
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	/* Column address */
+-	write_reg(par, 0x2A, xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
+ 
+-	/* Row address */
+-	write_reg(par, 0x2B, ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
+ 
+-	/* Memory write */
+-	write_reg(par, 0x2C);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ #define MY BIT(7)
+@@ -113,7 +113,7 @@ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ #define MV BIT(5)
+ static int set_var(struct fbtft_par *par)
+ {
+-	/* MADCTL - Memory data access control
++	/* Memory data access control (0x36h)
+ 	     RGB/BGR:
+ 		1. Mode selection pin SRGB
+ 			RGB H/W pin for color filter setting: 0=RGB, 1=BGR
+@@ -121,16 +121,20 @@ static int set_var(struct fbtft_par *par)
+ 			RGB-BGR ORDER color filter panel: 0=RGB, 1=BGR */
+ 	switch (par->info->var.rotate) {
+ 	case 0:
+-		write_reg(par, 0x36, MX | MY | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MX | MY | (par->bgr << 3));
+ 		break;
+ 	case 270:
+-		write_reg(par, 0x36, MY | MV | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MY | MV | (par->bgr << 3));
+ 		break;
+ 	case 180:
+-		write_reg(par, 0x36, par->bgr << 3);
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  par->bgr << 3);
+ 		break;
+ 	case 90:
+-		write_reg(par, 0x36, MX | MV | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MX | MV | (par->bgr << 3));
+ 		break;
+ 	}
+ 
+diff --git a/drivers/staging/fbtft/fb_ssd1305.c b/drivers/staging/fbtft/fb_ssd1305.c
+new file mode 100644
+index 0000000..4b38c3f
+--- /dev/null
++++ b/drivers/staging/fbtft/fb_ssd1305.c
+@@ -0,0 +1,216 @@
++/*
++ * FB driver for the SSD1305 OLED Controller
++ *
++ * based on SSD1306 driver by Noralf Tronnes
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/init.h>
++#include <linux/gpio.h>
++#include <linux/delay.h>
++
++#include "fbtft.h"
++
++#define DRVNAME		"fb_ssd1305"
++
++#define WIDTH 128
++#define HEIGHT 64
++
++/*
++ * write_reg() caveat:
++ *
++ *    This doesn't work because D/C has to be LOW for both values:
++ *      write_reg(par, val1, val2);
++ *
++ *    Do it like this:
++ *      write_reg(par, val1);
++ *      write_reg(par, val2);
++ */
++
++/* Init sequence taken from the Adafruit SSD1306 Arduino library */
++static int init_display(struct fbtft_par *par)
++{
++	par->fbtftops.reset(par);
++
++	if (par->gamma.curves[0] == 0) {
++		mutex_lock(&par->gamma.lock);
++		if (par->info->var.yres == 64)
++			par->gamma.curves[0] = 0xCF;
++		else
++			par->gamma.curves[0] = 0x8F;
++		mutex_unlock(&par->gamma.lock);
++	}
++
++	/* Set Display OFF */
++	write_reg(par, 0xAE);
++
++	/* Set Display Clock Divide Ratio/ Oscillator Frequency */
++	write_reg(par, 0xD5);
++	write_reg(par, 0x80);
++
++	/* Set Multiplex Ratio */
++	write_reg(par, 0xA8);
++	if (par->info->var.yres == 64)
++		write_reg(par, 0x3F);
++	else
++		write_reg(par, 0x1F);
++
++	/* Set Display Offset */
++	write_reg(par, 0xD3);
++	write_reg(par, 0x0);
++
++	/* Set Display Start Line */
++	write_reg(par, 0x40 | 0x0);
++
++	/* Charge Pump Setting */
++	write_reg(par, 0x8D);
++	/* A[2] = 1b, Enable charge pump during display on */
++	write_reg(par, 0x14);
++
++	/* Set Memory Addressing Mode */
++	write_reg(par, 0x20);
++	/* Vertical addressing mode  */
++	write_reg(par, 0x01);
++
++	/*
++	 * Set Segment Re-map
++	 * column address 127 is mapped to SEG0
++	 */
++	write_reg(par, 0xA0 | ((par->info->var.rotate == 180) ? 0x0 : 0x1));
++
++	/*
++	 * Set COM Output Scan Direction
++	 * remapped mode. Scan from COM[N-1] to COM0
++	 */
++	write_reg(par, ((par->info->var.rotate == 180) ? 0xC8 : 0xC0));
++
++	/* Set COM Pins Hardware Configuration */
++	write_reg(par, 0xDA);
++	if (par->info->var.yres == 64) {
++		/* A[4]=1b, Alternative COM pin configuration */
++		write_reg(par, 0x12);
++	} else {
++		/* A[4]=0b, Sequential COM pin configuration */
++		write_reg(par, 0x02);
++	}
++
++	/* Set Pre-charge Period */
++	write_reg(par, 0xD9);
++	write_reg(par, 0xF1);
++
++	/*
++	 * Entire Display ON
++	 * Resume to RAM content display. Output follows RAM content
++	 */
++	write_reg(par, 0xA4);
++
++	/*
++	 * Set Normal Display
++	 *  0 in RAM: OFF in display panel
++	 *  1 in RAM: ON in display panel
++	 */
++	write_reg(par, 0xA6);
++
++	/* Set Display ON */
++	write_reg(par, 0xAF);
++
++	return 0;
++}
++
++static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
++{
++	/* Set Lower Column Start Address for Page Addressing Mode */
++	write_reg(par, 0x00 | ((par->info->var.rotate == 180) ? 0x0 : 0x4));
++	/* Set Higher Column Start Address for Page Addressing Mode */
++	write_reg(par, 0x10 | 0x0);
++	/* Set Display Start Line */
++	write_reg(par, 0x40 | 0x0);
++}
++
++static int blank(struct fbtft_par *par, bool on)
++{
++	if (on)
++		write_reg(par, 0xAE);
++	else
++		write_reg(par, 0xAF);
++	return 0;
++}
++
++/* Gamma is used to control Contrast */
++static int set_gamma(struct fbtft_par *par, unsigned long *curves)
++{
++	curves[0] &= 0xFF;
++	/* Set Contrast Control for BANK0 */
++	write_reg(par, 0x81);
++	write_reg(par, curves[0]);
++
++	return 0;
++}
++
++static int write_vmem(struct fbtft_par *par, size_t offset, size_t len)
++{
++	u16 *vmem16 = (u16 *)par->info->screen_buffer;
++	u8 *buf = par->txbuf.buf;
++	int x, y, i;
++	int ret;
++
++	for (x = 0; x < par->info->var.xres; x++) {
++		for (y = 0; y < par->info->var.yres / 8; y++) {
++			*buf = 0x00;
++			for (i = 0; i < 8; i++)
++				*buf |= (vmem16[(y * 8 + i) *
++						par->info->var.xres + x] ?
++					 1 : 0) << i;
++			buf++;
++		}
++	}
++
++	/* Write data */
++	gpio_set_value(par->gpio.dc, 1);
++	ret = par->fbtftops.write(par, par->txbuf.buf,
++				  par->info->var.xres * par->info->var.yres /
++				  8);
++	if (ret < 0)
++		dev_err(par->info->device, "write failed and returned: %d\n",
++			ret);
++	return ret;
++}
++
++static struct fbtft_display display = {
++	.regwidth = 8,
++	.width = WIDTH,
++	.height = HEIGHT,
++	.txbuflen = WIDTH * HEIGHT / 8,
++	.gamma_num = 1,
++	.gamma_len = 1,
++	.gamma = "00",
++	.fbtftops = {
++		.write_vmem = write_vmem,
++		.init_display = init_display,
++		.set_addr_win = set_addr_win,
++		.blank = blank,
++		.set_gamma = set_gamma,
++	},
++};
++
++FBTFT_REGISTER_DRIVER(DRVNAME, "solomon,ssd1305", &display);
++
++MODULE_ALIAS("spi:" DRVNAME);
++MODULE_ALIAS("platform:" DRVNAME);
++MODULE_ALIAS("spi:ssd1305");
++MODULE_ALIAS("platform:ssd1305");
++
++MODULE_DESCRIPTION("SSD1305 OLED Driver");
++MODULE_AUTHOR("Alexey Mednyy");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/staging/fbtft/fb_ssd1325.c b/drivers/staging/fbtft/fb_ssd1325.c
+new file mode 100644
+index 0000000..15078bf
+--- /dev/null
++++ b/drivers/staging/fbtft/fb_ssd1325.c
+@@ -0,0 +1,205 @@
++/*
++ * FB driver for the SSD1325 OLED Controller
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/init.h>
++#include <linux/gpio.h>
++#include <linux/delay.h>
++
++#include "fbtft.h"
++
++#define DRVNAME		"fb_ssd1325"
++
++#define WIDTH 128
++#define HEIGHT 64
++#define GAMMA_NUM   1
++#define GAMMA_LEN   15
++#define DEFAULT_GAMMA "7 1 1 1 1 2 2 3 3 4 4 5 5 6 6"
++
++/*
++ * write_reg() caveat:
++ *
++ *    This doesn't work because D/C has to be LOW for both values:
++ *      write_reg(par, val1, val2);
++ *
++ *    Do it like this:
++ *      write_reg(par, val1);
++ *      write_reg(par, val2);
++ */
++
++/* Init sequence taken from the Adafruit SSD1306 Arduino library */
++static int init_display(struct fbtft_par *par)
++{
++	par->fbtftops.reset(par);
++
++	gpio_set_value(par->gpio.cs, 0);
++
++	write_reg(par, 0xb3);
++	write_reg(par, 0xf0);
++	write_reg(par, 0xae);
++	write_reg(par, 0xa1);
++	write_reg(par, 0x00);
++	write_reg(par, 0xa8);
++	write_reg(par, 0x3f);
++	write_reg(par, 0xa0);
++	write_reg(par, 0x45);
++	write_reg(par, 0xa2);
++	write_reg(par, 0x40);
++	write_reg(par, 0x75);
++	write_reg(par, 0x00);
++	write_reg(par, 0x3f);
++	write_reg(par, 0x15);
++	write_reg(par, 0x00);
++	write_reg(par, 0x7f);
++	write_reg(par, 0xa4);
++	write_reg(par, 0xaf);
++
++	return 0;
++}
++
++static uint8_t rgb565_to_g16(u16 pixel)
++{
++	u16 b = pixel & 0x1f;
++	u16 g = (pixel & (0x3f << 5)) >> 5;
++	u16 r = (pixel & (0x1f << (5 + 6))) >> (5 + 6);
++
++	pixel = (299 * r + 587 * g + 114 * b) / 195;
++	if (pixel > 255)
++		pixel = 255;
++	return (uint8_t)pixel / 16;
++}
++
++static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
++{
++	fbtft_par_dbg(DEBUG_SET_ADDR_WIN, par,
++		      "%s(xs=%d, ys=%d, xe=%d, ye=%d)\n", __func__, xs, ys, xe,
++		      ye);
++
++	write_reg(par, 0x75);
++	write_reg(par, 0x00);
++	write_reg(par, 0x3f);
++	write_reg(par, 0x15);
++	write_reg(par, 0x00);
++	write_reg(par, 0x7f);
++}
++
++static int blank(struct fbtft_par *par, bool on)
++{
++	fbtft_par_dbg(DEBUG_BLANK, par, "%s(blank=%s)\n",
++		      __func__, on ? "true" : "false");
++
++	if (on)
++		write_reg(par, 0xAE);
++	else
++		write_reg(par, 0xAF);
++	return 0;
++}
++
++/*
++ * Grayscale Lookup Table
++ * GS1 - GS15
++ * The "Gamma curve" contains the relative values between the entries
++ * in the Lookup table.
++ *
++ * 0 = Setting of GS1 < Setting of GS2 < Setting of GS3.....<
++ * Setting of GS14 < Setting of GS15
++ */
++static int set_gamma(struct fbtft_par *par, unsigned long *curves)
++{
++	int i;
++
++	fbtft_par_dbg(DEBUG_INIT_DISPLAY, par, "%s()\n", __func__);
++
++	for (i = 0; i < GAMMA_LEN; i++) {
++		if (i > 0 && curves[i] < 1) {
++			dev_err(par->info->device,
++				"Illegal value in Grayscale Lookup Table at index %d.\n"
++				"Must be greater than 0\n", i);
++			return -EINVAL;
++		}
++		if (curves[i] > 7) {
++			dev_err(par->info->device,
++				"Illegal value(s) in Grayscale Lookup Table.\n"
++				"At index=%d, the accumulated value has exceeded 7\n",
++				i);
++			return -EINVAL;
++		}
++	}
++	write_reg(par, 0xB8);
++	for (i = 0; i < 8; i++)
++		write_reg(par, (curves[i] & 0xFF));
++	return 0;
++}
++
++static int write_vmem(struct fbtft_par *par, size_t offset, size_t len)
++{
++	u16 *vmem16 = (u16 *)par->info->screen_buffer;
++	u8 *buf = par->txbuf.buf;
++	u8 n1;
++	u8 n2;
++	int y, x;
++	int ret;
++
++	for (x = 0; x < par->info->var.xres; x++) {
++		if (x % 2)
++			continue;
++		for (y = 0; y < par->info->var.yres; y++) {
++			n1 = rgb565_to_g16(vmem16[y * par->info->var.xres + x]);
++			n2 = rgb565_to_g16(vmem16
++					   [y * par->info->var.xres + x + 1]);
++			*buf = (n1 << 4) | n2;
++			buf++;
++		}
++	}
++
++	gpio_set_value(par->gpio.dc, 1);
++
++	/* Write data */
++	ret = par->fbtftops.write(par, par->txbuf.buf,
++				par->info->var.xres * par->info->var.yres / 2);
++	if (ret < 0)
++		dev_err(par->info->device,
++			"%s: write failed and returned: %d\n", __func__, ret);
++
++	return ret;
++}
++
++static struct fbtft_display display = {
++	.regwidth = 8,
++	.width = WIDTH,
++	.height = HEIGHT,
++	.txbuflen = WIDTH * HEIGHT / 2,
++	.gamma_num = GAMMA_NUM,
++	.gamma_len = GAMMA_LEN,
++	.gamma = DEFAULT_GAMMA,
++	.fbtftops = {
++		.write_vmem = write_vmem,
++		.init_display = init_display,
++		.set_addr_win = set_addr_win,
++		.blank = blank,
++		.set_gamma = set_gamma,
++	},
++};
++
++FBTFT_REGISTER_DRIVER(DRVNAME, "solomon,ssd1325", &display);
++
++MODULE_ALIAS("spi:" DRVNAME);
++MODULE_ALIAS("platform:" DRVNAME);
++MODULE_ALIAS("spi:ssd1325");
++MODULE_ALIAS("platform:ssd1325");
++
++MODULE_DESCRIPTION("SSD1325 OLED Driver");
++MODULE_AUTHOR("Alexey Mednyy");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/staging/fbtft/fb_st7735r.c b/drivers/staging/fbtft/fb_st7735r.c
+index a92b0d0..c5e51fe 100644
+--- a/drivers/staging/fbtft/fb_st7735r.c
++++ b/drivers/staging/fbtft/fb_st7735r.c
+@@ -17,6 +17,7 @@
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+ #include <linux/init.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -25,12 +26,10 @@
+ 			"0F 1B 0F 17 33 2C 29 2E 30 30 39 3F 00 07 03 10"
+ 
+ static int default_init_sequence[] = {
+-	/* SWRESET - Software reset */
+-	-1, 0x01,
++	-1, MIPI_DCS_SOFT_RESET,
+ 	-2, 150,                               /* delay */
+ 
+-	/* SLPOUT - Sleep out & booster on */
+-	-1, 0x11,
++	-1, MIPI_DCS_EXIT_SLEEP_MODE,
+ 	-2, 500,                               /* delay */
+ 
+ 	/* FRMCTR1 - frame rate control: normal mode
+@@ -71,18 +70,14 @@ static int default_init_sequence[] = {
+ 	/* VMCTR1 - Power Control */
+ 	-1, 0xC5, 0x0E,
+ 
+-	/* INVOFF - Display inversion off */
+-	-1, 0x20,
++	-1, MIPI_DCS_EXIT_INVERT_MODE,
+ 
+-	/* COLMOD - Interface pixel format */
+-	-1, 0x3A, 0x05,
++	-1, MIPI_DCS_SET_PIXEL_FORMAT, MIPI_DCS_PIXEL_FMT_16BIT,
+ 
+-	/* DISPON - Display On */
+-	-1, 0x29,
++	-1, MIPI_DCS_SET_DISPLAY_ON,
+ 	-2, 100,                               /* delay */
+ 
+-	/* NORON - Partial off (Normal) */
+-	-1, 0x13,
++	-1, MIPI_DCS_ENTER_NORMAL_MODE,
+ 	-2, 10,                               /* delay */
+ 
+ 	/* end marker */
+@@ -91,14 +86,13 @@ static int default_init_sequence[] = {
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	/* Column address */
+-	write_reg(par, 0x2A, xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
+ 
+-	/* Row address */
+-	write_reg(par, 0x2B, ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
+ 
+-	/* Memory write */
+-	write_reg(par, 0x2C);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ #define MY BIT(7)
+@@ -114,16 +108,20 @@ static int set_var(struct fbtft_par *par)
+ 		RGB-BGR ORDER color filter panel: 0=RGB, 1=BGR */
+ 	switch (par->info->var.rotate) {
+ 	case 0:
+-		write_reg(par, 0x36, MX | MY | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MX | MY | (par->bgr << 3));
+ 		break;
+ 	case 270:
+-		write_reg(par, 0x36, MY | MV | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MY | MV | (par->bgr << 3));
+ 		break;
+ 	case 180:
+-		write_reg(par, 0x36, par->bgr << 3);
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  par->bgr << 3);
+ 		break;
+ 	case 90:
+-		write_reg(par, 0x36, MX | MV | (par->bgr << 3));
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE,
++			  MX | MV | (par->bgr << 3));
+ 		break;
+ 	}
+ 
+diff --git a/drivers/staging/fbtft/fb_tinylcd.c b/drivers/staging/fbtft/fb_tinylcd.c
+index caf263d..097e71c 100644
+--- a/drivers/staging/fbtft/fb_tinylcd.c
++++ b/drivers/staging/fbtft/fb_tinylcd.c
+@@ -18,6 +18,7 @@
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+ #include <linux/delay.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ 
+@@ -38,7 +39,7 @@ static int init_display(struct fbtft_par *par)
+ 	write_reg(par, 0xB4, 0x02);
+ 	write_reg(par, 0xB6, 0x00, 0x22, 0x3B);
+ 	write_reg(par, 0xB7, 0x07);
+-	write_reg(par, 0x36, 0x58);
++	write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, 0x58);
+ 	write_reg(par, 0xF0, 0x36, 0xA5, 0xD3);
+ 	write_reg(par, 0xE5, 0x80);
+ 	write_reg(par, 0xE5, 0x01);
+@@ -47,24 +48,23 @@ static int init_display(struct fbtft_par *par)
+ 	write_reg(par, 0xF0, 0x36, 0xA5, 0x53);
+ 	write_reg(par, 0xE0, 0x00, 0x35, 0x33, 0x00, 0x00, 0x00,
+ 			     0x00, 0x35, 0x33, 0x00, 0x00, 0x00);
+-	write_reg(par, 0x3A, 0x55);
+-	write_reg(par, 0x11);
++	write_reg(par, MIPI_DCS_SET_PIXEL_FORMAT, 0x55);
++	write_reg(par, MIPI_DCS_EXIT_SLEEP_MODE);
+ 	udelay(250);
+-	write_reg(par, 0x29);
++	write_reg(par, MIPI_DCS_SET_DISPLAY_ON);
+ 
+ 	return 0;
+ }
+ 
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+-	/* Column address */
+-	write_reg(par, 0x2A, xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF);
+ 
+-	/* Row address */
+-	write_reg(par, 0x2B, ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF);
+ 
+-	/* Memory write */
+-	write_reg(par, 0x2C);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ static int set_var(struct fbtft_par *par)
+@@ -72,19 +72,19 @@ static int set_var(struct fbtft_par *par)
+ 	switch (par->info->var.rotate) {
+ 	case 270:
+ 		write_reg(par, 0xB6, 0x00, 0x02, 0x3B);
+-		write_reg(par, 0x36, 0x28);
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, 0x28);
+ 		break;
+ 	case 180:
+ 		write_reg(par, 0xB6, 0x00, 0x22, 0x3B);
+-		write_reg(par, 0x36, 0x58);
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, 0x58);
+ 		break;
+ 	case 90:
+ 		write_reg(par, 0xB6, 0x00, 0x22, 0x3B);
+-		write_reg(par, 0x36, 0x38);
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, 0x38);
+ 		break;
+ 	default:
+ 		write_reg(par, 0xB6, 0x00, 0x22, 0x3B);
+-		write_reg(par, 0x36, 0x08);
++		write_reg(par, MIPI_DCS_SET_ADDRESS_MODE, 0x08);
+ 		break;
+ 	}
+ 
+diff --git a/drivers/staging/fbtft/fb_uc1611.c b/drivers/staging/fbtft/fb_uc1611.c
+index 4e82814..e87401a 100644
+--- a/drivers/staging/fbtft/fb_uc1611.c
++++ b/drivers/staging/fbtft/fb_uc1611.c
+@@ -222,8 +222,8 @@ static int set_var(struct fbtft_par *par)
+ static int write_vmem(struct fbtft_par *par, size_t offset, size_t len)
+ {
+ 	u8 *vmem8 = (u8 *)(par->info->screen_buffer);
+-	u8 *buf8 = (u8 *)(par->txbuf.buf);
+-	u16 *buf16 = (u16 *)(par->txbuf.buf);
++	u8 *buf8 = par->txbuf.buf;
++	u16 *buf16 = par->txbuf.buf;
+ 	int line_length = par->info->fix.line_length;
+ 	int y_start = (offset / line_length);
+ 	int y_end = (offset + len - 1) / line_length;
+diff --git a/drivers/staging/fbtft/fb_uc1701.c b/drivers/staging/fbtft/fb_uc1701.c
+index 212908e..b78045f 100644
+--- a/drivers/staging/fbtft/fb_uc1701.c
++++ b/drivers/staging/fbtft/fb_uc1701.c
+@@ -78,11 +78,11 @@ static int init_display(struct fbtft_par *par)
+ 	mdelay(10);
+ 
+ 	/* set startpoint */
+-	/* LCD_START_LINE | (pos & 0x3F) */
+ 	write_reg(par, LCD_START_LINE);
+ 
+ 	/* select orientation BOTTOMVIEW */
+ 	write_reg(par, LCD_BOTTOMVIEW | 1);
++
+ 	/* output mode select (turns display upside-down) */
+ 	write_reg(par, LCD_SCAN_DIR | 0x00);
+ 
+@@ -96,20 +96,14 @@ static int init_display(struct fbtft_par *par)
+ 	write_reg(par, LCD_BIAS | 0);
+ 
+ 	/* power control mode: all features on */
+-	/* LCD_POWER_CONTROL | (val&0x07) */
+ 	write_reg(par, LCD_POWER_CONTROL | 0x07);
+ 
+ 	/* set voltage regulator R/R */
+-	/* LCD_VOLTAGE | (val&0x07) */
+ 	write_reg(par, LCD_VOLTAGE | 0x07);
+ 
+ 	/* volume mode set */
+-	/* LCD_VOLUME_MODE,val&0x3f,LCD_NO_OP */
+ 	write_reg(par, LCD_VOLUME_MODE);
+-	/* LCD_VOLUME_MODE,val&0x3f,LCD_NO_OP */
+ 	write_reg(par, 0x09);
+-	/* ???? */
+-	/* LCD_VOLUME_MODE,val&0x3f,LCD_NO_OP */
+ 	write_reg(par, LCD_NO_OP);
+ 
+ 	/* advanced program control */
+@@ -125,17 +119,8 @@ static int init_display(struct fbtft_par *par)
+ static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+ {
+ 	/* goto address */
+-	/* LCD_PAGE_ADDRESS | ((page) & 0x1F),
+-	 (((col)+SHIFT_ADDR_NORMAL) & 0x0F),
+-	 LCD_COL_ADDRESS | ((((col)+SHIFT_ADDR_NORMAL)>>4) & 0x0F) */
+ 	write_reg(par, LCD_PAGE_ADDRESS);
+-	/* LCD_PAGE_ADDRESS | ((page) & 0x1F),
+-	 (((col)+SHIFT_ADDR_NORMAL) & 0x0F),
+-	  LCD_COL_ADDRESS | ((((col)+SHIFT_ADDR_NORMAL)>>4) & 0x0F) */
+ 	write_reg(par, 0x00);
+-	/* LCD_PAGE_ADDRESS | ((page) & 0x1F),
+-	 (((col)+SHIFT_ADDR_NORMAL) & 0x0F),
+-	  LCD_COL_ADDRESS | ((((col)+SHIFT_ADDR_NORMAL)>>4) & 0x0F) */
+ 	write_reg(par, LCD_COL_ADDRESS);
+ }
+ 
+@@ -156,17 +141,9 @@ static int write_vmem(struct fbtft_par *par, size_t offset, size_t len)
+ 					 1 : 0) << i;
+ 			buf++;
+ 		}
+-		/* LCD_PAGE_ADDRESS | ((page) & 0x1F),
+-		 (((col)+SHIFT_ADDR_NORMAL) & 0x0F),
+-		  LCD_COL_ADDRESS | ((((col)+SHIFT_ADDR_NORMAL)>>4) & 0x0F) */
++
+ 		write_reg(par, LCD_PAGE_ADDRESS | (u8)y);
+-		/* LCD_PAGE_ADDRESS | ((page) & 0x1F),
+-		 (((col)+SHIFT_ADDR_NORMAL) & 0x0F),
+-		  LCD_COL_ADDRESS | ((((col)+SHIFT_ADDR_NORMAL)>>4) & 0x0F) */
+ 		write_reg(par, 0x00);
+-		/* LCD_PAGE_ADDRESS | ((page) & 0x1F),
+-		 (((col)+SHIFT_ADDR_NORMAL) & 0x0F),
+-		  LCD_COL_ADDRESS | ((((col)+SHIFT_ADDR_NORMAL)>>4) & 0x0F) */
+ 		write_reg(par, LCD_COL_ADDRESS);
+ 		gpio_set_value(par->gpio.dc, 1);
+ 		ret = par->fbtftops.write(par, par->txbuf.buf, WIDTH);
+diff --git a/drivers/staging/fbtft/fbtft-bus.c b/drivers/staging/fbtft/fbtft-bus.c
+index 58449ad8..83505bc 100644
+--- a/drivers/staging/fbtft/fbtft-bus.c
++++ b/drivers/staging/fbtft/fbtft-bus.c
+@@ -125,7 +125,7 @@ EXPORT_SYMBOL(fbtft_write_reg8_bus9);
+ int fbtft_write_vmem16_bus8(struct fbtft_par *par, size_t offset, size_t len)
+ {
+ 	u16 *vmem16;
+-	u16 *txbuf16 = (u16 *)par->txbuf.buf;
++	u16 *txbuf16 = par->txbuf.buf;
+ 	size_t remain;
+ 	size_t to_copy;
+ 	size_t tx_array_size;
+@@ -150,14 +150,14 @@ int fbtft_write_vmem16_bus8(struct fbtft_par *par, size_t offset, size_t len)
+ 	tx_array_size = par->txbuf.len / 2;
+ 
+ 	if (par->startbyte) {
+-		txbuf16 = (u16 *)(par->txbuf.buf + 1);
++		txbuf16 = par->txbuf.buf + 1;
+ 		tx_array_size -= 2;
+ 		*(u8 *)(par->txbuf.buf) = par->startbyte | 0x2;
+ 		startbyte_size = 1;
+ 	}
+ 
+ 	while (remain) {
+-		to_copy = remain > tx_array_size ? tx_array_size : remain;
++		to_copy = min(tx_array_size, remain);
+ 		dev_dbg(par->info->device, "    to_copy=%zu, remain=%zu\n",
+ 						to_copy, remain - to_copy);
+ 
+@@ -201,7 +201,7 @@ int fbtft_write_vmem16_bus9(struct fbtft_par *par, size_t offset, size_t len)
+ 	tx_array_size = par->txbuf.len / 2;
+ 
+ 	while (remain) {
+-		to_copy = remain > tx_array_size ? tx_array_size : remain;
++		to_copy = min(tx_array_size, remain);
+ 		dev_dbg(par->info->device, "    to_copy=%zu, remain=%zu\n",
+ 						to_copy, remain - to_copy);
+ 
+diff --git a/drivers/staging/fbtft/fbtft-core.c b/drivers/staging/fbtft/fbtft-core.c
+index b1e4516..0c1a77c 100644
+--- a/drivers/staging/fbtft/fbtft-core.c
++++ b/drivers/staging/fbtft/fbtft-core.c
+@@ -35,6 +35,7 @@
+ #include <linux/dma-mapping.h>
+ #include <linux/of.h>
+ #include <linux/of_gpio.h>
++#include <video/mipi_display.h>
+ 
+ #include "fbtft.h"
+ #include "internal.h"
+@@ -129,7 +130,8 @@ static int fbtft_request_gpios(struct fbtft_par *par)
+ 	while (gpio->name[0]) {
+ 		flags = FBTFT_GPIO_NO_MATCH;
+ 		/* if driver provides match function, try it first,
+-		   if no match use our own */
++		 * if no match use our own
++		 */
+ 		if (par->fbtftops.request_gpios_match)
+ 			flags = par->fbtftops.request_gpios_match(par, gpio);
+ 		if (flags == FBTFT_GPIO_NO_MATCH)
+@@ -319,16 +321,13 @@ EXPORT_SYMBOL(fbtft_unregister_backlight);
+ static void fbtft_set_addr_win(struct fbtft_par *par, int xs, int ys, int xe,
+ 			       int ye)
+ {
+-	/* Column address set */
+-	write_reg(par, 0x2A,
+-		(xs >> 8) & 0xFF, xs & 0xFF, (xe >> 8) & 0xFF, xe & 0xFF);
++	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
++		  (xs >> 8) & 0xFF, xs & 0xFF, (xe >> 8) & 0xFF, xe & 0xFF);
+ 
+-	/* Row address set */
+-	write_reg(par, 0x2B,
+-		(ys >> 8) & 0xFF, ys & 0xFF, (ye >> 8) & 0xFF, ye & 0xFF);
++	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS,
++		  (ys >> 8) & 0xFF, ys & 0xFF, (ye >> 8) & 0xFF, ye & 0xFF);
+ 
+-	/* Memory write */
+-	write_reg(par, 0x2C);
++	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+ }
+ 
+ static void fbtft_reset(struct fbtft_par *par)
+@@ -520,8 +519,7 @@ static ssize_t fbtft_fb_write(struct fb_info *info, const char __user *buf,
+ 		"%s: count=%zd, ppos=%llu\n", __func__,  count, *ppos);
+ 	res = fb_sys_write(info, buf, count, ppos);
+ 
+-	/* TODO: only mark changed area
+-	   update all for now */
++	/* TODO: only mark changed area update all for now */
+ 	par->fbtftops.mkdirty(info, -1, 0);
+ 
+ 	return res;
+@@ -738,8 +736,11 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
+ 		goto alloc_fail;
+ 
+ 	if (display->gamma_num && display->gamma_len) {
+-		gamma_curves = devm_kzalloc(dev, display->gamma_num * display->gamma_len * sizeof(gamma_curves[0]),
+-						GFP_KERNEL);
++		gamma_curves = devm_kcalloc(dev,
++					    display->gamma_num *
++					    display->gamma_len,
++					    sizeof(gamma_curves[0]),
++					    GFP_KERNEL);
+ 		if (!gamma_curves)
+ 			goto alloc_fail;
+ 	}
+@@ -987,10 +988,6 @@ int fbtft_register_framebuffer(struct fb_info *fb_info)
+ reg_fail:
+ 	if (par->fbtftops.unregister_backlight)
+ 		par->fbtftops.unregister_backlight(par);
+-	if (spi)
+-		spi_set_drvdata(spi, NULL);
+-	if (par->pdev)
+-		platform_set_drvdata(par->pdev, NULL);
+ 
+ 	return ret;
+ }
+@@ -1008,12 +1005,7 @@ EXPORT_SYMBOL(fbtft_register_framebuffer);
+ int fbtft_unregister_framebuffer(struct fb_info *fb_info)
+ {
+ 	struct fbtft_par *par = fb_info->par;
+-	struct spi_device *spi = par->spi;
+ 
+-	if (spi)
+-		spi_set_drvdata(spi, NULL);
+-	if (par->pdev)
+-		platform_set_drvdata(par->pdev, NULL);
+ 	if (par->fbtftops.unregister_backlight)
+ 		par->fbtftops.unregister_backlight(par);
+ 	fbtft_sysfs_exit(par);
+diff --git a/drivers/staging/fbtft/fbtft.h b/drivers/staging/fbtft/fbtft.h
+index 3ccdec9..d3bc394 100644
+--- a/drivers/staging/fbtft/fbtft.h
++++ b/drivers/staging/fbtft/fbtft.h
+@@ -20,14 +20,6 @@
+ #include <linux/spi/spi.h>
+ #include <linux/platform_device.h>
+ 
+-#define FBTFT_NOP		0x00
+-#define FBTFT_SWRESET	0x01
+-#define FBTFT_RDDID		0x04
+-#define FBTFT_RDDST		0x09
+-#define FBTFT_CASET		0x2A
+-#define FBTFT_RASET		0x2B
+-#define FBTFT_RAMWR		0x2C
+-
+ #define FBTFT_ONBOARD_BACKLIGHT 2
+ 
+ #define FBTFT_GPIO_NO_MATCH		0xFFFF
+diff --git a/drivers/staging/fbtft/fbtft_device.c b/drivers/staging/fbtft/fbtft_device.c
+index 071f79b..241d7c6 100644
+--- a/drivers/staging/fbtft/fbtft_device.c
++++ b/drivers/staging/fbtft/fbtft_device.c
+@@ -212,38 +212,63 @@ static int hy28b_init_sequence[] = {
+ 	"0F 00 1 7 4 0 0 0 6 7"
+ 
+ static int pitft_init_sequence[] = {
+-	-1, 0x01, -2, 5, -1, 0x28, -1, 0xEF,
+-	0x03, 0x80, 0x02, -1, 0xCF, 0x00, 0xC1, 0x30,
++	-1, MIPI_DCS_SOFT_RESET,
++	-2, 5,
++	-1, MIPI_DCS_SET_DISPLAY_OFF,
++	-1, 0xEF, 0x03, 0x80, 0x02,
++	-1, 0xCF, 0x00, 0xC1, 0x30,
+ 	-1, 0xED, 0x64, 0x03, 0x12, 0x81,
+ 	-1, 0xE8, 0x85, 0x00, 0x78,
+ 	-1, 0xCB, 0x39, 0x2C, 0x00, 0x34, 0x02,
+-	-1, 0xF7, 0x20, -1, 0xEA, 0x00, 0x00,
+-	-1, 0xC0, 0x23, -1, 0xC1, 0x10, -1, 0xC5,
+-	0x3e, 0x28, -1, 0xC7, 0x86, -1, 0x3A, 0x55,
+-	-1, 0xB1, 0x00, 0x18, -1, 0xB6, 0x08, 0x82,
+-	0x27, -1, 0xF2, 0x00, -1, 0x26, 0x01,
+-	-1, 0xE0, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08,
+-	0x4E, 0xF1, 0x37, 0x07, 0x10, 0x03,
+-	0x0E, 0x09, 0x00, -1, 0xE1, 0x00, 0x0E, 0x14,
+-	0x03, 0x11, 0x07, 0x31, 0xC1, 0x48,
+-	0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F, -1,
+-	0x11, -2, 100, -1, 0x29, -2, 20, -3 };
++	-1, 0xF7, 0x20,
++	-1, 0xEA, 0x00, 0x00,
++	-1, 0xC0, 0x23,
++	-1, 0xC1, 0x10,
++	-1, 0xC5, 0x3E, 0x28,
++	-1, 0xC7, 0x86,
++	-1, MIPI_DCS_SET_PIXEL_FORMAT, 0x55,
++	-1, 0xB1, 0x00, 0x18,
++	-1, 0xB6, 0x08, 0x82, 0x27,
++	-1, 0xF2, 0x00,
++	-1, MIPI_DCS_SET_GAMMA_CURVE, 0x01,
++	-1, 0xE0, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E,
++		0xF1, 0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00,
++	-1, 0xE1, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31,
++		0xC1, 0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F,
++	-1, MIPI_DCS_EXIT_SLEEP_MODE,
++	-2, 100,
++	-1, MIPI_DCS_SET_DISPLAY_ON,
++	-2, 20,
++	-3
++};
+ 
+ static int waveshare32b_init_sequence[] = {
+ 	-1, 0xCB, 0x39, 0x2C, 0x00, 0x34, 0x02,
+ 	-1, 0xCF, 0x00, 0xC1, 0x30,
+-	-1, 0xE8, 0x85, 0x00, 0x78, -1, 0xEA, 0x00,
+-	0x00, -1, 0xED, 0x64, 0x03, 0x12, 0x81,
+-	-1, 0xF7, 0x20, -1, 0xC0, 0x23, -1, 0xC1,
+-	0x10, -1, 0xC5, 0x3e, 0x28, -1, 0xC7, 0x86,
+-	-1, 0x36, 0x28, -1, 0x3A, 0x55, -1, 0xB1, 0x00,
+-	0x18, -1, 0xB6, 0x08, 0x82, 0x27,
+-	-1, 0xF2, 0x00, -1, 0x26, 0x01,
++	-1, 0xE8, 0x85, 0x00, 0x78,
++	-1, 0xEA, 0x00, 0x00,
++	-1, 0xED, 0x64, 0x03, 0x12, 0x81,
++	-1, 0xF7, 0x20,
++	-1, 0xC0, 0x23,
++	-1, 0xC1, 0x10,
++	-1, 0xC5, 0x3E, 0x28,
++	-1, 0xC7, 0x86,
++	-1, MIPI_DCS_SET_ADDRESS_MODE, 0x28,
++	-1, MIPI_DCS_SET_PIXEL_FORMAT, 0x55,
++	-1, 0xB1, 0x00, 0x18,
++	-1, 0xB6, 0x08, 0x82, 0x27,
++	-1, 0xF2, 0x00,
++	-1, MIPI_DCS_SET_GAMMA_CURVE, 0x01,
+ 	-1, 0xE0, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E,
+-	0xF1, 0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00,
++		0xF1, 0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00,
+ 	-1, 0xE1, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31,
+-	0xC1, 0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F,
+-	-1, 0x11, -2, 120, -1, 0x29, -1, 0x2c, -3 };
++		0xC1, 0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F,
++	-1, MIPI_DCS_EXIT_SLEEP_MODE,
++	-2, 120,
++	-1, MIPI_DCS_SET_DISPLAY_ON,
++	-1, MIPI_DCS_WRITE_MEMORY_START,
++	-3
++};
+ 
+ /* Supported displays in alphabetical order */
+ static struct fbtft_device_display displays[] = {
+@@ -1287,7 +1312,7 @@ Device 'xxx' does not have a release() function, it is broken and must be fixed
+ 
+ static int spi_device_found(struct device *dev, void *data)
+ {
+-	struct spi_device *spi = container_of(dev, struct spi_device, dev);
++	struct spi_device *spi = to_spi_device(dev);
+ 
+ 	dev_info(dev, "%s %s %dkHz %d bits mode=0x%02X\n", spi->modalias,
+ 		 dev_name(dev), spi->max_speed_hz / 1000, spi->bits_per_word,
+@@ -1305,7 +1330,7 @@ static void pr_spi_devices(void)
+ static int p_device_found(struct device *dev, void *data)
+ {
+ 	struct platform_device
+-	*pdev = container_of(dev, struct platform_device, dev);
++	*pdev = to_platform_device(dev);
+ 
+ 	if (strstr(pdev->name, "fb"))
+ 		dev_info(dev, "%s id=%d pdata? %s\n", pdev->name, pdev->id,
+-- 
+2.8.0.rc3
+
