@@ -196,36 +196,160 @@ aufs4
 rt
 #local_patch
 
+pre_backports () {
+	echo "dir: backports/${subsystem}"
+
+	cd ~/linux-src/
+	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master
+	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		git checkout ${backport_tag} -b tmp
+	fi
+	cd -
+}
+
+pre_backports_tty () {
+	echo "dir: backports/${subsystem}"
+
+	cd ~/linux-src/
+	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master
+	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		git checkout ${backport_tag} -b tmp
+		git revert --no-edit be7635e7287e0e8013af3c89a6354a9e0182594c
+		git revert --no-edit c74ba8b3480da6ddaea17df2263ec09b869ac496
+	fi
+	cd -
+}
+
+post_backports () {
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		cd ~/linux-src/
+		git checkout master -f ; git branch -D tmp
+		cd -
+	fi
+
+	git add .
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		git commit -a -m "backports: ${subsystem}: from: ${backport_tag}" -s
+	else
+		git commit -a -m "backports: ${subsystem}" -s
+	fi
+	git format-patch -1 -o ../patches/backports/${subsystem}/
+
+	exit 2
+}
+
+patch_backports (){
+	echo "dir: backports/${subsystem}"
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-${backport_tag}.patch"
+	else
+		${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}.patch"
+	fi
+}
+
 lts44_backports () {
+	backport_tag="v4.6-rc2"
+
+	subsystem="tty"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports_tty
+
+		rm -rf drivers/tty/serial/nwpserial.c
+		rm -rf drivers/tty/serial/of_serial.c
+
+		cp -v ~/linux-src/drivers/of/fdt.c ./drivers/of/fdt.c
+		cp -v ~/linux-src/drivers/of/fdt_address.c ./drivers/of/fdt_address.c
+		cp -v ~/linux-src/drivers/tty/serial/8250/8250.h ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/8250/8250_*.c ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/8250/Kconfig ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/8250/Makefile ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/8250/serial_cs.c ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/Kconfig ./drivers/tty/serial/
+		cp -v ~/linux-src/drivers/tty/serial/Makefile ./drivers/tty/serial/
+		cp -v ~/linux-src/drivers/tty/serial/earlycon.c ./drivers/tty/serial/
+		cp -v ~/linux-src/include/asm-generic/vmlinux.lds.h ./include/asm-generic/
+		cp -v ~/linux-src/include/linux/of_fdt.h ./include/linux/
+		cp -v ~/linux-src/include/linux/serial_8250.h ./include/linux/
+		cp -v ~/linux-src/include/linux/serial_core.h ./include/linux/
+		cp -v ~/linux-src/include/uapi/linux/serial.h ./include/uapi/linux/
+
+		post_backports
+	fi
+	patch_backports
+	${git} "${DIR}/patches/backports/tty/rt-serial-warn-fix.patch"
+
+	subsystem="fbtft"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/staging/fbtft/* ./drivers/staging/fbtft/
+		cp -v ~/linux-src/include/video/mipi_display.h ./include/video/mipi_display.h
+
+		post_backports
+	fi
+	patch_backports
+
+	subsystem="iio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -vr ~/linux-src/drivers/iio/* ./drivers/iio/
+		cp -vr ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+		cp -vr ~/linux-src/include/linux/iio/* ./include/linux/iio/
+		cp -v  ~/linux-src/include/linux/mfd/palmas.h ./include/linux/mfd/
+		cp -v  ~/linux-src/include/linux/platform_data/ad5761.h ./include/linux/platform_data/
+		cp -v  ~/linux-src/include/uapi/linux/iio/types.h ./include/uapi/linux/iio/types.h
+
+		post_backports
+	fi
+	patch_backports
+
+	subsystem="edt-ft5x06"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/edt-ft5x06.c
+
+		post_backports
+	fi
+	patch_backports
+	${git} "${DIR}/patches/backports/edt-ft5x06/0002-edt-ft5x06-add-invert_x-invert_y-swap_xy.patch"
+
 	echo "dir: lts44_backports"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		echo "dir: lts44_backports/fixes"
-		cherrypick_dir="lts44_backports/fixes"
-		SHA="d20313b2c407a90fb60eca99d73c47a75bb42e08" ; num="1" ; cherrypick
-
 		echo "dir: lts44_backports/dmtimer"
 		cherrypick_dir="lts44_backports/dmtimer"
 		SHA="6604c6556db9e41c85f2839f66bd9d617bcf9f87" ; num="1" ; cherrypick
 		SHA="074726402b82f14ca377da0b4a4767674c3d1ff8" ; cherrypick
 		SHA="20437f79f6627a31752f422688a6047c25cefcf1" ; cherrypick
-
+		SHA="f8caa792261c0edded20eba2b8fcc899a1b91819" ; cherrypick
+		SHA="cd378881426379a62a7fe67f34b8cbe738302022" ; cherrypick
+		SHA="7b0883f33809ff0aeca9848193c31629a752bb77" ; cherrypick
+		SHA="922201d129c8f9d0c3207dca90ea6ffd8e2242f0" ; cherrypick
 		exit 2
 	fi
 
-	is_44="enable"
-	if [ "x${is_44}" = "xenable" ] ; then
-		echo "dir: lts44_backports/fixes"
-		#4.5.0-rc0
-		${git} "${DIR}/patches/lts44_backports/fixes/0001-dmaengine-edma-Fix-paRAM-slot-allocation-for-entry-c.patch"
-
-		echo "dir: lts44_backports/dmtimer"
+	echo "dir: lts44_backports/dmtimer"
+	if [ "x${merged_in_4_5}" = "xenable" ] ; then
 		#4.5.0-rc0
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0001-pwm-Add-PWM-driver-for-OMAP-using-dual-mode-timers.patch"
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0002-pwm-omap-dmtimer-Potential-NULL-dereference-on-error.patch"
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0003-ARM-OMAP-Add-PWM-dmtimer-platform-data-quirks.patch"
 	fi
-	unset is_44
+	if [ "x${merged_in_4_6}" = "xenable" ] ; then
+		#4.6.0-rc0
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0004-pwm-omap-dmtimer-Fix-inaccurate-period-and-duty-cycl.patch"
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0005-pwm-omap-dmtimer-Add-sanity-checking-for-load-and-ma.patch"
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0006-pwm-omap-dmtimer-Round-load-and-match-values-rather-.patch"
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0007-pwm-omap-dmtimer-Add-debug-message-for-effective-per.patch"
+	fi
 }
 
 reverts () {
@@ -639,19 +763,36 @@ beaglebone () {
 		cleanup
 	fi
 
-	echo "dir: beaglebone/rs485"
+#	echo "dir: beaglebone/rs485"
+#	#regenerate="enable"
+#	if [ "x${regenerate}" = "xenable" ] ; then
+#		start_cleanup
+#	fi
+
+#	#[PATCH v8 0/3] tty: Introduce software RS485 direction control support
+#	${git} "${DIR}/patches/beaglebone/rs485/0001-tty-Move-serial8250_stop_rx-in-front-of-serial8250_s.patch"
+#	${git} "${DIR}/patches/beaglebone/rs485/0002-tty-Add-software-emulated-RS485-support-for-8250.patch"
+#	${git} "${DIR}/patches/beaglebone/rs485/0003-tty-8250_omap-Use-software-emulated-RS485-direction-.patch"
+
+#	if [ "x${regenerate}" = "xenable" ] ; then
+#		number=3
+#		cleanup
+#	fi
+
+	echo "dir: beaglebone/mctrl_gpio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
-
-	#[PATCH v8 0/3] tty: Introduce software RS485 direction control support
-	${git} "${DIR}/patches/beaglebone/rs485/0001-tty-Move-serial8250_stop_rx-in-front-of-serial8250_s.patch"
-	${git} "${DIR}/patches/beaglebone/rs485/0002-tty-Add-software-emulated-RS485-support-for-8250.patch"
-	${git} "${DIR}/patches/beaglebone/rs485/0003-tty-8250_omap-Use-software-emulated-RS485-direction-.patch"
+		#[RFC v2 0/5] tty/serial/8250: add MCTRL_GPIO support
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0001-tty-serial-8250-fix-RS485-half-duplex-RX.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0002-tty-serial-8250-make-UART_MCR-register-access-consis.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0003-serial-mctrl_gpio-add-modem-control-read-routine.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0004-serial-mctrl_gpio-add-IRQ-locking.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0005-tty-serial-8250-use-mctrl_gpio-helpers.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=3
+		number=5
 		cleanup
 	fi
 
