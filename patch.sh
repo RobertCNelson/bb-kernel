@@ -184,6 +184,7 @@ rt () {
 	fi
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
+	${git} "${DIR}/patches/rt/0001-revert-drivers-block-zram-Replace-bit-spinlocks-with.patch"
 }
 
 local_patch () {
