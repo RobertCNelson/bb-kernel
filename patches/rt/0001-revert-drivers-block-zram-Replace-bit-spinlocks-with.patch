@@ -1,0 +1,179 @@
+From 7c0f5926113f0dba209c9aa27a7b729a341c83ea Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Tue, 5 Apr 2016 09:09:50 -0500
+Subject: [PATCH] revert: drivers/block/zram: Replace bit spinlocks with
+ rtmutex
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/block/zram/zram_drv.c | 30 ++++++++++++++----------------
+ drivers/block/zram/zram_drv.h | 41 -----------------------------------------
+ 2 files changed, 14 insertions(+), 57 deletions(-)
+
+diff --git a/drivers/block/zram/zram_drv.c b/drivers/block/zram/zram_drv.c
+index 65e0b37..370c2f7 100644
+--- a/drivers/block/zram/zram_drv.c
++++ b/drivers/block/zram/zram_drv.c
+@@ -520,8 +520,6 @@ static struct zram_meta *zram_meta_alloc(char *pool_name, u64 disksize)
+ 		goto out_error;
+ 	}
+ 
+-	zram_meta_init_table_locks(meta, disksize);
+-
+ 	return meta;
+ 
+ out_error:
+@@ -570,12 +568,12 @@ static int zram_decompress_page(struct zram *zram, char *mem, u32 index)
+ 	unsigned long handle;
+ 	size_t size;
+ 
+-	zram_lock_table(&meta->table[index]);
++	bit_spin_lock(ZRAM_ACCESS, &meta->table[index].value);
+ 	handle = meta->table[index].handle;
+ 	size = zram_get_obj_size(meta, index);
+ 
+ 	if (!handle || zram_test_flag(meta, index, ZRAM_ZERO)) {
+-		zram_unlock_table(&meta->table[index]);
++		bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
+ 		clear_page(mem);
+ 		return 0;
+ 	}
+@@ -586,7 +584,7 @@ static int zram_decompress_page(struct zram *zram, char *mem, u32 index)
+ 	else
+ 		ret = zcomp_decompress(zram->comp, cmem, size, mem);
+ 	zs_unmap_object(meta->mem_pool, handle);
+-	zram_unlock_table(&meta->table[index]);
++	bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
+ 
+ 	/* Should NEVER happen. Return bio error if it does. */
+ 	if (unlikely(ret)) {
+@@ -606,14 +604,14 @@ static int zram_bvec_read(struct zram *zram, struct bio_vec *bvec,
+ 	struct zram_meta *meta = zram->meta;
+ 	page = bvec->bv_page;
+ 
+-	zram_lock_table(&meta->table[index]);
++	bit_spin_lock(ZRAM_ACCESS, &meta->table[index].value);
+ 	if (unlikely(!meta->table[index].handle) ||
+ 			zram_test_flag(meta, index, ZRAM_ZERO)) {
+-		zram_unlock_table(&meta->table[index]);
++		bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
+ 		handle_zero_page(bvec);
+ 		return 0;
+ 	}
+-	zram_unlock_table(&meta->table[index]);
++	bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
+ 
+ 	if (is_partial_io(bvec))
+ 		/* Use  a temporary buffer to decompress the page */
+@@ -691,10 +689,10 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
+ 		if (user_mem)
+ 			kunmap_atomic(user_mem);
+ 		/* Free memory associated with this sector now. */
+-		zram_lock_table(&meta->table[index]);
++		bit_spin_lock(ZRAM_ACCESS, &meta->table[index].value);
+ 		zram_free_page(zram, index);
+ 		zram_set_flag(meta, index, ZRAM_ZERO);
+-		zram_unlock_table(&meta->table[index]);
++		bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
+ 
+ 		atomic64_inc(&zram->stats.zero_pages);
+ 		ret = 0;
+@@ -754,12 +752,12 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
+ 	 * Free memory associated with this sector
+ 	 * before overwriting unused sectors.
+ 	 */
+-	zram_lock_table(&meta->table[index]);
++	bit_spin_lock(ZRAM_ACCESS, &meta->table[index].value);
+ 	zram_free_page(zram, index);
+ 
+ 	meta->table[index].handle = handle;
+ 	zram_set_obj_size(meta, index, clen);
+-	zram_unlock_table(&meta->table[index]);
++	bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
+ 
+ 	/* Update stats */
+ 	atomic64_add(clen, &zram->stats.compr_data_size);
+@@ -802,9 +800,9 @@ static void zram_bio_discard(struct zram *zram, u32 index,
+ 	}
+ 
+ 	while (n >= PAGE_SIZE) {
+-		zram_lock_table(&meta->table[index]);
++		bit_spin_lock(ZRAM_ACCESS, &meta->table[index].value);
+ 		zram_free_page(zram, index);
+-		zram_unlock_table(&meta->table[index]);
++		bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
+ 		atomic64_inc(&zram->stats.notify_free);
+ 		index++;
+ 		n -= PAGE_SIZE;
+@@ -930,9 +928,9 @@ static void zram_slot_free_notify(struct block_device *bdev,
+ 	zram = bdev->bd_disk->private_data;
+ 	meta = zram->meta;
+ 
+-	zram_lock_table(&meta->table[index]);
++	bit_spin_lock(ZRAM_ACCESS, &meta->table[index].value);
+ 	zram_free_page(zram, index);
+-	zram_unlock_table(&meta->table[index]);
++	bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
+ 	atomic64_inc(&zram->stats.notify_free);
+ }
+ 
+diff --git a/drivers/block/zram/zram_drv.h b/drivers/block/zram/zram_drv.h
+index 1e4a3c6..8e92339 100644
+--- a/drivers/block/zram/zram_drv.h
++++ b/drivers/block/zram/zram_drv.h
+@@ -72,9 +72,6 @@ enum zram_pageflags {
+ struct zram_table_entry {
+ 	unsigned long handle;
+ 	unsigned long value;
+-#ifdef CONFIG_PREEMPT_RT_BASE
+-	spinlock_t lock;
+-#endif
+ };
+ 
+ struct zram_stats {
+@@ -122,42 +119,4 @@ struct zram {
+ 	 */
+ 	bool claim; /* Protected by bdev->bd_mutex */
+ };
+-
+-#ifndef CONFIG_PREEMPT_RT_BASE
+-static inline void zram_lock_table(struct zram_table_entry *table)
+-{
+-	bit_spin_lock(ZRAM_ACCESS, &table->value);
+-}
+-
+-static inline void zram_unlock_table(struct zram_table_entry *table)
+-{
+-	bit_spin_unlock(ZRAM_ACCESS, &table->value);
+-}
+-
+-static inline void zram_meta_init_locks(struct zram_meta *meta, u64 disksize) { }
+-#else /* CONFIG_PREEMPT_RT_BASE */
+-static inline void zram_lock_table(struct zram_table_entry *table)
+-{
+-	spin_lock(&table->lock);
+-	__set_bit(ZRAM_ACCESS, &table->value);
+-}
+-
+-static inline void zram_unlock_table(struct zram_table_entry *table)
+-{
+-	__clear_bit(ZRAM_ACCESS, &table->value);
+-	spin_unlock(&table->lock);
+-}
+-
+-static inline void zram_meta_init_table_locks(struct zram_meta *meta, u64 disksize)
+-{
+-        size_t num_pages = disksize >> PAGE_SHIFT;
+-        size_t index;
+-
+-        for (index = 0; index < num_pages; index++) {
+-		spinlock_t *lock = &meta->table[index].lock;
+-		spin_lock_init(lock);
+-        }
+-}
+-#endif /* CONFIG_PREEMPT_RT_BASE */
+-
+ #endif
+-- 
+2.8.0.rc3
+
