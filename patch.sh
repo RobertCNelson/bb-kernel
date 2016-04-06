@@ -81,10 +81,14 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
+
+	#v4.1.21
+	git revert --no-edit 143cf26c48278bd438a97a8bd3e18b6460192981
+	git revert --no-edit 1a138f3e487026aede3642cbe09aee0f64c2f66b
+
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz
@@ -212,18 +216,17 @@ ti () {
 	fi
 }
 
-pru_uio () {
-	echo "dir: pru_uio"
+pru () {
+	echo "dir: pru"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/pru_uio/0001-Making-the-uio-pruss-driver-work.patch"
-	${git} "${DIR}/patches/pru_uio/0002-Cleaned-up-error-reporting.patch"
+	${git} "${DIR}/patches/pru/0001-Making-the-uio-pruss-driver-work.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
+		number=1
 		cleanup
 	fi
 }
@@ -617,7 +620,7 @@ reverts
 backports
 ti
 #fixes
-pru_uio
+pru
 bbb_overlays
 beaglebone
 quieter
