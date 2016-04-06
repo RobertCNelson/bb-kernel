@@ -212,18 +212,17 @@ ti () {
 	fi
 }
 
-pru_uio () {
-	echo "dir: pru_uio"
+pru () {
+	echo "dir: pru"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/pru_uio/0001-Making-the-uio-pruss-driver-work.patch"
-	${git} "${DIR}/patches/pru_uio/0002-Cleaned-up-error-reporting.patch"
+	${git} "${DIR}/patches/pru/0001-Making-the-uio-pruss-driver-work.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
+		number=1
 		cleanup
 	fi
 }
@@ -617,7 +616,7 @@ reverts
 backports
 ti
 #fixes
-pru_uio
+pru
 bbb_overlays
 beaglebone
 quieter
