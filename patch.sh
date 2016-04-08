@@ -831,22 +831,6 @@ beaglebone () {
 		cleanup
 	fi
 
-#	echo "dir: beaglebone/rs485"
-#	#regenerate="enable"
-#	if [ "x${regenerate}" = "xenable" ] ; then
-#		start_cleanup
-#	fi
-
-#	#[PATCH v8 0/3] tty: Introduce software RS485 direction control support
-#	${git} "${DIR}/patches/beaglebone/rs485/0001-tty-Move-serial8250_stop_rx-in-front-of-serial8250_s.patch"
-#	${git} "${DIR}/patches/beaglebone/rs485/0002-tty-Add-software-emulated-RS485-support-for-8250.patch"
-#	${git} "${DIR}/patches/beaglebone/rs485/0003-tty-8250_omap-Use-software-emulated-RS485-direction-.patch"
-
-#	if [ "x${regenerate}" = "xenable" ] ; then
-#		number=3
-#		cleanup
-#	fi
-
 	echo "dir: beaglebone/mctrl_gpio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -908,7 +892,6 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/tilcdc/0023-drm-tilcdc-Write-to-LCDC_END_OF_INT_IND_REG-at-the-e.patch"
 	${git} "${DIR}/patches/beaglebone/tilcdc/0024-drm-tilcdc-Move-waiting-of-LCDC_FRAME_DONE-IRQ-into-.patch"
 	${git} "${DIR}/patches/beaglebone/tilcdc/0025-drm-tilcdc-Recover-from-sync-lost-error-flood-by-res.patch"
-
 
 	#This has to be last...
 	echo "dir: beaglebone/dtbs"
