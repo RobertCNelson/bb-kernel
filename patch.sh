@@ -44,6 +44,10 @@ fi
 
 echo "Starting patch.sh"
 
+unset merged_in_4_5
+merged_in_4_6="enable"
+#unset merged_in_4_6
+
 git_add () {
 	git add .
 	git commit -a -m 'testing patchset'
@@ -190,36 +194,159 @@ aufs4
 #rt
 #local_patch
 
+pre_backports () {
+	echo "dir: backports/${subsystem}"
+
+	cd ~/linux-src/
+	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master
+	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		git checkout ${backport_tag} -b tmp
+	fi
+	cd -
+}
+
+pre_backports_tty () {
+	echo "dir: backports/${subsystem}"
+
+	cd ~/linux-src/
+	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master
+	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		git checkout ${backport_tag} -b tmp
+		git revert --no-edit be7635e7287e0e8013af3c89a6354a9e0182594c
+		git revert --no-edit c74ba8b3480da6ddaea17df2263ec09b869ac496
+	fi
+	cd -
+}
+
+post_backports () {
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		cd ~/linux-src/
+		git checkout master -f ; git branch -D tmp
+		cd -
+	fi
+
+	git add .
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		git commit -a -m "backports: ${subsystem}: from: ${backport_tag}" -s
+	else
+		git commit -a -m "backports: ${subsystem}" -s
+	fi
+	git format-patch -1 -o ../patches/backports/${subsystem}/
+
+	exit 2
+}
+
+patch_backports (){
+	echo "dir: backports/${subsystem}"
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-${backport_tag}.patch"
+	else
+		${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}.patch"
+	fi
+}
+
 lts44_backports () {
+	backport_tag="v4.6-rc2"
+
+	subsystem="tty"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports_tty
+
+		rm -rf drivers/tty/serial/nwpserial.c
+		rm -rf drivers/tty/serial/of_serial.c
+
+		cp -v ~/linux-src/drivers/of/fdt.c ./drivers/of/fdt.c
+		cp -v ~/linux-src/drivers/of/fdt_address.c ./drivers/of/fdt_address.c
+		cp -v ~/linux-src/drivers/tty/serial/8250/8250.h ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/8250/8250_*.c ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/8250/Kconfig ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/8250/Makefile ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/8250/serial_cs.c ./drivers/tty/serial/8250/
+		cp -v ~/linux-src/drivers/tty/serial/Kconfig ./drivers/tty/serial/
+		cp -v ~/linux-src/drivers/tty/serial/Makefile ./drivers/tty/serial/
+		cp -v ~/linux-src/drivers/tty/serial/earlycon.c ./drivers/tty/serial/
+		cp -v ~/linux-src/include/asm-generic/vmlinux.lds.h ./include/asm-generic/
+		cp -v ~/linux-src/include/linux/of_fdt.h ./include/linux/
+		cp -v ~/linux-src/include/linux/serial_8250.h ./include/linux/
+		cp -v ~/linux-src/include/linux/serial_core.h ./include/linux/
+		cp -v ~/linux-src/include/uapi/linux/serial.h ./include/uapi/linux/
+
+		post_backports
+	fi
+	patch_backports
+
+	subsystem="fbtft"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/staging/fbtft/* ./drivers/staging/fbtft/
+		cp -v ~/linux-src/include/video/mipi_display.h ./include/video/mipi_display.h
+
+		post_backports
+	fi
+	patch_backports
+
+	subsystem="iio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -vr ~/linux-src/drivers/iio/* ./drivers/iio/
+		cp -vr ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+		cp -vr ~/linux-src/include/linux/iio/* ./include/linux/iio/
+		cp -v  ~/linux-src/include/linux/mfd/palmas.h ./include/linux/mfd/
+		cp -v  ~/linux-src/include/linux/platform_data/ad5761.h ./include/linux/platform_data/
+		cp -v  ~/linux-src/include/uapi/linux/iio/types.h ./include/uapi/linux/iio/types.h
+
+		post_backports
+	fi
+	patch_backports
+
+	subsystem="edt-ft5x06"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/edt-ft5x06.c
+
+		post_backports
+	fi
+	#patch_backports
+	${git} "${DIR}/patches/backports/edt-ft5x06/0002-edt-ft5x06-add-invert_x-invert_y-swap_xy.patch"
+
 	echo "dir: lts44_backports"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		echo "dir: lts44_backports/fixes"
-		cherrypick_dir="lts44_backports/fixes"
-		SHA="d20313b2c407a90fb60eca99d73c47a75bb42e08" ; num="1" ; cherrypick
-
 		echo "dir: lts44_backports/dmtimer"
 		cherrypick_dir="lts44_backports/dmtimer"
 		SHA="6604c6556db9e41c85f2839f66bd9d617bcf9f87" ; num="1" ; cherrypick
 		SHA="074726402b82f14ca377da0b4a4767674c3d1ff8" ; cherrypick
 		SHA="20437f79f6627a31752f422688a6047c25cefcf1" ; cherrypick
-
+		SHA="f8caa792261c0edded20eba2b8fcc899a1b91819" ; cherrypick
+		SHA="cd378881426379a62a7fe67f34b8cbe738302022" ; cherrypick
+		SHA="7b0883f33809ff0aeca9848193c31629a752bb77" ; cherrypick
+		SHA="922201d129c8f9d0c3207dca90ea6ffd8e2242f0" ; cherrypick
 		exit 2
 	fi
 
-	#is_44="enable"
-	if [ "x${is_44}" = "xenable" ] ; then
-		echo "dir: lts44_backports/fixes"
-		#4.5.0-rc0
-		${git} "${DIR}/patches/lts44_backports/fixes/0001-dmaengine-edma-Fix-paRAM-slot-allocation-for-entry-c.patch"
-
-		echo "dir: lts44_backports/dmtimer"
+	echo "dir: lts44_backports/dmtimer"
+	if [ "x${merged_in_4_5}" = "xenable" ] ; then
 		#4.5.0-rc0
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0001-pwm-Add-PWM-driver-for-OMAP-using-dual-mode-timers.patch"
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0002-pwm-omap-dmtimer-Potential-NULL-dereference-on-error.patch"
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0003-ARM-OMAP-Add-PWM-dmtimer-platform-data-quirks.patch"
 	fi
-	unset is_44
+	if [ "x${merged_in_4_6}" = "xenable" ] ; then
+		#4.6.0-rc0
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0004-pwm-omap-dmtimer-Fix-inaccurate-period-and-duty-cycl.patch"
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0005-pwm-omap-dmtimer-Add-sanity-checking-for-load-and-ma.patch"
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0006-pwm-omap-dmtimer-Round-load-and-match-values-rather-.patch"
+		${git} "${DIR}/patches/lts44_backports/dmtimer/0007-pwm-omap-dmtimer-Add-debug-message-for-effective-per.patch"
+	fi
 }
 
 reverts () {
@@ -244,24 +371,58 @@ fixes () {
 		start_cleanup
 	fi
 
+#	${git} "${DIR}/patches/fixes/0001-fix-sleep33xx.S-for-thumb2.patch"
+#	${git} "${DIR}/patches/fixes/0002-fix-sleep43xx.S-for-thumb2.patch"
+#	${git} "${DIR}/patches/fixes/0003-fix-ti-emif-sram-pm.S-for-thumb2.patch"
+	${git} "${DIR}/patches/fixes/0004-net-wireless-SanCloud-wifi-issue-when-associating-wi.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
+		number=4
 		cleanup
 	fi
 }
 
 ti () {
-	echo "dir: ti/iodelay/"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		echo "dir: ti/iodelay"
+		cherrypick_dir="ti/iodelay"
+		SHA="d3fecebe6b63c6b49a890b6f70866e2ce6024ae3" ; num="1" ; cherrypick
+		SHA="52a607e7c45e44e09f50233384cc352417556966" ; cherrypick
+		SHA="7735321423eead6bffce89c8f635b6c66a3052a1" ; cherrypick
+
+		exit 2
+	fi
+
+	is_mainline="enable"
+	if [ "x${is_mainline}" = "xenable" ] ; then
+		echo "dir: ti/iodelay/"
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		${git} "${DIR}/patches/ti/iodelay/0001-pinctrl-bindings-pinctrl-Add-support-for-TI-s-IODela.patch"
+		${git} "${DIR}/patches/ti/iodelay/0002-pinctrl-Introduce-TI-IOdelay-configuration-driver.patch"
+		${git} "${DIR}/patches/ti/iodelay/0003-ARM-dts-dra7-Add-iodelay-module.patch"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			number=3
+			cleanup
+		fi
+	fi
+	unset is_mainline
+
+	echo "dir: ti/dtbs"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/ti/iodelay/0001-pinctrl-bindings-pinctrl-Add-support-for-TI-s-IODela.patch"
-	${git} "${DIR}/patches/ti/iodelay/0002-pinctrl-Introduce-TI-IOdelay-configuration-driver.patch"
+	${git} "${DIR}/patches/ti/dtbs/0001-sync-with-ti-4.4.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
+		number=1
 		cleanup
 	fi
 }
@@ -310,7 +471,7 @@ bbb_overlays () {
 		fi
 		git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
 		cd dtc
-		git pull --no-edit https://github.com/pantoniou/dtc dt-overlays5
+		git pull --no-edit https://github.com/RobertCNelson/dtc bb.org-4.1-dt-overlays5-dtc-b06e55c88b9b
 
 		cd ../KERNEL/
 		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh
@@ -325,6 +486,7 @@ bbb_overlays () {
 			start_cleanup
 		fi
 
+		#4.6.0-rc: https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=91feabc2e2240ee80dc8ac08103cb83f497e4d12
 		${git} "${DIR}/patches/bbb_overlays/dtc/0001-scripts-dtc-Update-to-upstream-version-overlays.patch"
 
 		if [ "x${regenerate}" = "xenable" ] ; then
@@ -336,21 +498,37 @@ bbb_overlays () {
 	echo "dir: bbb_overlays/nvmem"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
+		cherrypick_dir="bbb_overlays/nvmem"
+		#merged in 4.6.0-rc0
+		SHA="092462c2b52259edba80a6748acb3305f7f70423" ; num="1" ; cherrypick
+		SHA="cb54ad6cddb606add2481b82901d69670b480d1b" ; cherrypick
+		SHA="c074abe02e5e3479b2dfd109fa2620d22d351c34" ; cherrypick
+		SHA="e1379b56e9e88653fcb58cbaa71cd6b1cc304918" ; cherrypick
+		SHA="3ca9b1ac28398c6fe0bed335d2d71a35e1c5f7c9" ; cherrypick
+		SHA="811b0d6538b9f26f3eb0f90fe4e6118f2480ec6f" ; cherrypick
+		SHA="b6c217ab9be6895384cf0b284ace84ad79e5c53b" ; cherrypick
+		SHA="57d155506dd5e8f8242d0310d3822c486f70dea7" ; cherrypick
+		SHA="3ccea0e1fdf896645f8cccddcfcf60cb289fdf76" ; cherrypick
+		SHA="5a99f570dab9f626d3b0b87a4ddf5de8c648aae8" ; cherrypick
+		SHA="1c4b6e2c7534b9b193f440f77dd47e420a150288" ; cherrypick
+		SHA="bec3c11bad0e7ac05fb90f204d0ab6f79945822b" ; cherrypick
+		exit 2
 	fi
 
-	#[PATCHv6 0/7] Convert exiting EEPROM drivers to NVMEM
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0001-nvmem-Add-flag-to-export-NVMEM-to-root-only.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0002-nvmem-Add-backwards-compatibility-support-for-older-.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0003-eeprom-at24-extend-driver-to-plug-into-the-NVMEM-fra.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0004-eeprom-at25-Remove-in-kernel-API-for-accessing-the-E.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0005-eeprom-at25-extend-driver-to-plug-into-the-NVMEM-fra.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0006-eeprom-93xx46-extend-driver-to-plug-into-the-NVMEM-f.patch"
-	${git} "${DIR}/patches/bbb_overlays/nvmem/0007-misc-at24-replace-memory_accessor-with-nvmem_device_.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=7
-		cleanup
+	if [ "x${merged_in_4_6}" = "xenable" ] ; then
+		#merged in 4.6.0-rc0
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0001-misc-eeprom-use-kobj_to_dev.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0002-misc-eeprom_93xx46-Fix-16-bit-read-and-write-accesse.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0003-misc-eeprom_93xx46-Implement-eeprom_93xx46-DT-bindin.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0004-misc-eeprom_93xx46-Add-quirks-to-support-Atmel-AT93C.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0005-misc-eeprom_93xx46-Add-support-for-a-GPIO-select-lin.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0006-nvmem-Add-flag-to-export-NVMEM-to-root-only.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0007-nvmem-Add-backwards-compatibility-support-for-older-.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0008-eeprom-at24-extend-driver-to-plug-into-the-NVMEM-fra.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0009-eeprom-at25-Remove-in-kernel-API-for-accessing-the-E.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0010-eeprom-at25-extend-driver-to-plug-into-the-NVMEM-fra.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0011-eeprom-93xx46-extend-driver-to-plug-into-the-NVMEM-f.patch"
+		${git} "${DIR}/patches/bbb_overlays/nvmem/0012-misc-at24-replace-memory_accessor-with-nvmem_device_.patch"
 	fi
 
 	echo "dir: bbb_overlays/configfs"
@@ -362,13 +540,10 @@ bbb_overlays () {
 		exit 2
 	fi
 
-	#is_44="enable"
-	if [ "x${is_44}" = "xenable" ] ; then
-		#(< 4.5.0-rc0)
+	if [ "x${merged_in_4_5}" = "xenable" ] ; then
+		#merged in 4.5.0-rc0
 		${git} "${DIR}/patches/bbb_overlays/configfs/0001-configfs-implement-binary-attributes.patch"
 	fi
-	unset is_44
-
 
 	echo "dir: bbb_overlays/of"
 	#regenerate="enable"
@@ -379,12 +554,10 @@ bbb_overlays () {
 		exit 2
 	fi
 
-	#is_44="enable"
-	if [ "x${is_44}" = "xenable" ] ; then
-		#(< 4.5.0-rc0)
+	if [ "x${merged_in_4_5}" = "xenable" ] ; then
+		#merged in 4.5.0-rc0
 		${git} "${DIR}/patches/bbb_overlays/of/0001-drivers-of-Export-OF-changeset-functions.patch"
 	fi
-	unset is_44
 
 	echo "dir: bbb_overlays/omap"
 	#regenerate="enable"
@@ -395,12 +568,10 @@ bbb_overlays () {
 		exit 2
 	fi
 
-	#is_44="enable"
-	if [ "x${is_44}" = "xenable" ] ; then
+	if [ "x${merged_in_4_5}" = "xenable" ] ; then
 		#merged in 4.5.0-rc6?
 		${git} "${DIR}/patches/bbb_overlays/omap/0001-ARM-OMAP2-Fix-omap_device-for-module-reload-on-PM-ru.patch"
 	fi
-	unset is_44
 
 	echo "dir: bbb_overlays"
 	#regenerate="enable"
@@ -561,15 +732,9 @@ beaglebone () {
 
 	${git} "${DIR}/patches/beaglebone/abbbi/0001-gpu-drm-i2c-add-alternative-adv7511-driver-with-audi.patch"
 	${git} "${DIR}/patches/beaglebone/abbbi/0002-gpu-drm-i2c-adihdmi-componentize-driver-and-huge-ref.patch"
-
-	is_45="enable"
-	if [ "x${is_45}" = "xenable" ] ; then
-		${git} "${DIR}/patches/beaglebone/abbbi/0003-drm-adihdmi-Drop-dummy-save-restore-hooks.patch"
-		${git} "${DIR}/patches/beaglebone/abbbi/0004-drm-adihdmi-Pass-name-to-drm_encoder_init.patch"
-	fi
-	unset is_45
-
-	${git} "${DIR}/patches/beaglebone/abbbi/0005-ARM-dts-add-Arrow-BeagleBone-Black-Industrial-dts.patch"
+	${git} "${DIR}/patches/beaglebone/abbbi/0003-ARM-dts-add-Arrow-BeagleBone-Black-Industrial-dts.patch"
+	${git} "${DIR}/patches/beaglebone/abbbi/0004-drm-adihdmi-Drop-dummy-save-restore-hooks.patch"
+	${git} "${DIR}/patches/beaglebone/abbbi/0005-drm-adihdmi-Pass-name-to-drm_encoder_init.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=5
@@ -608,10 +773,11 @@ beaglebone () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/beaglebone/sancloud/0001-add-sancloud-beaglebone-enhanced.patch"
+	${git} "${DIR}/patches/beaglebone/sancloud/0001-add-am335x-sancloud-bbe.patch"
+	${git} "${DIR}/patches/beaglebone/sancloud/0002-am335x-sancloud-bbe-update-lps331ap-mpu6050-irq-pins.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
+		number=2
 		cleanup
 	fi
 
@@ -628,6 +794,24 @@ beaglebone () {
 		cleanup
 	fi
 
+	#echo "dir: beaglebone/CTAG"
+	#regenerate="enable"
+	#if [ "x${regenerate}" = "xenable" ] ; then
+	#	start_cleanup
+	#fi
+
+	#${git} "${DIR}/patches/beaglebone/CTAG/0001-Added-driver-and-device-tree-for-CTAG-face2-4-Audio-.patch"
+	#${git} "${DIR}/patches/beaglebone/CTAG/0002-Added-support-for-higher-sampling-rates-in-AD193X-dr.patch"
+	#${git} "${DIR}/patches/beaglebone/CTAG/0003-Added-support-for-AD193X-and-CTAG-face2-4-Audio-Card.patch"
+	#${git} "${DIR}/patches/beaglebone/CTAG/0004-Modified-ASOC-platform-driver-for-McASP-to-use-async.patch"
+	#${git} "${DIR}/patches/beaglebone/CTAG/0005-Changed-descriptions-in-files-belonging-to-CTAG-face.patch"
+	#${git} "${DIR}/patches/beaglebone/CTAG/0006-add-black-version-of-ctag-face-pass-uboot-cape-ctag-.patch"
+
+	#if [ "x${regenerate}" = "xenable" ] ; then
+	#	number=6
+	#	cleanup
+	#fi
+
 	echo "dir: beaglebone/capes"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -638,63 +822,93 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/capes/0002-ARM-dts-am335x-boneblack-enable-wl1835mod-cape-suppo.patch"
 	${git} "${DIR}/patches/beaglebone/capes/0003-add-am335x-boneblack-bbbmini.dts.patch"
 	${git} "${DIR}/patches/beaglebone/capes/0004-add-lcd-am335x-boneblack-bbb-exp-c.dtb-am335x-bonebl.patch"
+	${git} "${DIR}/patches/beaglebone/capes/0005-bb-audio-cape.patch"
 
 	#Replicape use am335x-boneblack-overlay.dtb???
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=4
+		number=5
 		cleanup
 	fi
 
-	echo "dir: beaglebone/rs485"
+#	echo "dir: beaglebone/rs485"
+#	#regenerate="enable"
+#	if [ "x${regenerate}" = "xenable" ] ; then
+#		start_cleanup
+#	fi
+
+#	#[PATCH v8 0/3] tty: Introduce software RS485 direction control support
+#	${git} "${DIR}/patches/beaglebone/rs485/0001-tty-Move-serial8250_stop_rx-in-front-of-serial8250_s.patch"
+#	${git} "${DIR}/patches/beaglebone/rs485/0002-tty-Add-software-emulated-RS485-support-for-8250.patch"
+#	${git} "${DIR}/patches/beaglebone/rs485/0003-tty-8250_omap-Use-software-emulated-RS485-direction-.patch"
+
+#	if [ "x${regenerate}" = "xenable" ] ; then
+#		number=3
+#		cleanup
+#	fi
+
+	echo "dir: beaglebone/mctrl_gpio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+		#[RFC v2 0/5] tty/serial/8250: add MCTRL_GPIO support
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0001-tty-serial-8250-fix-RS485-half-duplex-RX.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0002-tty-serial-8250-make-UART_MCR-register-access-consis.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0003-serial-mctrl_gpio-add-modem-control-read-routine.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0004-serial-mctrl_gpio-add-IRQ-locking.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0005-tty-serial-8250-use-mctrl_gpio-helpers.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=5
+		cleanup
+	fi
+
+	echo "dir: beaglebone/jtag"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
 
-	#[PATCH v8 0/3] tty: Introduce software RS485 direction control support
-	${git} "${DIR}/patches/beaglebone/rs485/0001-tty-Move-serial8250_stop_rx-in-front-of-serial8250_s.patch"
-	${git} "${DIR}/patches/beaglebone/rs485/0002-tty-Add-software-emulated-RS485-support-for-8250.patch"
-	${git} "${DIR}/patches/beaglebone/rs485/0003-tty-8250_omap-Use-software-emulated-RS485-direction-.patch"
+	${git} "${DIR}/patches/beaglebone/jtag/0001-add-jtag-clock-pinmux.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=3
+		number=1
 		cleanup
 	fi
 
-	echo "dir: beaglebone/tilcdc"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
+	if [ "x${merged_in_4_6}" = "xenable" ] ; then
+		echo "dir: beaglebone/tilcdc"
+		#merged in 4.6.0-rc0
+		${git} "${DIR}/patches/beaglebone/tilcdc/0001-drm-tilcdc-rewrite-pixel-clock-calculation.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0002-drm-tilcdc-verify-fb-pitch.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0003-drm-tilcdc-adopt-pinctrl-support.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0004-drm-tilcdc-fix-kernel-panic-on-suspend-when-no-hdmi-.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0005-drm-tilcdc-make-frame_done-interrupt-active-at-all-t.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0006-drm-tilcdc-disable-the-lcd-controller-dma-engine-whe.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0007-drm-tilcdc-Implement-dma-buf-support-for-tilcdc.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0008-drm-tilcdc-fix-build-error-when-CONFIG_CPU_FREQ.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0009-drm-tilcdc-Allocate-register-storage-based-on-the-ac.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0010-drm-tilcdc-cleanup-runtime-PM-handling.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0011-drm-tilcdc-disable-crtc-on-unload.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0012-drm-tilcdc-split-reset-to-a-separate-function.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0013-drm-tilcdc-remove-broken-error-handling.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0014-drm-tilcdc-cleanup-irq-handling.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0015-drm-tilcdc-Get-rid-of-complex-ping-pong-mechanism.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0016-drm-tilcdc-Do-not-update-the-next-frame-buffer-close.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0017-drm-tilcdc-Fix-interrupt-enable-disable-code-for-ver.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0018-drm-tilcdc-Remove-the-duplicate-LCDC_INT_ENABLE_SET_.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0019-drm-tilcdc-Add-prints-on-sync-lost-and-FIFO-underrun.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0020-drm-tilcdc-Disable-sync-lost-interrupt-if-it-fires-o.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0021-drm-tilcdc-Initialize-crtc-port.patch"
+		${git} "${DIR}/patches/beaglebone/tilcdc/0022-drm-tilcdc-Use-devm_kzalloc-and-devm_kcalloc-for-pri.patch"
 	fi
 
-	${git} "${DIR}/patches/beaglebone/tilcdc/0001-drm-tilcdc-rewrite-pixel-clock-calculation.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0002-drm-tilcdc-verify-fb-pitch.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0003-drm-tilcdc-adopt-pinctrl-support.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0004-drm-tilcdc-fix-kernel-panic-on-suspend-when-no-hdmi-.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0005-drm-tilcdc-make-frame_done-interrupt-active-at-all-t.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0006-drm-tilcdc-disable-the-lcd-controller-dma-engine-whe.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0007-drm-tilcdc-Implement-dma-buf-support-for-tilcdc.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0008-drm-tilcdc-fix-build-error-when-CONFIG_CPU_FREQ.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0009-drm-tilcdc-Allocate-register-storage-based-on-the-ac.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0010-drm-tilcdc-cleanup-runtime-PM-handling.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0011-drm-tilcdc-disable-crtc-on-unload.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0012-drm-tilcdc-split-reset-to-a-separate-function.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0013-drm-tilcdc-remove-broken-error-handling.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0014-drm-tilcdc-cleanup-irq-handling.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0015-drm-tilcdc-Get-rid-of-complex-ping-pong-mechanism.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0016-drm-tilcdc-Do-not-update-the-next-frame-buffer-close.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0017-drm-tilcdc-Fix-interrupt-enable-disable-code-for-ver.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0018-drm-tilcdc-Remove-the-duplicate-LCDC_INT_ENABLE_SET_.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0019-drm-tilcdc-Add-prints-on-sync-lost-and-FIFO-underrun.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0020-drm-tilcdc-Disable-sync-lost-interrupt-if-it-fires-o.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0021-drm-tilcdc-Initialize-crtc-port.patch"
-	${git} "${DIR}/patches/beaglebone/tilcdc/0022-drm-tilcdc-Use-devm_kzalloc-and-devm_kcalloc-for-pri.patch"
+	#[PATCH v2 0/3] Recover from sync lost error flood by resetting the LCDC
+	${git} "${DIR}/patches/beaglebone/tilcdc/0023-drm-tilcdc-Write-to-LCDC_END_OF_INT_IND_REG-at-the-e.patch"
+	${git} "${DIR}/patches/beaglebone/tilcdc/0024-drm-tilcdc-Move-waiting-of-LCDC_FRAME_DONE-IRQ-into-.patch"
+	${git} "${DIR}/patches/beaglebone/tilcdc/0025-drm-tilcdc-Recover-from-sync-lost-error-flood-by-res.patch"
 
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=22
-		cleanup
-	fi
 
 	#This has to be last...
 	echo "dir: beaglebone/dtbs"
@@ -742,8 +956,12 @@ beaglebone () {
 		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
 
 		device="am335x-sancloud-bbe.dtb" ; dtb_makefile_append
+
+		#device="am335x-boneblack-ctag-face.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-ctag-face.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
