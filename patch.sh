@@ -186,7 +186,7 @@ local_patch () {
 }
 
 #external_git
-#aufs4
+aufs4
 #rt
 #local_patch
 
