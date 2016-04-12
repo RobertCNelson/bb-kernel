@@ -184,7 +184,6 @@ rt () {
 	fi
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
-	${git} "${DIR}/patches/rt/0001-revert-drivers-block-zram-Replace-bit-spinlocks-with.patch"
 }
 
 local_patch () {
@@ -251,7 +250,7 @@ patch_backports (){
 }
 
 lts44_backports () {
-	backport_tag="v4.6-rc2"
+	backport_tag="v4.6-rc3"
 
 	subsystem="tty"
 	#regenerate="enable"
