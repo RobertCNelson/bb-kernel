@@ -1,12 +1,11 @@
-From 3e4e0e8a7019fb20a65ec8d6e4e98cfab98867d5 Mon Sep 17 00:00:00 2001
+From 72bb0938ac26055fe58cfcedd1d3e49ecb8b224a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 12 Apr 2016 13:21:50 -0500
-Subject: [PATCH] backports: iio: from: v4.6-rc3
+Date: Wed, 20 Apr 2016 11:56:58 -0500
+Subject: [PATCH] backports: iio: from: v4.6-rc4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  drivers/iio/accel/Kconfig                          |    2 +-
- drivers/iio/accel/bmc150-accel-core.c              |    7 +-
  drivers/iio/accel/mma8452.c                        |  206 ++-
  drivers/iio/accel/st_accel_core.c                  |   16 +
  drivers/iio/adc/Kconfig                            |   61 +-
@@ -38,7 +37,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/dac/mcp4725.c                          |   87 +-
  drivers/iio/dac/stx104.c                           |  152 ++
  drivers/iio/dac/vf610_dac.c                        |  298 ++++
- drivers/iio/gyro/bmg160_core.c                     |    9 +-
  drivers/iio/gyro/st_gyro_core.c                    |   15 +
  drivers/iio/health/Kconfig                         |   32 +-
  drivers/iio/health/Makefile                        |    2 +
@@ -61,7 +59,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/imu/inv_mpu6050/inv_mpu_ring.c         |   54 +-
  drivers/iio/imu/inv_mpu6050/inv_mpu_spi.c          |   98 ++
  drivers/iio/imu/inv_mpu6050/inv_mpu_trigger.c      |   32 +-
- drivers/iio/industrialio-buffer.c                  |   60 +-
+ drivers/iio/industrialio-buffer.c                  |   59 +-
  drivers/iio/industrialio-core.c                    |    1 +
  drivers/iio/light/apds9960.c                       |    3 +-
  drivers/iio/light/bh1750.c                         |    2 +-
@@ -74,7 +72,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/magnetometer/hmc5843_core.c            |  686 ++++++++
  drivers/iio/magnetometer/hmc5843_i2c.c             |  103 ++
  drivers/iio/magnetometer/hmc5843_spi.c             |  100 ++
- drivers/iio/magnetometer/st_magn.h                 |    1 +
  drivers/iio/magnetometer/st_magn_core.c            |    4 +
  drivers/iio/potentiometer/Kconfig                  |   12 +
  drivers/iio/potentiometer/Makefile                 |    1 +
@@ -139,7 +136,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/mfd/palmas.h                         |    3 +
  include/linux/platform_data/ad5761.h               |   44 +
  include/uapi/linux/iio/types.h                     |    1 +
- 134 files changed, 10368 insertions(+), 1151 deletions(-)
+ 131 files changed, 10357 insertions(+), 1144 deletions(-)
  create mode 100644 drivers/iio/adc/at91-sama5d2_adc.c
  create mode 100644 drivers/iio/adc/fsl-imx25-gcq.c
  create mode 100644 drivers/iio/adc/mxs-lradc.c
@@ -178,44 +175,6 @@ index 833ea9d..b0d3ecf 100644
  
  	  To compile this driver as a module, choose M here: the module
  	  will be called mma8452.
-diff --git a/drivers/iio/accel/bmc150-accel-core.c b/drivers/iio/accel/bmc150-accel-core.c
-index c73331f7..2072a31 100644
---- a/drivers/iio/accel/bmc150-accel-core.c
-+++ b/drivers/iio/accel/bmc150-accel-core.c
-@@ -547,7 +547,7 @@ static int bmc150_accel_get_axis(struct bmc150_accel_data *data,
- {
- 	int ret;
- 	int axis = chan->scan_index;
--	unsigned int raw_val;
-+	__le16 raw_val;
- 
- 	mutex_lock(&data->mutex);
- 	ret = bmc150_accel_set_power_state(data, true);
-@@ -557,14 +557,14 @@ static int bmc150_accel_get_axis(struct bmc150_accel_data *data,
- 	}
- 
- 	ret = regmap_bulk_read(data->regmap, BMC150_ACCEL_AXIS_TO_REG(axis),
--			       &raw_val, 2);
-+			       &raw_val, sizeof(raw_val));
- 	if (ret < 0) {
- 		dev_err(data->dev, "Error reading axis %d\n", axis);
- 		bmc150_accel_set_power_state(data, false);
- 		mutex_unlock(&data->mutex);
- 		return ret;
- 	}
--	*val = sign_extend32(raw_val >> chan->scan_type.shift,
-+	*val = sign_extend32(le16_to_cpu(raw_val) >> chan->scan_type.shift,
- 			     chan->scan_type.realbits - 1);
- 	ret = bmc150_accel_set_power_state(data, false);
- 	mutex_unlock(&data->mutex);
-@@ -988,6 +988,7 @@ static const struct iio_event_spec bmc150_accel_event = {
- 		.realbits = (bits),					\
- 		.storagebits = 16,					\
- 		.shift = 16 - (bits),					\
-+		.endianness = IIO_LE,					\
- 	},								\
- 	.event_spec = &bmc150_accel_event,				\
- 	.num_event_specs = 1						\
 diff --git a/drivers/iio/accel/mma8452.c b/drivers/iio/accel/mma8452.c
 index ccc632a..7f4994f 100644
 --- a/drivers/iio/accel/mma8452.c
@@ -7199,7 +7158,7 @@ index 0000000..174f4b7
 +MODULE_LICENSE("GPL v2");
 diff --git a/drivers/iio/dac/vf610_dac.c b/drivers/iio/dac/vf610_dac.c
 new file mode 100644
-index 0000000..c4ec7779
+index 0000000..c4ec777
 --- /dev/null
 +++ b/drivers/iio/dac/vf610_dac.c
 @@ -0,0 +1,298 @@
@@ -7501,54 +7460,6 @@ index 0000000..c4ec7779
 +MODULE_AUTHOR("Sanchayan Maity <sanchayan.maity@toradex.com>");
 +MODULE_DESCRIPTION("Freescale VF610 DAC driver");
 +MODULE_LICENSE("GPL v2");
-diff --git a/drivers/iio/gyro/bmg160_core.c b/drivers/iio/gyro/bmg160_core.c
-index bbce3b0..4dac567 100644
---- a/drivers/iio/gyro/bmg160_core.c
-+++ b/drivers/iio/gyro/bmg160_core.c
-@@ -452,7 +452,7 @@ static int bmg160_get_temp(struct bmg160_data *data, int *val)
- static int bmg160_get_axis(struct bmg160_data *data, int axis, int *val)
- {
- 	int ret;
--	unsigned int raw_val;
-+	__le16 raw_val;
- 
- 	mutex_lock(&data->mutex);
- 	ret = bmg160_set_power_state(data, true);
-@@ -462,7 +462,7 @@ static int bmg160_get_axis(struct bmg160_data *data, int axis, int *val)
- 	}
- 
- 	ret = regmap_bulk_read(data->regmap, BMG160_AXIS_TO_REG(axis), &raw_val,
--			       2);
-+			       sizeof(raw_val));
- 	if (ret < 0) {
- 		dev_err(data->dev, "Error reading axis %d\n", axis);
- 		bmg160_set_power_state(data, false);
-@@ -470,7 +470,7 @@ static int bmg160_get_axis(struct bmg160_data *data, int axis, int *val)
- 		return ret;
- 	}
- 
--	*val = sign_extend32(raw_val, 15);
-+	*val = sign_extend32(le16_to_cpu(raw_val), 15);
- 	ret = bmg160_set_power_state(data, false);
- 	mutex_unlock(&data->mutex);
- 	if (ret < 0)
-@@ -733,6 +733,7 @@ static const struct iio_event_spec bmg160_event = {
- 		.sign = 's',						\
- 		.realbits = 16,					\
- 		.storagebits = 16,					\
-+		.endianness = IIO_LE,					\
- 	},								\
- 	.event_spec = &bmg160_event,					\
- 	.num_event_specs = 1						\
-@@ -780,7 +781,7 @@ static irqreturn_t bmg160_trigger_handler(int irq, void *p)
- 			mutex_unlock(&data->mutex);
- 			goto err;
- 		}
--		data->buffer[i++] = ret;
-+		data->buffer[i++] = val;
- 	}
- 	mutex_unlock(&data->mutex);
- 
 diff --git a/drivers/iio/gyro/st_gyro_core.c b/drivers/iio/gyro/st_gyro_core.c
 index 02eddce..110f95b 100644
 --- a/drivers/iio/gyro/st_gyro_core.c
@@ -11247,7 +11158,7 @@ index 844610c..e8818d4 100644
  	iio_trigger_set_drvdata(st->trig, indio_dev);
  
 diff --git a/drivers/iio/industrialio-buffer.c b/drivers/iio/industrialio-buffer.c
-index 139ae91..90462fc 100644
+index 5b6abc5..90462fc 100644
 --- a/drivers/iio/industrialio-buffer.c
 +++ b/drivers/iio/industrialio-buffer.c
 @@ -512,33 +512,41 @@ static ssize_t iio_buffer_show_enable(struct device *dev,
@@ -11306,15 +11217,7 @@ index 139ae91..90462fc 100644
  		bytes = ALIGN(bytes, length);
  		bytes += length;
  	}
-@@ -645,6 +653,7 @@ static int iio_verify_update(struct iio_dev *indio_dev,
- 	unsigned int modes;
- 
- 	memset(config, 0, sizeof(*config));
-+	config->watermark = ~0;
- 
- 	/*
- 	 * If there is just one buffer and we are removing it there is nothing
-@@ -1288,7 +1297,6 @@ static int iio_buffer_add_demux(struct iio_buffer *buffer,
+@@ -1289,7 +1297,6 @@ static int iio_buffer_add_demux(struct iio_buffer *buffer,
  static int iio_buffer_update_demux(struct iio_dev *indio_dev,
  				   struct iio_buffer *buffer)
  {
@@ -11322,7 +11225,7 @@ index 139ae91..90462fc 100644
  	int ret, in_ind = -1, out_ind, length;
  	unsigned in_loc = 0, out_loc = 0;
  	struct iio_demux_table *p = NULL;
-@@ -1315,21 +1323,11 @@ static int iio_buffer_update_demux(struct iio_dev *indio_dev,
+@@ -1316,21 +1323,11 @@ static int iio_buffer_update_demux(struct iio_dev *indio_dev,
  			in_ind = find_next_bit(indio_dev->active_scan_mask,
  					       indio_dev->masklength,
  					       in_ind + 1);
@@ -11346,7 +11249,7 @@ index 139ae91..90462fc 100644
  		out_loc = roundup(out_loc, length);
  		in_loc = roundup(in_loc, length);
  		ret = iio_buffer_add_demux(buffer, &p, in_loc, out_loc, length);
-@@ -1340,13 +1338,7 @@ static int iio_buffer_update_demux(struct iio_dev *indio_dev,
+@@ -1341,13 +1338,7 @@ static int iio_buffer_update_demux(struct iio_dev *indio_dev,
  	}
  	/* Relies on scan_timestamp being last */
  	if (buffer->scan_timestamp) {
@@ -12716,18 +12619,6 @@ index 0000000..535f03a
 +MODULE_AUTHOR("Josef Gajdusek <atx@atx.name>");
 +MODULE_DESCRIPTION("HMC5983 SPI driver");
 +MODULE_LICENSE("GPL");
-diff --git a/drivers/iio/magnetometer/st_magn.h b/drivers/iio/magnetometer/st_magn.h
-index 06a4d9c..9daca46 100644
---- a/drivers/iio/magnetometer/st_magn.h
-+++ b/drivers/iio/magnetometer/st_magn.h
-@@ -44,6 +44,7 @@ static inline int st_magn_allocate_ring(struct iio_dev *indio_dev)
- static inline void st_magn_deallocate_ring(struct iio_dev *indio_dev)
- {
- }
-+#define ST_MAGN_TRIGGER_SET_STATE NULL
- #endif /* CONFIG_IIO_BUFFER */
- 
- #endif /* ST_MAGN_H */
 diff --git a/drivers/iio/magnetometer/st_magn_core.c b/drivers/iio/magnetometer/st_magn_core.c
 index b27f014..501f858 100644
 --- a/drivers/iio/magnetometer/st_magn_core.c
