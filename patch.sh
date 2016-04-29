@@ -55,7 +55,12 @@ start_cleanup () {
 
 cleanup () {
 	if [ "${number}" ] ; then
-		git format-patch -${number} -o ${DIR}/patches/
+		if [ "x${wdir}" = "x" ] ; then
+			git format-patch -${number} -o ${DIR}/patches/
+		else
+			git format-patch -${number} -o ${DIR}/patches/${wdir}/
+			unset wdir
+		fi
 	fi
 	exit 2
 }
