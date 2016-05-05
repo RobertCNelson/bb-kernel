@@ -233,11 +233,7 @@ post_backports () {
 	fi
 
 	git add .
-	if [ ! "x${backport_tag}" = "x" ] ; then
-		git commit -a -m "backports: ${subsystem}: from: ${backport_tag}" -s
-	else
-		git commit -a -m "backports: ${subsystem}" -s
-	fi
+	git commit -a -m "backports: ${subsystem}: from: linux.git" -s
 	git format-patch -1 -o ../patches/backports/${subsystem}/
 
 	exit 2
@@ -245,15 +241,11 @@ post_backports () {
 
 patch_backports (){
 	echo "dir: backports/${subsystem}"
-	if [ ! "x${backport_tag}" = "x" ] ; then
-		${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-${backport_tag}.patch"
-	else
-		${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}.patch"
-	fi
+	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 lts44_backports () {
-	backport_tag="v4.6-rc4"
+	backport_tag="v4.6-rc6"
 
 	subsystem="tty"
 	#regenerate="enable"
@@ -842,15 +834,13 @@ beaglebone () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
-		#[RFC v2 0/5] tty/serial/8250: add MCTRL_GPIO support
-		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0001-tty-serial-8250-fix-RS485-half-duplex-RX.patch"
-		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0002-tty-serial-8250-make-UART_MCR-register-access-consis.patch"
-		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0003-serial-mctrl_gpio-add-modem-control-read-routine.patch"
-		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0004-serial-mctrl_gpio-add-IRQ-locking.patch"
-		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0005-tty-serial-8250-use-mctrl_gpio-helpers.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0001-tty-serial-8250-make-UART_MCR-register-access-consis.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0002-serial-mctrl_gpio-add-modem-control-read-routine.patch"
+		${git} "${DIR}/patches/beaglebone/mctrl_gpio/0003-serial-mctrl_gpio-add-IRQ-locking.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=5
+		wdir="beaglebone/mctrl_gpio"
+		number=3
 		cleanup
 	fi
 
