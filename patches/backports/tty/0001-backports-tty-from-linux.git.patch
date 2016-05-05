@@ -1,7 +1,7 @@
-From 5ed190f20bf2ad0ce225386982a08dbd6ff7bfa7 Mon Sep 17 00:00:00 2001
+From aade89864c89efc1e2a56498464678e3db9dce97 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 20 Apr 2016 11:36:46 -0500
-Subject: [PATCH] backports: tty: from: v4.6-rc4
+Date: Wed, 4 May 2016 20:24:44 -0500
+Subject: [PATCH] backports: tty: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -25,24 +25,24 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/8250/8250_mtk.c           |  16 +-
  drivers/tty/serial/8250/8250_of.c            | 348 +++++++++++++++++++
  drivers/tty/serial/8250/8250_omap.c          |  40 ++-
- drivers/tty/serial/8250/8250_pci.c           | 147 +++------
+ drivers/tty/serial/8250/8250_pci.c           | 147 +++-----
  drivers/tty/serial/8250/8250_pnp.c           |  48 +--
- drivers/tty/serial/8250/8250_port.c          | 469 +++++++++++++++++++-------
+ drivers/tty/serial/8250/8250_port.c          | 478 ++++++++++++++++++++-------
  drivers/tty/serial/8250/8250_uniphier.c      |  24 ++
- drivers/tty/serial/8250/Kconfig              |  63 +++-
+ drivers/tty/serial/8250/Kconfig              |  62 +++-
  drivers/tty/serial/8250/Makefile             |   3 +
  drivers/tty/serial/8250/serial_cs.c          |  90 ++---
  drivers/tty/serial/Kconfig                   |  77 ++---
  drivers/tty/serial/Makefile                  |   4 +-
  drivers/tty/serial/earlycon.c                | 127 +++++--
- drivers/tty/serial/nwpserial.c               | 477 ---------------------------
+ drivers/tty/serial/nwpserial.c               | 477 --------------------------
  drivers/tty/serial/of_serial.c               | 377 ---------------------
  include/asm-generic/vmlinux.lds.h            |   6 +-
  include/linux/of_fdt.h                       |   2 +-
  include/linux/serial_8250.h                  |   8 +
  include/linux/serial_core.h                  |  28 +-
  include/uapi/linux/serial.h                  |   1 +
- 37 files changed, 1681 insertions(+), 1452 deletions(-)
+ 37 files changed, 1689 insertions(+), 1452 deletions(-)
  create mode 100644 drivers/tty/serial/8250/8250_bcm2835aux.c
  create mode 100644 drivers/tty/serial/8250/8250_moxa.c
  create mode 100644 drivers/tty/serial/8250/8250_of.c
@@ -2275,7 +2275,7 @@ index 658b392..34f05ed 100644
  		uart.port.flags |= UPF_FIXED_PORT | UPF_FIXED_TYPE;
  		uart.port.type = PORT_8250_CIR;
 diff --git a/drivers/tty/serial/8250/8250_port.c b/drivers/tty/serial/8250/8250_port.c
-index a0b9e85..e213da0 100644
+index a0b9e85..00ad263 100644
 --- a/drivers/tty/serial/8250/8250_port.c
 +++ b/drivers/tty/serial/8250/8250_port.c
 @@ -35,9 +35,9 @@
@@ -2457,7 +2457,7 @@ index a0b9e85..e213da0 100644
  		       serial_index(port), old_capabilities,
  		       up->capabilities);
  	}
-@@ -1281,7 +1381,69 @@ static void autoconfig_irq(struct uart_8250_port *up)
+@@ -1281,7 +1381,78 @@ static void autoconfig_irq(struct uart_8250_port *up)
  	port->irq = (irq > 0) ? irq : 0;
  }
  
@@ -2484,9 +2484,18 @@ index a0b9e85..e213da0 100644
 +	/*
 +	 * Empty the RX FIFO, we are not interested in anything
 +	 * received during the half-duplex transmission.
++	 * Enable previously disabled RX interrupts.
 +	 */
-+	if (!(p->port.rs485.flags & SER_RS485_RX_DURING_TX))
++	if (!(p->port.rs485.flags & SER_RS485_RX_DURING_TX)) {
 +		serial8250_clear_fifos(p);
++
++		serial8250_rpm_get(p);
++
++		p->ier |= UART_IER_RLSI | UART_IER_RDI;
++		serial_port_out(&p->port, UART_IER, p->ier);
++
++		serial8250_rpm_put(p);
++	}
 +}
 +
 +static void serial8250_em485_handle_stop_tx(unsigned long arg)
@@ -2528,7 +2537,7 @@ index a0b9e85..e213da0 100644
  {
  	if (p->ier & UART_IER_THRI) {
  		p->ier &= ~UART_IER_THRI;
-@@ -1290,6 +1452,28 @@ static inline void __stop_tx(struct uart_8250_port *p)
+@@ -1290,6 +1461,28 @@ static inline void __stop_tx(struct uart_8250_port *p)
  	}
  }
  
@@ -2557,7 +2566,7 @@ index a0b9e85..e213da0 100644
  static void serial8250_stop_tx(struct uart_port *port)
  {
  	struct uart_8250_port *up = up_to_u8250p(port);
-@@ -1307,12 +1491,10 @@ static void serial8250_stop_tx(struct uart_port *port)
+@@ -1307,12 +1500,10 @@ static void serial8250_stop_tx(struct uart_port *port)
  	serial8250_rpm_put(up);
  }
  
@@ -2571,7 +2580,7 @@ index a0b9e85..e213da0 100644
  	if (up->dma && !up->dma->tx_dma(up))
  		return;
  
-@@ -1322,6 +1504,7 @@ static void serial8250_start_tx(struct uart_port *port)
+@@ -1322,6 +1513,7 @@ static void serial8250_start_tx(struct uart_port *port)
  
  		if (up->bugs & UART_BUG_TXEN) {
  			unsigned char lsr;
@@ -2579,7 +2588,7 @@ index a0b9e85..e213da0 100644
  			lsr = serial_in(up, UART_LSR);
  			up->lsr_saved_flags |= lsr & LSR_SAVE_FLAGS;
  			if (lsr & UART_LSR_THRE)
-@@ -1338,33 +1521,83 @@ static void serial8250_start_tx(struct uart_port *port)
+@@ -1338,33 +1530,83 @@ static void serial8250_start_tx(struct uart_port *port)
  	}
  }
  
@@ -2675,7 +2684,7 @@ index a0b9e85..e213da0 100644
  
  	/* no MSR capabilities */
  	if (up->bugs & UART_BUG_NOMSR)
-@@ -1389,81 +1622,85 @@ static void serial8250_enable_ms(struct uart_port *port)
+@@ -1389,81 +1631,85 @@ static void serial8250_enable_ms(struct uart_port *port)
  	serial8250_rpm_put(up);
  }
  
@@ -2824,7 +2833,7 @@ index a0b9e85..e213da0 100644
  	return lsr;
  }
  EXPORT_SYMBOL_GPL(serial8250_rx_chars);
-@@ -1496,11 +1733,9 @@ void serial8250_tx_chars(struct uart_8250_port *up)
+@@ -1496,11 +1742,9 @@ void serial8250_tx_chars(struct uart_8250_port *up)
  		port->icount.tx++;
  		if (uart_circ_empty(xmit))
  			break;
@@ -2839,7 +2848,7 @@ index a0b9e85..e213da0 100644
  	} while (--count > 0);
  
  	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
-@@ -1729,6 +1964,7 @@ static void wait_for_xmitr(struct uart_8250_port *up, int bits)
+@@ -1729,6 +1973,7 @@ static void wait_for_xmitr(struct uart_8250_port *up, int bits)
  	/* Wait up to 1s for flow control if necessary */
  	if (up->port.flags & UPF_CONS_FLOW) {
  		unsigned int tmout;
@@ -2847,7 +2856,7 @@ index a0b9e85..e213da0 100644
  		for (tmout = 1000000; tmout; tmout--) {
  			unsigned int msr = serial_in(up, UART_MSR);
  			up->msr_saved_flags |= msr & MSR_SAVE_FLAGS;
-@@ -1962,23 +2198,23 @@ int serial8250_do_startup(struct uart_port *port)
+@@ -1962,23 +2207,23 @@ int serial8250_do_startup(struct uart_port *port)
  
  	serial8250_set_mctrl(port, port->mctrl);
  
@@ -2883,7 +2892,7 @@ index a0b9e85..e213da0 100644
  	 */
  	serial_port_out(port, UART_IER, UART_IER_THRI);
  	lsr = serial_port_in(port, UART_LSR);
-@@ -2061,8 +2297,12 @@ void serial8250_do_shutdown(struct uart_port *port)
+@@ -2061,8 +2306,12 @@ void serial8250_do_shutdown(struct uart_port *port)
  	/*
  	 * Disable interrupts from this port
  	 */
@@ -2896,7 +2905,7 @@ index a0b9e85..e213da0 100644
  
  	if (up->dma)
  		serial8250_release_dma(up);
-@@ -2228,9 +2468,9 @@ static void serial8250_set_divisor(struct uart_port *port, unsigned int baud,
+@@ -2228,9 +2477,9 @@ static void serial8250_set_divisor(struct uart_port *port, unsigned int baud,
  		serial_port_out(port, 0x2, quot_frac);
  }
  
@@ -2909,7 +2918,7 @@ index a0b9e85..e213da0 100644
  {
  	unsigned int tolerance = port->uartclk / 100;
  
-@@ -2247,7 +2487,7 @@ serial8250_get_baud_rate(struct uart_port *port, struct ktermios *termios,
+@@ -2247,7 +2496,7 @@ serial8250_get_baud_rate(struct uart_port *port, struct ktermios *termios,
  
  void
  serial8250_do_set_termios(struct uart_port *port, struct ktermios *termios,
@@ -2918,7 +2927,7 @@ index a0b9e85..e213da0 100644
  {
  	struct uart_8250_port *up = up_to_u8250p(port);
  	unsigned char cval;
-@@ -2457,6 +2697,7 @@ static int serial8250_request_std_resource(struct uart_8250_port *up)
+@@ -2457,6 +2706,7 @@ static int serial8250_request_std_resource(struct uart_8250_port *up)
  	case UPIO_TSI:
  	case UPIO_MEM32:
  	case UPIO_MEM32BE:
@@ -2926,7 +2935,7 @@ index a0b9e85..e213da0 100644
  	case UPIO_MEM:
  		if (!port->mapbase)
  			break;
-@@ -2494,6 +2735,7 @@ static void serial8250_release_std_resource(struct uart_8250_port *up)
+@@ -2494,6 +2744,7 @@ static void serial8250_release_std_resource(struct uart_8250_port *up)
  	case UPIO_TSI:
  	case UPIO_MEM32:
  	case UPIO_MEM32BE:
@@ -2934,7 +2943,7 @@ index a0b9e85..e213da0 100644
  	case UPIO_MEM:
  		if (!port->mapbase)
  			break;
-@@ -2558,8 +2800,7 @@ static int do_get_rxtrig(struct tty_port *port)
+@@ -2558,8 +2809,7 @@ static int do_get_rxtrig(struct tty_port *port)
  {
  	struct uart_state *state = container_of(port, struct uart_state, port);
  	struct uart_port *uport = state->uart_port;
@@ -2944,7 +2953,7 @@ index a0b9e85..e213da0 100644
  
  	if (!(up->capabilities & UART_CAP_FIFO) || uport->fifosize <= 1)
  		return -EINVAL;
-@@ -2595,8 +2836,7 @@ static int do_set_rxtrig(struct tty_port *port, unsigned char bytes)
+@@ -2595,8 +2845,7 @@ static int do_set_rxtrig(struct tty_port *port, unsigned char bytes)
  {
  	struct uart_state *state = container_of(port, struct uart_state, port);
  	struct uart_port *uport = state->uart_port;
@@ -2954,7 +2963,7 @@ index a0b9e85..e213da0 100644
  	int rxtrig;
  
  	if (!(up->capabilities & UART_CAP_FIFO) || uport->fifosize <= 1 ||
-@@ -2720,8 +2960,7 @@ serial8250_verify_port(struct uart_port *port, struct serial_struct *ser)
+@@ -2720,8 +2969,7 @@ serial8250_verify_port(struct uart_port *port, struct serial_struct *ser)
  	return 0;
  }
  
@@ -2964,7 +2973,7 @@ index a0b9e85..e213da0 100644
  {
  	int type = port->type;
  
-@@ -2844,9 +3083,9 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -2844,9 +3092,9 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  
  	serial8250_rpm_get(up);
  
@@ -3019,7 +3028,7 @@ index 245edbb..1b7bd26 100644
   * The register map is slightly different from that of 8250.
   * IO callbacks must be overridden for correct access to FCR, LCR, and MCR.
 diff --git a/drivers/tty/serial/8250/Kconfig b/drivers/tty/serial/8250/Kconfig
-index 6412f14..64742a0 100644
+index 6412f14..4d7cb9c 100644
 --- a/drivers/tty/serial/8250/Kconfig
 +++ b/drivers/tty/serial/8250/Kconfig
 @@ -262,7 +262,12 @@ config SERIAL_8250_RSA
@@ -3067,15 +3076,7 @@ index 6412f14..64742a0 100644
  config SERIAL_8250_FSL
  	bool
  	depends on SERIAL_8250_CONSOLE
-@@ -295,6 +324,7 @@ config SERIAL_8250_EM
- config SERIAL_8250_RT288X
- 	bool "Ralink RT288x/RT305x/RT3662/RT3883 serial port support"
- 	depends on SERIAL_8250
-+	depends on MIPS || COMPILE_TEST
- 	default y if MIPS_ALCHEMY || SOC_RT288X || SOC_RT305X || SOC_RT3883 || SOC_MT7620
- 	help
- 	  Selecting this option will add support for the alternate register
-@@ -346,7 +376,7 @@ config SERIAL_8250_LPC18XX
+@@ -346,7 +375,7 @@ config SERIAL_8250_LPC18XX
  	  serial port, say Y to this option. If unsure, say Y.
  
  config SERIAL_8250_MT6577
@@ -3084,7 +3085,7 @@ index 6412f14..64742a0 100644
  	depends on SERIAL_8250 && ARCH_MEDIATEK
  	help
  	  If you have a Mediatek based board and want to use the
-@@ -360,10 +390,10 @@ config SERIAL_8250_UNIPHIER
+@@ -360,10 +389,10 @@ config SERIAL_8250_UNIPHIER
  	  serial ports, say Y to this option. If unsure, say N.
  
  config SERIAL_8250_INGENIC
@@ -3099,7 +3100,7 @@ index 6412f14..64742a0 100644
  	help
  	  If you have a system using an Ingenic SoC and wish to make use of
  	  its UARTs, say Y to this option. If unsure, say N.
-@@ -372,9 +402,28 @@ config SERIAL_8250_MID
+@@ -372,9 +401,28 @@ config SERIAL_8250_MID
  	tristate "Support for serial ports on Intel MID platforms"
  	depends on SERIAL_8250 && PCI
  	select HSU_DMA if SERIAL_8250_DMA
@@ -4729,5 +4730,5 @@ index 25331f9..5d59c3e 100644
  #define UART_CLEAR_FIFO		0x01
  #define UART_USE_FIFO		0x02
 -- 
-2.8.0.rc3
+2.8.1
 
