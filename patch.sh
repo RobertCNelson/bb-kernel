@@ -245,7 +245,7 @@ patch_backports (){
 }
 
 lts44_backports () {
-	backport_tag="v4.6-rc6"
+	backport_tag="v4.6-rc7"
 
 	subsystem="tty"
 	#regenerate="enable"
@@ -339,9 +339,10 @@ lts44_backports () {
 	fi
 	if [ "x${merged_in_4_6}" = "xenable" ] ; then
 		#4.6.0-rc0
-		${git} "${DIR}/patches/lts44_backports/dmtimer/0004-pwm-omap-dmtimer-Fix-inaccurate-period-and-duty-cycl.patch"
-		${git} "${DIR}/patches/lts44_backports/dmtimer/0005-pwm-omap-dmtimer-Add-sanity-checking-for-load-and-ma.patch"
-		${git} "${DIR}/patches/lts44_backports/dmtimer/0006-pwm-omap-dmtimer-Round-load-and-match-values-rather-.patch"
+		#v4.5.4
+#		${git} "${DIR}/patches/lts44_backports/dmtimer/0004-pwm-omap-dmtimer-Fix-inaccurate-period-and-duty-cycl.patch"
+#		${git} "${DIR}/patches/lts44_backports/dmtimer/0005-pwm-omap-dmtimer-Add-sanity-checking-for-load-and-ma.patch"
+#		${git} "${DIR}/patches/lts44_backports/dmtimer/0006-pwm-omap-dmtimer-Round-load-and-match-values-rather-.patch"
 		${git} "${DIR}/patches/lts44_backports/dmtimer/0007-pwm-omap-dmtimer-Add-debug-message-for-effective-per.patch"
 	fi
 }
