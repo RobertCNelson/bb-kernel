@@ -1,6 +1,6 @@
-From e4e4e46573201955bb6824d9b65b8727ea9328eb Mon Sep 17 00:00:00 2001
+From 944abded8305e2baec12a77b9999280639f7089e Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 4 May 2016 20:23:32 -0500
+Date: Wed, 11 May 2016 16:34:37 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -43,7 +43,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm64/Kconfig                                 |    3 +-
  arch/arm64/include/asm/thread_info.h               |    6 +-
  arch/arm64/kernel/asm-offsets.c                    |    1 +
- arch/arm64/kernel/debug-monitors.c                 |   21 +-
  arch/arm64/kernel/entry.S                          |   13 +-
  arch/mips/Kconfig                                  |    2 +-
  arch/mips/kvm/mips.c                               |    8 +-
@@ -400,7 +399,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/core/pcm_native.c                            |    8 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   17 +-
- 395 files changed, 12471 insertions(+), 3380 deletions(-)
+ 394 files changed, 12460 insertions(+), 3370 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -729,7 +728,7 @@ index 0000000..6f2aeab
 +
 +These data are also reset when the wakeup histogram is reset.
 diff --git a/Makefile b/Makefile
-index 0722cdf..0de0162 100644
+index 5b5f462..f410a3f 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -767,6 +767,9 @@ KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
@@ -2003,58 +2002,6 @@ index 25de8b2..c503840 100644
    DEFINE(TI_ADDR_LIMIT,		offsetof(struct thread_info, addr_limit));
    DEFINE(TI_TASK,		offsetof(struct thread_info, task));
    DEFINE(TI_CPU,		offsetof(struct thread_info, cpu));
-diff --git a/arch/arm64/kernel/debug-monitors.c b/arch/arm64/kernel/debug-monitors.c
-index 8aee3ae..c1492ba 100644
---- a/arch/arm64/kernel/debug-monitors.c
-+++ b/arch/arm64/kernel/debug-monitors.c
-@@ -186,20 +186,21 @@ static void clear_regs_spsr_ss(struct pt_regs *regs)
- 
- /* EL1 Single Step Handler hooks */
- static LIST_HEAD(step_hook);
--static DEFINE_RWLOCK(step_hook_lock);
-+static DEFINE_SPINLOCK(step_hook_lock);
- 
- void register_step_hook(struct step_hook *hook)
- {
--	write_lock(&step_hook_lock);
--	list_add(&hook->node, &step_hook);
--	write_unlock(&step_hook_lock);
-+	spin_lock(&step_hook_lock);
-+	list_add_rcu(&hook->node, &step_hook);
-+	spin_unlock(&step_hook_lock);
- }
- 
- void unregister_step_hook(struct step_hook *hook)
- {
--	write_lock(&step_hook_lock);
--	list_del(&hook->node);
--	write_unlock(&step_hook_lock);
-+	spin_lock(&step_hook_lock);
-+	list_del_rcu(&hook->node);
-+	spin_unlock(&step_hook_lock);
-+	synchronize_rcu();
- }
- 
- /*
-@@ -213,15 +214,15 @@ static int call_step_hook(struct pt_regs *regs, unsigned int esr)
- 	struct step_hook *hook;
- 	int retval = DBG_HOOK_ERROR;
- 
--	read_lock(&step_hook_lock);
-+	rcu_read_lock();
- 
--	list_for_each_entry(hook, &step_hook, node)	{
-+	list_for_each_entry_rcu(hook, &step_hook, node)	{
- 		retval = hook->fn(regs, esr);
- 		if (retval == DBG_HOOK_HANDLED)
- 			break;
- 	}
- 
--	read_unlock(&step_hook_lock);
-+	rcu_read_unlock();
- 
- 	return retval;
- }
 diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
 index 7ed3d75..dd8fd31 100644
 --- a/arch/arm64/kernel/entry.S
@@ -27852,7 +27799,7 @@ index 919d9d0..3bf86ec 100644
  
  #define TRACE_BUF_SIZE		1024
 diff --git a/kernel/trace/trace_events.c b/kernel/trace/trace_events.c
-index d202d99..0e508e9 100644
+index 996f0fd..4a48f97 100644
 --- a/kernel/trace/trace_events.c
 +++ b/kernel/trace/trace_events.c
 @@ -188,6 +188,8 @@ static int trace_define_common_fields(void)
@@ -29240,10 +29187,10 @@ index cbe6f0b..6871838 100644
  	}
  
 diff --git a/mm/compaction.c b/mm/compaction.c
-index de3e1e7..ba0f146 100644
+index 7881e07..ed1aaa9 100644
 --- a/mm/compaction.c
 +++ b/mm/compaction.c
-@@ -1443,10 +1443,12 @@ check_drain:
+@@ -1435,10 +1435,12 @@ check_drain:
  				cc->migrate_pfn & ~((1UL << cc->order) - 1);
  
  			if (cc->last_migrated_pfn < current_block_start) {
@@ -29463,7 +29410,7 @@ index f802c2d..b1b6f23 100644
  #ifdef finish_arch_post_lock_switch
  	finish_arch_post_lock_switch();
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index c69531a..4ea5d17 100644
+index 6cf5cad..230e6c89 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
 @@ -60,6 +60,7 @@
