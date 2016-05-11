@@ -1,6 +1,6 @@
-From 2d43e05e9c0c04b4313df1bc40032c877f062565 Mon Sep 17 00:00:00 2001
+From 4fa1530e1523cbbe0664c7918fecdd11192eaf6a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 4 May 2016 20:25:20 -0500
+Date: Wed, 11 May 2016 16:36:55 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -26,7 +26,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/adc/Kconfig                            |  106 +-
  drivers/iio/adc/Makefile                           |    9 +
  drivers/iio/adc/ad7793.c                           |    5 +-
- drivers/iio/adc/at91-sama5d2_adc.c                 |  508 ++++++
+ drivers/iio/adc/at91-sama5d2_adc.c                 |  510 ++++++
  drivers/iio/adc/at91_adc.c                         |    2 +-
  drivers/iio/adc/axp288_adc.c                       |    2 +-
  drivers/iio/adc/exynos_adc.c                       |  224 ++-
@@ -92,10 +92,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/imu/inv_mpu6050/Makefile               |    8 +-
  drivers/iio/imu/inv_mpu6050/inv_mpu_acpi.c         |   24 +-
  drivers/iio/imu/inv_mpu6050/inv_mpu_core.c         |  458 +++--
- drivers/iio/imu/inv_mpu6050/inv_mpu_i2c.c          |  208 +++
+ drivers/iio/imu/inv_mpu6050/inv_mpu_i2c.c          |  232 +++
  drivers/iio/imu/inv_mpu6050/inv_mpu_iio.h          |   37 +-
  drivers/iio/imu/inv_mpu6050/inv_mpu_ring.c         |   54 +-
- drivers/iio/imu/inv_mpu6050/inv_mpu_spi.c          |   98 ++
+ drivers/iio/imu/inv_mpu6050/inv_mpu_spi.c          |   99 ++
  drivers/iio/imu/inv_mpu6050/inv_mpu_trigger.c      |   32 +-
  drivers/iio/imu/kmx61.c                            |   24 +-
  drivers/iio/industrialio-buffer.c                  |  118 +-
@@ -195,7 +195,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/mfd/palmas.h                         |   78 +-
  include/linux/platform_data/ad5761.h               |   44 +
  include/uapi/linux/iio/types.h                     |    1 +
- 190 files changed, 18983 insertions(+), 1398 deletions(-)
+ 190 files changed, 19010 insertions(+), 1398 deletions(-)
  create mode 100644 drivers/iio/accel/mma7455.h
  create mode 100644 drivers/iio/accel/mma7455_core.c
  create mode 100644 drivers/iio/accel/mma7455_i2c.c
@@ -2076,10 +2076,10 @@ index 4d960d3..7b07bb6 100644
  				/* 1170mV / 0.81 mV/C / 2^23 */
 diff --git a/drivers/iio/adc/at91-sama5d2_adc.c b/drivers/iio/adc/at91-sama5d2_adc.c
 new file mode 100644
-index 0000000..dbee13a
+index 0000000..2e154cb
 --- /dev/null
 +++ b/drivers/iio/adc/at91-sama5d2_adc.c
-@@ -0,0 +1,508 @@
+@@ -0,0 +1,510 @@
 +/*
 + * Atmel ADC driver for SAMA5D2 devices and compatible.
 + *
@@ -2532,6 +2532,8 @@ index 0000000..dbee13a
 +	ret = clk_prepare_enable(st->per_clk);
 +	if (ret)
 +		goto vref_disable;
++
++	platform_set_drvdata(pdev, indio_dev);
 +
 +	ret = iio_device_register(indio_dev);
 +	if (ret < 0)
@@ -18114,10 +18116,10 @@ index f0e0609..d192953 100644
  MODULE_DESCRIPTION("Invensense device MPU6050 driver");
 diff --git a/drivers/iio/imu/inv_mpu6050/inv_mpu_i2c.c b/drivers/iio/imu/inv_mpu6050/inv_mpu_i2c.c
 new file mode 100644
-index 0000000..f581256
+index 0000000..5ee4e0d
 --- /dev/null
 +++ b/drivers/iio/imu/inv_mpu6050/inv_mpu_i2c.c
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,232 @@
 +/*
 +* Copyright (C) 2012 Invensense, Inc.
 +*
@@ -18224,6 +18226,19 @@ index 0000000..f581256
 +	return 0;
 +}
 +
++static const char *inv_mpu_match_acpi_device(struct device *dev, int *chip_id)
++{
++	const struct acpi_device_id *id;
++
++	id = acpi_match_device(dev->driver->acpi_match_table, dev);
++	if (!id)
++		return NULL;
++
++	*chip_id = (int)id->driver_data;
++
++	return dev_name(dev);
++}
++
 +/**
 + *  inv_mpu_probe() - probe function.
 + *  @client:          i2c client.
@@ -18235,13 +18250,24 @@ index 0000000..f581256
 +			 const struct i2c_device_id *id)
 +{
 +	struct inv_mpu6050_state *st;
-+	int result;
-+	const char *name = id ? id->name : NULL;
++	int result, chip_type;
 +	struct regmap *regmap;
++	const char *name;
 +
 +	if (!i2c_check_functionality(client->adapter,
 +				     I2C_FUNC_SMBUS_I2C_BLOCK))
 +		return -EOPNOTSUPP;
++
++	if (id) {
++		chip_type = (int)id->driver_data;
++		name = id->name;
++	} else if (ACPI_HANDLE(&client->dev)) {
++		name = inv_mpu_match_acpi_device(&client->dev, &chip_type);
++		if (!name)
++			return -ENODEV;
++	} else {
++		return -ENOSYS;
++	}
 +
 +	regmap = devm_regmap_init_i2c(client, &inv_mpu_regmap_config);
 +	if (IS_ERR(regmap)) {
@@ -18251,7 +18277,7 @@ index 0000000..f581256
 +	}
 +
 +	result = inv_mpu_core_probe(regmap, client->irq, name,
-+				    NULL, id->driver_data);
++				    NULL, chip_type);
 +	if (result < 0)
 +		return result;
 +
@@ -18584,10 +18610,10 @@ index ba27e27..d070062 100644
  		fifo_count -= bytes_per_datum;
 diff --git a/drivers/iio/imu/inv_mpu6050/inv_mpu_spi.c b/drivers/iio/imu/inv_mpu6050/inv_mpu_spi.c
 new file mode 100644
-index 0000000..dea6c43
+index 0000000..7bcb8d8
 --- /dev/null
 +++ b/drivers/iio/imu/inv_mpu6050/inv_mpu_spi.c
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,99 @@
 +/*
 +* Copyright (C) 2015 Intel Corporation Inc.
 +*
@@ -18636,6 +18662,7 @@ index 0000000..dea6c43
 +	struct regmap *regmap;
 +	const struct spi_device_id *id = spi_get_device_id(spi);
 +	const char *name = id ? id->name : NULL;
++	const int chip_type = id ? id->driver_data : 0;
 +
 +	regmap = devm_regmap_init_spi(spi, &inv_mpu_regmap_config);
 +	if (IS_ERR(regmap)) {
@@ -18645,7 +18672,7 @@ index 0000000..dea6c43
 +	}
 +
 +	return inv_mpu_core_probe(regmap, spi->irq, name,
-+				  inv_mpu_i2c_disable, id->driver_data);
++				  inv_mpu_i2c_disable, chip_type);
 +}
 +
 +static int inv_mpu_remove(struct spi_device *spi)
@@ -20654,7 +20681,7 @@ index 2c72df4..dd03fe5 100644
 +obj-$(CONFIG_SENSORS_HMC5843_I2C)	+= hmc5843_i2c.o
 +obj-$(CONFIG_SENSORS_HMC5843_SPI)	+= hmc5843_spi.o
 diff --git a/drivers/iio/magnetometer/ak8975.c b/drivers/iio/magnetometer/ak8975.c
-index b13936d..9c5c9ef 100644
+index f2a7f72..0e931a9 100644
 --- a/drivers/iio/magnetometer/ak8975.c
 +++ b/drivers/iio/magnetometer/ak8975.c
 @@ -252,7 +252,7 @@ struct ak_def {
