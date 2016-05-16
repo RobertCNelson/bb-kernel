@@ -197,7 +197,7 @@ local_patch () {
 
 #external_git
 #aufs4
-#rt
+rt
 #local_patch
 
 reverts () {
