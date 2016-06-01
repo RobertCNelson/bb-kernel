@@ -203,8 +203,8 @@ pre_backports () {
 	echo "dir: backports/${subsystem}"
 
 	cd ~/linux-src/
-	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master
-	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
+	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		git checkout ${backport_tag} -b tmp
 	fi
@@ -215,8 +215,8 @@ pre_backports_tty () {
 	echo "dir: backports/${subsystem}"
 
 	cd ~/linux-src/
-	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master
-	git pull --no-edit git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
+	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		git checkout ${backport_tag} -b tmp
 		git revert --no-edit be7635e7287e0e8013af3c89a6354a9e0182594c
@@ -245,7 +245,7 @@ patch_backports (){
 }
 
 lts44_backports () {
-	backport_tag="v4.6-rc7"
+	backport_tag="v4.6.1"
 
 	subsystem="tty"
 	#regenerate="enable"

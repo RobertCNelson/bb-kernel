@@ -1,6 +1,6 @@
-From 1f7735b632381ed8e468b4f4b791a2f7475f7da2 Mon Sep 17 00:00:00 2001
+From 7574f70f8cc99391b21dfd6861d702b0a9f04186 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 11 May 2016 17:02:58 -0500
+Date: Wed, 1 Jun 2016 17:46:25 -0500
 Subject: [PATCH 3/5] merge: aufs4-mmap
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -15,10 +15,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/Makefile              |  2 +-
  mm/filemap.c             |  2 +-
  mm/memory.c              |  2 +-
- mm/mmap.c                | 17 +++++-----
+ mm/mmap.c                | 33 ++++++++++++++-----
  mm/nommu.c               | 10 +++---
  mm/prfile.c              | 86 ++++++++++++++++++++++++++++++++++++++++++++++++
- 13 files changed, 141 insertions(+), 23 deletions(-)
+ 13 files changed, 158 insertions(+), 22 deletions(-)
  create mode 100644 mm/prfile.c
 
 diff --git a/fs/proc/base.c b/fs/proc/base.c
@@ -92,10 +92,10 @@ index faacb0c..17b43be 100644
  		ino = inode->i_ino;
  		pgoff = (loff_t)vma->vm_pgoff << PAGE_SHIFT;
 diff --git a/include/linux/mm.h b/include/linux/mm.h
-index a6c240e..ac6b079 100644
+index e4e59f9..8ca1644 100644
 --- a/include/linux/mm.h
 +++ b/include/linux/mm.h
-@@ -1221,6 +1221,28 @@ static inline int fixup_user_fault(struct task_struct *tsk,
+@@ -1230,6 +1230,28 @@ static inline int fixup_user_fault(struct task_struct *tsk,
  }
  #endif
  
@@ -184,7 +184,7 @@ index da7a35d..f800f87 100644
  	if (page->mapping != inode->i_mapping) {
  		unlock_page(page);
 diff --git a/mm/memory.c b/mm/memory.c
-index 3345dcf..869aa2c 100644
+index c1aa0e4..e9cbbbe 100644
 --- a/mm/memory.c
 +++ b/mm/memory.c
 @@ -2082,7 +2082,7 @@ static inline int wp_page_reuse(struct mm_struct *mm,
@@ -197,7 +197,7 @@ index 3345dcf..869aa2c 100644
  
  	return VM_FAULT_WRITE;
 diff --git a/mm/mmap.c b/mm/mmap.c
-index 76d1ec2..fdd163e 100644
+index 76d1ec2..298bc71 100644
 --- a/mm/mmap.c
 +++ b/mm/mmap.c
 @@ -290,7 +290,7 @@ static struct vm_area_struct *remove_vma(struct vm_area_struct *vma)
@@ -246,28 +246,45 @@ index 76d1ec2..fdd163e 100644
  	unlink_anon_vmas(new);
   out_free_mpol:
  	mpol_put(vma_policy(new));
-@@ -2640,7 +2640,6 @@ SYSCALL_DEFINE5(remap_file_pages, unsigned long, start, unsigned long, size,
+@@ -2640,7 +2640,7 @@ SYSCALL_DEFINE5(remap_file_pages, unsigned long, start, unsigned long, size,
  	struct vm_area_struct *vma;
  	unsigned long populate = 0;
  	unsigned long ret = -EINVAL;
 -	struct file *file;
++	struct file *file, *prfile;
  
  	pr_warn_once("%s (%d) uses deprecated remap_file_pages() syscall. "
  			"See Documentation/vm/remap_file_pages.txt.\n",
-@@ -2708,10 +2707,10 @@ SYSCALL_DEFINE5(remap_file_pages, unsigned long, start, unsigned long, size,
+@@ -2708,10 +2708,27 @@ SYSCALL_DEFINE5(remap_file_pages, unsigned long, start, unsigned long, size,
  		}
  	}
  
 -	file = get_file(vma->vm_file);
 +	vma_get_file(vma);
++	file = vma->vm_file;
++	prfile = vma->vm_prfile;
  	ret = do_mmap_pgoff(vma->vm_file, start, size,
  			prot, flags, pgoff, &populate);
--	fput(file);
-+	vma_fput(vma);
++	if (!IS_ERR_VALUE(ret) && file && prfile) {
++		struct vm_area_struct *new_vma;
++
++		new_vma = find_vma(mm, ret);
++		if (!new_vma->vm_prfile)
++			new_vma->vm_prfile = prfile;
++		if (new_vma != vma)
++			get_file(prfile);
++	}
++	/*
++	 * two fput()s instead of vma_fput(vma),
++	 * coz vma may not be available anymore.
++	 */
+ 	fput(file);
++	if (prfile)
++		fput(prfile);
  out:
  	up_write(&mm->mmap_sem);
  	if (populate)
-@@ -2982,7 +2981,7 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
+@@ -2982,7 +2999,7 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
  		if (anon_vma_clone(new_vma, vma))
  			goto out_free_mempol;
  		if (new_vma->vm_file)
