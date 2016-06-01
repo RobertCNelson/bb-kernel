@@ -159,9 +159,10 @@ aufs4 () {
 	fi
 
 	${git} "${DIR}/patches/aufs4/0005-merge-aufs4.patch"
+	${git} "${DIR}/patches/aufs4/0006-aufs-call-mutex.owner-only-when-DEBUG_MUTEXES-or-MUT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		git format-patch -5 -o ../patches/aufs4/
+		git format-patch -6 -o ../patches/aufs4/
 		exit 2
 	fi
 }
@@ -196,9 +197,68 @@ local_patch () {
 }
 
 #external_git
-#aufs4
+aufs4
 rt
 #local_patch
+
+pre_backports () {
+	echo "dir: backports/${subsystem}"
+
+	cd ~/linux-src/
+	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
+	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		git checkout ${backport_tag} -b tmp
+	fi
+	cd -
+}
+
+post_backports () {
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		cd ~/linux-src/
+		git checkout master -f ; git branch -D tmp
+		cd -
+	fi
+
+	git add .
+	git commit -a -m "backports: ${subsystem}: from: linux.git" -s
+	git format-patch -1 -o ../patches/backports/${subsystem}/
+
+	exit 2
+}
+
+patch_backports (){
+	echo "dir: backports/${subsystem}"
+	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
+}
+
+backports () {
+	backport_tag="v4.7-rc1"
+
+	subsystem="fbtft"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/staging/fbtft/* ./drivers/staging/fbtft/
+		cp -v ~/linux-src/include/video/mipi_display.h ./include/video/mipi_display.h
+
+		post_backports
+	fi
+	patch_backports
+
+	subsystem="edt-ft5x06"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/edt-ft5x06.c
+
+		post_backports
+	fi
+	#patch_backports
+	${git} "${DIR}/patches/backports/edt-ft5x06/0002-edt-ft5x06-add-invert_x-invert_y-swap_xy.patch"
+}
 
 reverts () {
 	echo "dir: reverts"
@@ -899,28 +959,8 @@ quieter () {
 	fi
 }
 
-sgx () {
-	echo "dir: sgx"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/sgx/0001-HACK-drm-fb_helper-enable-panning-support.patch"
-	${git} "${DIR}/patches/sgx/0002-HACK-drm-tilcdc-add-vsync-callback-for-use-in-omaplf.patch"
-	${git} "${DIR}/patches/sgx/0003-drm-tilcdc-fix-the-ping-pong-dma-tearing-issue-seen-.patch"
-	${git} "${DIR}/patches/sgx/0004-ARM-OMAP2-Use-pdata-quirks-for-sgx-deassert_hardrese.patch"
-	${git} "${DIR}/patches/sgx/0005-ARM-dts-am33xx-add-DT-node-for-gpu.patch"
-	${git} "${DIR}/patches/sgx/0006-Revert-ARM-reduce-visibility-of-dmac_-functions.patch"
-	${git} "${DIR}/patches/sgx/0007-arm-Export-cache-flush-management-symbols-when-MULTI.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=7
-		cleanup
-	fi
-}
-
 ###
+backports
 reverts
 #fixes
 ti
@@ -933,7 +973,6 @@ pru_rpmsg
 bbb_overlays
 beaglebone
 quieter
-#sgx
 
 packaging () {
 	echo "dir: packaging"
