@@ -1,6 +1,6 @@
-From a0f1cbc9f9f9025127f7a8cdfcfd6d4fdbe13665 Mon Sep 17 00:00:00 2001
+From 5d986f205e5039e9305e0fc67a8fb815c2358c5e Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 1 Jun 2016 18:03:43 -0500
+Date: Wed, 8 Jun 2016 10:25:14 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -13,7 +13,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm/include/asm/switch_to.h                   |    8 +
  arch/arm/include/asm/thread_info.h                 |    8 +-
  arch/arm/kernel/asm-offsets.c                      |    1 +
- arch/arm/kernel/entry-armv.S                       |   13 +-
+ arch/arm/kernel/entry-armv.S                       |   19 +-
  arch/arm/kernel/entry-common.S                     |    9 +-
  arch/arm/kernel/process.c                          |   24 +
  arch/arm/kernel/signal.c                           |    3 +-
@@ -164,6 +164,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/timerfd.c                                       |    5 +-
  include/acpi/platform/aclinux.h                    |   15 +
  include/asm-generic/bug.h                          |   14 +
+ include/asm-generic/preempt.h                      |    4 +-
  include/linux/blk-mq.h                             |    1 +
  include/linux/blkdev.h                             |    3 +-
  include/linux/bottom_half.h                        |   34 +
@@ -186,7 +187,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/kernel.h                             |    5 +
  include/linux/lglock.h                             |   24 +
  include/linux/list_bl.h                            |   30 +-
- include/linux/locallock.h                          |  272 +++++
+ include/linux/locallock.h                          |  278 +++++
  include/linux/mm_types.h                           |    4 +
  include/linux/mutex.h                              |   20 +-
  include/linux/mutex_rt.h                           |   84 ++
@@ -227,6 +228,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/thread_info.h                        |   12 +-
  include/linux/timer.h                              |    2 +-
  include/linux/trace_events.h                       |    3 +
+ include/linux/tracepoint.h                         |   13 +
  include/linux/uaccess.h                            |    2 +
  include/linux/uprobes.h                            |    1 +
  include/linux/vmstat.h                             |    4 +
@@ -269,7 +271,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/panic.c                                     |    2 +
  kernel/power/hibernate.c                           |   14 +
  kernel/power/suspend.c                             |    9 +
- kernel/printk/printk.c                             |  137 ++-
+ kernel/printk/printk.c                             |  147 ++-
  kernel/ptrace.c                                    |    9 +-
  kernel/rcu/rcutorture.c                            |    7 +
  kernel/rcu/tree.c                                  |  146 ++-
@@ -310,7 +312,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/latency_hist.c                        | 1178 +++++++++++++++++++
  kernel/trace/trace.c                               |   38 +-
  kernel/trace/trace.h                               |    2 +
- kernel/trace/trace_events.c                        |    2 +
+ kernel/trace/trace_events.c                        |    4 +-
  kernel/trace/trace_irqsoff.c                       |   11 +
  kernel/trace/trace_output.c                        |   19 +-
  kernel/user.c                                      |    4 +-
@@ -337,7 +339,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/page_alloc.c                                    |  146 ++-
  mm/slab.h                                          |    4 +
  mm/slub.c                                          |  135 ++-
- mm/swap.c                                          |   39 +-
+ mm/swap.c                                          |   76 +-
  mm/truncate.c                                      |    7 +-
  mm/vmalloc.c                                       |   13 +-
  mm/vmstat.c                                        |    6 +
@@ -356,7 +358,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/sunrpc/svc_xprt.c                              |    6 +-
  scripts/mkcompile_h                                |    4 +-
  sound/core/pcm_native.c                            |    8 +-
- 351 files changed, 11050 insertions(+), 1777 deletions(-)
+ 353 files changed, 11117 insertions(+), 1788 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -782,7 +784,7 @@ index 27d0581..5a37422 100644
    DEFINE(TI_TASK,		offsetof(struct thread_info, task));
    DEFINE(TI_CPU,		offsetof(struct thread_info, cpu));
 diff --git a/arch/arm/kernel/entry-armv.S b/arch/arm/kernel/entry-armv.S
-index e255050..1880275 100644
+index e255050..3125de9 100644
 --- a/arch/arm/kernel/entry-armv.S
 +++ b/arch/arm/kernel/entry-armv.S
 @@ -215,11 +215,18 @@ __irq_svc:
@@ -806,15 +808,22 @@ index e255050..1880275 100644
  #endif
  
  	svc_exit r5, irq = 1			@ return from exception
-@@ -234,6 +241,8 @@ svc_preempt:
+@@ -234,8 +241,14 @@ svc_preempt:
  1:	bl	preempt_schedule_irq		@ irq en/disable is done inside
  	ldr	r0, [tsk, #TI_FLAGS]		@ get new tasks TI_FLAGS
  	tst	r0, #_TIF_NEED_RESCHED
 +	bne	1b
 +	tst	r0, #_TIF_NEED_RESCHED_LAZY
  	reteq	r8				@ go again
- 	b	1b
+-	b	1b
++	ldr	r0, [tsk, #TI_PREEMPT_LAZY]	@ get preempt lazy count
++	teq	r0, #0				@ if preempt lazy count != 0
++	beq	1b
++	ret	r8				@ go again
++
  #endif
+ 
+ __und_fault:
 diff --git a/arch/arm/kernel/entry-common.S b/arch/arm/kernel/entry-common.S
 index 30a7228..c3bd6cb 100644
 --- a/arch/arm/kernel/entry-common.S
@@ -4518,10 +4527,10 @@ index 1c21220..8984996 100644
  	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
  
 diff --git a/drivers/gpu/drm/i915/intel_display.c b/drivers/gpu/drm/i915/intel_display.c
-index 0104a06..623261d 100644
+index 7741efb..8830703 100644
 --- a/drivers/gpu/drm/i915/intel_display.c
 +++ b/drivers/gpu/drm/i915/intel_display.c
-@@ -11475,7 +11475,7 @@ void intel_check_page_flip(struct drm_device *dev, int pipe)
+@@ -11476,7 +11476,7 @@ void intel_check_page_flip(struct drm_device *dev, int pipe)
  	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
  	struct intel_unpin_work *work;
  
@@ -7389,6 +7398,23 @@ index 6f96247..fa53a21 100644
  #endif /* __ASSEMBLY__ */
  
  #endif
+diff --git a/include/asm-generic/preempt.h b/include/asm-generic/preempt.h
+index 5d8ffa3..c1cde35 100644
+--- a/include/asm-generic/preempt.h
++++ b/include/asm-generic/preempt.h
+@@ -7,10 +7,10 @@
+ 
+ static __always_inline int preempt_count(void)
+ {
+-	return current_thread_info()->preempt_count;
++	return READ_ONCE(current_thread_info()->preempt_count);
+ }
+ 
+-static __always_inline int *preempt_count_ptr(void)
++static __always_inline volatile int *preempt_count_ptr(void)
+ {
+ 	return &current_thread_info()->preempt_count;
+ }
 diff --git a/include/linux/blk-mq.h b/include/linux/blk-mq.h
 index 9ac9799..05fc249 100644
 --- a/include/linux/blk-mq.h
@@ -8379,10 +8405,10 @@ index cb48330..4e50623 100644
  static inline bool hlist_bl_is_locked(struct hlist_bl_head *b)
 diff --git a/include/linux/locallock.h b/include/linux/locallock.h
 new file mode 100644
-index 0000000..493e801
+index 0000000..845c77f
 --- /dev/null
 +++ b/include/linux/locallock.h
-@@ -0,0 +1,272 @@
+@@ -0,0 +1,278 @@
 +#ifndef _LINUX_LOCALLOCK_H
 +#define _LINUX_LOCALLOCK_H
 +
@@ -8451,6 +8477,9 @@ index 0000000..493e801
 +#define local_lock(lvar)					\
 +	do { __local_lock(&get_local_var(lvar)); } while (0)
 +
++#define local_lock_on(lvar, cpu)				\
++	do { __local_lock(&per_cpu(lvar, cpu)); } while (0)
++
 +static inline int __local_trylock(struct local_irq_lock *lv)
 +{
 +	if (lv->owner != current && spin_trylock_local(&lv->lock)) {
@@ -8488,6 +8517,9 @@ index 0000000..493e801
 +		__local_unlock(this_cpu_ptr(&lvar));		\
 +		put_local_var(lvar);				\
 +	} while (0)
++
++#define local_unlock_on(lvar, cpu)                       \
++	do { __local_unlock(&per_cpu(lvar, cpu)); } while (0)
 +
 +static inline void __local_lock_irq(struct local_irq_lock *lv)
 +{
@@ -10987,6 +11019,30 @@ index 0810f81b..682bfdf 100644
  };
  
  #define TRACE_EVENT_TYPE_MAX						\
+diff --git a/include/linux/tracepoint.h b/include/linux/tracepoint.h
+index be586c6..12cb3bb 100644
+--- a/include/linux/tracepoint.h
++++ b/include/linux/tracepoint.h
+@@ -33,6 +33,19 @@ struct trace_enum_map {
+ 
+ #define TRACEPOINT_DEFAULT_PRIO	10
+ 
++/*
++ * The preempt count recorded in trace_event_raw_event_# are off by one due to
++ * rcu_read_lock_sched_notrace() in __DO_TRACE. This is corrected here.
++ */
++static inline int event_preempt_count(void)
++{
++#ifdef CONFIG_PREEMPT
++	return preempt_count() - 1;
++#else
++	return 0;
++#endif
++}
++
+ extern int
+ tracepoint_probe_register(struct tracepoint *tp, void *probe, void *data);
+ extern int
 diff --git a/include/linux/uaccess.h b/include/linux/uaccess.h
 index 3495578..1d65e4f 100644
 --- a/include/linux/uaccess.h
@@ -12129,7 +12185,7 @@ index c0ded24..55397ba 100644
  	/*
  	 * Since hrtimers have a fixed rate, we can do a static freq->period
 diff --git a/kernel/exit.c b/kernel/exit.c
-index fd90195..18269f0 100644
+index 79c7e38..12da2d0 100644
 --- a/kernel/exit.c
 +++ b/kernel/exit.c
 @@ -143,7 +143,7 @@ static void __exit_signal(struct task_struct *tsk)
@@ -13536,7 +13592,7 @@ index 0000000..d4ab61c
 +}
 +EXPORT_SYMBOL(atomic_dec_and_mutex_lock);
 diff --git a/kernel/locking/rtmutex.c b/kernel/locking/rtmutex.c
-index 3e74660..6697100 100644
+index 3e74660..fde5e54 100644
 --- a/kernel/locking/rtmutex.c
 +++ b/kernel/locking/rtmutex.c
 @@ -7,6 +7,11 @@
@@ -14490,7 +14546,7 @@ index 3e74660..6697100 100644
  int __sched rt_mutex_trylock(struct rt_mutex *lock)
  {
 +#ifdef CONFIG_PREEMPT_RT_FULL
-+	if (WARN_ON(in_irq() || in_nmi()))
++	if (WARN_ON_ONCE(in_irq() || in_nmi()))
 +#else
  	if (WARN_ON(in_irq() || in_nmi() || in_serving_softirq()))
 +#endif
@@ -14943,7 +14999,7 @@ index 5b70d64..e25382c 100644
  }
  EXPORT_SYMBOL(pm_suspend);
 diff --git a/kernel/printk/printk.c b/kernel/printk/printk.c
-index bfbf284..723bcab 100644
+index bfbf284..ba5e338 100644
 --- a/kernel/printk/printk.c
 +++ b/kernel/printk/printk.c
 @@ -246,6 +246,65 @@ __packed __aligned(4)
@@ -15073,15 +15129,20 @@ index bfbf284..723bcab 100644
  	raw_spin_unlock_irq(&logbuf_lock);
  
  	kfree(text);
-@@ -1443,6 +1528,7 @@ static void call_console_drivers(int level,
+@@ -1443,6 +1528,12 @@ static void call_console_drivers(int level,
  	if (!console_drivers)
  		return;
  
++	if (IS_ENABLED(CONFIG_PREEMPT_RT_BASE)) {
++		if (in_irq() || in_nmi())
++			return;
++	}
++
 +	migrate_disable();
  	for_each_console(con) {
  		if (exclusive_console && con != exclusive_console)
  			continue;
-@@ -1458,6 +1544,7 @@ static void call_console_drivers(int level,
+@@ -1458,6 +1549,7 @@ static void call_console_drivers(int level,
  		else
  			con->write(con, text, len);
  	}
@@ -15089,7 +15150,7 @@ index bfbf284..723bcab 100644
  }
  
  /*
-@@ -1620,6 +1707,13 @@ asmlinkage int vprintk_emit(int facility, int level,
+@@ -1620,6 +1712,13 @@ asmlinkage int vprintk_emit(int facility, int level,
  	/* cpu currently holding logbuf_lock in this function */
  	static unsigned int logbuf_cpu = UINT_MAX;
  
@@ -15103,7 +15164,7 @@ index bfbf284..723bcab 100644
  	if (level == LOGLEVEL_SCHED) {
  		level = LOGLEVEL_DEFAULT;
  		in_sched = true;
-@@ -1755,13 +1849,23 @@ asmlinkage int vprintk_emit(int facility, int level,
+@@ -1755,13 +1854,23 @@ asmlinkage int vprintk_emit(int facility, int level,
  
  	/* If called from the scheduler, we can not call up(). */
  	if (!in_sched) {
@@ -15128,7 +15189,7 @@ index bfbf284..723bcab 100644
  			console_unlock();
  		lockdep_on();
  	}
-@@ -1901,26 +2005,6 @@ DEFINE_PER_CPU(printk_func_t, printk_func);
+@@ -1901,26 +2010,6 @@ DEFINE_PER_CPU(printk_func_t, printk_func);
  
  #endif /* CONFIG_PRINTK */
  
@@ -15155,7 +15216,7 @@ index bfbf284..723bcab 100644
  static int __add_preferred_console(char *name, int idx, char *options,
  				   char *brl_options)
  {
-@@ -2183,11 +2267,16 @@ static void console_cont_flush(char *text, size_t size)
+@@ -2183,11 +2272,16 @@ static void console_cont_flush(char *text, size_t size)
  		goto out;
  
  	len = cont_print_text(text, size);
@@ -15172,7 +15233,7 @@ index bfbf284..723bcab 100644
  	return;
  out:
  	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
-@@ -2309,13 +2398,17 @@ skip:
+@@ -2309,13 +2403,17 @@ skip:
  		console_idx = log_next(console_idx);
  		console_seq++;
  		console_prev = msg->flags;
@@ -15191,6 +15252,18 @@ index bfbf284..723bcab 100644
  		if (do_cond_resched)
  			cond_resched();
  	}
+@@ -2367,6 +2465,11 @@ void console_unblank(void)
+ {
+ 	struct console *c;
+ 
++	if (IS_ENABLED(CONFIG_PREEMPT_RT_BASE)) {
++		if (in_irq() || in_nmi())
++			return;
++	}
++
+ 	/*
+ 	 * console_unblank can no longer be called in interrupt context unless
+ 	 * oops_in_progress is set to 1..
 diff --git a/kernel/ptrace.c b/kernel/ptrace.c
 index d49bfa1..b8cf7a8 100644
 --- a/kernel/ptrace.c
@@ -16722,7 +16795,7 @@ index 981fcd7..11e9705 100644
  			/*
  			 * We have to ensure that we have at least one bit
 diff --git a/kernel/sched/deadline.c b/kernel/sched/deadline.c
-index 686ec8a..2badfda 100644
+index 686ec8a..8099333 100644
 --- a/kernel/sched/deadline.c
 +++ b/kernel/sched/deadline.c
 @@ -134,7 +134,7 @@ static void inc_dl_migration(struct sched_dl_entity *dl_se, struct dl_rq *dl_rq)
@@ -16813,7 +16886,7 @@ index 686ec8a..2badfda 100644
  			if (unlikely(task_rq(task) != rq ||
  				     !cpumask_test_cpu(later_rq->cpu,
 -				                       &task->cpus_allowed) ||
-+						       tsk_cpus_allowed(task)) ||
++				                       tsk_cpus_allowed(task)) ||
  				     task_running(rq, task) ||
  				     !dl_task(task) ||
  				     !task_on_rq_queued(task))) {
@@ -21383,7 +21456,7 @@ index 3fff4ad..acb00bc 100644
  
  #define TRACE_BUF_SIZE		1024
 diff --git a/kernel/trace/trace_events.c b/kernel/trace/trace_events.c
-index 6f96586..52c4fff 100644
+index 6f96586..90b40cf 100644
 --- a/kernel/trace/trace_events.c
 +++ b/kernel/trace/trace_events.c
 @@ -188,6 +188,8 @@ static int trace_define_common_fields(void)
@@ -21395,6 +21468,15 @@ index 6f96586..52c4fff 100644
  
  	return ret;
  }
+@@ -243,7 +245,7 @@ void *trace_event_buffer_reserve(struct trace_event_buffer *fbuffer,
+ 		return NULL;
+ 
+ 	local_save_flags(fbuffer->flags);
+-	fbuffer->pc = preempt_count();
++	fbuffer->pc = event_preempt_count();
+ 	fbuffer->trace_file = trace_file;
+ 
+ 	fbuffer->event =
 diff --git a/kernel/trace/trace_irqsoff.c b/kernel/trace/trace_irqsoff.c
 index 03cdff8..940bd10 100644
 --- a/kernel/trace/trace_irqsoff.c
@@ -22810,7 +22892,7 @@ index 0c6317b..1e6ab5f 100644
  	}
  
 diff --git a/mm/compaction.c b/mm/compaction.c
-index 8fa2540..852cc96 100644
+index f8e925e..14cfc47 100644
 --- a/mm/compaction.c
 +++ b/mm/compaction.c
 @@ -1414,10 +1414,12 @@ check_drain:
@@ -23033,7 +23115,7 @@ index f802c2d..b1b6f23 100644
  #ifdef finish_arch_post_lock_switch
  	finish_arch_post_lock_switch();
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index c1069ef..2ec2148 100644
+index 898fe3f..3011403 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
 @@ -61,6 +61,7 @@
@@ -23838,7 +23920,7 @@ index 4dbb109e..2d10cc5 100644
  
  	for (i = 0; i < t.count; i++) {
 diff --git a/mm/swap.c b/mm/swap.c
-index 03aacbc..8927472 100644
+index 03aacbc..d3558eb 100644
 --- a/mm/swap.c
 +++ b/mm/swap.c
 @@ -32,6 +32,7 @@
@@ -23923,19 +24005,25 @@ index 03aacbc..8927472 100644
  }
  
  /**
-@@ -591,9 +596,9 @@ void lru_add_drain_cpu(int cpu)
+@@ -591,9 +596,15 @@ void lru_add_drain_cpu(int cpu)
  		unsigned long flags;
  
  		/* No harm done if a racing interrupt already did this */
 -		local_irq_save(flags);
++#ifdef CONFIG_PREEMPT_RT_BASE
++		local_lock_irqsave_on(rotate_lock, flags, cpu);
++		pagevec_move_tail(pvec);
++		local_unlock_irqrestore_on(rotate_lock, flags, cpu);
++#else
 +		local_lock_irqsave(rotate_lock, flags);
  		pagevec_move_tail(pvec);
 -		local_irq_restore(flags);
 +		local_unlock_irqrestore(rotate_lock, flags);
++#endif
  	}
  
  	pvec = &per_cpu(lru_deactivate_file_pvecs, cpu);
-@@ -625,11 +630,12 @@ void deactivate_file_page(struct page *page)
+@@ -625,11 +636,12 @@ void deactivate_file_page(struct page *page)
  		return;
  
  	if (likely(get_page_unless_zero(page))) {
@@ -23950,7 +24038,7 @@ index 03aacbc..8927472 100644
  	}
  }
  
-@@ -644,19 +650,20 @@ void deactivate_file_page(struct page *page)
+@@ -644,27 +656,48 @@ void deactivate_file_page(struct page *page)
  void deactivate_page(struct page *page)
  {
  	if (PageLRU(page) && PageActive(page) && !PageUnevictable(page)) {
@@ -23974,7 +24062,61 @@ index 03aacbc..8927472 100644
 +	local_unlock_cpu(swapvec_lock);
  }
  
++
++#ifdef CONFIG_PREEMPT_RT_BASE
++static inline void remote_lru_add_drain(int cpu, struct cpumask *has_work)
++{
++	local_lock_on(swapvec_lock, cpu);
++	lru_add_drain_cpu(cpu);
++	local_unlock_on(swapvec_lock, cpu);
++}
++
++#else
++
  static void lru_add_drain_per_cpu(struct work_struct *dummy)
+ {
+ 	lru_add_drain();
+ }
+ 
+ static DEFINE_PER_CPU(struct work_struct, lru_add_drain_work);
++static inline void remote_lru_add_drain(int cpu, struct cpumask *has_work)
++{
++	struct work_struct *work = &per_cpu(lru_add_drain_work, cpu);
++
++	INIT_WORK(work, lru_add_drain_per_cpu);
++	schedule_work_on(cpu, work);
++	cpumask_set_cpu(cpu, has_work);
++}
++#endif
+ 
+ void lru_add_drain_all(void)
+ {
+@@ -677,21 +710,18 @@ void lru_add_drain_all(void)
+ 	cpumask_clear(&has_work);
+ 
+ 	for_each_online_cpu(cpu) {
+-		struct work_struct *work = &per_cpu(lru_add_drain_work, cpu);
+-
+ 		if (pagevec_count(&per_cpu(lru_add_pvec, cpu)) ||
+ 		    pagevec_count(&per_cpu(lru_rotate_pvecs, cpu)) ||
+ 		    pagevec_count(&per_cpu(lru_deactivate_file_pvecs, cpu)) ||
+ 		    pagevec_count(&per_cpu(lru_deactivate_pvecs, cpu)) ||
+-		    need_activate_page_drain(cpu)) {
+-			INIT_WORK(work, lru_add_drain_per_cpu);
+-			schedule_work_on(cpu, work);
+-			cpumask_set_cpu(cpu, &has_work);
+-		}
++		    need_activate_page_drain(cpu))
++			remote_lru_add_drain(cpu, &has_work);
+ 	}
+ 
++#ifndef CONFIG_PREEMPT_RT_BASE
+ 	for_each_cpu(cpu, &has_work)
+ 		flush_work(&per_cpu(lru_add_drain_work, cpu));
++#endif
+ 
+ 	put_online_cpus();
+ 	mutex_unlock(&lock);
 diff --git a/mm/truncate.c b/mm/truncate.c
 index b002728..dcc445a 100644
 --- a/mm/truncate.c
