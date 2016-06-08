@@ -233,7 +233,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.7-rc1"
+	backport_tag="v4.7-rc2"
 
 	subsystem="fbtft"
 	#regenerate="enable"
