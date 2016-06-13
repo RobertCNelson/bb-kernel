@@ -740,6 +740,21 @@ quieter () {
 	fi
 }
 
+more_fixes () {
+	echo "dir: more_fixes"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/more_fixes/0001-slab-gcc5-fixes.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+}
+
 ###
 reverts
 #fixes
@@ -749,6 +764,7 @@ pru_rpmsg
 bbb_overlays
 beaglebone
 quieter
+more_fixes
 
 packaging () {
 	echo "dir: packaging"
