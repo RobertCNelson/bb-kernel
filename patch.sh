@@ -1212,7 +1212,7 @@ pcm512x
 beagleboy
 treewide
 gcc5
-#emmc
+emmc
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
