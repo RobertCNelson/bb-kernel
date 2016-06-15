@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/sh -e
 #
-# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -55,7 +55,12 @@ start_cleanup () {
 
 cleanup () {
 	if [ "${number}" ] ; then
-		git format-patch -${number} -o ${DIR}/patches/
+		if [ "x${wdir}" = "x" ] ; then
+			git format-patch -${number} -o ${DIR}/patches/
+		else
+			git format-patch -${number} -o ${DIR}/patches/${wdir}/
+			unset wdir
+		fi
 	fi
 	exit 2
 }
@@ -1096,6 +1101,22 @@ gcc5 () {
 	fi
 }
 
+emmc () {
+	echo "dir: emmc"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/emmc/0001-mmc-core-Update-the-ext-csd.rev-check-for-eMMC5.1.patch"
+	${git} "${DIR}/patches/emmc/0002-mmc-Allow-forward-compatibility-for-eMMC.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=2
+		cleanup
+	fi
+}
+
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
 	echo "dir: bb_view_lcd"
@@ -1191,6 +1212,7 @@ pcm512x
 beagleboy
 treewide
 gcc5
+#emmc
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd

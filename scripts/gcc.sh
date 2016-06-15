@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,10 @@ DIR=$PWD
 #For:
 #toolchain
 . "${DIR}/version.sh"
+
+if [  -f "${DIR}/.yakbuild" ] ; then
+	. "${DIR}/recipe.sh"
+fi
 
 if [ -d $HOME/dl/gcc/ ] ; then
 	gcc_dir="$HOME/dl/gcc"
@@ -92,14 +96,14 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_eabi_4_9)
 		#
-		#https://releases.linaro.org/15.05/components/toolchain/binaries/arm-eabi/gcc-linaro-4.9-2015.05-x86_64_arm-eabi.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/4.9-2016.02/arm-eabi/gcc-linaro-5.3-2016.02-x86_64_arm-eabi.tar.xz
 		#
 
 		gcc_version="4.9"
-		release="15.05"
+		release="16.02"
 		target="arm-eabi"
 
-		version="${release}/components/toolchain/binaries/${target}"
+		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
 		filename="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi.tar.xz"
 		directory="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi"
 
@@ -109,11 +113,11 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_eabi_5)
 		#
-		#https://releases.linaro.org/components/toolchain/binaries/5.2-2015.11/arm-eabi/gcc-linaro-5.2-2015.11-x86_64_arm-eabi.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/5.3-2016.02/arm-eabi/gcc-linaro-5.3-2016.02-x86_64_arm-eabi.tar.xz
 		#
 
-		gcc_version="5.2"
-		release="15.11"
+		gcc_version="5.3"
+		release="16.02"
 		target="arm-eabi"
 
 		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
@@ -185,14 +189,14 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_gnueabihf_4_9)
 		#
-		#https://releases.linaro.org/15.05/components/toolchain/binaries/arm-linux-gnueabihf/gcc-linaro-4.9-2015.05-x86_64_arm-linux-gnueabihf.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/4.9-2016.02/arm-linux-gnueabihf/gcc-linaro-4.9-2016.02-x86_64_arm-linux-gnueabihf.tar.xz
 		#
 
 		gcc_version="4.9"
-		release="15.05"
+		release="16.02"
 		target="arm-linux-gnueabihf"
 
-		version="${release}/components/toolchain/binaries/${target}"
+		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
 		filename="gcc-linaro-${gcc_version}-20${release}-x86_64_${target}.tar.xz"
 		directory="gcc-linaro-${gcc_version}-20${release}-x86_64_${target}"
 
@@ -202,11 +206,11 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_gnueabihf_5)
 		#
-		#https://releases.linaro.org/components/toolchain/binaries/5.2-2015.11/arm-linux-gnueabihf/gcc-linaro-5.2-2015.11-x86_64_arm-linux-gnueabihf.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/5.3-2016.02/arm-linux-gnueabihf/gcc-linaro-5.3-2016.02-x86_64_arm-linux-gnueabihf.tar.xz
 		#
 
-		gcc_version="5.2"
-		release="15.11"
+		gcc_version="5.3"
+		release="16.02"
 		target="arm-linux-gnueabihf"
 
 		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
@@ -219,11 +223,11 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_aarch64_gnu_5)
 		#
-		#https://releases.linaro.org/components/toolchain/binaries/5.2-2015.11/aarch64-linux-gnu/gcc-linaro-5.2-2015.11-x86_64_aarch64-linux-gnu.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/5.3-2016.02/aarch64-linux-gnu/gcc-linaro-5.3-2016.02-x86_64_aarch64-linux-gnu.tar.xz
 		#
 
-		gcc_version="5.2"
-		release="15.11"
+		gcc_version="5.3"
+		release="16.02"
 		target="aarch64-linux-gnu"
 
 		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
@@ -266,11 +270,19 @@ if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] ; then
 	gcc_toolchain
 fi
 
-GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep arm || true)
+unset check
+if [ "x${KERNEL_ARCH}" = "xarm" ] ; then
+	check="arm"
+fi
+if [ "x${KERNEL_ARCH}" = "xarm64" ] ; then
+	check="aarch64"
+fi
+
+GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep ${check} || true)
 
 if [ "x${GCC_TEST}" = "x" ] ; then
 	echo "-----------------------------"
-	echo "scripts/gcc: Error: The GCC ARM Cross Compiler you setup in system.sh (CC variable) is invalid."
+	echo "scripts/gcc: Error: The GCC Cross Compiler you setup in system.sh (CC variable) is invalid."
 	echo "-----------------------------"
 	gcc_toolchain
 fi

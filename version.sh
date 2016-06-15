@@ -4,6 +4,10 @@ ARCH=$(uname -m)
 
 config="omap2plus_defconfig"
 
+build_prefix="-xenomai-r"
+branch_prefix=""
+branch_postfix=".13-xenomai"
+
 #arm
 KERNEL_ARCH=arm
 #toolchain="gcc_linaro_eabi_4_8"
@@ -21,7 +25,7 @@ toolchain="gcc_linaro_gnueabihf_4_7"
 #Kernel/Build
 KERNEL_REL=3.8
 KERNEL_TAG=${KERNEL_REL}.13
-BUILD=xenomai-r78
+BUILD=${build_prefix}78
 kernel_rt=".X-rtY"
 
 #v4.X-rcX + upto SHA
@@ -29,7 +33,7 @@ kernel_rt=".X-rtY"
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="3.8.13-xenomai"
+BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=cross
 DEBARCH=armhf
