@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash -e
 
 #opensuse support added by: Antonio Cavallo
 #https://launchpad.net/~a.cavallo
@@ -56,12 +56,14 @@ redhat_reqs () {
 	if [ "x${arch}" = "xx86_64" ] ; then
 		pkg="ncurses-devel.x86_64"
 		check_rpm
-		pkg="ncurses-devel.i686"
-		check_rpm
-		pkg="libstdc++.i686"
-		check_rpm
-		pkg="zlib.i686"
-		check_rpm
+		if [ "x${ignore_32bit}" = "xfalse" ] ; then
+			pkg="ncurses-devel.i686"
+			check_rpm
+			pkg="libstdc++.i686"
+			check_rpm
+			pkg="zlib.i686"
+			check_rpm
+		fi
 	fi
 
 	if [ "$(which lsb_release)" ] ; then
@@ -236,12 +238,22 @@ debian_regs () {
 		fi
 
 		if [ "x${deb_distro}" = "xsana" ] ; then
+			#EOL: 15th of April 2016.
 			#lsb_release -a
 			#Distributor ID:    Kali
 			#Description:    Kali GNU/Linux 2.0
 			#Release:    2.0
 			#Codename:    sana
 			deb_distro="jessie"
+		fi
+
+		if [ "x${deb_distro}" = "xkali-rolling" ] ; then
+			#lsb_release -a:
+			#Distributor ID:    Kali
+			#Description:    Kali GNU/Linux Rolling
+			#Release:    kali-rolling
+			#Codename:    kali-rolling
+			deb_distro="stretch"
 		fi
 
 		#Linux Mint: Compatibility Matrix
@@ -323,24 +335,32 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		squeeze|wheezy|jessie|stretch|sid)
-			#6 squeeze: 2016-02-06 https://wiki.debian.org/DebianSqueeze
+		wheezy|jessie|stretch|sid)
 			#7 wheezy: https://wiki.debian.org/DebianWheezy
 			#8 jessie: https://wiki.debian.org/DebianJessie
 			#9 stretch: https://wiki.debian.org/DebianStretch
 			unset warn_eol_distro
 			;;
-		xenial)
-			#16.04 trusty: (EOL: April 20xx) lts: xenial -> xyz
+		squeeze)
+			#6 squeeze: 2016-02-06 https://wiki.debian.org/DebianSqueeze
+			warn_eol_distro=1
+			stop_pkg_search=1
+			;;
+		yakkety)
+			#16.10 yakkety: (EOL: July 2017)
 			unset warn_eol_distro
 			;;
-		vivid|wily)
-			#15.04 vivid: (EOL: February 4, 2016)
+		xenial)
+			#16.04 xenial: (EOL: April 2021) lts: xenial -> xyz
+			unset warn_eol_distro
+			;;
+		wily)
 			#15.10 wily: (EOL: July 2016)
 			unset warn_eol_distro
 			;;
-		utopic)
+		utopic|vivid)
 			#14.10 utopic: (EOL: July 23, 2015)
+			#15.04 vivid: (EOL: February 4, 2016)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -381,7 +401,7 @@ debian_regs () {
 		
 		#Libs; starting with jessie/sid, lib<pkg_name>-dev:<arch>
 		case "${deb_distro}" in
-		squeeze|wheezy|precise)
+		wheezy|precise)
 			pkg="libncurses5-dev"
 			check_dpkg
 			;;
@@ -395,20 +415,24 @@ debian_regs () {
 		if [ "x${deb_arch}" = "xamd64" ] ; then
 			unset dpkg_multiarch
 			case "${deb_distro}" in
-			squeeze|precise)
-				pkg="ia32-libs"
-				check_dpkg
+			precise)
+				if [ "x${ignore_32bit}" = "xfalse" ] ; then
+					pkg="ia32-libs"
+					check_dpkg
+				fi
 				;;
 			*)
-				pkg="libc6:i386"
-				check_dpkg
-				pkg="libncurses5:i386"
-				check_dpkg
-				pkg="libstdc++6:i386"
-				check_dpkg
-				pkg="zlib1g:i386"
-				check_dpkg
-				dpkg_multiarch=1
+				if [ "x${ignore_32bit}" = "xfalse" ] ; then
+					pkg="libc6:i386"
+					check_dpkg
+					pkg="libncurses5:i386"
+					check_dpkg
+					pkg="libstdc++6:i386"
+					check_dpkg
+					pkg="zlib1g:i386"
+					check_dpkg
+					dpkg_multiarch=1
+				fi
 				;;
 			esac
 
@@ -470,6 +494,28 @@ else
 	info "host: [$(uname -m)]"
 	info "git HEAD commit: [$(git rev-parse HEAD)]"
 fi
+
+DIR=$PWD
+. "${DIR}/version.sh"
+
+if [  -f "${DIR}/.yakbuild" ] ; then
+	. "${DIR}/recipe.sh"
+fi
+
+ARCH=$(uname -m)
+
+ignore_32bit="false"
+if [ "x${ARCH}" = "xx86_64" ] ; then
+	case "${toolchain}" in
+	gcc_linaro_eabi_5|gcc_linaro_gnueabihf_5|gcc_linaro_aarch64_gnu_5)
+		ignore_32bit="true"
+		;;
+	*)
+		ignore_32bit="false"
+		;;
+	esac
+fi
+
 case "$BUILD_HOST" in
     redhat*)
 	    redhat_reqs || error "Failed dependency check"
