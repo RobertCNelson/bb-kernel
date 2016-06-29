@@ -207,6 +207,7 @@ pre_backports () {
 	cd ~/linux-src/
 	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
 	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
+	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		git checkout ${backport_tag} -b tmp
 	fi
@@ -233,7 +234,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.7-rc2"
+	backport_tag="v4.7-rc5"
 
 	subsystem="fbtft"
 	#regenerate="enable"
