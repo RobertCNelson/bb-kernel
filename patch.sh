@@ -86,17 +86,10 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-	#v4.1.24
-	git revert --no-edit 28f83d2daecd97392c9a0580c00853a19a76a8bc
-
-	#v4.1.21
-	git revert --no-edit 143cf26c48278bd438a97a8bd3e18b6460192981
-	git revert --no-edit 1a138f3e487026aede3642cbe09aee0f64c2f66b
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
+
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz

@@ -1,6 +1,6 @@
-From 9d189f6be6215fce2e73be5da4289dc75c6de5a3 Mon Sep 17 00:00:00 2001
+From b976c82e4c8f984b32128a0ca180bd100fed2589 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 8 Jun 2016 10:58:38 -0500
+Date: Wed, 29 Jun 2016 10:02:51 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -43,7 +43,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm64/include/asm/futex.h                     |    4 +-
  arch/arm64/include/asm/thread_info.h               |    3 +
  arch/arm64/kernel/asm-offsets.c                    |    1 +
- arch/arm64/kernel/debug-monitors.c                 |   42 +-
  arch/arm64/kernel/entry.S                          |   13 +-
  arch/arm64/kernel/insn.c                           |    6 +-
  arch/arm64/kernel/perf_event.c                     |    2 +-
@@ -325,7 +324,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/events/core.c                               |    1 +
  kernel/exit.c                                      |    2 +-
  kernel/fork.c                                      |   41 +-
- kernel/futex.c                                     |  149 ++-
+ kernel/futex.c                                     |  150 ++-
  kernel/irq/handle.c                                |    8 +-
  kernel/irq/manage.c                                |  260 +++-
  kernel/irq/settings.h                              |   12 +
@@ -434,7 +433,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/soc/intel/atom/sst/sst.c                     |    4 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 429 files changed, 12292 insertions(+), 2302 deletions(-)
+ 428 files changed, 12271 insertions(+), 2282 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -1939,102 +1938,6 @@ index da675cc..c73e2ae 100644
    DEFINE(TI_ADDR_LIMIT,		offsetof(struct thread_info, addr_limit));
    DEFINE(TI_TASK,		offsetof(struct thread_info, task));
    DEFINE(TI_CPU,		offsetof(struct thread_info, cpu));
-diff --git a/arch/arm64/kernel/debug-monitors.c b/arch/arm64/kernel/debug-monitors.c
-index b056369..0d1d675 100644
---- a/arch/arm64/kernel/debug-monitors.c
-+++ b/arch/arm64/kernel/debug-monitors.c
-@@ -184,20 +184,21 @@ static void clear_regs_spsr_ss(struct pt_regs *regs)
- 
- /* EL1 Single Step Handler hooks */
- static LIST_HEAD(step_hook);
--static DEFINE_RWLOCK(step_hook_lock);
-+static DEFINE_SPINLOCK(step_hook_lock);
- 
- void register_step_hook(struct step_hook *hook)
- {
--	write_lock(&step_hook_lock);
--	list_add(&hook->node, &step_hook);
--	write_unlock(&step_hook_lock);
-+	spin_lock(&step_hook_lock);
-+	list_add_rcu(&hook->node, &step_hook);
-+	spin_unlock(&step_hook_lock);
- }
- 
- void unregister_step_hook(struct step_hook *hook)
- {
--	write_lock(&step_hook_lock);
--	list_del(&hook->node);
--	write_unlock(&step_hook_lock);
-+	spin_lock(&step_hook_lock);
-+	list_del_rcu(&hook->node);
-+	spin_unlock(&step_hook_lock);
-+	synchronize_rcu();
- }
- 
- /*
-@@ -211,15 +212,15 @@ static int call_step_hook(struct pt_regs *regs, unsigned int esr)
- 	struct step_hook *hook;
- 	int retval = DBG_HOOK_ERROR;
- 
--	read_lock(&step_hook_lock);
-+	rcu_read_lock();
- 
--	list_for_each_entry(hook, &step_hook, node)	{
-+	list_for_each_entry_rcu(hook, &step_hook, node)	{
- 		retval = hook->fn(regs, esr);
- 		if (retval == DBG_HOOK_HANDLED)
- 			break;
- 	}
- 
--	read_unlock(&step_hook_lock);
-+	rcu_read_unlock();
- 
- 	return retval;
- }
-@@ -271,20 +272,21 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
-  * Use reader/writer locks instead of plain spinlock.
-  */
- static LIST_HEAD(break_hook);
--static DEFINE_RWLOCK(break_hook_lock);
-+static DEFINE_SPINLOCK(break_hook_lock);
- 
- void register_break_hook(struct break_hook *hook)
- {
--	write_lock(&break_hook_lock);
--	list_add(&hook->node, &break_hook);
--	write_unlock(&break_hook_lock);
-+	spin_lock(&break_hook_lock);
-+	list_add_rcu(&hook->node, &break_hook);
-+	spin_unlock(&break_hook_lock);
- }
- 
- void unregister_break_hook(struct break_hook *hook)
- {
--	write_lock(&break_hook_lock);
--	list_del(&hook->node);
--	write_unlock(&break_hook_lock);
-+	spin_lock(&break_hook_lock);
-+	list_del_rcu(&hook->node);
-+	spin_unlock(&break_hook_lock);
-+	synchronize_rcu();
- }
- 
- static int call_break_hook(struct pt_regs *regs, unsigned int esr)
-@@ -292,11 +294,11 @@ static int call_break_hook(struct pt_regs *regs, unsigned int esr)
- 	struct break_hook *hook;
- 	int (*fn)(struct pt_regs *regs, unsigned int esr) = NULL;
- 
--	read_lock(&break_hook_lock);
--	list_for_each_entry(hook, &break_hook, node)
-+	rcu_read_lock();
-+	list_for_each_entry_rcu(hook, &break_hook, node)
- 		if ((esr & hook->esr_mask) == hook->esr_val)
- 			fn = hook->fn;
--	read_unlock(&break_hook_lock);
-+	rcu_read_unlock();
- 
- 	return fn ? fn(regs, esr) : DBG_HOOK_ERROR;
- }
 diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
 index bddd04d..6515be3 100644
 --- a/arch/arm64/kernel/entry.S
@@ -5187,10 +5090,10 @@ index 7dd9a8d..192de59 100644
  
  /*
 diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
-index 75eb960..aab21d7 100644
+index bd84d22..ba639dd 100644
 --- a/arch/x86/kvm/x86.c
 +++ b/arch/x86/kvm/x86.c
-@@ -5810,6 +5810,13 @@ int kvm_arch_init(void *opaque)
+@@ -5815,6 +5815,13 @@ int kvm_arch_init(void *opaque)
  		goto out;
  	}
  
@@ -10013,7 +9916,7 @@ index c7a5602..2907544 100644
  		__this_cpu_inc(bh_accounting.nr);
  		recalc_bh_state();
 diff --git a/fs/dcache.c b/fs/dcache.c
-index 10bce74..54b26e9 100644
+index 2c75b39..7f5ec63 100644
 --- a/fs/dcache.c
 +++ b/fs/dcache.c
 @@ -19,6 +19,7 @@
@@ -10136,7 +10039,7 @@ index 8c44654..78c1545 100644
  
  		/*
 diff --git a/fs/namespace.c b/fs/namespace.c
-index fce3cc1..2893702 100644
+index 6257268..3c40c3c 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -14,6 +14,7 @@
@@ -15886,7 +15789,7 @@ index 8209fa2..8f8a0a1 100644
  	p->lockdep_depth = 0; /* no locks held yet */
  	p->curr_chain_key = 0;
 diff --git a/kernel/futex.c b/kernel/futex.c
-index b75fbdd..e417491 100644
+index 46b168e..8422f94 100644
 --- a/kernel/futex.c
 +++ b/kernel/futex.c
 @@ -738,7 +738,9 @@ void exit_pi_state_list(struct task_struct *curr)
@@ -15951,7 +15854,7 @@ index b75fbdd..e417491 100644
  	int ret = 0;
  
  	if (!pi_state)
-@@ -1178,7 +1177,17 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_q *this)
+@@ -1188,7 +1187,17 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_q *this)
  	raw_spin_unlock_irq(&new_owner->pi_lock);
  
  	raw_spin_unlock(&pi_state->pi_mutex.wait_lock);
@@ -15970,7 +15873,7 @@ index b75fbdd..e417491 100644
  
  	return 0;
  }
-@@ -1217,6 +1226,7 @@ futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
+@@ -1227,6 +1236,7 @@ futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
  	struct futex_q *this, *next;
  	union futex_key key = FUTEX_KEY_INIT;
  	int ret;
@@ -15978,7 +15881,7 @@ index b75fbdd..e417491 100644
  
  	if (!bitset)
  		return -EINVAL;
-@@ -1244,13 +1254,14 @@ futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
+@@ -1254,13 +1264,14 @@ futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
  			if (!(this->bitset & bitset))
  				continue;
  
@@ -15994,7 +15897,7 @@ index b75fbdd..e417491 100644
  out_put_key:
  	put_futex_key(&key);
  out:
-@@ -1269,6 +1280,7 @@ futex_wake_op(u32 __user *uaddr1, unsigned int flags, u32 __user *uaddr2,
+@@ -1279,6 +1290,7 @@ futex_wake_op(u32 __user *uaddr1, unsigned int flags, u32 __user *uaddr2,
  	struct futex_hash_bucket *hb1, *hb2;
  	struct futex_q *this, *next;
  	int ret, op_ret;
@@ -16002,7 +15905,7 @@ index b75fbdd..e417491 100644
  
  retry:
  	ret = get_futex_key(uaddr1, flags & FLAGS_SHARED, &key1, VERIFY_READ);
-@@ -1320,7 +1332,7 @@ retry_private:
+@@ -1330,7 +1342,7 @@ retry_private:
  				ret = -EINVAL;
  				goto out_unlock;
  			}
@@ -16011,7 +15914,7 @@ index b75fbdd..e417491 100644
  			if (++ret >= nr_wake)
  				break;
  		}
-@@ -1334,7 +1346,7 @@ retry_private:
+@@ -1344,7 +1356,7 @@ retry_private:
  					ret = -EINVAL;
  					goto out_unlock;
  				}
@@ -16020,7 +15923,7 @@ index b75fbdd..e417491 100644
  				if (++op_ret >= nr_wake2)
  					break;
  			}
-@@ -1344,6 +1356,7 @@ retry_private:
+@@ -1354,6 +1366,7 @@ retry_private:
  
  out_unlock:
  	double_unlock_hb(hb1, hb2);
@@ -16028,7 +15931,7 @@ index b75fbdd..e417491 100644
  out_put_keys:
  	put_futex_key(&key2);
  out_put_key1:
-@@ -1503,6 +1516,7 @@ static int futex_requeue(u32 __user *uaddr1, unsigned int flags,
+@@ -1513,6 +1526,7 @@ static int futex_requeue(u32 __user *uaddr1, unsigned int flags,
  	struct futex_pi_state *pi_state = NULL;
  	struct futex_hash_bucket *hb1, *hb2;
  	struct futex_q *this, *next;
@@ -16036,7 +15939,7 @@ index b75fbdd..e417491 100644
  
  	if (requeue_pi) {
  		/*
-@@ -1679,7 +1693,7 @@ retry_private:
+@@ -1689,7 +1703,7 @@ retry_private:
  		 * woken by futex_unlock_pi().
  		 */
  		if (++task_count <= nr_wake && !requeue_pi) {
@@ -16045,7 +15948,7 @@ index b75fbdd..e417491 100644
  			continue;
  		}
  
-@@ -1705,6 +1719,16 @@ retry_private:
+@@ -1715,6 +1729,16 @@ retry_private:
  				requeue_pi_wake_futex(this, &key2, hb2);
  				drop_count++;
  				continue;
@@ -16062,7 +15965,7 @@ index b75fbdd..e417491 100644
  			} else if (ret) {
  				/* -EDEADLK */
  				this->pi_state = NULL;
-@@ -1719,6 +1743,7 @@ retry_private:
+@@ -1729,6 +1753,7 @@ retry_private:
  out_unlock:
  	free_pi_state(pi_state);
  	double_unlock_hb(hb1, hb2);
@@ -16070,7 +15973,7 @@ index b75fbdd..e417491 100644
  	hb_waiters_dec(hb2);
  
  	/*
-@@ -2412,13 +2437,26 @@ retry:
+@@ -2422,13 +2447,22 @@ retry:
  	 */
  	match = futex_top_waiter(hb, &key);
  	if (match) {
@@ -16091,6 +15994,14 @@ index b75fbdd..e417491 100644
  		if (ret == -EFAULT)
  			goto pi_faulted;
 +
+ 		/*
+ 		 * A unconditional UNLOCK_PI op raced against a waiter
+ 		 * setting the FUTEX_WAITERS bit. Try again.
+@@ -2438,6 +2472,11 @@ retry:
+ 			put_futex_key(&key);
+ 			goto retry;
+ 		}
++
 +		/*
 +		 * wake_futex_pi has detected invalid state. Tell user
 +		 * space.
@@ -16098,7 +16009,7 @@ index b75fbdd..e417491 100644
  		goto out_unlock;
  	}
  
-@@ -2439,6 +2477,7 @@ retry:
+@@ -2458,6 +2497,7 @@ retry:
  
  out_unlock:
  	spin_unlock(&hb->lock);
@@ -16106,7 +16017,7 @@ index b75fbdd..e417491 100644
  	put_futex_key(&key);
  	return ret;
  
-@@ -2549,7 +2588,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2568,7 +2608,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	struct hrtimer_sleeper timeout, *to = NULL;
  	struct rt_mutex_waiter rt_waiter;
  	struct rt_mutex *pi_mutex = NULL;
@@ -16115,7 +16026,7 @@ index b75fbdd..e417491 100644
  	union futex_key key2 = FUTEX_KEY_INIT;
  	struct futex_q q = futex_q_init;
  	int res, ret;
-@@ -2574,10 +2613,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2593,10 +2633,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	 * The waiter is allocated on our stack, manipulated by the requeue
  	 * code while we sleep on uaddr.
  	 */
@@ -16127,7 +16038,7 @@ index b75fbdd..e417491 100644
  
  	ret = get_futex_key(uaddr2, flags & FLAGS_SHARED, &key2, VERIFY_WRITE);
  	if (unlikely(ret != 0))
-@@ -2608,20 +2644,55 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2627,20 +2664,55 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	/* Queue the futex_q, drop the hb lock, wait for wakeup. */
  	futex_wait_queue_me(hb, &q, to);
  
@@ -16194,7 +16105,7 @@ index b75fbdd..e417491 100644
  
  	/* Check if the requeue code acquired the second futex for us. */
  	if (!q.rt_waiter) {
-@@ -2630,14 +2701,15 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2649,14 +2721,15 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  		 * did a lock-steal - fix up the PI-state in that case.
  		 */
  		if (q.pi_state && (q.pi_state->owner != current)) {
@@ -16212,7 +16123,7 @@ index b75fbdd..e417491 100644
  		}
  	} else {
  		/*
-@@ -2650,7 +2722,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2669,7 +2742,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  		ret = rt_mutex_finish_proxy_lock(pi_mutex, to, &rt_waiter);
  		debug_rt_mutex_free_waiter(&rt_waiter);
  
