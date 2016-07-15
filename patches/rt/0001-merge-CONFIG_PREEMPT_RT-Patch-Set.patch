@@ -1,6 +1,6 @@
-From 9a2e43ed738d8da12b58d715dcd7dc809d2954a0 Mon Sep 17 00:00:00 2001
+From a744b845ca292ab21f6681ab244ec2a17f4b92a5 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 29 Jun 2016 09:45:20 -0500
+Date: Fri, 15 Jul 2016 16:10:17 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -227,7 +227,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/kvm_host.h                           |    5 +-
  include/linux/lglock.h                             |   24 +
  include/linux/list_bl.h                            |   30 +-
- include/linux/locallock.h                          |  270 +++++
+ include/linux/locallock.h                          |  276 +++++
  include/linux/mm_types.h                           |    4 +
  include/linux/mutex.h                              |   20 +-
  include/linux/mutex_rt.h                           |   84 ++
@@ -265,6 +265,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/suspend.h                            |    6 +
  include/linux/swait.h                              |  173 +++
  include/linux/swap.h                               |    5 +-
+ include/linux/swork.h                              |   24 +
  include/linux/thread_info.h                        |   12 +-
  include/linux/timer.h                              |    2 +-
  include/linux/trace_events.h                       |    3 +
@@ -272,7 +273,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/uprobes.h                            |    1 +
  include/linux/vmstat.h                             |    4 +
  include/linux/wait.h                               |    1 +
- include/linux/work-simple.h                        |   24 +
  include/net/dst.h                                  |    2 +-
  include/net/neighbour.h                            |    4 +-
  include/net/netns/ipv4.h                           |    1 +
@@ -333,7 +333,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/sched/rt.c                                  |   26 +-
  kernel/sched/sched.h                               |   10 +
  kernel/sched/swait.c                               |  143 +++
- kernel/sched/work-simple.c                         |  173 +++
+ kernel/sched/swork.c                               |  173 +++
  kernel/signal.c                                    |  120 +-
  kernel/softirq.c                                   |  784 ++++++++++---
  kernel/stop_machine.c                              |   59 +-
@@ -354,7 +354,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/latency_hist.c                        | 1178 +++++++++++++++++++
  kernel/trace/trace.c                               |   38 +-
  kernel/trace/trace.h                               |    2 +
- kernel/trace/trace_events.c                        |    2 +
+ kernel/trace/trace_events.c                        |   10 +
  kernel/trace/trace_irqsoff.c                       |   11 +
  kernel/trace/trace_output.c                        |   18 +-
  kernel/user.c                                      |    4 +-
@@ -380,7 +380,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/page_alloc.c                                    |  146 ++-
  mm/slab.h                                          |    4 +
  mm/slub.c                                          |  126 +-
- mm/swap.c                                          |   34 +-
+ mm/swap.c                                          |   71 +-
  mm/truncate.c                                      |    7 +-
  mm/vmalloc.c                                       |   13 +-
  mm/vmstat.c                                        |    6 +
@@ -401,7 +401,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/core/pcm_native.c                            |    8 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   17 +-
- 396 files changed, 12487 insertions(+), 3383 deletions(-)
+ 396 files changed, 12531 insertions(+), 3390 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -415,12 +415,12 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  create mode 100644 include/linux/spinlock_types_raw.h
  create mode 100644 include/linux/spinlock_types_rt.h
  create mode 100644 include/linux/swait.h
- create mode 100644 include/linux/work-simple.h
+ create mode 100644 include/linux/swork.h
  create mode 100644 include/trace/events/hist.h
  create mode 100644 include/trace/events/latency_hist.h
  create mode 100644 kernel/locking/rt.c
  create mode 100644 kernel/sched/swait.c
- create mode 100644 kernel/sched/work-simple.c
+ create mode 100644 kernel/sched/swork.c
  create mode 100644 kernel/trace/latency_hist.c
 
 diff --git a/Documentation/hwlat_detector.txt b/Documentation/hwlat_detector.txt
@@ -730,7 +730,7 @@ index 0000000..6f2aeab
 +
 +These data are also reset when the wakeup histogram is reset.
 diff --git a/Makefile b/Makefile
-index fadbb9d..ce2ce88c0 100644
+index 9790880..974825c 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -768,6 +768,9 @@ KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
@@ -3220,7 +3220,7 @@ index 439df97..b7954dd 100644
 +	DEFINE(_PREEMPT_ENABLED, PREEMPT_ENABLED);
  }
 diff --git a/arch/x86/kernel/cpu/mcheck/mce.c b/arch/x86/kernel/cpu/mcheck/mce.c
-index 7e8a736..a080b49 100644
+index 7e8a736..430a4ec 100644
 --- a/arch/x86/kernel/cpu/mcheck/mce.c
 +++ b/arch/x86/kernel/cpu/mcheck/mce.c
 @@ -41,6 +41,8 @@
@@ -3228,7 +3228,7 @@ index 7e8a736..a080b49 100644
  #include <linux/irq_work.h>
  #include <linux/export.h>
 +#include <linux/jiffies.h>
-+#include <linux/work-simple.h>
++#include <linux/swork.h>
  
  #include <asm/processor.h>
  #include <asm/traps.h>
@@ -11278,14 +11278,14 @@ index fee9eb7..b42d4ad 100644
  
  static inline uint8_t *
 diff --git a/drivers/thermal/x86_pkg_temp_thermal.c b/drivers/thermal/x86_pkg_temp_thermal.c
-index 7fc919f..a774f0c 100644
+index 7fc919f..e03fa17 100644
 --- a/drivers/thermal/x86_pkg_temp_thermal.c
 +++ b/drivers/thermal/x86_pkg_temp_thermal.c
 @@ -29,6 +29,7 @@
  #include <linux/pm.h>
  #include <linux/thermal.h>
  #include <linux/debugfs.h>
-+#include <linux/work-simple.h>
++#include <linux/swork.h>
  #include <asm/cpu_device_id.h>
  #include <asm/mce.h>
  
@@ -11540,7 +11540,7 @@ index 97ef75a..2ae4acb 100644
  		kfree(ffs);
  	}
 diff --git a/drivers/usb/gadget/legacy/inode.c b/drivers/usb/gadget/legacy/inode.c
-index f454c7a..b20a603 100644
+index 5538661..fb27910 100644
 --- a/drivers/usb/gadget/legacy/inode.c
 +++ b/drivers/usb/gadget/legacy/inode.c
 @@ -345,7 +345,7 @@ ep_io (struct ep_data *epdata, void *buf, unsigned len)
@@ -11625,14 +11625,14 @@ index ea448a3..3e1c9d5 100644
  
  static inline struct usba_ep *to_usba_ep(struct usb_ep *ep)
 diff --git a/fs/aio.c b/fs/aio.c
-index 155f842..14af015 100644
+index 155f842..dd8d6f2 100644
 --- a/fs/aio.c
 +++ b/fs/aio.c
 @@ -40,6 +40,7 @@
  #include <linux/ramfs.h>
  #include <linux/percpu-refcount.h>
  #include <linux/mount.h>
-+#include <linux/work-simple.h>
++#include <linux/swork.h>
  
  #include <asm/kmap_types.h>
  #include <asm/uaccess.h>
@@ -12217,14 +12217,14 @@ index 89d9aa9e..4a20100 100644
   * macro tricks to expand the set_buffer_foo(), clear_buffer_foo()
   * and buffer_foo() functions.
 diff --git a/include/linux/cgroup-defs.h b/include/linux/cgroup-defs.h
-index 8da2632..1c12de3 100644
+index 8da2632..0cc4742 100644
 --- a/include/linux/cgroup-defs.h
 +++ b/include/linux/cgroup-defs.h
 @@ -16,6 +16,7 @@
  #include <linux/percpu-refcount.h>
  #include <linux/percpu-rwsem.h>
  #include <linux/workqueue.h>
-+#include <linux/work-simple.h>
++#include <linux/swork.h>
  
  #ifdef CONFIG_CGROUPS
  
@@ -13170,10 +13170,10 @@ index 8132214..89ffaa7 100644
  static inline bool hlist_bl_is_locked(struct hlist_bl_head *b)
 diff --git a/include/linux/locallock.h b/include/linux/locallock.h
 new file mode 100644
-index 0000000..6fe5928
+index 0000000..e572a39
 --- /dev/null
 +++ b/include/linux/locallock.h
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,276 @@
 +#ifndef _LINUX_LOCALLOCK_H
 +#define _LINUX_LOCALLOCK_H
 +
@@ -13242,6 +13242,9 @@ index 0000000..6fe5928
 +#define local_lock(lvar)					\
 +	do { __local_lock(&get_local_var(lvar)); } while (0)
 +
++#define local_lock_on(lvar, cpu)				\
++	do { __local_lock(&per_cpu(lvar, cpu)); } while (0)
++
 +static inline int __local_trylock(struct local_irq_lock *lv)
 +{
 +	if (lv->owner != current && spin_trylock_local(&lv->lock)) {
@@ -13279,6 +13282,9 @@ index 0000000..6fe5928
 +		__local_unlock(this_cpu_ptr(&lvar));		\
 +		put_local_var(lvar);				\
 +	} while (0)
++
++#define local_unlock_on(lvar, cpu)                       \
++	do { __local_unlock(&per_cpu(lvar, cpu)); } while (0)
 +
 +static inline void __local_lock_irq(struct local_irq_lock *lv)
 +{
@@ -15173,7 +15179,7 @@ index d80259a..ddd1e68 100644
  /* Test if 'sig' is valid signal. Use this instead of testing _NSIG directly */
  static inline int valid_signal(unsigned long sig)
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index 4fde618..d17c4d9 100644
+index 1716f93..ab5911f 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -203,6 +203,7 @@ struct sk_buff_head {
@@ -15931,6 +15937,36 @@ index 7ba7dcc..da646f2 100644
  extern void lru_cache_add(struct page *);
  extern void lru_cache_add_anon(struct page *page);
  extern void lru_cache_add_file(struct page *page);
+diff --git a/include/linux/swork.h b/include/linux/swork.h
+new file mode 100644
+index 0000000..f175fa9
+--- /dev/null
++++ b/include/linux/swork.h
+@@ -0,0 +1,24 @@
++#ifndef _LINUX_SWORK_H
++#define _LINUX_SWORK_H
++
++#include <linux/list.h>
++
++struct swork_event {
++	struct list_head item;
++	unsigned long flags;
++	void (*func)(struct swork_event *);
++};
++
++static inline void INIT_SWORK(struct swork_event *event,
++			      void (*func)(struct swork_event *))
++{
++	event->flags = 0;
++	event->func = func;
++}
++
++bool swork_queue(struct swork_event *sev);
++
++int swork_get(void);
++void swork_put(void);
++
++#endif /* _LINUX_SWORK_H */
 diff --git a/include/linux/thread_info.h b/include/linux/thread_info.h
 index ff307b5..be9f9dc 100644
 --- a/include/linux/thread_info.h
@@ -16049,36 +16085,6 @@ index 513b36f..981c8a8 100644
  
  typedef struct __wait_queue wait_queue_t;
  typedef int (*wait_queue_func_t)(wait_queue_t *wait, unsigned mode, int flags, void *key);
-diff --git a/include/linux/work-simple.h b/include/linux/work-simple.h
-new file mode 100644
-index 0000000..f175fa9
---- /dev/null
-+++ b/include/linux/work-simple.h
-@@ -0,0 +1,24 @@
-+#ifndef _LINUX_SWORK_H
-+#define _LINUX_SWORK_H
-+
-+#include <linux/list.h>
-+
-+struct swork_event {
-+	struct list_head item;
-+	unsigned long flags;
-+	void (*func)(struct swork_event *);
-+};
-+
-+static inline void INIT_SWORK(struct swork_event *event,
-+			      void (*func)(struct swork_event *))
-+{
-+	event->flags = 0;
-+	event->func = func;
-+}
-+
-+bool swork_queue(struct swork_event *sev);
-+
-+int swork_get(void);
-+void swork_put(void);
-+
-+#endif /* _LINUX_SWORK_H */
 diff --git a/include/net/dst.h b/include/net/dst.h
 index c7329dc..35c3dba 100644
 --- a/include/net/dst.h
@@ -17450,7 +17456,7 @@ index fc1ef73..83c6665 100644
  	return r;
  }
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index 95e47d2..2d26658 100644
+index 12ecd4f..560ea99 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
 @@ -802,6 +802,7 @@ static void __perf_mux_hrtimer_init(struct perf_cpu_context *cpuctx, int cpu)
@@ -22090,7 +22096,7 @@ index 0b4570c..60684be 100644
  
  	old = buf->data;
 diff --git a/kernel/sched/Makefile b/kernel/sched/Makefile
-index 6768797..debedbe 100644
+index 6768797..01b9994 100644
 --- a/kernel/sched/Makefile
 +++ b/kernel/sched/Makefile
 @@ -13,7 +13,7 @@ endif
@@ -22098,7 +22104,7 @@ index 6768797..debedbe 100644
  obj-y += core.o loadavg.o clock.o cputime.o
  obj-y += idle_task.o fair.o rt.o deadline.o stop_task.o
 -obj-y += wait.o completion.o idle.o
-+obj-y += wait.o swait.o work-simple.o completion.o idle.o
++obj-y += wait.o swait.o swork.o completion.o idle.o
  obj-$(CONFIG_SMP) += cpupri.o cpudeadline.o
  obj-$(CONFIG_SCHED_AUTOGROUP) += auto_group.o
  obj-$(CONFIG_SCHEDSTATS) += stats.o
@@ -23668,11 +23674,11 @@ index 0000000..205fe36
 +	}
 +}
 +EXPORT_SYMBOL(finish_swait);
-diff --git a/kernel/sched/work-simple.c b/kernel/sched/work-simple.c
+diff --git a/kernel/sched/swork.c b/kernel/sched/swork.c
 new file mode 100644
-index 0000000..9ffe405
+index 0000000..1950f40
 --- /dev/null
-+++ b/kernel/sched/work-simple.c
++++ b/kernel/sched/swork.c
 @@ -0,0 +1,173 @@
 +/*
 + * Copyright (C) 2014 BMW Car IT GmbH, Daniel Wagner daniel.wagner@bmw-carit.de
@@ -23682,7 +23688,7 @@ index 0000000..9ffe405
 + */
 +
 +#include <linux/swait.h>
-+#include <linux/work-simple.h>
++#include <linux/swork.h>
 +#include <linux/kthread.h>
 +#include <linux/slab.h>
 +#include <linux/spinlock.h>
@@ -27927,7 +27933,7 @@ index 919d9d0..3bf86ec 100644
  
  #define TRACE_BUF_SIZE		1024
 diff --git a/kernel/trace/trace_events.c b/kernel/trace/trace_events.c
-index 996f0fd..4a48f97 100644
+index 996f0fd..5bd79b3 100644
 --- a/kernel/trace/trace_events.c
 +++ b/kernel/trace/trace_events.c
 @@ -188,6 +188,8 @@ static int trace_define_common_fields(void)
@@ -27939,6 +27945,21 @@ index 996f0fd..4a48f97 100644
  
  	return ret;
  }
+@@ -244,6 +246,14 @@ void *trace_event_buffer_reserve(struct trace_event_buffer *fbuffer,
+ 
+ 	local_save_flags(fbuffer->flags);
+ 	fbuffer->pc = preempt_count();
++	/*
++	 * If CONFIG_PREEMPT is enabled, then the tracepoint itself disables
++	 * preemption (adding one to the preempt_count). Since we are
++	 * interested in the preempt_count at the time the tracepoint was
++	 * hit, we need to subtract one to offset the increment.
++	 */
++	if (IS_ENABLED(CONFIG_PREEMPT))
++		fbuffer->pc--;
+ 	fbuffer->trace_file = trace_file;
+ 
+ 	fbuffer->event =
 diff --git a/kernel/trace/trace_irqsoff.c b/kernel/trace/trace_irqsoff.c
 index be3222b..553e712 100644
 --- a/kernel/trace/trace_irqsoff.c
@@ -30297,7 +30318,7 @@ index 65d5f92..feb4a44 100644
  
  	for (i = 0; i < t.count; i++) {
 diff --git a/mm/swap.c b/mm/swap.c
-index 39395fb..ca194ae 100644
+index 39395fb..ad16649 100644
 --- a/mm/swap.c
 +++ b/mm/swap.c
 @@ -31,6 +31,7 @@
@@ -30382,19 +30403,25 @@ index 39395fb..ca194ae 100644
  }
  
  /**
-@@ -816,9 +821,9 @@ void lru_add_drain_cpu(int cpu)
+@@ -816,9 +821,15 @@ void lru_add_drain_cpu(int cpu)
  		unsigned long flags;
  
  		/* No harm done if a racing interrupt already did this */
 -		local_irq_save(flags);
++#ifdef CONFIG_PREEMPT_RT_BASE
++		local_lock_irqsave_on(rotate_lock, flags, cpu);
++		pagevec_move_tail(pvec);
++		local_unlock_irqrestore_on(rotate_lock, flags, cpu);
++#else
 +		local_lock_irqsave(rotate_lock, flags);
  		pagevec_move_tail(pvec);
 -		local_irq_restore(flags);
 +		local_unlock_irqrestore(rotate_lock, flags);
++#endif
  	}
  
  	pvec = &per_cpu(lru_deactivate_file_pvecs, cpu);
-@@ -846,18 +851,19 @@ void deactivate_file_page(struct page *page)
+@@ -846,26 +857,47 @@ void deactivate_file_page(struct page *page)
  		return;
  
  	if (likely(get_page_unless_zero(page))) {
@@ -30417,7 +30444,60 @@ index 39395fb..ca194ae 100644
 +	local_unlock_cpu(swapvec_lock);
  }
  
++
++#ifdef CONFIG_PREEMPT_RT_BASE
++static inline void remote_lru_add_drain(int cpu, struct cpumask *has_work)
++{
++	local_lock_on(swapvec_lock, cpu);
++	lru_add_drain_cpu(cpu);
++	local_unlock_on(swapvec_lock, cpu);
++}
++
++#else
++
  static void lru_add_drain_per_cpu(struct work_struct *dummy)
+ {
+ 	lru_add_drain();
+ }
+ 
+ static DEFINE_PER_CPU(struct work_struct, lru_add_drain_work);
++static inline void remote_lru_add_drain(int cpu, struct cpumask *has_work)
++{
++	struct work_struct *work = &per_cpu(lru_add_drain_work, cpu);
++
++	INIT_WORK(work, lru_add_drain_per_cpu);
++	schedule_work_on(cpu, work);
++	cpumask_set_cpu(cpu, has_work);
++}
++#endif
+ 
+ void lru_add_drain_all(void)
+ {
+@@ -878,20 +910,17 @@ void lru_add_drain_all(void)
+ 	cpumask_clear(&has_work);
+ 
+ 	for_each_online_cpu(cpu) {
+-		struct work_struct *work = &per_cpu(lru_add_drain_work, cpu);
+-
+ 		if (pagevec_count(&per_cpu(lru_add_pvec, cpu)) ||
+ 		    pagevec_count(&per_cpu(lru_rotate_pvecs, cpu)) ||
+ 		    pagevec_count(&per_cpu(lru_deactivate_file_pvecs, cpu)) ||
+-		    need_activate_page_drain(cpu)) {
+-			INIT_WORK(work, lru_add_drain_per_cpu);
+-			schedule_work_on(cpu, work);
+-			cpumask_set_cpu(cpu, &has_work);
+-		}
++		    need_activate_page_drain(cpu))
++			remote_lru_add_drain(cpu, &has_work);
+ 	}
+ 
++#ifndef CONFIG_PREEMPT_RT_BASE
+ 	for_each_cpu(cpu, &has_work)
+ 		flush_work(&per_cpu(lru_add_drain_work, cpu));
++#endif
+ 
+ 	put_online_cpus();
+ 	mutex_unlock(&lock);
 diff --git a/mm/truncate.c b/mm/truncate.c
 index 76e35ad..5f19642 100644
 --- a/mm/truncate.c
