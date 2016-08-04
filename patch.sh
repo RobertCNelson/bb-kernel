@@ -88,12 +88,14 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	#v4.1.29
+	git revert --no-edit 74225a4cbea38034034add5da67a2f7ee23251c0
+
 	#v4.1.28
 	git revert --no-edit c5ad33184354260be6d05de57e46a5498692f6d6
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz
