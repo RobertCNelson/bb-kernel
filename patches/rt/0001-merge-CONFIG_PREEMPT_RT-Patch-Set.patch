@@ -1,6 +1,6 @@
-From b8f281038bc2052b2e8db0da3e3511e1871b8a78 Mon Sep 17 00:00:00 2001
+From 1ac58ce817f4aea4f785a1aeeee572b3c65749b5 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 1 Aug 2016 09:57:49 -0500
+Date: Wed, 10 Aug 2016 09:15:02 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -60,6 +60,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/x86/include/asm/signal.h                      |   13 +
  arch/x86/include/asm/stackprotector.h              |    9 +-
  arch/x86/include/asm/thread_info.h                 |    6 +
+ arch/x86/include/asm/tlbflush.h                    |    7 +
  arch/x86/include/asm/uv/uv_bau.h                   |   14 +-
  arch/x86/include/asm/uv/uv_hub.h                   |    2 +-
  arch/x86/kernel/apic/io_apic.c                     |    3 +-
@@ -143,7 +144,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../net/wireless/intersil/orinoco/orinoco_usb.c    |    2 +-
  drivers/pci/access.c                               |    2 +-
  drivers/power/bq27xxx_battery.c                    |    5 +-
- drivers/scsi/fcoe/fcoe.c                           |   18 +-
+ drivers/scsi/fcoe/fcoe.c                           |   20 +-
  drivers/scsi/fcoe/fcoe_ctlr.c                      |    4 +-
  drivers/scsi/libfc/fc_exch.c                       |    4 +-
  drivers/scsi/libsas/sas_ata.c                      |    4 +-
@@ -372,7 +373,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/sunrpc/svc_xprt.c                              |    6 +-
  scripts/mkcompile_h                                |    4 +-
  sound/core/pcm_native.c                            |    8 +-
- 367 files changed, 11836 insertions(+), 2322 deletions(-)
+ 368 files changed, 11844 insertions(+), 2323 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -2611,6 +2612,25 @@ index ffae84d..b4575ba 100644
  #define STACK_WARN		(THREAD_SIZE/8)
  
  /*
+diff --git a/arch/x86/include/asm/tlbflush.h b/arch/x86/include/asm/tlbflush.h
+index 1fde8d5..b202084 100644
+--- a/arch/x86/include/asm/tlbflush.h
++++ b/arch/x86/include/asm/tlbflush.h
+@@ -135,7 +135,14 @@ static inline void cr4_set_bits_and_update_boot(unsigned long mask)
+ 
+ static inline void __native_flush_tlb(void)
+ {
++	/*
++	 * if current->mm == NULL then we borrow a mm which may change during a
++	 * task switch and therefore we must not be preempted while we write CR3
++	 * back.
++	 */
++	preempt_disable();
+ 	native_write_cr3(native_read_cr3());
++	preempt_enable();
+ }
+ 
+ static inline void __native_flush_tlb_global_irq_disabled(void)
 diff --git a/arch/x86/include/asm/uv/uv_bau.h b/arch/x86/include/asm/uv/uv_bau.h
 index fc808b8..ebb4011 100644
 --- a/arch/x86/include/asm/uv/uv_bau.h
@@ -6745,7 +6765,7 @@ index 45f6ebf..e90b3f3 100644
  
  /*
 diff --git a/drivers/scsi/fcoe/fcoe.c b/drivers/scsi/fcoe/fcoe.c
-index 0efe711..3d23265 100644
+index 0efe711..908056e 100644
 --- a/drivers/scsi/fcoe/fcoe.c
 +++ b/drivers/scsi/fcoe/fcoe.c
 @@ -1286,7 +1286,7 @@ static void fcoe_percpu_thread_destroy(unsigned int cpu)
@@ -6795,6 +6815,15 @@ index 0efe711..3d23265 100644
  	return -EINVAL;
  }
  
+@@ -1814,7 +1814,7 @@ static void fcoe_recv_frame(struct sk_buff *skb)
+ 	 */
+ 	hp = (struct fcoe_hdr *) skb_network_header(skb);
+ 
+-	stats = per_cpu_ptr(lport->stats, get_cpu());
++	stats = per_cpu_ptr(lport->stats, get_cpu_light());
+ 	if (unlikely(FC_FCOE_DECAPS_VER(hp) != FC_FCOE_VER)) {
+ 		if (stats->ErrorFrames < 5)
+ 			printk(KERN_WARNING "fcoe: FCoE version "
 @@ -1846,13 +1846,13 @@ static void fcoe_recv_frame(struct sk_buff *skb)
  		goto drop;
  
@@ -7498,7 +7527,7 @@ index 684996c..6e18a06 100644
  
  		/*
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 44abb2d..ce40e2c 100644
+index 9c0e0af..061ca25 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -14,6 +14,7 @@
@@ -9512,7 +9541,7 @@ index 9ccbdf2..428d6a7 100644
  
  typedef __printf(1, 0) int (*printk_func_t)(const char *fmt, va_list args);
 diff --git a/include/linux/radix-tree.h b/include/linux/radix-tree.h
-index 51a97ac..0608483 100644
+index 495a09b..da7b96a 100644
 --- a/include/linux/radix-tree.h
 +++ b/include/linux/radix-tree.h
 @@ -294,8 +294,13 @@ radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
@@ -11663,7 +11692,7 @@ index 0000000..d3f2fbd
 +
 +#endif /* _LATENCY_HIST_H */
 diff --git a/init/Kconfig b/init/Kconfig
-index 0dfd09d..a74c5a0 100644
+index d895c7a..8a05ce1 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
 @@ -494,7 +494,7 @@ config TINY_RCU
@@ -11701,7 +11730,7 @@ index 0dfd09d..a74c5a0 100644
  	default n
  	help
  	  This feature lets you explicitly allocate real CPU bandwidth
-@@ -1717,6 +1718,7 @@ choice
+@@ -1718,6 +1719,7 @@ choice
  
  config SLAB
  	bool "SLAB"
@@ -11709,7 +11738,7 @@ index 0dfd09d..a74c5a0 100644
  	help
  	  The regular slab allocator that is established and known to work
  	  well in all environments. It organizes cache hot objects in
-@@ -1735,6 +1737,7 @@ config SLUB
+@@ -1736,6 +1738,7 @@ config SLUB
  config SLOB
  	depends on EXPERT
  	bool "SLOB (Simple Allocator)"
@@ -11717,7 +11746,7 @@ index 0dfd09d..a74c5a0 100644
  	help
  	   SLOB replaces the stock allocator with a drastically simpler
  	   allocator. SLOB is generally more space efficient but
-@@ -1744,7 +1747,7 @@ endchoice
+@@ -1745,7 +1748,7 @@ endchoice
  
  config SLUB_CPU_PARTIAL
  	default y
@@ -12068,10 +12097,10 @@ index 3f9c974..11dbe26 100644
  
  config PREEMPT_COUNT
 diff --git a/kernel/cgroup.c b/kernel/cgroup.c
-index 86cb5c6..3920f49 100644
+index 75c0ff0..ec99547 100644
 --- a/kernel/cgroup.c
 +++ b/kernel/cgroup.c
-@@ -5005,10 +5005,10 @@ static void css_free_rcu_fn(struct rcu_head *rcu_head)
+@@ -5011,10 +5011,10 @@ static void css_free_rcu_fn(struct rcu_head *rcu_head)
  	queue_work(cgroup_destroy_wq, &css->destroy_work);
  }
  
@@ -12084,7 +12113,7 @@ index 86cb5c6..3920f49 100644
  	struct cgroup_subsys *ss = css->ss;
  	struct cgroup *cgrp = css->cgroup;
  
-@@ -5049,8 +5049,8 @@ static void css_release(struct percpu_ref *ref)
+@@ -5055,8 +5055,8 @@ static void css_release(struct percpu_ref *ref)
  	struct cgroup_subsys_state *css =
  		container_of(ref, struct cgroup_subsys_state, refcnt);
  
@@ -12095,7 +12124,7 @@ index 86cb5c6..3920f49 100644
  }
  
  static void init_and_link_css(struct cgroup_subsys_state *css,
-@@ -5694,6 +5694,7 @@ static int __init cgroup_wq_init(void)
+@@ -5698,6 +5698,7 @@ static int __init cgroup_wq_init(void)
  	 */
  	cgroup_destroy_wq = alloc_workqueue("cgroup_destroy", 0, 1);
  	BUG_ON(!cgroup_destroy_wq);
@@ -12104,7 +12133,7 @@ index 86cb5c6..3920f49 100644
  	/*
  	 * Used to destroy pidlists and separate to serve as flush domain.
 diff --git a/kernel/cpu.c b/kernel/cpu.c
-index 3e3f6e4..e4d7491 100644
+index e7cea29..ebaf999 100644
 --- a/kernel/cpu.c
 +++ b/kernel/cpu.c
 @@ -152,8 +152,8 @@ static struct {
@@ -16436,7 +16465,7 @@ index 8d0f35d..b62cf64 100644
  }
  EXPORT_SYMBOL(completion_done);
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 11546a6..140ee06 100644
+index 65716ce..1249647 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -128,7 +128,11 @@ const_debug unsigned int sysctl_sched_features =
@@ -17066,7 +17095,7 @@ index 11546a6..140ee06 100644
  
  /**
   * yield - yield the current processor to other threads.
-@@ -5072,7 +5316,9 @@ void init_idle(struct task_struct *idle, int cpu)
+@@ -5074,7 +5318,9 @@ void init_idle(struct task_struct *idle, int cpu)
  
  	/* Set the preempt count _outside_ the spinlocks! */
  	init_idle_preempt_count(idle, cpu);
@@ -17077,7 +17106,7 @@ index 11546a6..140ee06 100644
  	/*
  	 * The idle tasks have their own, simple scheduling class:
  	 */
-@@ -5213,6 +5459,8 @@ void sched_setnuma(struct task_struct *p, int nid)
+@@ -5215,6 +5461,8 @@ void sched_setnuma(struct task_struct *p, int nid)
  #endif /* CONFIG_NUMA_BALANCING */
  
  #ifdef CONFIG_HOTPLUG_CPU
@@ -17086,7 +17115,7 @@ index 11546a6..140ee06 100644
  /*
   * Ensures that the idle task is using init_mm right before its cpu goes
   * offline.
-@@ -5227,7 +5475,11 @@ void idle_task_exit(void)
+@@ -5229,7 +5477,11 @@ void idle_task_exit(void)
  		switch_mm(mm, &init_mm, current);
  		finish_arch_post_lock_switch();
  	}
@@ -17099,7 +17128,7 @@ index 11546a6..140ee06 100644
  }
  
  /*
-@@ -5423,6 +5675,10 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
+@@ -5425,6 +5677,10 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
  
  	case CPU_DEAD:
  		calc_load_migrate(rq);
@@ -17110,7 +17139,7 @@ index 11546a6..140ee06 100644
  		break;
  #endif
  	}
-@@ -7405,7 +7661,7 @@ void __init sched_init(void)
+@@ -7407,7 +7663,7 @@ void __init sched_init(void)
  #ifdef CONFIG_DEBUG_ATOMIC_SLEEP
  static inline int preempt_count_equals(int preempt_offset)
  {
@@ -17315,10 +17344,10 @@ index 4fbc3bd..5503c1f 100644
  #undef __PN
  #undef P
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index eeaf920..3b66683 100644
+index 0858959..6bce479 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -3335,7 +3335,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
+@@ -3333,7 +3333,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
  	ideal_runtime = sched_slice(cfs_rq, curr);
  	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
  	if (delta_exec > ideal_runtime) {
@@ -17327,7 +17356,7 @@ index eeaf920..3b66683 100644
  		/*
  		 * The current task ran long enough, ensure it doesn't get
  		 * re-elected due to buddy favours.
-@@ -3359,7 +3359,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
+@@ -3357,7 +3357,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
  		return;
  
  	if (delta > ideal_runtime)
@@ -17336,7 +17365,7 @@ index eeaf920..3b66683 100644
  }
  
  static void
-@@ -3504,7 +3504,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
+@@ -3502,7 +3502,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
  	 * validating it and just reschedule.
  	 */
  	if (queued) {
@@ -17345,7 +17374,7 @@ index eeaf920..3b66683 100644
  		return;
  	}
  	/*
-@@ -3686,7 +3686,7 @@ static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec)
+@@ -3684,7 +3684,7 @@ static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec)
  	 * hierarchy can be throttled
  	 */
  	if (!assign_cfs_rq_runtime(cfs_rq) && likely(cfs_rq->curr))
@@ -17354,7 +17383,7 @@ index eeaf920..3b66683 100644
  }
  
  static __always_inline
-@@ -4298,7 +4298,7 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
+@@ -4296,7 +4296,7 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
  
  		if (delta < 0) {
  			if (rq->curr == p)
@@ -17363,7 +17392,7 @@ index eeaf920..3b66683 100644
  			return;
  		}
  		hrtick_start(rq, delta);
-@@ -5438,7 +5438,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
+@@ -5441,7 +5441,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
  	return;
  
  preempt:
@@ -17372,7 +17401,7 @@ index eeaf920..3b66683 100644
  	/*
  	 * Only set the backward buddy when the current task is still
  	 * on the rq. This can happen when a wakeup gets interleaved
-@@ -8189,7 +8189,7 @@ static void task_fork_fair(struct task_struct *p)
+@@ -8192,7 +8192,7 @@ static void task_fork_fair(struct task_struct *p)
  		 * 'current' within the tree based on its new key value.
  		 */
  		swap(curr->vruntime, se->vruntime);
@@ -17381,7 +17410,7 @@ index eeaf920..3b66683 100644
  	}
  
  	se->vruntime -= cfs_rq->min_vruntime;
-@@ -8214,7 +8214,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
+@@ -8217,7 +8217,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
  	 */
  	if (rq->curr == p) {
  		if (p->prio > oldprio)
@@ -19741,7 +19770,7 @@ index 6df8927..6b4c19f 100644
  #else
  void ntp_notify_cmos_timer(void) { }
 diff --git a/kernel/time/posix-cpu-timers.c b/kernel/time/posix-cpu-timers.c
-index 1cafba8..5f16807 100644
+index 39008d7..633f4ea 100644
 --- a/kernel/time/posix-cpu-timers.c
 +++ b/kernel/time/posix-cpu-timers.c
 @@ -3,6 +3,7 @@
@@ -19761,7 +19790,7 @@ index 1cafba8..5f16807 100644
  
  	ret = 0;
  	old_incr = timer->it.cpu.incr;
-@@ -1063,7 +1064,7 @@ void posix_cpu_timer_schedule(struct k_itimer *timer)
+@@ -1064,7 +1065,7 @@ void posix_cpu_timer_schedule(struct k_itimer *timer)
  	/*
  	 * Now re-arm for the new expiry time.
  	 */
@@ -19770,7 +19799,7 @@ index 1cafba8..5f16807 100644
  	arm_timer(timer);
  	unlock_task_sighand(p, &flags);
  
-@@ -1152,13 +1153,13 @@ static inline int fastpath_timer_check(struct task_struct *tsk)
+@@ -1153,13 +1154,13 @@ static inline int fastpath_timer_check(struct task_struct *tsk)
   * already updated our counts.  We need to check if any timers fire now.
   * Interrupts are disabled.
   */
@@ -19786,7 +19815,7 @@ index 1cafba8..5f16807 100644
  
  	/*
  	 * The fast path checks that there are no expired thread or thread
-@@ -1212,6 +1213,190 @@ void run_posix_cpu_timers(struct task_struct *tsk)
+@@ -1213,6 +1214,190 @@ void run_posix_cpu_timers(struct task_struct *tsk)
  	}
  }
  
@@ -24710,10 +24739,10 @@ index 0c6317b..1e6ab5f 100644
  	}
  
 diff --git a/mm/compaction.c b/mm/compaction.c
-index f8e925e..14cfc47 100644
+index c59a3c4..3f023e7 100644
 --- a/mm/compaction.c
 +++ b/mm/compaction.c
-@@ -1414,10 +1414,12 @@ check_drain:
+@@ -1409,10 +1409,12 @@ check_drain:
  				cc->migrate_pfn & ~((1UL << cc->order) - 1);
  
  			if (cc->last_migrated_pfn < current_block_start) {
@@ -24946,7 +24975,7 @@ index f802c2d..b1b6f23 100644
  #ifdef finish_arch_post_lock_switch
  	finish_arch_post_lock_switch();
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index 898fe3f..3011403 100644
+index ff50f59..a0a18a2 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
 @@ -61,6 +61,7 @@
@@ -24976,7 +25005,7 @@ index 898fe3f..3011403 100644
  int page_group_by_mobility_disabled __read_mostly;
  
  #ifdef CONFIG_DEFERRED_STRUCT_PAGE_INIT
-@@ -814,7 +827,7 @@ static inline int free_pages_check(struct page *page)
+@@ -816,7 +829,7 @@ static inline int free_pages_check(struct page *page)
  }
  
  /*
@@ -24985,7 +25014,7 @@ index 898fe3f..3011403 100644
   * Assumes all pages on list are in same zone, and of same order.
   * count is the number of pages to free.
   *
-@@ -825,18 +838,53 @@ static inline int free_pages_check(struct page *page)
+@@ -827,18 +840,53 @@ static inline int free_pages_check(struct page *page)
   * pinned" detection logic.
   */
  static void free_pcppages_bulk(struct zone *zone, int count,
@@ -25043,7 +25072,7 @@ index 898fe3f..3011403 100644
  	while (to_free) {
  		struct page *page;
  		struct list_head *list;
-@@ -852,7 +900,7 @@ static void free_pcppages_bulk(struct zone *zone, int count,
+@@ -854,7 +902,7 @@ static void free_pcppages_bulk(struct zone *zone, int count,
  			batch_free++;
  			if (++migratetype == MIGRATE_PCPTYPES)
  				migratetype = 0;
@@ -25052,7 +25081,7 @@ index 898fe3f..3011403 100644
  		} while (list_empty(list));
  
  		/* This is the only non-empty list. Free them all. */
-@@ -860,24 +908,12 @@ static void free_pcppages_bulk(struct zone *zone, int count,
+@@ -862,24 +910,12 @@ static void free_pcppages_bulk(struct zone *zone, int count,
  			batch_free = to_free;
  
  		do {
@@ -25078,7 +25107,7 @@ index 898fe3f..3011403 100644
  }
  
  static void free_one_page(struct zone *zone,
-@@ -886,7 +922,9 @@ static void free_one_page(struct zone *zone,
+@@ -888,7 +924,9 @@ static void free_one_page(struct zone *zone,
  				int migratetype)
  {
  	unsigned long nr_scanned;
@@ -25089,7 +25118,7 @@ index 898fe3f..3011403 100644
  	nr_scanned = zone_page_state(zone, NR_PAGES_SCANNED);
  	if (nr_scanned)
  		__mod_zone_page_state(zone, NR_PAGES_SCANNED, -nr_scanned);
-@@ -896,7 +934,7 @@ static void free_one_page(struct zone *zone,
+@@ -898,7 +936,7 @@ static void free_one_page(struct zone *zone,
  		migratetype = get_pfnblock_migratetype(page, pfn);
  	}
  	__free_one_page(page, pfn, zone, order, migratetype);
@@ -25098,7 +25127,7 @@ index 898fe3f..3011403 100644
  }
  
  static int free_tail_pages_check(struct page *head_page, struct page *page)
-@@ -1070,10 +1108,10 @@ static void __free_pages_ok(struct page *page, unsigned int order)
+@@ -1072,10 +1110,10 @@ static void __free_pages_ok(struct page *page, unsigned int order)
  		return;
  
  	migratetype = get_pfnblock_migratetype(page, pfn);
@@ -25111,7 +25140,7 @@ index 898fe3f..3011403 100644
  }
  
  static void __init __free_pages_boot_core(struct page *page,
-@@ -2015,16 +2053,18 @@ static int rmqueue_bulk(struct zone *zone, unsigned int order,
+@@ -2017,16 +2055,18 @@ static int rmqueue_bulk(struct zone *zone, unsigned int order,
  void drain_zone_pages(struct zone *zone, struct per_cpu_pages *pcp)
  {
  	unsigned long flags;
@@ -25133,7 +25162,7 @@ index 898fe3f..3011403 100644
  }
  #endif
  
-@@ -2040,16 +2080,21 @@ static void drain_pages_zone(unsigned int cpu, struct zone *zone)
+@@ -2042,16 +2082,21 @@ static void drain_pages_zone(unsigned int cpu, struct zone *zone)
  	unsigned long flags;
  	struct per_cpu_pageset *pset;
  	struct per_cpu_pages *pcp;
@@ -25159,7 +25188,7 @@ index 898fe3f..3011403 100644
  }
  
  /*
-@@ -2135,8 +2180,17 @@ void drain_all_pages(struct zone *zone)
+@@ -2137,8 +2182,17 @@ void drain_all_pages(struct zone *zone)
  		else
  			cpumask_clear_cpu(cpu, &cpus_with_pcps);
  	}
@@ -25177,7 +25206,7 @@ index 898fe3f..3011403 100644
  }
  
  #ifdef CONFIG_HIBERNATION
-@@ -2192,7 +2246,7 @@ void free_hot_cold_page(struct page *page, bool cold)
+@@ -2194,7 +2248,7 @@ void free_hot_cold_page(struct page *page, bool cold)
  
  	migratetype = get_pfnblock_migratetype(page, pfn);
  	set_pcppage_migratetype(page, migratetype);
@@ -25186,7 +25215,7 @@ index 898fe3f..3011403 100644
  	__count_vm_event(PGFREE);
  
  	/*
-@@ -2218,12 +2272,17 @@ void free_hot_cold_page(struct page *page, bool cold)
+@@ -2220,12 +2274,17 @@ void free_hot_cold_page(struct page *page, bool cold)
  	pcp->count++;
  	if (pcp->count >= pcp->high) {
  		unsigned long batch = READ_ONCE(pcp->batch);
@@ -25206,7 +25235,7 @@ index 898fe3f..3011403 100644
  }
  
  /*
-@@ -2358,7 +2417,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
+@@ -2360,7 +2419,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
  		struct per_cpu_pages *pcp;
  		struct list_head *list;
  
@@ -25215,7 +25244,7 @@ index 898fe3f..3011403 100644
  		pcp = &this_cpu_ptr(zone->pageset)->pcp;
  		list = &pcp->lists[migratetype];
  		if (list_empty(list)) {
-@@ -2382,7 +2441,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
+@@ -2384,7 +2443,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
  		 * allocate greater than order-1 page units with __GFP_NOFAIL.
  		 */
  		WARN_ON_ONCE((gfp_flags & __GFP_NOFAIL) && (order > 1));
@@ -25224,7 +25253,7 @@ index 898fe3f..3011403 100644
  
  		page = NULL;
  		if (alloc_flags & ALLOC_HARDER) {
-@@ -2392,11 +2451,13 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
+@@ -2394,11 +2453,13 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
  		}
  		if (!page)
  			page = __rmqueue(zone, order, migratetype);
@@ -25240,7 +25269,7 @@ index 898fe3f..3011403 100644
  	}
  
  	__mod_zone_page_state(zone, NR_ALLOC_BATCH, -(1 << order));
-@@ -2406,13 +2467,13 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
+@@ -2408,13 +2469,13 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
  
  	__count_zone_vm_events(PGALLOC, zone, 1 << order);
  	zone_statistics(preferred_zone, zone, gfp_flags);
@@ -25256,7 +25285,7 @@ index 898fe3f..3011403 100644
  	return NULL;
  }
  
-@@ -6213,7 +6274,9 @@ static int page_alloc_cpu_notify(struct notifier_block *self,
+@@ -6215,7 +6276,9 @@ static int page_alloc_cpu_notify(struct notifier_block *self,
  	int cpu = (unsigned long)hcpu;
  
  	if (action == CPU_DEAD || action == CPU_DEAD_FROZEN) {
@@ -25266,7 +25295,7 @@ index 898fe3f..3011403 100644
  		drain_pages(cpu);
  
  		/*
-@@ -6239,6 +6302,7 @@ static int page_alloc_cpu_notify(struct notifier_block *self,
+@@ -6241,6 +6304,7 @@ static int page_alloc_cpu_notify(struct notifier_block *self,
  void __init page_alloc_init(void)
  {
  	hotcpu_notifier(page_alloc_cpu_notify, 0);
@@ -25274,7 +25303,7 @@ index 898fe3f..3011403 100644
  }
  
  /*
-@@ -7163,7 +7227,7 @@ void zone_pcp_reset(struct zone *zone)
+@@ -7165,7 +7229,7 @@ void zone_pcp_reset(struct zone *zone)
  	struct per_cpu_pageset *pset;
  
  	/* avoid races with drain_pages()  */
@@ -25283,7 +25312,7 @@ index 898fe3f..3011403 100644
  	if (zone->pageset != &boot_pageset) {
  		for_each_online_cpu(cpu) {
  			pset = per_cpu_ptr(zone->pageset, cpu);
-@@ -7172,7 +7236,7 @@ void zone_pcp_reset(struct zone *zone)
+@@ -7174,7 +7238,7 @@ void zone_pcp_reset(struct zone *zone)
  		free_percpu(zone->pageset);
  		zone->pageset = &boot_pageset;
  	}
