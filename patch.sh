@@ -88,6 +88,9 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	#v4.1.30
+	git revert --no-edit 1602957c537ea8e5dd79fb393ab1055a71e13ac8
+
 	#v4.1.29
 	git revert --no-edit 74225a4cbea38034034add5da67a2f7ee23251c0
 
