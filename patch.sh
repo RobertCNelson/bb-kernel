@@ -249,6 +249,7 @@ backports () {
 		cp -v  ~/linux-src/include/linux/mfd/palmas.h ./include/linux/mfd/
 		cp -v  ~/linux-src/include/linux/platform_data/ad5761.h ./include/linux/platform_data/
 		cp -v  ~/linux-src/include/uapi/linux/iio/types.h ./include/uapi/linux/iio/types.h
+		cp -v  ~/linux-src/kernel/time/timekeeping.c ./kernel/time/timekeeping.c
 
 		post_backports
 	fi
@@ -839,6 +840,10 @@ packaging () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
+		#v4.8.0-rc1+
+		if [ ! -d "${DIR}/KERNEL/scripts/gcc-plugins/" ] ; then
+			sed -i -e 's:(cd $objtree; find scripts/gcc-plugins:#(cd $objtree; find scripts/gcc-plugins:g' "${DIR}/KERNEL/scripts/package/builddeb"
+		fi
 		git commit -a -m 'packaging: sync builddeb changes' -s
 		git format-patch -1 -o "${DIR}/patches/packaging"
 		exit 2
