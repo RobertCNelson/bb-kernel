@@ -175,6 +175,11 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 
+	#v4.6.7
+	git revert --no-edit ec686b017167e4d306f295d21399d532783a69a0
+	git revert --no-edit 65eee9e03dd0623a86b7ce1845f5d281d00e48d1
+	git revert --no-edit 8d87f55bd871eafe1f954c43f4a4b2da16da7add
+
 	#v4.6.6
 	git revert --no-edit db70cd18d3da727a3a59694de428a9e41c620de7
 	git revert --no-edit b31a27b8ac07c1bcc6b4329e018be27bed3b7aee
@@ -244,7 +249,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.7"
+	backport_tag="v4.7.1"
 
 	subsystem="i2c"
 	#regenerate="enable"
@@ -259,7 +264,7 @@ backports () {
 	fi
 	patch_backports
 
-	backport_tag="v4.8-rc1"
+	backport_tag="v4.8-rc2"
 
 	subsystem="fbtft"
 	#regenerate="enable"
