@@ -175,8 +175,11 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 
-	#v4.4.16
-	git revert --no-edit edc185a40251e4727ba729ccb478d39cf76bfc54
+	#v4.4.18
+	git revert --no-edit eccccb42d44f44badcfbdbb4e21a4f30d9694666
+	git revert --no-edit a0fddee3fb342a4150c83c36e317660663691a72
+	git revert --no-edit 8627c7750a66a46d56d3564e1e881aa53764497c
+	git revert --no-edit 92f71339bceeda3a13b71e9663bf422bf3d3e941
 
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
@@ -256,7 +259,7 @@ patch_backports (){
 }
 
 lts44_backports () {
-	backport_tag="v4.6.6"
+	backport_tag="v4.6.7"
 
 	subsystem="tty"
 	#regenerate="enable"
