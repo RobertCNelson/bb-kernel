@@ -302,6 +302,21 @@ lts44_backports () {
 	fi
 	patch_backports
 
+	backport_tag="v4.7.2"
+
+	subsystem="i2c"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -vr ~/linux-src/drivers/i2c/* ./drivers/i2c/
+		cp -v  ~/linux-src/include/linux/i2c-mux.h ./include/linux/
+		cp -v  ~/linux-src/include/linux/i2c.h ./include/linux/
+
+		post_backports
+	fi
+	patch_backports
+
 	subsystem="iio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -309,26 +324,31 @@ lts44_backports () {
 
 		cp -vr ~/linux-src/drivers/iio/* ./drivers/iio/
 		cp -vr ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+		cp -vr ~/linux-src/include/dt-bindings/iio/* ./include/dt-bindings/iio/
 		cp -vr ~/linux-src/include/linux/iio/* ./include/linux/iio/
 		cp -v  ~/linux-src/include/linux/mfd/palmas.h ./include/linux/mfd/
 		cp -v  ~/linux-src/include/linux/platform_data/ad5761.h ./include/linux/platform_data/
+		cp -v  ~/linux-src/include/linux/platform_data/st_sensors_pdata.h ./include/linux/platform_data/
 		cp -v  ~/linux-src/include/uapi/linux/iio/types.h ./include/uapi/linux/iio/types.h
 
 		post_backports
 	fi
 	patch_backports
+	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	subsystem="edt-ft5x06"
+	backport_tag="v4.8-rc3"
+
+	subsystem="touchscreen"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		cp -v ~/linux-src/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/edt-ft5x06.c
+		cp -v ~/linux-src/drivers/input/touchscreen/* ./drivers/input/touchscreen/
+		cp -v ~/linux-src/include/linux/input/touchscreen.h ./include/linux/input/touchscreen.h
 
 		post_backports
 	fi
 	patch_backports
-	${git} "${DIR}/patches/backports/edt-ft5x06/0002-edt-ft5x06-add-invert_x-invert_y-swap_xy.patch"
 
 	echo "dir: lts44_backports"
 	#regenerate="enable"
