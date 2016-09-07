@@ -1,6 +1,6 @@
-From 5a1d7959dc67d2d8de122d1121e0af499c6c6b34 Mon Sep 17 00:00:00 2001
+From bc06540b02e75d26627a32e73cb66fdfea4bea13 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 10 Aug 2016 10:06:16 -0500
+Date: Wed, 7 Sep 2016 10:27:25 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -229,7 +229,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/autofs4/autofs_i.h                              |    1 +
  fs/autofs4/expire.c                                |    2 +-
  fs/buffer.c                                        |   21 +-
- fs/dcache.c                                        |    5 +-
+ fs/dcache.c                                        |    9 +-
  fs/eventpoll.c                                     |    4 +-
  fs/exec.c                                          |    2 +
  fs/f2fs/f2fs.h                                     |    4 +-
@@ -447,7 +447,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/soc/intel/atom/sst/sst.c                     |    4 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   16 +-
- 442 files changed, 12500 insertions(+), 2388 deletions(-)
+ 442 files changed, 12504 insertions(+), 2388 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -2179,7 +2179,7 @@ index dcd06d1..7d45b00d 100644
  #define _TIF_SYSCALL_TRACE	(1 << TIF_SYSCALL_TRACE)
  #define _TIF_SYSCALL_AUDIT	(1 << TIF_SYSCALL_AUDIT)
 diff --git a/arch/arm64/kernel/asm-offsets.c b/arch/arm64/kernel/asm-offsets.c
-index da675cc..c73e2ae 100644
+index 4106ac6..21f4a79 100644
 --- a/arch/arm64/kernel/asm-offsets.c
 +++ b/arch/arm64/kernel/asm-offsets.c
 @@ -35,6 +35,7 @@ int main(void)
@@ -2191,10 +2191,10 @@ index da675cc..c73e2ae 100644
    DEFINE(TI_TASK,		offsetof(struct thread_info, task));
    DEFINE(TI_CPU,		offsetof(struct thread_info, cpu));
 diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
-index bddd04d..6515be3 100644
+index 05012cd..7abfb48 100644
 --- a/arch/arm64/kernel/entry.S
 +++ b/arch/arm64/kernel/entry.S
-@@ -367,11 +367,16 @@ el1_irq:
+@@ -380,11 +380,16 @@ el1_irq:
  #ifdef CONFIG_PREEMPT
  	get_thread_info tsk
  	ldr	w24, [tsk, #TI_PREEMPT]		// get preempt count
@@ -2214,7 +2214,7 @@ index bddd04d..6515be3 100644
  #endif
  #ifdef CONFIG_TRACE_IRQFLAGS
  	bl	trace_hardirqs_on
-@@ -385,6 +390,7 @@ el1_preempt:
+@@ -398,6 +403,7 @@ el1_preempt:
  1:	bl	preempt_schedule_irq		// irq en/disable is done inside
  	ldr	x0, [tsk, #TI_FLAGS]		// get new tasks TI_FLAGS
  	tbnz	x0, #TIF_NEED_RESCHED, 1b	// needs rescheduling?
@@ -2222,7 +2222,7 @@ index bddd04d..6515be3 100644
  	ret	x24
  #endif
  
-@@ -622,6 +628,7 @@ fast_work_pending:
+@@ -635,6 +641,7 @@ fast_work_pending:
  	str	x0, [sp, #S_X0]			// returned x0
  work_pending:
  	tbnz	x1, #TIF_NEED_RESCHED, work_resched
@@ -7953,15 +7953,15 @@ index 479024a..a67a351 100644
  	i915_gem_execbuffer_move_to_active(vmas, ring);
  	i915_gem_execbuffer_retire_commands(dev, file, ring, batch_obj);
 diff --git a/drivers/gpu/drm/i915/i915_gem_shrinker.c b/drivers/gpu/drm/i915/i915_gem_shrinker.c
-index f7929e7..8ea68ad 100644
+index 7ab9cc4..e06515f 100644
 --- a/drivers/gpu/drm/i915/i915_gem_shrinker.c
 +++ b/drivers/gpu/drm/i915/i915_gem_shrinker.c
 @@ -39,7 +39,7 @@ static bool mutex_is_locked_by(struct mutex *mutex, struct task_struct *task)
  	if (!mutex_is_locked(mutex))
  		return false;
  
--#if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_MUTEXES)
-+#if (defined(CONFIG_SMP) || defined(CONFIG_DEBUG_MUTEXES)) && !defined(CONFIG_PREEMPT_RT_BASE)
+-#if defined(CONFIG_DEBUG_MUTEXES) || defined(CONFIG_MUTEX_SPIN_ON_OWNER)
++#if (defined(CONFIG_DEBUG_MUTEXES) || defined(CONFIG_MUTEX_SPIN_ON_OWNER)) && !defined(CONFIG_PREEMPT_RT_BASE)
  	return mutex->owner == task;
  #else
  	/* Since UP may be pre-empted, we cannot assume that we own the lock */
@@ -7986,10 +7986,10 @@ index b0df8d1..8d34df0 100644
  	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
  
 diff --git a/drivers/gpu/drm/i915/intel_display.c b/drivers/gpu/drm/i915/intel_display.c
-index 5250596..9ac6a47 100644
+index 5632373..d1f1781 100644
 --- a/drivers/gpu/drm/i915/intel_display.c
 +++ b/drivers/gpu/drm/i915/intel_display.c
-@@ -10104,7 +10104,7 @@ void intel_check_page_flip(struct drm_device *dev, int pipe)
+@@ -10084,7 +10084,7 @@ void intel_check_page_flip(struct drm_device *dev, int pipe)
  	struct drm_crtc *crtc = dev_priv->pipe_to_crtc_mapping[pipe];
  	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
  
@@ -8337,10 +8337,10 @@ index 4d20088..98b64ed 100644
  	Allows a block device to be used as cache for other devices; uses
  	a btree for indexing and the layout is optimized for SSDs.
 diff --git a/drivers/md/dm.c b/drivers/md/dm.c
-index 1f37781..827044c 100644
+index 87de9a0..86f64c1 100644
 --- a/drivers/md/dm.c
 +++ b/drivers/md/dm.c
-@@ -2133,7 +2133,7 @@ static void dm_request_fn(struct request_queue *q)
+@@ -2141,7 +2141,7 @@ static void dm_request_fn(struct request_queue *q)
  		/* Establish tio->ti before queuing work (map_tio_request) */
  		tio->ti = ti;
  		queue_kthread_work(&md->kworker, &tio->work);
@@ -10649,7 +10649,7 @@ index c7a5602..2907544 100644
  		__this_cpu_inc(bh_accounting.nr);
  		recalc_bh_state();
 diff --git a/fs/dcache.c b/fs/dcache.c
-index 2c75b39..7f5ec63 100644
+index 6608574..d96330d 100644
 --- a/fs/dcache.c
 +++ b/fs/dcache.c
 @@ -19,6 +19,7 @@
@@ -10660,16 +10660,20 @@ index 2c75b39..7f5ec63 100644
  #include <linux/slab.h>
  #include <linux/init.h>
  #include <linux/hash.h>
-@@ -578,7 +579,7 @@ static struct dentry *dentry_kill(struct dentry *dentry)
- 
- failed:
- 	spin_unlock(&dentry->d_lock);
--	cpu_relax();
-+	cpu_chill();
- 	return dentry; /* try again with same dentry */
+@@ -785,7 +786,11 @@ repeat:
+ kill_it:
+ 	dentry = dentry_kill(dentry);
+ 	if (dentry) {
+-		cond_resched();
++		int r;
++
++		r = cond_resched();
++		if (!r)
++			cpu_chill();
+ 		goto repeat;
+ 	}
  }
- 
-@@ -2388,7 +2389,7 @@ again:
+@@ -2391,7 +2396,7 @@ again:
  	if (dentry->d_lockref.count == 1) {
  		if (!spin_trylock(&inode->i_lock)) {
  			spin_unlock(&dentry->d_lock);
@@ -15720,7 +15724,7 @@ index c3fc5c2..161a180 100644
  	}
  	if (ret == 0) {
 diff --git a/ipc/msg.c b/ipc/msg.c
-index 6525406..9ad6991 100644
+index 3b2b0f5..a75e79f 100644
 --- a/ipc/msg.c
 +++ b/ipc/msg.c
 @@ -188,6 +188,12 @@ static void expunge_all(struct msg_queue *msq, int res)
@@ -15773,7 +15777,7 @@ index 6525406..9ad6991 100644
  }
  
 diff --git a/ipc/sem.c b/ipc/sem.c
-index c50aa57..d6261be 100644
+index 534caee..fbfdb0b 100644
 --- a/ipc/sem.c
 +++ b/ipc/sem.c
 @@ -690,6 +690,13 @@ undo:
@@ -28958,7 +28962,7 @@ index 08342c5..905e283 100644
  
  	for (i = 0; i < t.count; i++) {
 diff --git a/mm/swap.c b/mm/swap.c
-index a7251a8..20432b7 100644
+index ab3b9c2..b433019 100644
 --- a/mm/swap.c
 +++ b/mm/swap.c
 @@ -32,6 +32,7 @@
@@ -28986,7 +28990,7 @@ index a7251a8..20432b7 100644
 -		local_irq_save(flags);
 +		local_lock_irqsave(rotate_lock, flags);
  		pvec = this_cpu_ptr(&lru_rotate_pvecs);
- 		if (!pagevec_add(pvec, page))
+ 		if (!pagevec_add(pvec, page) || PageCompound(page))
  			pagevec_move_tail(pvec);
 -		local_irq_restore(flags);
 +		local_unlock_irqrestore(rotate_lock, flags);
@@ -29002,7 +29006,7 @@ index a7251a8..20432b7 100644
 +						       activate_page_pvecs);
  
  		page_cache_get(page);
- 		if (!pagevec_add(pvec, page))
+ 		if (!pagevec_add(pvec, page) || PageCompound(page))
  			pagevec_lru_move_fn(pvec, __activate_page, NULL);
 -		put_cpu_var(activate_page_pvecs);
 +		put_locked_var(swapvec_lock, activate_page_pvecs);
@@ -29027,7 +29031,7 @@ index a7251a8..20432b7 100644
  }
  
  /*
-@@ -628,13 +633,13 @@ EXPORT_SYMBOL(mark_page_accessed);
+@@ -628,12 +633,12 @@ EXPORT_SYMBOL(mark_page_accessed);
  
  static void __lru_cache_add(struct page *page)
  {
@@ -29035,15 +29039,14 @@ index a7251a8..20432b7 100644
 +	struct pagevec *pvec = &get_locked_var(swapvec_lock, lru_add_pvec);
  
  	page_cache_get(page);
- 	if (!pagevec_space(pvec))
+ 	if (!pagevec_add(pvec, page) || PageCompound(page))
  		__pagevec_lru_add(pvec);
- 	pagevec_add(pvec, page);
 -	put_cpu_var(lru_add_pvec);
 +	put_locked_var(swapvec_lock, lru_add_pvec);
  }
  
  /**
-@@ -814,9 +819,15 @@ void lru_add_drain_cpu(int cpu)
+@@ -813,9 +818,15 @@ void lru_add_drain_cpu(int cpu)
  		unsigned long flags;
  
  		/* No harm done if a racing interrupt already did this */
@@ -29061,7 +29064,7 @@ index a7251a8..20432b7 100644
  	}
  
  	pvec = &per_cpu(lru_deactivate_file_pvecs, cpu);
-@@ -844,26 +855,47 @@ void deactivate_file_page(struct page *page)
+@@ -843,26 +854,47 @@ void deactivate_file_page(struct page *page)
  		return;
  
  	if (likely(get_page_unless_zero(page))) {
@@ -29069,7 +29072,7 @@ index a7251a8..20432b7 100644
 +		struct pagevec *pvec = &get_locked_var(swapvec_lock,
 +						       lru_deactivate_file_pvecs);
  
- 		if (!pagevec_add(pvec, page))
+ 		if (!pagevec_add(pvec, page) || PageCompound(page))
  			pagevec_lru_move_fn(pvec, lru_deactivate_file_fn, NULL);
 -		put_cpu_var(lru_deactivate_file_pvecs);
 +		put_locked_var(swapvec_lock, lru_deactivate_file_pvecs);
@@ -29113,7 +29116,7 @@ index a7251a8..20432b7 100644
  
  void lru_add_drain_all(void)
  {
-@@ -876,20 +908,17 @@ void lru_add_drain_all(void)
+@@ -875,20 +907,17 @@ void lru_add_drain_all(void)
  	cpumask_clear(&has_work);
  
  	for_each_online_cpu(cpu) {
@@ -30107,10 +30110,10 @@ index f84f585..9b0cd1b 100644
  	mmput(mm);
  	kvm_put_kvm(vcpu->kvm);
 diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
-index d93deb5..00e0576 100644
+index f9746f2..3424e7f 100644
 --- a/virt/kvm/kvm_main.c
 +++ b/virt/kvm/kvm_main.c
-@@ -218,7 +218,7 @@ int kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
+@@ -220,7 +220,7 @@ int kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
  	vcpu->kvm = kvm;
  	vcpu->vcpu_id = id;
  	vcpu->pid = NULL;
@@ -30119,7 +30122,7 @@ index d93deb5..00e0576 100644
  	kvm_async_pf_vcpu_init(vcpu);
  
  	page = alloc_page(GFP_KERNEL | __GFP_ZERO);
-@@ -1780,7 +1780,7 @@ static int kvm_vcpu_check_block(struct kvm_vcpu *vcpu)
+@@ -1782,7 +1782,7 @@ static int kvm_vcpu_check_block(struct kvm_vcpu *vcpu)
  void kvm_vcpu_block(struct kvm_vcpu *vcpu)
  {
  	ktime_t start, cur;
@@ -30128,7 +30131,7 @@ index d93deb5..00e0576 100644
  	bool waited = false;
  
  	start = cur = ktime_get();
-@@ -1801,7 +1801,7 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
+@@ -1803,7 +1803,7 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
  	}
  
  	for (;;) {
@@ -30137,7 +30140,7 @@ index d93deb5..00e0576 100644
  
  		if (kvm_vcpu_check_block(vcpu) < 0)
  			break;
-@@ -1810,7 +1810,7 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
+@@ -1812,7 +1812,7 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
  		schedule();
  	}
  
@@ -30146,7 +30149,7 @@ index d93deb5..00e0576 100644
  	cur = ktime_get();
  
  out:
-@@ -1826,11 +1826,11 @@ void kvm_vcpu_kick(struct kvm_vcpu *vcpu)
+@@ -1828,11 +1828,11 @@ void kvm_vcpu_kick(struct kvm_vcpu *vcpu)
  {
  	int me;
  	int cpu = vcpu->cpu;
@@ -30161,7 +30164,7 @@ index d93deb5..00e0576 100644
  		++vcpu->stat.halt_wakeup;
  	}
  
-@@ -1931,7 +1931,7 @@ void kvm_vcpu_on_spin(struct kvm_vcpu *me)
+@@ -1933,7 +1933,7 @@ void kvm_vcpu_on_spin(struct kvm_vcpu *me)
  				continue;
  			if (vcpu == me)
  				continue;
@@ -30171,5 +30174,5 @@ index d93deb5..00e0576 100644
  			if (!kvm_vcpu_eligible_for_directed_yield(vcpu))
  				continue;
 -- 
-2.8.1
+2.9.3
 
