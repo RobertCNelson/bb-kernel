@@ -3,6 +3,8 @@
 #opensuse support added by: Antonio Cavallo
 #https://launchpad.net/~a.cavallo
 
+git_bin=$(which git)
+
 warning () { echo "! $@" >&2; }
 error () { echo "* $@" >&2; exit 1; }
 info () { echo "+ $@" >&2; }
@@ -71,7 +73,7 @@ redhat_reqs () {
 		echo "RPM distro version: [${rpm_distro}]"
 
 		case "${rpm_distro}" in
-		22|23|24)
+		22|23|24|25)
 			pkgtool="dnf"
 			;;
 		esac
@@ -139,6 +141,9 @@ debian_regs () {
 	pkg="lzop"
 	check_dpkg
 	pkg="man-db"
+	check_dpkg
+	#git
+	pkg="gettext"
 	check_dpkg
 
 	unset warn_dpkg_ia32
@@ -414,13 +419,31 @@ debian_regs () {
 		wheezy|precise)
 			pkg="libncurses5-dev"
 			check_dpkg
+			if [ "x${build_git}" = "xtrue" ] ; then
+				#git
+				pkg="libcurl4-gnutls-dev"
+				check_dpkg
+				pkg="libexpat1-dev"
+				check_dpkg
+				pkg="libssl-dev"
+				check_dpkg
+			fi
 			;;
 		*)
 			pkg="libncurses5-dev:${deb_arch}"
 			check_dpkg
+			if [ "x${build_git}" = "xtrue" ] ; then
+				#git
+				pkg="libcurl4-gnutls-dev:${deb_arch}"
+				check_dpkg
+				pkg="libexpat1-dev:${deb_arch}"
+				check_dpkg
+				pkg="libssl-dev:${deb_arch}"
+				check_dpkg
+			fi
 			;;
 		esac
-		
+
 		#pkg: ia32-libs
 		if [ "x${deb_arch}" = "xamd64" ] ; then
 			unset dpkg_multiarch
@@ -472,7 +495,7 @@ debian_regs () {
 		echo "-----------------------------"
 		echo "Please cut, paste and email to: bugs@rcn-ee.com"
 		echo "-----------------------------"
-		echo "git: [$(git rev-parse HEAD)]"
+		echo "git: [$(${git_bin} rev-parse HEAD)]"
 		echo "git: [$(cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g')]"
 		echo "uname -m: [$(uname -m)]"
 		echo "lsb_release -a:"
@@ -498,11 +521,11 @@ BUILD_HOST=${BUILD_HOST:="$( detect_host )"}
 if [ "$(which lsb_release)" ] ; then
 	info "Detected build host [$(lsb_release -sd)]"
 	info "host: [$(uname -m)]"
-	info "git HEAD commit: [$(git rev-parse HEAD)]"
+	info "git HEAD commit: [$(${git_bin} rev-parse HEAD)]"
 else
 	info "Detected build host [$BUILD_HOST]"
 	info "host: [$(uname -m)]"
-	info "git HEAD commit: [$(git rev-parse HEAD)]"
+	info "git HEAD commit: [$(${git_bin} rev-parse HEAD)]"
 fi
 
 DIR=$PWD
@@ -524,6 +547,33 @@ if [ "x${ARCH}" = "xx86_64" ] ; then
 		ignore_32bit="false"
 		;;
 	esac
+fi
+
+git_bin=$(which git)
+
+git_major=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f1)
+git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
+git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
+
+#debian Stable:
+#https://packages.debian.org/stable/git -> 2.1.4
+
+compare_major="2"
+compare_minor="1"
+compare_sub="4"
+
+unset build_git
+
+if [ "${git_major}" -lt "${compare_major}" ] ; then
+	build_git="true"
+elif [ "${git_major}" -eq "${compare_major}" ] ; then
+	if [ "${git_minor}" -lt "${compare_minor}" ] ; then
+		build_git="true"
+	elif [ "${git_minor}" -eq "${compare_minor}" ] ; then
+		if [ "${git_sub}" -lt "${compare_sub}" ] ; then
+			build_git="true"
+		fi
+	fi
 fi
 
 case "$BUILD_HOST" in
