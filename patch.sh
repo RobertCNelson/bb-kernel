@@ -170,13 +170,6 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-	#v4.4.18
-	git revert --no-edit eccccb42d44f44badcfbdbb4e21a4f30d9694666
-	git revert --no-edit a0fddee3fb342a4150c83c36e317660663691a72
-	git revert --no-edit 8627c7750a66a46d56d3564e1e881aa53764497c
-	git revert --no-edit 92f71339bceeda3a13b71e9663bf422bf3d3e941
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -298,7 +291,7 @@ lts44_backports () {
 	fi
 	patch_backports
 
-	backport_tag="v4.7.2"
+	backport_tag="v4.7.3"
 
 	subsystem="i2c"
 	#regenerate="enable"
@@ -332,7 +325,7 @@ lts44_backports () {
 	patch_backports
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	backport_tag="v4.8-rc3"
+	backport_tag="v4.8-rc5"
 
 	subsystem="touchscreen"
 	#regenerate="enable"
