@@ -291,7 +291,7 @@ lts44_backports () {
 	fi
 	patch_backports
 
-	backport_tag="v4.7.3"
+	backport_tag="v4.7.4"
 
 	subsystem="i2c"
 	#regenerate="enable"
@@ -325,7 +325,7 @@ lts44_backports () {
 	patch_backports
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	backport_tag="v4.8-rc5"
+	backport_tag="v4.8-rc6"
 
 	subsystem="touchscreen"
 	#regenerate="enable"
@@ -781,9 +781,10 @@ beaglebone () {
 	fi
 
 	${git} "${DIR}/patches/beaglebone/bbgw/0001-add-beaglebone-green-wireless.patch"
+	${git} "${DIR}/patches/beaglebone/bbgw/0002-bbgw-wlan0-fixes.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
+		number=2
 		cleanup
 	fi
 
