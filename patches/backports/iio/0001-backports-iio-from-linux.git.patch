@@ -1,6 +1,6 @@
-From 4b80ab6d0e088b5a48cfa4fb05d13f9e9cfc370e Mon Sep 17 00:00:00 2001
+From 4b4625533339a5bb49c04a5b9483a898aea1ed74 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 7 Sep 2016 09:13:10 -0500
+Date: Thu, 15 Sep 2016 08:55:49 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -11,9 +11,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/accel/Makefile                         |    3 +
  drivers/iio/accel/bma180.c                         |    2 +-
  drivers/iio/accel/bma220_spi.c                     |  338 ++++++
- drivers/iio/accel/bmc150-accel-core.c              |    4 +-
+ drivers/iio/accel/bmc150-accel-core.c              |   15 +-
  drivers/iio/accel/kxcjk-1013.c                     |    2 +-
- drivers/iio/accel/kxsd9.c                          |    1 +
+ drivers/iio/accel/kxsd9.c                          |    2 +
  drivers/iio/accel/mma7455_core.c                   |    3 +-
  drivers/iio/accel/mma7660.c                        |  277 +++++
  drivers/iio/accel/mma8452.c                        |  223 +++-
@@ -57,6 +57,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/buffer/industrialio-buffer-dma.c       |    4 +-
  drivers/iio/chemical/Kconfig                       |    8 +-
  drivers/iio/chemical/atlas-ph-sensor.c             |  269 ++++-
+ .../iio/common/hid-sensors/hid-sensor-attributes.c |    4 +-
  drivers/iio/common/st_sensors/st_sensors_buffer.c  |   49 +-
  drivers/iio/common/st_sensors/st_sensors_core.c    |   57 +-
  drivers/iio/common/st_sensors/st_sensors_i2c.c     |    4 +-
@@ -87,7 +88,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/imu/inv_mpu6050/inv_mpu_iio.h          |    2 +
  drivers/iio/imu/inv_mpu6050/inv_mpu_ring.c         |    2 +-
  drivers/iio/imu/inv_mpu6050/inv_mpu_spi.c          |    1 +
- drivers/iio/industrialio-core.c                    |  180 +++-
+ drivers/iio/industrialio-buffer.c                  |    4 +-
+ drivers/iio/industrialio-core.c                    |  185 +++-
  drivers/iio/industrialio-event.c                   |   19 +-
  drivers/iio/industrialio-sw-device.c               |  182 ++++
  drivers/iio/industrialio-trigger.c                 |   37 +-
@@ -158,8 +160,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/iio/sw_device.h                      |   70 ++
  include/linux/iio/sw_trigger.h                     |    2 +-
  include/uapi/linux/iio/types.h                     |    1 +
- kernel/time/timekeeping.c                          |   16 +-
- 154 files changed, 6183 insertions(+), 1146 deletions(-)
+ kernel/time/timekeeping.c                          |   11 +-
+ 156 files changed, 6197 insertions(+), 1152 deletions(-)
  create mode 100644 drivers/iio/accel/bma220_spi.c
  create mode 100644 drivers/iio/accel/mma7660.c
  create mode 100644 drivers/iio/adc/bcm_iproc_adc.c
@@ -642,10 +644,20 @@ index 0000000..5099f29
 +MODULE_DESCRIPTION("BMA220 acceleration sensor driver");
 +MODULE_LICENSE("GPL v2");
 diff --git a/drivers/iio/accel/bmc150-accel-core.c b/drivers/iio/accel/bmc150-accel-core.c
-index 197e693..bf17aae 100644
+index 197e693..59b380d 100644
 --- a/drivers/iio/accel/bmc150-accel-core.c
 +++ b/drivers/iio/accel/bmc150-accel-core.c
-@@ -901,7 +901,7 @@ static int __bmc150_accel_fifo_flush(struct iio_dev *indio_dev,
+@@ -67,6 +67,9 @@
+ #define BMC150_ACCEL_REG_PMU_BW		0x10
+ #define BMC150_ACCEL_DEF_BW			125
+ 
++#define BMC150_ACCEL_REG_RESET			0x14
++#define BMC150_ACCEL_RESET_VAL			0xB6
++
+ #define BMC150_ACCEL_REG_INT_MAP_0		0x19
+ #define BMC150_ACCEL_INT_MAP_0_BIT_SLOPE	BIT(2)
+ 
+@@ -901,7 +904,7 @@ static int __bmc150_accel_fifo_flush(struct iio_dev *indio_dev,
  	 */
  	if (!irq) {
  		data->old_timestamp = data->timestamp;
@@ -654,7 +666,7 @@ index 197e693..bf17aae 100644
  	}
  
  	/*
-@@ -1303,7 +1303,7 @@ static irqreturn_t bmc150_accel_irq_handler(int irq, void *private)
+@@ -1303,7 +1306,7 @@ static irqreturn_t bmc150_accel_irq_handler(int irq, void *private)
  	int i;
  
  	data->old_timestamp = data->timestamp;
@@ -663,6 +675,21 @@ index 197e693..bf17aae 100644
  
  	for (i = 0; i < BMC150_ACCEL_TRIGGERS; i++) {
  		if (data->triggers[i].enabled) {
+@@ -1497,6 +1500,14 @@ static int bmc150_accel_chip_init(struct bmc150_accel_data *data)
+ 	int ret, i;
+ 	unsigned int val;
+ 
++	/*
++	 * Reset chip to get it in a known good state. A delay of 1.8ms after
++	 * reset is required according to the data sheets of supported chips.
++	 */
++	regmap_write(data->regmap, BMC150_ACCEL_REG_RESET,
++		     BMC150_ACCEL_RESET_VAL);
++	usleep_range(1800, 2500);
++
+ 	ret = regmap_read(data->regmap, BMC150_ACCEL_REG_CHIP_ID, &val);
+ 	if (ret < 0) {
+ 		dev_err(dev, "Error: Reading chip id\n");
 diff --git a/drivers/iio/accel/kxcjk-1013.c b/drivers/iio/accel/kxcjk-1013.c
 index bfe219a..765a723 100644
 --- a/drivers/iio/accel/kxcjk-1013.c
@@ -677,10 +704,10 @@ index bfe219a..765a723 100644
  	if (data->dready_trigger_on)
  		iio_trigger_poll(data->dready_trig);
 diff --git a/drivers/iio/accel/kxsd9.c b/drivers/iio/accel/kxsd9.c
-index 3a9f106..da5fb67 100644
+index 3a9f106..9d72d4b 100644
 --- a/drivers/iio/accel/kxsd9.c
 +++ b/drivers/iio/accel/kxsd9.c
-@@ -160,6 +160,7 @@ static int kxsd9_read_raw(struct iio_dev *indio_dev,
+@@ -160,11 +160,13 @@ static int kxsd9_read_raw(struct iio_dev *indio_dev,
  		if (ret < 0)
  			goto error_ret;
  		*val = ret;
@@ -688,6 +715,12 @@ index 3a9f106..da5fb67 100644
  		break;
  	case IIO_CHAN_INFO_SCALE:
  		ret = spi_w8r8(st->us, KXSD9_READ(KXSD9_REG_CTRL_C));
+ 		if (ret < 0)
+ 			goto error_ret;
++		*val = 0;
+ 		*val2 = kxsd9_micro_scales[ret & KXSD9_FS_MASK];
+ 		ret = IIO_VAL_INT_PLUS_MICRO;
+ 		break;
 diff --git a/drivers/iio/accel/mma7455_core.c b/drivers/iio/accel/mma7455_core.c
 index c902f54..6551085 100644
 --- a/drivers/iio/accel/mma7455_core.c
@@ -4139,6 +4172,21 @@ index 62b37cd..407f141 100644
  static struct i2c_driver atlas_driver = {
  	.driver = {
  		.name	= ATLAS_DRV_NAME,
+diff --git a/drivers/iio/common/hid-sensors/hid-sensor-attributes.c b/drivers/iio/common/hid-sensors/hid-sensor-attributes.c
+index e81f434..dc33c1d 100644
+--- a/drivers/iio/common/hid-sensors/hid-sensor-attributes.c
++++ b/drivers/iio/common/hid-sensors/hid-sensor-attributes.c
+@@ -56,8 +56,8 @@ static struct {
+ 	{HID_USAGE_SENSOR_ALS, 0, 1, 0},
+ 	{HID_USAGE_SENSOR_ALS, HID_USAGE_SENSOR_UNITS_LUX, 1, 0},
+ 
+-	{HID_USAGE_SENSOR_PRESSURE, 0, 100000, 0},
+-	{HID_USAGE_SENSOR_PRESSURE, HID_USAGE_SENSOR_UNITS_PASCAL, 1, 0},
++	{HID_USAGE_SENSOR_PRESSURE, 0, 100, 0},
++	{HID_USAGE_SENSOR_PRESSURE, HID_USAGE_SENSOR_UNITS_PASCAL, 0, 1000},
+ };
+ 
+ static int pow_10(unsigned power)
 diff --git a/drivers/iio/common/st_sensors/st_sensors_buffer.c b/drivers/iio/common/st_sensors/st_sensors_buffer.c
 index f1693db..d06e728 100644
 --- a/drivers/iio/common/st_sensors/st_sensors_buffer.c
@@ -6897,8 +6945,30 @@ index 190a4a5..6e6476d 100644
  	{}
  };
  
+diff --git a/drivers/iio/industrialio-buffer.c b/drivers/iio/industrialio-buffer.c
+index 49bf9c5..158aaf4 100644
+--- a/drivers/iio/industrialio-buffer.c
++++ b/drivers/iio/industrialio-buffer.c
+@@ -110,7 +110,7 @@ ssize_t iio_buffer_read_first_n_outer(struct file *filp, char __user *buf,
+ 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
+ 	size_t datum_size;
+ 	size_t to_wait;
+-	int ret;
++	int ret = 0;
+ 
+ 	if (!indio_dev->info)
+ 		return -ENODEV;
+@@ -153,7 +153,7 @@ ssize_t iio_buffer_read_first_n_outer(struct file *filp, char __user *buf,
+ 		ret = rb->access->read_first_n(rb, n, buf);
+ 		if (ret == 0 && (filp->f_flags & O_NONBLOCK))
+ 			ret = -EAGAIN;
+-	 } while (ret == 0);
++	} while (ret == 0);
+ 	remove_wait_queue(&rb->pollq, &wait);
+ 
+ 	return ret;
 diff --git a/drivers/iio/industrialio-core.c b/drivers/iio/industrialio-core.c
-index e6319a9..f914d5d 100644
+index e6319a9..d2b8899 100644
 --- a/drivers/iio/industrialio-core.c
 +++ b/drivers/iio/industrialio-core.c
 @@ -80,6 +80,7 @@ static const char * const iio_chan_type_name_spec[] = {
@@ -6996,7 +7066,19 @@ index e6319a9..f914d5d 100644
  static int __init iio_init(void)
  {
  	int ret;
-@@ -989,11 +1070,91 @@ static ssize_t iio_show_dev_name(struct device *dev,
+@@ -532,9 +613,8 @@ ssize_t iio_format_value(char *buf, unsigned int type, int size, int *vals)
+ 			return sprintf(buf, "%d.%09u\n", vals[0], vals[1]);
+ 	case IIO_VAL_FRACTIONAL:
+ 		tmp = div_s64((s64)vals[0] * 1000000000LL, vals[1]);
+-		vals[1] = do_div(tmp, 1000000000LL);
+-		vals[0] = tmp;
+-		return sprintf(buf, "%d.%09u\n", vals[0], vals[1]);
++		vals[0] = (int)div_s64_rem(tmp, 1000000000, &vals[1]);
++		return sprintf(buf, "%d.%09u\n", vals[0], abs(vals[1]));
+ 	case IIO_VAL_FRACTIONAL_LOG2:
+ 		tmp = (s64)vals[0] * 1000000000LL >> vals[1];
+ 		vals[1] = do_div(tmp, 1000000000LL);
+@@ -989,11 +1069,91 @@ static ssize_t iio_show_dev_name(struct device *dev,
  
  static DEVICE_ATTR(name, S_IRUGO, iio_show_dev_name, NULL);
  
@@ -7089,7 +7171,7 @@ index e6319a9..f914d5d 100644
  
  	/* First count elements in any existing group */
  	if (indio_dev->info->attrs) {
-@@ -1008,16 +1169,25 @@ static int iio_device_register_sysfs(struct iio_dev *indio_dev)
+@@ -1008,16 +1168,25 @@ static int iio_device_register_sysfs(struct iio_dev *indio_dev)
  	 */
  	if (indio_dev->channels)
  		for (i = 0; i < indio_dev->num_channels; i++) {
@@ -7118,7 +7200,7 @@ index e6319a9..f914d5d 100644
  
  	indio_dev->chan_attr_group.attrs = kcalloc(attrcount + 1,
  						   sizeof(indio_dev->chan_attr_group.attrs[0]),
-@@ -1038,6 +1208,8 @@ static int iio_device_register_sysfs(struct iio_dev *indio_dev)
+@@ -1038,6 +1207,8 @@ static int iio_device_register_sysfs(struct iio_dev *indio_dev)
  		indio_dev->chan_attr_group.attrs[attrn++] = &p->dev_attr.attr;
  	if (indio_dev->name)
  		indio_dev->chan_attr_group.attrs[attrn++] = &dev_attr_name.attr;
@@ -11724,22 +11806,10 @@ index b0916fc..22e5e58 100644
  
  enum iio_modifier {
 diff --git a/kernel/time/timekeeping.c b/kernel/time/timekeeping.c
-index 479d25c..e07fb09 100644
+index b6c3945..e07fb09 100644
 --- a/kernel/time/timekeeping.c
 +++ b/kernel/time/timekeeping.c
-@@ -401,7 +401,10 @@ static __always_inline u64 __ktime_get_fast_ns(struct tk_fast *tkf)
- 	do {
- 		seq = raw_read_seqcount_latch(&tkf->seq);
- 		tkr = tkf->base + (seq & 0x01);
--		now = ktime_to_ns(tkr->base) + timekeeping_get_ns(tkr);
-+		now = ktime_to_ns(tkr->base);
-+
-+		now += clocksource_delta(tkr->read(tkr->clock),
-+					 tkr->cycle_last, tkr->mask);
- 	} while (read_seqcount_retry(&tkf->seq, seq));
- 
- 	return now;
-@@ -480,10 +483,12 @@ static inline void old_vsyscall_fixup(struct timekeeper *tk)
+@@ -483,10 +483,12 @@ static inline void old_vsyscall_fixup(struct timekeeper *tk)
  	* users are removed, this can be killed.
  	*/
  	remainder = tk->tkr_mono.xtime_nsec & ((1ULL << tk->tkr_mono.shift) - 1);
@@ -11756,7 +11826,7 @@ index 479d25c..e07fb09 100644
  }
  #else
  #define old_vsyscall_fixup(tk)
-@@ -2186,6 +2191,7 @@ struct timespec64 get_monotonic_coarse64(void)
+@@ -2189,6 +2191,7 @@ struct timespec64 get_monotonic_coarse64(void)
  
  	return now;
  }

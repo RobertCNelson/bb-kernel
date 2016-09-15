@@ -1,6 +1,6 @@
-From 030842575520110fadf3042956af16fc9e730489 Mon Sep 17 00:00:00 2001
+From 3e7e29da3afc0a6a300529b5795154fd49f3b972 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 7 Sep 2016 09:12:01 -0500
+Date: Thu, 15 Sep 2016 08:54:32 -0500
 Subject: [PATCH 5/5] merge: aufs4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -51,7 +51,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/hfsnotify.c                                |  287 +++
  fs/aufs/hfsplus.c                                  |   56 +
  fs/aufs/hnotify.c                                  |  723 ++++++++
- fs/aufs/i_op.c                                     | 1413 +++++++++++++++
+ fs/aufs/i_op.c                                     | 1448 +++++++++++++++
  fs/aufs/i_op_add.c                                 |  924 ++++++++++
  fs/aufs/i_op_del.c                                 |  511 ++++++
  fs/aufs/i_op_ren.c                                 | 1015 +++++++++++
@@ -92,7 +92,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/xattr.c                                    |  347 ++++
  fs/aufs/xino.c                                     | 1318 ++++++++++++++
  include/uapi/linux/aufs_type.h                     |  419 +++++
- 87 files changed, 34568 insertions(+)
+ 87 files changed, 34603 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -15254,10 +15254,10 @@ index 0000000..4444fe1
 +}
 diff --git a/fs/aufs/i_op.c b/fs/aufs/i_op.c
 new file mode 100644
-index 0000000..8517019
+index 0000000..f931821
 --- /dev/null
 +++ b/fs/aufs/i_op.c
-@@ -0,0 +1,1413 @@
+@@ -0,0 +1,1448 @@
 +/*
 + * Copyright (C) 2005-2016 Junjiro R. Okajima
 + *
@@ -16566,20 +16566,55 @@ index 0000000..8517019
 +
 +/* ---------------------------------------------------------------------- */
 +
++static int au_is_special(struct inode *inode)
++{
++	return (inode->i_mode & (S_IFBLK | S_IFCHR | S_IFIFO | S_IFSOCK));
++}
++
 +static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
 +{
 +	int err;
++	aufs_bindex_t bindex;
 +	struct super_block *sb;
 +	struct inode *h_inode;
++	struct vfsmount *h_mnt;
 +
 +	sb = inode->i_sb;
++	WARN_ONCE((flags & S_ATIME) && !IS_NOATIME(inode),
++		  "unexpected s_flags 0x%lx", sb->s_flags);
++
 +	/* mmap_sem might be acquired already, cf. aufs_mmap() */
 +	lockdep_off();
 +	si_read_lock(sb, AuLock_FLUSH);
 +	ii_write_lock_child(inode);
 +	lockdep_on();
-+	h_inode = au_h_iptr(inode, au_ibtop(inode));
-+	err = vfsub_update_time(h_inode, ts, flags);
++
++	err = 0;
++	bindex = au_ibtop(inode);
++	h_inode = au_h_iptr(inode, bindex);
++	if (!au_test_ro(sb, bindex, inode)) {
++		h_mnt = au_sbr_mnt(sb, bindex);
++		err = vfsub_mnt_want_write(h_mnt);
++		if (!err) {
++			err = vfsub_update_time(h_inode, ts, flags);
++			vfsub_mnt_drop_write(h_mnt);
++		}
++	} else if (au_is_special(h_inode)) {
++		/*
++		 * Never copy-up here.
++		 * These special files may already be opened and used for
++		 * communicating. If we copied it up, then the communication
++		 * would be corrupted.
++		 */
++		AuWarn1("timestamps for i%lu are ignored "
++			"since it is on readonly branch (hi%lu).\n",
++			inode->i_ino, h_inode->i_ino);
++	} else if (flags & ~S_ATIME) {
++		err = -EIO;
++		AuIOErr1("unexpected flags 0x%x\n", flags);
++		AuDebugOn(1);
++	}
++
 +	lockdep_off();
 +	if (!err)
 +		au_cpup_attr_timesizes(inode);
@@ -34848,7 +34883,7 @@ index 0000000..7f62beb
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 0000000..36ee78a
+index 0000000..7cc83dd
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,419 @@
@@ -34893,7 +34928,7 @@ index 0000000..36ee78a
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.7-20160905"
++#define AUFS_VERSION	"4.7-20160912"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
