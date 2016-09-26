@@ -232,7 +232,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.8-rc6"
+	backport_tag="v4.8-rc8"
 
 	subsystem="iio"
 	#regenerate="enable"
