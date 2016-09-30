@@ -291,7 +291,7 @@ lts44_backports () {
 	fi
 	patch_backports
 
-	backport_tag="v4.7.5"
+	backport_tag="v4.7.6"
 
 	subsystem="i2c"
 	#regenerate="enable"
@@ -1028,11 +1028,10 @@ gcc6 () {
 	fi
 
 	${git} "${DIR}/patches/gcc6/0001-net-davinci_cpdma-use-dma_addr_t-for-DMA-address.patch"
-	${git} "${DIR}/patches/gcc6/0002-cgroup-kill-cgrp_ss_priv-CGROUP_CANFORK_COUNT-and-fr.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="gcc6"
-		number=2
+		number=1
 		cleanup
 	fi
 }
