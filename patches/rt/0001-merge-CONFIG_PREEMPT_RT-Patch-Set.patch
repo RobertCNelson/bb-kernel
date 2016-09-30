@@ -1,6 +1,6 @@
-From 29735eb7e225c427ac2b89a1774040ebc958cb8e Mon Sep 17 00:00:00 2001
+From 69216c93f4297fe65daad2068d2bcea2a6b7eb3f Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 25 Sep 2016 22:32:30 -0500
+Date: Fri, 30 Sep 2016 16:21:14 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -70,7 +70,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/x86/entry/common.c                            |   11 +-
  arch/x86/entry/entry_32.S                          |   16 +
  arch/x86/entry/entry_64.S                          |   18 +
- arch/x86/include/asm/preempt.h                     |   18 +-
+ arch/x86/include/asm/preempt.h                     |   31 +-
  arch/x86/include/asm/signal.h                      |   13 +
  arch/x86/include/asm/stackprotector.h              |    9 +-
  arch/x86/include/asm/thread_info.h                 |    6 +
@@ -172,7 +172,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/net/rionet.c                               |    6 +-
  drivers/net/wireless/orinoco/orinoco_usb.c         |    2 +-
  drivers/pci/access.c                               |    2 +-
- drivers/scsi/fcoe/fcoe.c                           |   18 +-
+ drivers/scsi/fcoe/fcoe.c                           |   20 +-
  drivers/scsi/fcoe/fcoe_ctlr.c                      |    4 +-
  drivers/scsi/libfc/fc_exch.c                       |    4 +-
  drivers/scsi/libsas/sas_ata.c                      |    4 +-
@@ -192,7 +192,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/autofs4/autofs_i.h                              |    1 +
  fs/autofs4/expire.c                                |    2 +-
  fs/buffer.c                                        |   21 +-
- fs/dcache.c                                        |   10 +-
+ fs/dcache.c                                        |   20 +-
  fs/eventpoll.c                                     |    4 +-
  fs/exec.c                                          |    2 +
  fs/f2fs/f2fs.h                                     |    4 +-
@@ -390,8 +390,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/core/dev.c                                     |  157 ++-
  net/core/skbuff.c                                  |   28 +-
  net/core/sock.c                                    |    3 +-
- net/ipv4/icmp.c                                    |   30 +
+ net/ipv4/icmp.c                                    |   38 +
  net/ipv4/sysctl_net_ipv4.c                         |    7 +
+ net/ipv4/tcp_ipv4.c                                |    7 +
  net/mac80211/rx.c                                  |    2 +-
  net/netfilter/core.c                               |    6 +
  net/packet/af_packet.c                             |    5 +-
@@ -402,7 +403,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/core/pcm_native.c                            |    8 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   17 +-
- 397 files changed, 12537 insertions(+), 3391 deletions(-)
+ 398 files changed, 12574 insertions(+), 3394 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -731,10 +732,10 @@ index 0000000..6f2aeab
 +
 +These data are also reset when the wakeup histogram is reset.
 diff --git a/Makefile b/Makefile
-index a6512f4..b06a285 100644
+index 95421b6..336590d 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -768,6 +768,9 @@ KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
+@@ -783,6 +783,9 @@ KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
  # Prohibit date/time macros, which would make the build non-deterministic
  KBUILD_CFLAGS   += $(call cc-option,-Werror=date-time)
  
@@ -2996,10 +2997,10 @@ index a55697d..316081a 100644
  #ifdef CONFIG_XEN
  idtentry xen_hypervisor_callback xen_do_hypervisor_callback has_error_code=0
 diff --git a/arch/x86/include/asm/preempt.h b/arch/x86/include/asm/preempt.h
-index 01bcde8..5dbd2d0 100644
+index 01bcde8..6f432ad 100644
 --- a/arch/x86/include/asm/preempt.h
 +++ b/arch/x86/include/asm/preempt.h
-@@ -79,17 +79,33 @@ static __always_inline void __preempt_count_sub(int val)
+@@ -79,17 +79,46 @@ static __always_inline void __preempt_count_sub(int val)
   * a decrement which hits zero means we have no preempt_count and should
   * reschedule.
   */
@@ -3014,6 +3015,8 @@ index 01bcde8..5dbd2d0 100644
 +	if (____preempt_count_dec_and_test())
 +		return true;
 +#ifdef CONFIG_PREEMPT_LAZY
++	if (current_thread_info()->preempt_lazy_count)
++		return false;
 +	return test_thread_flag(TIF_NEED_RESCHED_LAZY);
 +#else
 +	return false;
@@ -3026,8 +3029,19 @@ index 01bcde8..5dbd2d0 100644
  static __always_inline bool should_resched(int preempt_offset)
  {
 +#ifdef CONFIG_PREEMPT_LAZY
-+	return unlikely(raw_cpu_read_4(__preempt_count) == preempt_offset ||
-+			test_thread_flag(TIF_NEED_RESCHED_LAZY));
++	u32 tmp;
++
++	tmp = raw_cpu_read_4(__preempt_count);
++	if (tmp == preempt_offset)
++		return true;
++
++	/* preempt count == 0 ? */
++	tmp &= ~PREEMPT_NEED_RESCHED;
++	if (tmp)
++		return false;
++	if (current_thread_info()->preempt_lazy_count)
++		return false;
++	return test_thread_flag(TIF_NEED_RESCHED_LAZY);
 +#else
  	return unlikely(raw_cpu_read_4(__preempt_count) == preempt_offset);
 +#endif
@@ -11145,7 +11159,7 @@ index 59ac36f..7a45a20 100644
  }
  EXPORT_SYMBOL_GPL(pci_cfg_access_unlock);
 diff --git a/drivers/scsi/fcoe/fcoe.c b/drivers/scsi/fcoe/fcoe.c
-index f442406..f1622a0 100644
+index f442406..cbbbebd 100644
 --- a/drivers/scsi/fcoe/fcoe.c
 +++ b/drivers/scsi/fcoe/fcoe.c
 @@ -1286,7 +1286,7 @@ static void fcoe_percpu_thread_destroy(unsigned int cpu)
@@ -11195,6 +11209,15 @@ index f442406..f1622a0 100644
  	return -EINVAL;
  }
  
+@@ -1814,7 +1814,7 @@ static void fcoe_recv_frame(struct sk_buff *skb)
+ 	 */
+ 	hp = (struct fcoe_hdr *) skb_network_header(skb);
+ 
+-	stats = per_cpu_ptr(lport->stats, get_cpu());
++	stats = per_cpu_ptr(lport->stats, get_cpu_light());
+ 	if (unlikely(FC_FCOE_DECAPS_VER(hp) != FC_FCOE_VER)) {
+ 		if (stats->ErrorFrames < 5)
+ 			printk(KERN_WARNING "fcoe: FCoE version "
 @@ -1846,13 +1846,13 @@ static void fcoe_recv_frame(struct sk_buff *skb)
  		goto drop;
  
@@ -11718,7 +11741,7 @@ index 155f842..dd8d6f2 100644
  {
  	unsigned i, new_nr;
 diff --git a/fs/autofs4/autofs_i.h b/fs/autofs4/autofs_i.h
-index c37149b..4c54134 100644
+index 502d389..05af8d3 100644
 --- a/fs/autofs4/autofs_i.h
 +++ b/fs/autofs4/autofs_i.h
 @@ -34,6 +34,7 @@
@@ -11730,7 +11753,7 @@ index c37149b..4c54134 100644
  #include <asm/uaccess.h>
  
 diff --git a/fs/autofs4/expire.c b/fs/autofs4/expire.c
-index 1cebc3c..d487fa2 100644
+index 7a5a598..d08bcdc 100644
 --- a/fs/autofs4/expire.c
 +++ b/fs/autofs4/expire.c
 @@ -150,7 +150,7 @@ again:
@@ -11814,7 +11837,7 @@ index 4f4cd95..72b27e1 100644
  		__this_cpu_inc(bh_accounting.nr);
  		recalc_bh_state();
 diff --git a/fs/dcache.c b/fs/dcache.c
-index 74d39c5..8e96df1 100644
+index 74d39c5..7a96c1bf 100644
 --- a/fs/dcache.c
 +++ b/fs/dcache.c
 @@ -19,6 +19,7 @@
@@ -11825,21 +11848,38 @@ index 74d39c5..8e96df1 100644
  #include <linux/slab.h>
  #include <linux/init.h>
  #include <linux/hash.h>
-@@ -785,7 +786,12 @@ repeat:
+@@ -747,6 +748,8 @@ static inline bool fast_dput(struct dentry *dentry)
+  */
+ void dput(struct dentry *dentry)
+ {
++	struct dentry *parent;
++
+ 	if (unlikely(!dentry))
+ 		return;
+ 
+@@ -783,9 +786,18 @@ repeat:
+ 	return;
+ 
  kill_it:
- 	dentry = dentry_kill(dentry);
- 	if (dentry) {
+-	dentry = dentry_kill(dentry);
+-	if (dentry) {
 -		cond_resched();
++	parent = dentry_kill(dentry);
++	if (parent) {
 +		int r;
 +
-+		/* the task with the highest priority won't schedule */
-+		r = cond_resched();
-+		if (!r)
-+			cpu_chill();
++		if (parent == dentry) {
++			/* the task with the highest priority won't schedule */
++			r = cond_resched();
++			if (!r)
++				cpu_chill();
++		} else {
++			dentry = parent;
++		}
  		goto repeat;
  	}
  }
-@@ -2395,7 +2401,7 @@ again:
+@@ -2395,7 +2407,7 @@ again:
  	if (dentry->d_lockref.count == 1) {
  		if (!spin_trylock(&inode->i_lock)) {
  			spin_unlock(&dentry->d_lock);
@@ -12983,7 +13023,7 @@ index a19bcf9..8974953 100644
  static inline int kdb_register(char *cmd, kdb_func_t func, char *usage,
  			       char *help, short minlen) { return 0; }
 diff --git a/include/linux/kernel.h b/include/linux/kernel.h
-index 924853d..c84b10d6 100644
+index e571e59..8004feb 100644
 --- a/include/linux/kernel.h
 +++ b/include/linux/kernel.h
 @@ -188,6 +188,9 @@ extern int _cond_resched(void);
@@ -13627,7 +13667,7 @@ index 0000000..c38a44b
 +
 +#endif
 diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
-index b97d682..b86a8e2 100644
+index 4e9c752..53dd708 100644
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
 @@ -2248,11 +2248,20 @@ void netdev_freemem(struct net_device *dev);
@@ -20737,7 +20777,7 @@ index 41e2b54..3535f80 100644
  
  	return 0;
 diff --git a/kernel/power/hibernate.c b/kernel/power/hibernate.c
-index b7dd571..908ee58 100644
+index 3124ceb..c1b9815 100644
 --- a/kernel/power/hibernate.c
 +++ b/kernel/power/hibernate.c
 @@ -285,6 +285,8 @@ static int create_image(int platform_mode)
@@ -22222,7 +22262,7 @@ index 8d0f35d..b62cf64 100644
  }
  EXPORT_SYMBOL(completion_done);
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 20253db..4b9de34 100644
+index 20253db..e9b8d51 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -260,7 +260,11 @@ late_initcall(sched_init_debug);
@@ -22825,7 +22865,7 @@ index 20253db..4b9de34 100644
 +
 +#else
 +
-+static int preemptible_lazy(void)
++static inline int preemptible_lazy(void)
 +{
 +	return 1;
 +}
@@ -26321,7 +26361,7 @@ index 704f595..763a3e5 100644
  #define CS_NAME_LEN	32
  
 diff --git a/kernel/time/timer.c b/kernel/time/timer.c
-index bbc5d11..fee8682 100644
+index bbc5d11..603699f 100644
 --- a/kernel/time/timer.c
 +++ b/kernel/time/timer.c
 @@ -80,6 +80,9 @@ struct tvec_root {
@@ -26414,7 +26454,7 @@ index bbc5d11..fee8682 100644
 +		   base->running_timer != timer);
 +}
 +
-+# define wakeup_timer_waiters(b)	wake_up(&(b)->wait_for_running_timer)
++# define wakeup_timer_waiters(b)	wake_up_all(&(b)->wait_for_running_timer)
 +#else
 +static inline void wait_for_running_timer(struct timer_list *timer)
 +{
@@ -26445,7 +26485,7 @@ index bbc5d11..fee8682 100644
  	}
  }
  EXPORT_SYMBOL(del_timer_sync);
-@@ -1248,15 +1303,17 @@ static inline void __run_timers(struct tvec_base *base)
+@@ -1248,16 +1303,18 @@ static inline void __run_timers(struct tvec_base *base)
  			if (irqsafe) {
  				spin_unlock(&base->lock);
  				call_timer_fn(timer, fn, data);
@@ -26460,10 +26500,11 @@ index bbc5d11..fee8682 100644
  		}
  	}
 -	base->running_timer = NULL;
-+	wakeup_timer_waiters(base);
  	spin_unlock_irq(&base->lock);
++	wakeup_timer_waiters(base);
  }
  
+ #ifdef CONFIG_NO_HZ_COMMON
 @@ -1390,6 +1447,14 @@ u64 get_next_timer_interrupt(unsigned long basej, u64 basem)
  	if (cpu_is_offline(smp_processor_id()))
  		return expires;
@@ -26662,10 +26703,10 @@ index e45db6b..364ccd0 100644
  	bool "Trace process context switches and events"
  	depends on !GENERIC_TRACER
 diff --git a/kernel/trace/Makefile b/kernel/trace/Makefile
-index 9b1044e..3bbaea0 100644
+index 05ea516..bc08c67 100644
 --- a/kernel/trace/Makefile
 +++ b/kernel/trace/Makefile
-@@ -36,6 +36,10 @@ obj-$(CONFIG_FUNCTION_TRACER) += trace_functions.o
+@@ -40,6 +40,10 @@ obj-$(CONFIG_FUNCTION_TRACER) += trace_functions.o
  obj-$(CONFIG_IRQSOFF_TRACER) += trace_irqsoff.o
  obj-$(CONFIG_PREEMPT_TRACER) += trace_irqsoff.o
  obj-$(CONFIG_SCHED_TRACER) += trace_sched_wakeup.o
@@ -27861,7 +27902,7 @@ index 0000000..7f6ee70
 +
 +device_initcall(latency_hist_init);
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index 8305cbb..8b0ae7d 100644
+index 059233a..aebdbff 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
 @@ -1652,6 +1652,7 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned long flags,
@@ -30739,7 +30780,7 @@ index c1ea194..b552fd6 100644
  }
  EXPORT_SYMBOL_GPL(zs_unmap_object);
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 9efbdb3..0e17592 100644
+index de4ed2b..5649333 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -186,6 +186,7 @@ static unsigned int napi_gen_id;
@@ -31028,7 +31069,7 @@ index 9efbdb3..0e17592 100644
  				smp_mb__before_atomic();
  				clear_bit(__QDISC_STATE_SCHED,
  					  &q->state);
-@@ -4049,7 +4125,7 @@ static void flush_backlog(void *arg)
+@@ -4065,7 +4141,7 @@ static void flush_backlog(void *arg)
  	skb_queue_walk_safe(&sd->input_pkt_queue, skb, tmp) {
  		if (skb->dev == dev) {
  			__skb_unlink(skb, &sd->input_pkt_queue);
@@ -31037,7 +31078,7 @@ index 9efbdb3..0e17592 100644
  			input_queue_head_incr(sd);
  		}
  	}
-@@ -4058,10 +4134,13 @@ static void flush_backlog(void *arg)
+@@ -4074,10 +4150,13 @@ static void flush_backlog(void *arg)
  	skb_queue_walk_safe(&sd->process_queue, skb, tmp) {
  		if (skb->dev == dev) {
  			__skb_unlink(skb, &sd->process_queue);
@@ -31052,7 +31093,7 @@ index 9efbdb3..0e17592 100644
  }
  
  static int napi_gro_complete(struct sk_buff *skb)
-@@ -4515,6 +4594,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
+@@ -4531,6 +4610,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
  		sd->rps_ipi_list = NULL;
  
  		local_irq_enable();
@@ -31060,7 +31101,7 @@ index 9efbdb3..0e17592 100644
  
  		/* Send pending IPI's to kick RPS processing on remote cpus. */
  		while (remsd) {
-@@ -4528,6 +4608,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
+@@ -4544,6 +4624,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
  	} else
  #endif
  		local_irq_enable();
@@ -31068,7 +31109,7 @@ index 9efbdb3..0e17592 100644
  }
  
  static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
-@@ -4609,6 +4690,7 @@ void __napi_schedule(struct napi_struct *n)
+@@ -4625,6 +4706,7 @@ void __napi_schedule(struct napi_struct *n)
  	local_irq_save(flags);
  	____napi_schedule(this_cpu_ptr(&softnet_data), n);
  	local_irq_restore(flags);
@@ -31076,7 +31117,7 @@ index 9efbdb3..0e17592 100644
  }
  EXPORT_SYMBOL(__napi_schedule);
  
-@@ -4885,7 +4967,7 @@ static void net_rx_action(struct softirq_action *h)
+@@ -4901,7 +4983,7 @@ static void net_rx_action(struct softirq_action *h)
  	list_splice_tail(&repoll, &list);
  	list_splice(&list, &sd->poll_list);
  	if (!list_empty(&sd->poll_list))
@@ -31085,7 +31126,7 @@ index 9efbdb3..0e17592 100644
  
  	net_rps_action_and_irq_enable(sd);
  }
-@@ -7218,7 +7300,7 @@ EXPORT_SYMBOL(free_netdev);
+@@ -7234,7 +7316,7 @@ EXPORT_SYMBOL(free_netdev);
  void synchronize_net(void)
  {
  	might_sleep();
@@ -31094,7 +31135,7 @@ index 9efbdb3..0e17592 100644
  		synchronize_rcu_expedited();
  	else
  		synchronize_rcu();
-@@ -7459,16 +7541,20 @@ static int dev_cpu_callback(struct notifier_block *nfb,
+@@ -7475,16 +7557,20 @@ static int dev_cpu_callback(struct notifier_block *nfb,
  
  	raise_softirq_irqoff(NET_TX_SOFTIRQ);
  	local_irq_enable();
@@ -31116,7 +31157,7 @@ index 9efbdb3..0e17592 100644
  
  	return NOTIFY_OK;
  }
-@@ -7770,8 +7856,9 @@ static int __init net_dev_init(void)
+@@ -7786,8 +7872,9 @@ static int __init net_dev_init(void)
  	for_each_possible_cpu(i) {
  		struct softnet_data *sd = &per_cpu(softnet_data, i);
  
@@ -31246,7 +31287,7 @@ index 0d91f7d..9c32342 100644
  EXPORT_SYMBOL(lock_sock_nested);
  
 diff --git a/net/ipv4/icmp.c b/net/ipv4/icmp.c
-index 36e2697..74314d9 100644
+index 36e2697..ff25932 100644
 --- a/net/ipv4/icmp.c
 +++ b/net/ipv4/icmp.c
 @@ -69,6 +69,7 @@
@@ -31257,7 +31298,63 @@ index 36e2697..74314d9 100644
  #include <linux/socket.h>
  #include <linux/in.h>
  #include <linux/inet.h>
-@@ -891,6 +892,30 @@ static bool icmp_redirect(struct sk_buff *skb)
+@@ -77,6 +78,7 @@
+ #include <linux/string.h>
+ #include <linux/netfilter_ipv4.h>
+ #include <linux/slab.h>
++#include <linux/locallock.h>
+ #include <net/snmp.h>
+ #include <net/ip.h>
+ #include <net/route.h>
+@@ -204,6 +206,8 @@ static const struct icmp_control icmp_pointers[NR_ICMP_TYPES+1];
+  *
+  *	On SMP we have one ICMP socket per-cpu.
+  */
++static DEFINE_LOCAL_IRQ_LOCK(icmp_sk_lock);
++
+ static struct sock *icmp_sk(struct net *net)
+ {
+ 	return *this_cpu_ptr(net->ipv4.icmp_sk);
+@@ -215,12 +219,14 @@ static inline struct sock *icmp_xmit_lock(struct net *net)
+ 
+ 	local_bh_disable();
+ 
++	local_lock(icmp_sk_lock);
+ 	sk = icmp_sk(net);
+ 
+ 	if (unlikely(!spin_trylock(&sk->sk_lock.slock))) {
+ 		/* This can happen if the output path signals a
+ 		 * dst_link_failure() for an outgoing ICMP packet.
+ 		 */
++		local_unlock(icmp_sk_lock);
+ 		local_bh_enable();
+ 		return NULL;
+ 	}
+@@ -230,6 +236,7 @@ static inline struct sock *icmp_xmit_lock(struct net *net)
+ static inline void icmp_xmit_unlock(struct sock *sk)
+ {
+ 	spin_unlock_bh(&sk->sk_lock.slock);
++	local_unlock(icmp_sk_lock);
+ }
+ 
+ int sysctl_icmp_msgs_per_sec __read_mostly = 1000;
+@@ -358,6 +365,7 @@ static void icmp_push_reply(struct icmp_bxm *icmp_param,
+ 	struct sock *sk;
+ 	struct sk_buff *skb;
+ 
++	local_lock(icmp_sk_lock);
+ 	sk = icmp_sk(dev_net((*rt)->dst.dev));
+ 	if (ip_append_data(sk, fl4, icmp_glue_bits, icmp_param,
+ 			   icmp_param->data_len+icmp_param->head_len,
+@@ -380,6 +388,7 @@ static void icmp_push_reply(struct icmp_bxm *icmp_param,
+ 		skb->ip_summed = CHECKSUM_NONE;
+ 		ip_push_pending_frames(sk, fl4);
+ 	}
++	local_unlock(icmp_sk_lock);
+ }
+ 
+ /*
+@@ -891,6 +900,30 @@ static bool icmp_redirect(struct sk_buff *skb)
  }
  
  /*
@@ -31288,7 +31385,7 @@ index 36e2697..74314d9 100644
   *	Handle ICMP_ECHO ("ping") requests.
   *
   *	RFC 1122: 3.2.2.6 MUST have an echo server that answers ICMP echo
-@@ -917,6 +942,11 @@ static bool icmp_echo(struct sk_buff *skb)
+@@ -917,6 +950,11 @@ static bool icmp_echo(struct sk_buff *skb)
  		icmp_param.data_len	   = skb->len;
  		icmp_param.head_len	   = sizeof(struct icmphdr);
  		icmp_reply(&icmp_param, skb);
@@ -31318,6 +31415,53 @@ index a0bd7a5..1866f91 100644
  		.procname	= "icmp_ignore_bogus_error_responses",
  		.data		= &init_net.ipv4.sysctl_icmp_ignore_bogus_error_responses,
  		.maxlen		= sizeof(int),
+diff --git a/net/ipv4/tcp_ipv4.c b/net/ipv4/tcp_ipv4.c
+index b5853ca..de922d8 100644
+--- a/net/ipv4/tcp_ipv4.c
++++ b/net/ipv4/tcp_ipv4.c
+@@ -62,6 +62,7 @@
+ #include <linux/init.h>
+ #include <linux/times.h>
+ #include <linux/slab.h>
++#include <linux/locallock.h>
+ 
+ #include <net/net_namespace.h>
+ #include <net/icmp.h>
+@@ -566,6 +567,7 @@ void tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
+ }
+ EXPORT_SYMBOL(tcp_v4_send_check);
+ 
++static DEFINE_LOCAL_IRQ_LOCK(tcp_sk_lock);
+ /*
+  *	This routine will send an RST to the other tcp.
+  *
+@@ -687,10 +689,13 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
+ 		arg.bound_dev_if = sk->sk_bound_dev_if;
+ 
+ 	arg.tos = ip_hdr(skb)->tos;
++
++	local_lock(tcp_sk_lock);
+ 	ip_send_unicast_reply(*this_cpu_ptr(net->ipv4.tcp_sk),
+ 			      skb, &TCP_SKB_CB(skb)->header.h4.opt,
+ 			      ip_hdr(skb)->saddr, ip_hdr(skb)->daddr,
+ 			      &arg, arg.iov[0].iov_len);
++	local_unlock(tcp_sk_lock);
+ 
+ 	TCP_INC_STATS_BH(net, TCP_MIB_OUTSEGS);
+ 	TCP_INC_STATS_BH(net, TCP_MIB_OUTRSTS);
+@@ -772,10 +777,12 @@ static void tcp_v4_send_ack(struct net *net,
+ 	if (oif)
+ 		arg.bound_dev_if = oif;
+ 	arg.tos = tos;
++	local_lock(tcp_sk_lock);
+ 	ip_send_unicast_reply(*this_cpu_ptr(net->ipv4.tcp_sk),
+ 			      skb, &TCP_SKB_CB(skb)->header.h4.opt,
+ 			      ip_hdr(skb)->saddr, ip_hdr(skb)->daddr,
+ 			      &arg, arg.iov[0].iov_len);
++	local_unlock(tcp_sk_lock);
+ 
+ 	TCP_INC_STATS_BH(net, TCP_MIB_OUTSEGS);
+ }
 diff --git a/net/mac80211/rx.c b/net/mac80211/rx.c
 index a3bb8f7..3be97739 100644
 --- a/net/mac80211/rx.c
