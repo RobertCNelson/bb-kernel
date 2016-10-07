@@ -59,6 +59,9 @@ cleanup () {
 		if [ "x${wdir}" = "x" ] ; then
 			${git_bin} format-patch -${number} -o ${DIR}/patches/
 		else
+			if [ ! -d ${DIR}/patches/${wdir}/ ] ; then
+				mkdir -p ${DIR}/patches/${wdir}/
+			fi
 			${git_bin} format-patch -${number} -o ${DIR}/patches/${wdir}/
 			unset wdir
 		fi
@@ -114,20 +117,15 @@ aufs4 () {
 		${git_bin} commit -a -m 'merge: aufs4-standalone' -s
 
 		${git_bin} format-patch -4 -o ../patches/aufs4/
-		exit 2
-	fi
-
-	${git} "${DIR}/patches/aufs4/0001-merge-aufs4-kbuild.patch"
-	${git} "${DIR}/patches/aufs4/0002-merge-aufs4-base.patch"
-	${git} "${DIR}/patches/aufs4/0003-merge-aufs4-mmap.patch"
-	${git} "${DIR}/patches/aufs4/0004-merge-aufs4-standalone.patch"
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		echo "dir: aufs4"
 
 		cd ../
 		if [ ! -f ./aufs4-standalone ] ; then
+			${git_bin} clone https://github.com/sfjro/aufs4-standalone
+			cd ./aufs4-standalone
+			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
+			cd ../
+		else
+			rm -rf ./aufs4-standalone || true
 			${git_bin} clone https://github.com/sfjro/aufs4-standalone
 			cd ./aufs4-standalone
 			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
@@ -154,12 +152,17 @@ aufs4 () {
 		start_cleanup
 	fi
 
+	${git} "${DIR}/patches/aufs4/0001-merge-aufs4-kbuild.patch"
+	${git} "${DIR}/patches/aufs4/0002-merge-aufs4-base.patch"
+	${git} "${DIR}/patches/aufs4/0003-merge-aufs4-mmap.patch"
+	${git} "${DIR}/patches/aufs4/0004-merge-aufs4-standalone.patch"
 	${git} "${DIR}/patches/aufs4/0005-merge-aufs4.patch"
 	${git} "${DIR}/patches/aufs4/0006-aufs-call-mutex.owner-only-when-DEBUG_MUTEXES-or-MUT.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		${git_bin} format-patch -6 -o ../patches/aufs4/
-		exit 2
+		wdir="aufs4"
+		number=6
+		cleanup
 	fi
 }
 
@@ -291,7 +294,7 @@ lts44_backports () {
 	fi
 	patch_backports
 
-	backport_tag="v4.7.6"
+	backport_tag="v4.7.7"
 
 	subsystem="i2c"
 	#regenerate="enable"
@@ -325,7 +328,7 @@ lts44_backports () {
 	patch_backports
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	backport_tag="v4.8-rc8"
+	backport_tag="v4.8.1"
 
 	subsystem="touchscreen"
 	#regenerate="enable"
