@@ -203,7 +203,6 @@ local_patch () {
 rt
 #local_patch
 
-
 pre_backports () {
 	echo "dir: backports/${subsystem}"
 
