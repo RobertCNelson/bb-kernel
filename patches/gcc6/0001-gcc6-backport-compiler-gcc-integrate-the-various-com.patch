@@ -1,0 +1,349 @@
+From b63c25a5e1f7f3ee04fe4bc822e25ecb5a5db3ae Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Fri, 14 Oct 2016 09:50:14 -0500
+Subject: [PATCH] gcc6: backport: compiler-gcc: integrate the various
+ compiler-gcc[345].h files
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ include/linux/compiler-gcc.h  | 120 ++++++++++++++++++++++++++++++++++++++++--
+ include/linux/compiler-gcc3.h |  23 --------
+ include/linux/compiler-gcc4.h |  77 ---------------------------
+ include/linux/compiler-gcc5.h |  66 -----------------------
+ 4 files changed, 116 insertions(+), 170 deletions(-)
+ delete mode 100644 include/linux/compiler-gcc3.h
+ delete mode 100644 include/linux/compiler-gcc4.h
+ delete mode 100644 include/linux/compiler-gcc5.h
+
+diff --git a/include/linux/compiler-gcc.h b/include/linux/compiler-gcc.h
+index 6a6d7ae..953cd121 100644
+--- a/include/linux/compiler-gcc.h
++++ b/include/linux/compiler-gcc.h
+@@ -5,6 +5,9 @@
+ /*
+  * Common definitions for all gcc versions go here.
+  */
++#define GCC_VERSION (__GNUC__ * 10000 \
++		   + __GNUC_MINOR__ * 100 \
++		   + __GNUC_PATCHLEVEL__)
+ 
+ 
+ /* Optimization barrier */
+@@ -34,6 +37,9 @@
+     __asm__ ("" : "=r"(__ptr) : "0"(ptr));		\
+     (typeof(ptr)) (__ptr + (off)); })
+ 
++/* Make the optimizer believe the variable can be manipulated arbitrarily. */
++#define OPTIMIZER_HIDE_VAR(var) __asm__ ("" : "=r" (var) : "0" (var))
++
+ #ifdef __CHECKER__
+ #define __must_be_array(arr) 0
+ #else
+@@ -94,10 +100,116 @@
+ #define __maybe_unused			__attribute__((unused))
+ #define __always_unused			__attribute__((unused))
+ 
+-#define __gcc_header(x) #x
+-#define _gcc_header(x) __gcc_header(linux/compiler-gcc##x.h)
+-#define gcc_header(x) _gcc_header(x)
+-#include gcc_header(__GNUC__)
++/* gcc version specific checks */
++
++#if GCC_VERSION < 30200
++# error Sorry, your compiler is too old - please upgrade it.
++#endif
++
++#if GCC_VERSION < 30300
++# define __used			__attribute__((__unused__))
++#else
++# define __used			__attribute__((__used__))
++#endif
++
++#ifdef CONFIG_GCOV_KERNEL
++# if GCC_VERSION < 30400
++#   error "GCOV profiling support for gcc versions below 3.4 not included"
++# endif /* __GNUC_MINOR__ */
++#endif /* CONFIG_GCOV_KERNEL */
++
++#if GCC_VERSION >= 30400
++#define __must_check		__attribute__((warn_unused_result))
++#endif
++
++#if GCC_VERSION >= 40000
++
++/* GCC 4.1.[01] miscompiles __weak */
++#ifdef __KERNEL__
++# if GCC_VERSION >= 40100 &&  GCC_VERSION <= 40101
++#  error Your version of gcc miscompiles the __weak directive
++# endif
++#endif
++
++#define __used			__attribute__((__used__))
++#define __compiler_offsetof(a, b)					\
++	__builtin_offsetof(a, b)
++
++#if GCC_VERSION >= 40100 && GCC_VERSION < 40600
++# define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
++#endif
++
++#if GCC_VERSION >= 40300
++/* Mark functions as cold. gcc will assume any path leading to a call
++ * to them will be unlikely.  This means a lot of manual unlikely()s
++ * are unnecessary now for any paths leading to the usual suspects
++ * like BUG(), printk(), panic() etc. [but let's keep them for now for
++ * older compilers]
++ *
++ * Early snapshots of gcc 4.3 don't support this and we can't detect this
++ * in the preprocessor, but we can live with this because they're unreleased.
++ * Maketime probing would be overkill here.
++ *
++ * gcc also has a __attribute__((__hot__)) to move hot functions into
++ * a special section, but I don't see any sense in this right now in
++ * the kernel context
++ */
++#define __cold			__attribute__((__cold__))
++
++#define __UNIQUE_ID(prefix) __PASTE(__PASTE(__UNIQUE_ID_, prefix), __COUNTER__)
++
++#ifndef __CHECKER__
++# define __compiletime_warning(message) __attribute__((warning(message)))
++# define __compiletime_error(message) __attribute__((error(message)))
++#endif /* __CHECKER__ */
++#endif /* GCC_VERSION >= 40300 */
++
++#if GCC_VERSION >= 40500
++/*
++ * Mark a position in code as unreachable.  This can be used to
++ * suppress control flow warnings after asm blocks that transfer
++ * control elsewhere.
++ *
++ * Early snapshots of gcc 4.5 don't support this and we can't detect
++ * this in the preprocessor, but we can live with this because they're
++ * unreleased.  Really, we need to have autoconf for the kernel.
++ */
++#define unreachable() __builtin_unreachable()
++
++/* Mark a function definition as prohibited from being cloned. */
++#define __noclone	__attribute__((__noclone__, __optimize__("no-tracer")))
++
++#endif /* GCC_VERSION >= 40500 */
++
++#if GCC_VERSION >= 40600
++/*
++ * Tell the optimizer that something else uses this function or variable.
++ */
++#define __visible	__attribute__((externally_visible))
++#endif
++
++/*
++ * GCC 'asm goto' miscompiles certain code sequences:
++ *
++ *   http://gcc.gnu.org/bugzilla/show_bug.cgi?id=58670
++ *
++ * Work it around via a compiler barrier quirk suggested by Jakub Jelinek.
++ *
++ * (asm goto is automatically volatile - the naming reflects this.)
++ */
++#define asm_volatile_goto(x...)	do { asm goto(x); asm (""); } while (0)
++
++#ifdef CONFIG_ARCH_USE_BUILTIN_BSWAP
++#if GCC_VERSION >= 40400
++#define __HAVE_BUILTIN_BSWAP32__
++#define __HAVE_BUILTIN_BSWAP64__
++#endif
++#if GCC_VERSION >= 40800 || (defined(__powerpc__) && GCC_VERSION >= 40600)
++#define __HAVE_BUILTIN_BSWAP16__
++#endif
++#endif /* CONFIG_ARCH_USE_BUILTIN_BSWAP */
++
++#endif	/* gcc version >= 40000 specific checks */
+ 
+ #if !defined(__noclone)
+ #define __noclone	/* not needed */
+diff --git a/include/linux/compiler-gcc3.h b/include/linux/compiler-gcc3.h
+deleted file mode 100644
+index 37d4124..0000000
+--- a/include/linux/compiler-gcc3.h
++++ /dev/null
+@@ -1,23 +0,0 @@
+-#ifndef __LINUX_COMPILER_H
+-#error "Please don't include <linux/compiler-gcc3.h> directly, include <linux/compiler.h> instead."
+-#endif
+-
+-#if __GNUC_MINOR__ < 2
+-# error Sorry, your compiler is too old - please upgrade it.
+-#endif
+-
+-#if __GNUC_MINOR__ >= 3
+-# define __used			__attribute__((__used__))
+-#else
+-# define __used			__attribute__((__unused__))
+-#endif
+-
+-#if __GNUC_MINOR__ >= 4
+-#define __must_check		__attribute__((warn_unused_result))
+-#endif
+-
+-#ifdef CONFIG_GCOV_KERNEL
+-# if __GNUC_MINOR__ < 4
+-#   error "GCOV profiling support for gcc versions below 3.4 not included"
+-# endif /* __GNUC_MINOR__ */
+-#endif /* CONFIG_GCOV_KERNEL */
+diff --git a/include/linux/compiler-gcc4.h b/include/linux/compiler-gcc4.h
+deleted file mode 100644
+index 662fd1b..0000000
+--- a/include/linux/compiler-gcc4.h
++++ /dev/null
+@@ -1,77 +0,0 @@
+-#ifndef __LINUX_COMPILER_H
+-#error "Please don't include <linux/compiler-gcc4.h> directly, include <linux/compiler.h> instead."
+-#endif
+-
+-/* GCC 4.1.[01] miscompiles __weak */
+-#ifdef __KERNEL__
+-# if __GNUC_MINOR__ == 1 && __GNUC_PATCHLEVEL__ <= 1
+-#  error Your version of gcc miscompiles the __weak directive
+-# endif
+-#endif
+-
+-#define __used			__attribute__((__used__))
+-#define __must_check 		__attribute__((warn_unused_result))
+-#define __compiler_offsetof(a,b) __builtin_offsetof(a,b)
+-
+-#if __GNUC_MINOR__ >= 3
+-/* Mark functions as cold. gcc will assume any path leading to a call
+-   to them will be unlikely.  This means a lot of manual unlikely()s
+-   are unnecessary now for any paths leading to the usual suspects
+-   like BUG(), printk(), panic() etc. [but let's keep them for now for
+-   older compilers]
+-
+-   Early snapshots of gcc 4.3 don't support this and we can't detect this
+-   in the preprocessor, but we can live with this because they're unreleased.
+-   Maketime probing would be overkill here.
+-
+-   gcc also has a __attribute__((__hot__)) to move hot functions into
+-   a special section, but I don't see any sense in this right now in
+-   the kernel context */
+-#define __cold			__attribute__((__cold__))
+-
+-#define __linktime_error(message) __attribute__((__error__(message)))
+-
+-#define __UNIQUE_ID(prefix) __PASTE(__PASTE(__UNIQUE_ID_, prefix), __COUNTER__)
+-
+-#if __GNUC_MINOR__ >= 5
+-/*
+- * Mark a position in code as unreachable.  This can be used to
+- * suppress control flow warnings after asm blocks that transfer
+- * control elsewhere.
+- *
+- * Early snapshots of gcc 4.5 don't support this and we can't detect
+- * this in the preprocessor, but we can live with this because they're
+- * unreleased.  Really, we need to have autoconf for the kernel.
+- */
+-#define unreachable() __builtin_unreachable()
+-
+-/* Mark a function definition as prohibited from being cloned. */
+-#define __noclone	__attribute__((__noclone__))
+-
+-#endif
+-#endif
+-
+-#if __GNUC_MINOR__ >= 6
+-/*
+- * Tell the optimizer that something else uses this function or variable.
+- */
+-#define __visible __attribute__((externally_visible))
+-#endif
+-
+-#if __GNUC_MINOR__ > 0
+-#define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
+-#endif
+-#if __GNUC_MINOR__ >= 3 && !defined(__CHECKER__)
+-#define __compiletime_warning(message) __attribute__((warning(message)))
+-#define __compiletime_error(message) __attribute__((error(message)))
+-#endif
+-
+-#ifdef CONFIG_ARCH_USE_BUILTIN_BSWAP
+-#if __GNUC_MINOR__ >= 4
+-#define __HAVE_BUILTIN_BSWAP32__
+-#define __HAVE_BUILTIN_BSWAP64__
+-#endif
+-#if __GNUC_MINOR__ >= 8 || (defined(__powerpc__) && __GNUC_MINOR__ >= 6)
+-#define __HAVE_BUILTIN_BSWAP16__
+-#endif
+-#endif
+diff --git a/include/linux/compiler-gcc5.h b/include/linux/compiler-gcc5.h
+deleted file mode 100644
+index cdd1cc2..0000000
+--- a/include/linux/compiler-gcc5.h
++++ /dev/null
+@@ -1,66 +0,0 @@
+-#ifndef __LINUX_COMPILER_H
+-#error "Please don't include <linux/compiler-gcc5.h> directly, include <linux/compiler.h> instead."
+-#endif
+-
+-#define __used				__attribute__((__used__))
+-#define __must_check			__attribute__((warn_unused_result))
+-#define __compiler_offsetof(a, b)	__builtin_offsetof(a, b)
+-
+-/* Mark functions as cold. gcc will assume any path leading to a call
+-   to them will be unlikely.  This means a lot of manual unlikely()s
+-   are unnecessary now for any paths leading to the usual suspects
+-   like BUG(), printk(), panic() etc. [but let's keep them for now for
+-   older compilers]
+-
+-   Early snapshots of gcc 4.3 don't support this and we can't detect this
+-   in the preprocessor, but we can live with this because they're unreleased.
+-   Maketime probing would be overkill here.
+-
+-   gcc also has a __attribute__((__hot__)) to move hot functions into
+-   a special section, but I don't see any sense in this right now in
+-   the kernel context */
+-#define __cold			__attribute__((__cold__))
+-
+-#define __UNIQUE_ID(prefix) __PASTE(__PASTE(__UNIQUE_ID_, prefix), __COUNTER__)
+-
+-#ifndef __CHECKER__
+-# define __compiletime_warning(message) __attribute__((warning(message)))
+-# define __compiletime_error(message) __attribute__((error(message)))
+-#endif /* __CHECKER__ */
+-
+-/*
+- * Mark a position in code as unreachable.  This can be used to
+- * suppress control flow warnings after asm blocks that transfer
+- * control elsewhere.
+- *
+- * Early snapshots of gcc 4.5 don't support this and we can't detect
+- * this in the preprocessor, but we can live with this because they're
+- * unreleased.  Really, we need to have autoconf for the kernel.
+- */
+-#define unreachable() __builtin_unreachable()
+-
+-/* Mark a function definition as prohibited from being cloned. */
+-#define __noclone	__attribute__((__noclone__))
+-
+-/*
+- * Tell the optimizer that something else uses this function or variable.
+- */
+-#define __visible __attribute__((externally_visible))
+-
+-/*
+- * GCC 'asm goto' miscompiles certain code sequences:
+- *
+- *   http://gcc.gnu.org/bugzilla/show_bug.cgi?id=58670
+- *
+- * Work it around via a compiler barrier quirk suggested by Jakub Jelinek.
+- * Fixed in GCC 4.8.2 and later versions.
+- *
+- * (asm goto is automatically volatile - the naming reflects this.)
+- */
+-#define asm_volatile_goto(x...)	do { asm goto(x); asm (""); } while (0)
+-
+-#ifdef CONFIG_ARCH_USE_BUILTIN_BSWAP
+-#define __HAVE_BUILTIN_BSWAP32__
+-#define __HAVE_BUILTIN_BSWAP64__
+-#define __HAVE_BUILTIN_BSWAP16__
+-#endif /* CONFIG_ARCH_USE_BUILTIN_BSWAP */
+-- 
+2.9.3
+

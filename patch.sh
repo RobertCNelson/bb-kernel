@@ -1116,6 +1116,38 @@ emmc () {
 	fi
 }
 
+cape_universal () {
+	echo "dir: cape_universal"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/cape_universal/0001-sync-beaglebone-universal-io-Sep-25-2016.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="cape_universal"
+		number=1
+		cleanup
+	fi
+}
+
+gcc6 () {
+	echo "dir: gcc6"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/gcc6/0001-gcc6-backport-compiler-gcc-integrate-the-various-com.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="gcc6"
+		number=1
+		cleanup
+	fi
+}
+
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
 	echo "dir: bb_view_lcd"
@@ -1128,6 +1160,7 @@ bb_view_lcd () {
 	${git} "${DIR}/patches/bb_view_lcd/0002-sitara_red_blue_swap_workaround.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="bb_view_lcd"
 		number=2
 		cleanup
 	fi
@@ -1212,6 +1245,8 @@ beagleboy
 treewide
 gcc5
 emmc
+cape_universal
+gcc6
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
