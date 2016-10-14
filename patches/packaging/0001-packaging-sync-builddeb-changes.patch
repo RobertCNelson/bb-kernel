@@ -1,15 +1,15 @@
-From 908599c43ee46d4a34b9dbdf3617703fff5fe4f0 Mon Sep 17 00:00:00 2001
+From adc30a35ab7c7bf1aa6a496a3cfab16289a90a20 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 25 Sep 2015 18:30:40 -0500
+Date: Fri, 14 Oct 2016 09:07:00 -0500
 Subject: [PATCH] packaging: sync builddeb changes
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- scripts/package/builddeb | 162 +++++++++++++++++++++++++++++++++--------------
- 1 file changed, 113 insertions(+), 49 deletions(-)
+ scripts/package/builddeb | 180 ++++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 131 insertions(+), 49 deletions(-)
 
 diff --git a/scripts/package/builddeb b/scripts/package/builddeb
-index f46e4dd..690996a 100644
+index f46e4dd..f9dba41 100644
 --- a/scripts/package/builddeb
 +++ b/scripts/package/builddeb
 @@ -15,6 +15,8 @@ set -e
@@ -21,9 +21,12 @@ index f46e4dd..690996a 100644
  	cp debian/copyright "$pdir/usr/share/doc/$pname/"
  	cp debian/changelog "$pdir/usr/share/doc/$pname/changelog.Debian"
  	gzip -9 "$pdir/usr/share/doc/$pname/changelog.Debian"
-@@ -25,8 +27,13 @@ create_package() {
+@@ -24,9 +26,16 @@ create_package() {
+ 	# Fix ownership and permissions
  	chown -R root:root "$pdir"
  	chmod -R go-w "$pdir"
++	# in case we are in a restrictive umask environment like 0077
++	chmod -R a+rX "$pdir"
  
 +	# Create the package
 +	dpkg-gencontrol $forcearch -Vkernel:debarch="${debarch}" -p$pname -P"$pdir"
@@ -36,7 +39,7 @@ index f46e4dd..690996a 100644
  	case "$UTS_MACHINE" in
  	i386|ia64|alpha)
  		debarch="$UTS_MACHINE" ;;
-@@ -35,16 +42,19 @@ create_package() {
+@@ -35,16 +44,28 @@ create_package() {
  	sparc*)
  		debarch=sparc ;;
  	s390*)
@@ -53,13 +56,22 @@ index f46e4dd..690996a 100644
 +		debarch=arm64 ;;
  	arm*)
 -		debarch=arm$(grep -q CONFIG_AEABI=y $KCONFIG_CONFIG && echo el || true) ;;
-+		debarch=arm$(grep -q CONFIG_AEABI=y $KCONFIG_CONFIG && echo hf || true) ;;
++		if grep -q CONFIG_AEABI=y $KCONFIG_CONFIG; then
++		    if grep -q CONFIG_VFP=y $KCONFIG_CONFIG; then
++			debarch=armhf
++		    else
++			debarch=armel
++		    fi
++		else
++		    debarch=arm
++		fi
++		;;
  	*)
 +		debarch=$(dpkg --print-architecture)
  		echo "" >&2
  		echo "** ** **  WARNING  ** ** **" >&2
  		echo "" >&2
-@@ -57,13 +67,8 @@ create_package() {
+@@ -57,13 +78,8 @@ create_package() {
  	if [ -n "$KBUILD_DEBARCH" ] ; then
  		debarch="$KBUILD_DEBARCH"
  	fi
@@ -74,7 +86,7 @@ index f46e4dd..690996a 100644
  }
  
  # Some variables and settings used throughout the script
-@@ -74,6 +79,7 @@ if [ -n "$KDEB_PKGVERSION" ]; then
+@@ -74,6 +90,7 @@ if [ -n "$KDEB_PKGVERSION" ]; then
  else
  	packageversion=$version-$revision
  fi
@@ -82,7 +94,7 @@ index f46e4dd..690996a 100644
  tmpdir="$objtree/debian/tmp"
  fwdir="$objtree/debian/fwtmp"
  kernel_headers_dir="$objtree/debian/hdrtmp"
-@@ -84,6 +90,9 @@ fwpackagename=linux-firmware-image-$version
+@@ -84,6 +101,9 @@ fwpackagename=linux-firmware-image-$version
  kernel_headers_packagename=linux-headers-$version
  libc_headers_packagename=linux-libc-dev
  dbg_packagename=$packagename-dbg
@@ -92,7 +104,7 @@ index f46e4dd..690996a 100644
  
  if [ "$ARCH" = "um" ] ; then
  	packagename=user-mode-linux-$version
-@@ -106,31 +115,20 @@ esac
+@@ -106,31 +126,20 @@ esac
  BUILD_DEBUG="$(grep -s '^CONFIG_DEBUG_INFO=y' $KCONFIG_CONFIG || true)"
  
  # Setup the directory structure
@@ -129,7 +141,7 @@ index f46e4dd..690996a 100644
  	cp System.map "$tmpdir/boot/System.map-$version"
  	cp $KCONFIG_CONFIG "$tmpdir/boot/config-$version"
  fi
-@@ -141,6 +139,22 @@ else
+@@ -141,6 +150,22 @@ else
  	cp arch/$ARCH/boot/$KBUILD_IMAGE "$tmpdir/$installed_image_path"
  fi
  
@@ -152,7 +164,7 @@ index f46e4dd..690996a 100644
  if grep -q '^CONFIG_MODULES=y' $KCONFIG_CONFIG ; then
  	INSTALL_MOD_PATH="$tmpdir" $MAKE KBUILD_SRC= modules_install
  	rm -f "$tmpdir/lib/modules/$version/build"
-@@ -150,18 +164,22 @@ if grep -q '^CONFIG_MODULES=y' $KCONFIG_CONFIG ; then
+@@ -150,18 +175,22 @@ if grep -q '^CONFIG_MODULES=y' $KCONFIG_CONFIG ; then
  		rmdir "$tmpdir/lib/modules/$version"
  	fi
  	if [ -n "$BUILD_DEBUG" ] ; then
@@ -187,7 +199,7 @@ index f46e4dd..690996a 100644
  	fi
  fi
  
-@@ -206,7 +224,7 @@ if [ -n "$DEBEMAIL" ]; then
+@@ -206,7 +235,7 @@ if [ -n "$DEBEMAIL" ]; then
  elif [ -n "$EMAIL" ]; then
         email=$EMAIL
  else
@@ -196,14 +208,15 @@ index f46e4dd..690996a 100644
  fi
  if [ -n "$DEBFULLNAME" ]; then
         name=$DEBFULLNAME
-@@ -217,9 +235,20 @@ else
+@@ -217,9 +246,21 @@ else
  fi
  maintainer="$name <$email>"
  
 +# Try to determine distribution
 +if [ -n "$KDEB_CHANGELOG_DIST" ]; then
 +        distribution=$KDEB_CHANGELOG_DIST
-+elif distribution=$(lsb_release -cs 2>/dev/null) && [ -n "$distribution" ]; then
++# In some cases lsb_release returns the codename as n/a, which breaks dpkg-parsechangelog
++elif distribution=$(lsb_release -cs 2>/dev/null) && [ -n "$distribution" ] && [ "$distribution" != "n/a" ]; then
 +        : # nothing to do in this case
 +else
 +        distribution="unstable"
@@ -218,7 +231,7 @@ index f46e4dd..690996a 100644
  
    * Custom built Linux kernel.
  
-@@ -233,10 +262,10 @@ This is a packacked upstream version of the Linux kernel.
+@@ -233,10 +274,10 @@ This is a packacked upstream version of the Linux kernel.
  The sources may be found at most Linux ftp sites, including:
  ftp://ftp.kernel.org/pub/linux/kernel
  
@@ -231,7 +244,7 @@ index f46e4dd..690996a 100644
  
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
-@@ -246,12 +275,16 @@ On Debian GNU/Linux systems, the complete text of the GNU General Public
+@@ -246,12 +287,16 @@ On Debian GNU/Linux systems, the complete text of the GNU General Public
  License version 2 can be found in \`/usr/share/common-licenses/GPL-2'.
  EOF
  
@@ -249,7 +262,7 @@ index f46e4dd..690996a 100644
  Standards-Version: 3.8.4
  Homepage: http://www.kernel.org/
  EOF
-@@ -287,14 +320,16 @@ EOF
+@@ -287,14 +332,22 @@ EOF
  
  fi
  
@@ -259,10 +272,16 @@ index f46e4dd..690996a 100644
 -(cd $objtree; find arch/$SRCARCH/include Module.symvers include scripts -type f >> "$objtree/debian/hdrobjfiles")
 +# Build kernel header package
 +(cd $srctree; find . -name Makefile\* -o -name Kconfig\* -o -name \*.pl) > "$objtree/debian/hdrsrcfiles"
-+(cd $srctree; find arch/$SRCARCH/include include scripts -type f) >> "$objtree/debian/hdrsrcfiles"
++(cd $srctree; find arch/*/include include scripts -type f) >> "$objtree/debian/hdrsrcfiles"
 +(cd $srctree; find arch/$SRCARCH -name module.lds -o -name Kbuild.platforms -o -name Platform) >> "$objtree/debian/hdrsrcfiles"
 +(cd $srctree; find $(find arch/$SRCARCH -name include -o -name scripts -type d) -type f) >> "$objtree/debian/hdrsrcfiles"
++if grep -q '^CONFIG_STACK_VALIDATION=y' $KCONFIG_CONFIG ; then
++	(cd $objtree; find tools/objtool -type f -executable) >> "$objtree/debian/hdrobjfiles"
++fi
 +(cd $objtree; find arch/$SRCARCH/include Module.symvers include scripts -type f) >> "$objtree/debian/hdrobjfiles"
++if grep -q '^CONFIG_GCC_PLUGINS=y' $KCONFIG_CONFIG ; then
++	(cd $objtree; find scripts/gcc-plugins -name \*.so -o -name gcc-common.h) >> "$objtree/debian/hdrobjfiles"
++fi
  destdir=$kernel_headers_dir/usr/src/linux-headers-$version
  mkdir -p "$destdir"
 -(cd $srctree; tar -c -f - -T "$objtree/debian/hdrsrcfiles") | (cd $destdir; tar -xf -)
@@ -272,7 +291,7 @@ index f46e4dd..690996a 100644
  (cd $objtree; cp $KCONFIG_CONFIG $destdir/.config) # copy .config manually to be where it's expected to be
  ln -sf "/usr/src/linux-headers-$version" "$kernel_headers_dir/lib/modules/$version/build"
  rm -f "$objtree/debian/hdrsrcfiles" "$objtree/debian/hdrobjfiles"
-@@ -370,4 +405,33 @@ EOF
+@@ -370,4 +423,33 @@ EOF
  	create_package "$dbg_packagename" "$dbg_dir"
  fi
  
@@ -307,5 +326,5 @@ index f46e4dd..690996a 100644
 +
  exit 0
 -- 
-2.5.3
+2.9.3
 
