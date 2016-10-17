@@ -40,11 +40,6 @@ fi
 
 echo "Starting patch.sh"
 
-#merged_in_4_5="enable"
-unset merged_in_4_5
-#merged_in_4_6="enable"
-unset merged_in_4_6
-
 git_add () {
 	${git_bin} add .
 	${git_bin} commit -a -m 'testing patchset'
@@ -202,7 +197,6 @@ local_patch () {
 #aufs4
 rt
 #local_patch
-
 
 pre_backports () {
 	echo "dir: backports/${subsystem}"
