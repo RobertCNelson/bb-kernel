@@ -167,10 +167,6 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-	#v4.8.1
-	${git_bin} revert --no-edit 0b09f2d43201472327b80f9978cd768b46353a34
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -195,7 +191,7 @@ local_patch () {
 
 #external_git
 #aufs4
-rt
+#rt
 #local_patch
 
 pre_backports () {
@@ -234,18 +230,14 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="3477d168ba61c5b0ca42d3d4642f3463609a5417"
+	backport_tag="v4.x-y"
 
-	subsystem="iio"
+	subsystem="xyz"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		cp -vr ~/linux-src/drivers/iio/* ./drivers/iio/
-		cp -vr ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
-		cp -v  ~/linux-src/include/linux/hid-sensor-hub.h ./include/linux/
-		cp -vr ~/linux-src/include/linux/iio/* ./include/linux/iio/
-		cp -v  ~/linux-src/include/uapi/linux/iio/types.h ./include/uapi/linux/iio/types.h
+		cp -v ~/linux-src/x/ ./x/
 
 		post_backports
 	fi
@@ -398,20 +390,6 @@ drivers () {
 		cleanup
 	fi
 
-	echo "dir: drivers/ti/tps65217"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/drivers/ti/tps65217/0001-tps65217-Enable-KEY_POWER-press-on-AC-loss-PWR_BUT.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="drivers/ti/tps65217"
-		number=1
-		cleanup
-	fi
-
 	echo "dir: drivers/ti/cpsw"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -485,10 +463,12 @@ soc () {
 	fi
 
 	${git} "${DIR}/patches/soc/imx/0001-first-pass-imx6q-ccimx6sbc.patch"
-	${git} "${DIR}/patches/soc/imx/0002-imx6-wl1835-base-boards.patch"
-	${git} "${DIR}/patches/soc/imx/0003-imx6q-sabresd-add-support-for-wilink8-wlan-and-bluet.patch"
-	${git} "${DIR}/patches/soc/imx/0004-imx6sl-evk-add-support-for-wilink8-wlan-and-bluetoot.patch"
 	${git} "${DIR}/patches/soc/imx/0005-mcimx6ul-bb-and-ism43362-b81-evb.patch"
+
+	#need to be re-synced...
+	#${git} "${DIR}/patches/soc/imx/0002-imx6-wl1835-base-boards.patch"
+	#${git} "${DIR}/patches/soc/imx/0003-imx6q-sabresd-add-support-for-wilink8-wlan-and-bluet.patch"
+	#${git} "${DIR}/patches/soc/imx/0004-imx6sl-evk-add-support-for-wilink8-wlan-and-bluetoot.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="soc/imx"
@@ -545,10 +525,13 @@ soc () {
 	${git} "${DIR}/patches/soc/ti/bone_common/0002-ARM-dts-am335x-bone-common-add-collision-and-carrier.patch"
 	${git} "${DIR}/patches/soc/ti/bone_common/0003-ARM-dts-am335x-bone-common-disable-running-JTAG.patch"
 	${git} "${DIR}/patches/soc/ti/bone_common/0004-ARM-dts-am335x-bone-common-overlays.patch"
+	#FIXME: still broken...
+	${git} "${DIR}/patches/soc/ti/bone_common/0005-HACK-am335x-bone-common.dtsi-pwr-button.patch"
+	${git} "${DIR}/patches/soc/ti/bone_common/0006-ARM-dts-am335x-bone-common-rtc-defined-in-common.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="soc/ti/bone_common"
-		number=4
+		number=6
 		cleanup
 	fi
 
@@ -615,11 +598,10 @@ soc () {
 	fi
 
 	${git} "${DIR}/patches/soc/ti/sancloud/0001-add-am335x-sancloud-bbe.patch"
-	${git} "${DIR}/patches/soc/ti/sancloud/0002-am335x-sancloud-bbe-update-lps331ap-mpu6050-irq-pins.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="soc/ti/sancloud"
-		number=2
+		number=1
 		cleanup
 	fi
 
@@ -769,6 +751,7 @@ beaglebone () {
 		device="am335x-bonegreen-wireless-led-hack.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-wireless.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-wireless-emmc-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblue.dtb" ; dtb_makefile_append
 
 		device="am335x-sancloud-bbe.dtb" ; dtb_makefile_append
@@ -858,7 +841,7 @@ more_fixes () {
 }
 
 ###
-backports
+#backports
 #reverts
 #fixes
 drivers
