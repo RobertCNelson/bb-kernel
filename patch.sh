@@ -194,7 +194,7 @@ local_patch () {
 }
 
 #external_git
-#aufs4
+aufs4
 rt
 #local_patch
 
@@ -234,7 +234,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="3477d168ba61c5b0ca42d3d4642f3463609a5417"
+	backport_tag="v4.9-rc1"
 
 	subsystem="iio"
 	#regenerate="enable"
