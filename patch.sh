@@ -40,11 +40,6 @@ fi
 
 echo "Starting patch.sh"
 
-#merged_in_4_5="enable"
-unset merged_in_4_5
-#merged_in_4_6="enable"
-unset merged_in_4_6
-
 git_add () {
 	${git_bin} add .
 	${git_bin} commit -a -m 'testing patchset'
@@ -235,7 +230,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.8.2"
+	backport_tag="v4.8.3"
 
 	subsystem="iio"
 	#regenerate="enable"
