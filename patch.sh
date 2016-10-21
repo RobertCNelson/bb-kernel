@@ -294,7 +294,7 @@ lts44_backports () {
 	fi
 	patch_backports
 
-	backport_tag="v4.7.8"
+	backport_tag="v4.7.9"
 
 	subsystem="i2c"
 	#regenerate="enable"
@@ -328,7 +328,7 @@ lts44_backports () {
 	patch_backports
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	backport_tag="v4.8.2"
+	backport_tag="v4.8.3"
 
 	subsystem="touchscreen"
 	#regenerate="enable"
@@ -783,11 +783,25 @@ beaglebone () {
 		start_cleanup
 	fi
 
-	${git} "${DIR}/patches/beaglebone/bbgw/0001-add-beaglebone-green-wireless.patch"
-	${git} "${DIR}/patches/beaglebone/bbgw/0002-bbgw-wlan0-fixes.patch"
+	${git} "${DIR}/patches/beaglebone/bbgw/0001-ARM-dts-add-am335x-bonegreen-wireless.dtb.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=2
+		wdir="beaglebone/bbgw"
+		number=1
+		cleanup
+	fi
+
+	echo "dir: beaglebone/bbbw"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/beaglebone/bbbw/0001-ARM-dts-add-am335x-boneblack-wireless.dtb.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="beaglebone/bbbw"
+		number=1
 		cleanup
 	fi
 
@@ -945,6 +959,9 @@ beaglebone () {
 		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
+
+		device="am335x-boneblack-wireless.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-wireless-emmc-overlay.dtb" ; dtb_makefile_append
 
 		device="am335x-sancloud-bbe.dtb" ; dtb_makefile_append
 
