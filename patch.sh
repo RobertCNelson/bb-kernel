@@ -168,6 +168,12 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 
+	#v4.8.4
+	${git_bin} revert --no-edit 4cd2546a1cefcb907ac6f15b5dc3905b28a43187
+	${git_bin} revert --no-edit 3d549dcfbbb0ecdaa571431a27ee5da9f2466716
+	${git_bin} revert --no-edit 7d5d3b13596da50b6fa835997823f419f9c818c4
+	${git_bin} revert --no-edit 65fc3ba570e5b03f00b2539d3bd2ae3891b68216
+
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -542,10 +548,11 @@ soc () {
 	${git} "${DIR}/patches/soc/ti/bone_common/0002-ARM-dts-am335x-bone-common-add-collision-and-carrier.patch"
 	${git} "${DIR}/patches/soc/ti/bone_common/0003-ARM-dts-am335x-bone-common-disable-running-JTAG.patch"
 	${git} "${DIR}/patches/soc/ti/bone_common/0004-ARM-dts-am335x-bone-common-overlays.patch"
+	${git} "${DIR}/patches/soc/ti/bone_common/0005-ARM-dts-am335x-bone-common-rtc-defined-in-common.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="soc/ti/bone_common"
-		number=4
+		number=5
 		cleanup
 	fi
 
@@ -765,6 +772,7 @@ beaglebone () {
 		device="am335x-bonegreen-wireless.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-wireless.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-wireless-emmc-overlay.dtb" ; dtb_makefile_append
 		device="am335x-boneblue.dtb" ; dtb_makefile_append
 
 		device="am335x-sancloud-bbe.dtb" ; dtb_makefile_append
