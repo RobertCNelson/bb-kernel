@@ -1,6 +1,6 @@
-From f51c4952fbdd48c63d1b827524cce8ab07d0fe65 Mon Sep 17 00:00:00 2001
+From b70f132d9ca8fe7af44befe5ea80840b50ff08b5 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 28 Oct 2016 11:05:23 -0500
+Date: Mon, 31 Oct 2016 13:14:36 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -158,7 +158,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/exec.c                                          |    2 +
  fs/fuse/dir.c                                      |    2 +-
  fs/jbd2/checkpoint.c                               |    2 +
- fs/jbd2/transaction.c                              |    6 +-
  fs/namei.c                                         |    4 +-
  fs/namespace.c                                     |    8 +-
  fs/nfs/delegation.c                                |    4 +-
@@ -211,7 +210,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/pid.h                                |    1 +
  include/linux/preempt.h                            |   78 +-
  include/linux/printk.h                             |    2 +
- include/linux/radix-tree.h                         |   18 +-
+ include/linux/radix-tree.h                         |   12 +-
  include/linux/random.h                             |    2 +-
  include/linux/rbtree.h                             |    2 +-
  include/linux/rbtree_augmented.h                   |    1 +
@@ -342,13 +341,13 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  lib/irq_poll.c                                     |    5 +
  lib/locking-selftest.c                             |   50 +
  lib/percpu_ida.c                                   |   20 +-
- lib/radix-tree.c                                   |   19 +-
+ lib/radix-tree.c                                   |    5 +-
  lib/scatterlist.c                                  |    6 +-
  lib/smp_processor_id.c                             |    5 +-
  mm/Kconfig                                         |    2 +-
  mm/backing-dev.c                                   |    4 +-
  mm/compaction.c                                    |    6 +-
- mm/filemap.c                                       |   60 +-
+ mm/filemap.c                                       |   13 +-
  mm/highmem.c                                       |    6 +-
  mm/memcontrol.c                                    |   41 +-
  mm/mmu_context.c                                   |    2 +
@@ -380,7 +379,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/sunrpc/svc_xprt.c                              |    6 +-
  scripts/mkcompile_h                                |    4 +-
  sound/core/pcm_native.c                            |    8 +-
- 375 files changed, 11471 insertions(+), 1911 deletions(-)
+ 374 files changed, 11431 insertions(+), 1878 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -689,7 +688,7 @@ index 0000000..6f2aeab
 +
 +These data are also reset when the wakeup histogram is reset.
 diff --git a/Makefile b/Makefile
-index daa3a01..3cb27d2 100644
+index b249529..b1800d3 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -398,7 +398,7 @@ KBUILD_CPPFLAGS := -D__KERNEL__
@@ -4641,10 +4640,10 @@ index 1c2aec3..1d85c0c 100644
  	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
  
 diff --git a/drivers/gpu/drm/i915/intel_display.c b/drivers/gpu/drm/i915/intel_display.c
-index 175595f..d2439b8e 100644
+index e9a64fb..2aac27b 100644
 --- a/drivers/gpu/drm/i915/intel_display.c
 +++ b/drivers/gpu/drm/i915/intel_display.c
-@@ -11613,7 +11613,7 @@ void intel_check_page_flip(struct drm_i915_private *dev_priv, int pipe)
+@@ -11647,7 +11647,7 @@ void intel_check_page_flip(struct drm_i915_private *dev_priv, int pipe)
  	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
  	struct intel_flip_work *work;
  
@@ -4654,7 +4653,7 @@ index 175595f..d2439b8e 100644
  	if (crtc == NULL)
  		return;
 diff --git a/drivers/gpu/drm/i915/intel_sprite.c b/drivers/gpu/drm/i915/intel_sprite.c
-index 7c08e4f..7c6a239 100644
+index 4178849..0eb939c9 100644
 --- a/drivers/gpu/drm/i915/intel_sprite.c
 +++ b/drivers/gpu/drm/i915/intel_sprite.c
 @@ -38,6 +38,7 @@
@@ -7432,51 +7431,6 @@ index 684996c..6e18a06 100644
  		mutex_lock(&journal->j_checkpoint_mutex);
  
  		/*
-diff --git a/fs/jbd2/transaction.c b/fs/jbd2/transaction.c
-index 9ed949a..e165266 100644
---- a/fs/jbd2/transaction.c
-+++ b/fs/jbd2/transaction.c
-@@ -159,6 +159,7 @@ static void wait_transaction_locked(journal_t *journal)
- 	read_unlock(&journal->j_state_lock);
- 	if (need_to_start)
- 		jbd2_log_start_commit(journal, tid);
-+	jbd2_might_wait_for_commit(journal);
- 	schedule();
- 	finish_wait(&journal->j_wait_transaction_locked, &wait);
- }
-@@ -182,8 +183,6 @@ static int add_transaction_credits(journal_t *journal, int blocks,
- 	int needed;
- 	int total = blocks + rsv_blocks;
- 
--	jbd2_might_wait_for_commit(journal);
--
- 	/*
- 	 * If the current transaction is locked down for commit, wait
- 	 * for the lock to be released.
-@@ -214,6 +213,7 @@ static int add_transaction_credits(journal_t *journal, int blocks,
- 		if (atomic_read(&journal->j_reserved_credits) + total >
- 		    journal->j_max_transaction_buffers) {
- 			read_unlock(&journal->j_state_lock);
-+			jbd2_might_wait_for_commit(journal);
- 			wait_event(journal->j_wait_reserved,
- 				   atomic_read(&journal->j_reserved_credits) + total <=
- 				   journal->j_max_transaction_buffers);
-@@ -238,6 +238,7 @@ static int add_transaction_credits(journal_t *journal, int blocks,
- 	if (jbd2_log_space_left(journal) < jbd2_space_needed(journal)) {
- 		atomic_sub(total, &t->t_outstanding_credits);
- 		read_unlock(&journal->j_state_lock);
-+		jbd2_might_wait_for_commit(journal);
- 		write_lock(&journal->j_state_lock);
- 		if (jbd2_log_space_left(journal) < jbd2_space_needed(journal))
- 			__jbd2_log_wait_for_space(journal);
-@@ -255,6 +256,7 @@ static int add_transaction_credits(journal_t *journal, int blocks,
- 		sub_reserved_credits(journal, rsv_blocks);
- 		atomic_sub(total, &t->t_outstanding_credits);
- 		read_unlock(&journal->j_state_lock);
-+		jbd2_might_wait_for_commit(journal);
- 		wait_event(journal->j_wait_reserved,
- 			 atomic_read(&journal->j_reserved_credits) + rsv_blocks
- 			 <= journal->j_max_transaction_buffers / 2);
 diff --git a/fs/namei.c b/fs/namei.c
 index adb0414..a89dfaf 100644
 --- a/fs/namei.c
@@ -9865,22 +9819,10 @@ index 696a56b..310aa32 100644
  
  #ifdef CONFIG_PRINTK_NMI
 diff --git a/include/linux/radix-tree.h b/include/linux/radix-tree.h
-index 4c45105..fd9ea1c 100644
+index 52b97db..fd9ea1c 100644
 --- a/include/linux/radix-tree.h
 +++ b/include/linux/radix-tree.h
-@@ -280,18 +280,28 @@ bool __radix_tree_delete_node(struct radix_tree_root *root,
- 			      struct radix_tree_node *node);
- void *radix_tree_delete_item(struct radix_tree_root *, unsigned long, void *);
- void *radix_tree_delete(struct radix_tree_root *, unsigned long);
--struct radix_tree_node *radix_tree_replace_clear_tags(
--				struct radix_tree_root *root,
--				unsigned long index, void *entry);
-+void radix_tree_clear_tags(struct radix_tree_root *root,
-+			   struct radix_tree_node *node,
-+			   void **slot);
- unsigned int radix_tree_gang_lookup(struct radix_tree_root *root,
- 			void **results, unsigned long first_index,
- 			unsigned int max_items);
+@@ -289,9 +289,19 @@ unsigned int radix_tree_gang_lookup(struct radix_tree_root *root,
  unsigned int radix_tree_gang_lookup_slot(struct radix_tree_root *root,
  			void ***results, unsigned long *indices,
  			unsigned long first_index, unsigned int max_items);
@@ -23523,7 +23465,7 @@ index 6d40944..822a2c0 100644
  }
  EXPORT_SYMBOL_GPL(percpu_ida_for_each_free);
 diff --git a/lib/radix-tree.c b/lib/radix-tree.c
-index 91f0727..881cc19 100644
+index 8e6d552..881cc19 100644
 --- a/lib/radix-tree.c
 +++ b/lib/radix-tree.c
 @@ -290,13 +290,14 @@ radix_tree_node_alloc(struct radix_tree_root *root)
@@ -23558,35 +23500,6 @@ index 91f0727..881cc19 100644
  
  /*
   * The maximum index which can be stored in a radix tree
-@@ -1583,15 +1586,10 @@ void *radix_tree_delete(struct radix_tree_root *root, unsigned long index)
- }
- EXPORT_SYMBOL(radix_tree_delete);
- 
--struct radix_tree_node *radix_tree_replace_clear_tags(
--			struct radix_tree_root *root,
--			unsigned long index, void *entry)
-+void radix_tree_clear_tags(struct radix_tree_root *root,
-+			   struct radix_tree_node *node,
-+			   void **slot)
- {
--	struct radix_tree_node *node;
--	void **slot;
--
--	__radix_tree_lookup(root, index, &node, &slot);
--
- 	if (node) {
- 		unsigned int tag, offset = get_slot_offset(node, slot);
- 		for (tag = 0; tag < RADIX_TREE_MAX_TAGS; tag++)
-@@ -1600,9 +1598,6 @@ struct radix_tree_node *radix_tree_replace_clear_tags(
- 		/* Clear root node tags */
- 		root->gfp_mask &= __GFP_BITS_MASK;
- 	}
--
--	radix_tree_replace_slot(slot, entry);
--	return node;
- }
- 
- /**
 diff --git a/lib/scatterlist.c b/lib/scatterlist.c
 index 004fc70..ccc4699 100644
 --- a/lib/scatterlist.c
@@ -23683,7 +23596,7 @@ index 9affb29..d5eb0e5 100644
  				cc->last_migrated_pfn = 0;
  			}
 diff --git a/mm/filemap.c b/mm/filemap.c
-index 4a31bad..5d63556 100644
+index ea47a7d..c32c0b6 100644
 --- a/mm/filemap.c
 +++ b/mm/filemap.c
 @@ -159,9 +159,12 @@ static int page_cache_tree_insert(struct address_space *mapping,
@@ -23701,59 +23614,7 @@ index 4a31bad..5d63556 100644
  	}
  	return 0;
  }
-@@ -169,33 +172,35 @@ static int page_cache_tree_insert(struct address_space *mapping,
- static void page_cache_tree_delete(struct address_space *mapping,
- 				   struct page *page, void *shadow)
- {
--	struct radix_tree_node *node;
- 	int i, nr = PageHuge(page) ? 1 : hpage_nr_pages(page);
- 
- 	VM_BUG_ON_PAGE(!PageLocked(page), page);
- 	VM_BUG_ON_PAGE(PageTail(page), page);
- 	VM_BUG_ON_PAGE(nr != 1 && shadow, page);
- 
--	if (shadow) {
--		mapping->nrexceptional += nr;
--		/*
--		 * Make sure the nrexceptional update is committed before
--		 * the nrpages update so that final truncate racing
--		 * with reclaim does not see both counters 0 at the
--		 * same time and miss a shadow entry.
--		 */
--		smp_wmb();
--	}
--	mapping->nrpages -= nr;
--
- 	for (i = 0; i < nr; i++) {
--		node = radix_tree_replace_clear_tags(&mapping->page_tree,
--				page->index + i, shadow);
-+		struct radix_tree_node *node;
-+		void **slot;
-+
-+		__radix_tree_lookup(&mapping->page_tree, page->index + i,
-+				    &node, &slot);
-+
-+		radix_tree_clear_tags(&mapping->page_tree, node, slot);
-+
- 		if (!node) {
- 			VM_BUG_ON_PAGE(nr != 1, page);
--			return;
-+			/*
-+			 * We need a node to properly account shadow
-+			 * entries. Don't plant any without. XXX
-+			 */
-+			shadow = NULL;
- 		}
- 
-+		radix_tree_replace_slot(slot, shadow);
-+
-+		if (!node)
-+			break;
-+
- 		workingset_node_pages_dec(node);
- 		if (shadow)
- 			workingset_node_shadows_inc(node);
-@@ -215,10 +220,24 @@ static void page_cache_tree_delete(struct address_space *mapping,
+@@ -217,8 +220,10 @@ static void page_cache_tree_delete(struct address_space *mapping,
  		if (!dax_mapping(mapping) && !workingset_node_pages(node) &&
  				list_empty(&node->private_list)) {
  			node->private_data = mapping;
@@ -23765,29 +23626,7 @@ index 4a31bad..5d63556 100644
 +			local_unlock(workingset_shadow_lock);
  		}
  	}
-+
-+	if (shadow) {
-+		mapping->nrexceptional += nr;
-+		/*
-+		 * Make sure the nrexceptional update is committed before
-+		 * the nrpages update so that final truncate racing
-+		 * with reclaim does not see both counters 0 at the
-+		 * same time and miss a shadow entry.
-+		 */
-+		smp_wmb();
-+	}
-+	mapping->nrpages -= nr;
- }
  
- /*
-@@ -619,7 +638,6 @@ int replace_page_cache_page(struct page *old, struct page *new, gfp_t gfp_mask)
- 		__delete_from_page_cache(old, NULL);
- 		error = page_cache_tree_insert(mapping, new, NULL);
- 		BUG_ON(error);
--		mapping->nrpages++;
- 
- 		/*
- 		 * hugetlb pages do not participate in page cache accounting.
 diff --git a/mm/highmem.c b/mm/highmem.c
 index 50b4ca6..77518a3 100644
 --- a/mm/highmem.c
@@ -26448,5 +26287,5 @@ index c61fd50..1583de4 100644
  EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock_irqrestore);
  
 -- 
-2.9.3
+2.10.1
 
