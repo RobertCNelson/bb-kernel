@@ -251,7 +251,18 @@ reverts () {
 		start_cleanup
 	fi
 
+	#https://github.com/torvalds/linux/commit/00f0ea70d2b82b7d7afeb1bdedc9169eb8ea6675
+	#
+	#Causes bone_capemgr to get stuck on slot 1 and just eventually exit "without" checking slot2/3/4...
+	#
+	#[    5.406775] bone_capemgr bone_capemgr: Baseboard: 'A335BNLT,00C0,2516BBBK2626'
+	#[    5.414178] bone_capemgr bone_capemgr: compatible-baseboard=ti,beaglebone-black - #slots=4
+	#[    5.422573] bone_capemgr bone_capemgr: Failed to add slot #1
+
+	${git} "${DIR}/patches/reverts/0001-Revert-eeprom-at24-check-if-the-chip-is-functional-i.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="reverts"
 		number=1
 		cleanup
 	fi
@@ -264,8 +275,15 @@ fixes () {
 		start_cleanup
 	fi
 
+	${git} "${DIR}/patches/fixes/0001-kbuild-add-fno-PIE.patch"
+	${git} "${DIR}/patches/fixes/0002-kbuild-modversions-for-EXPORT_SYMBOL-for-asm.patch"
+	${git} "${DIR}/patches/fixes/0003-kbuild-provide-include-asm-asm-prototypes.h-for-ARM.patch"
+	#v4.9.0-rc3:
+	${git} "${DIR}/patches/fixes/0004-ARM-wire-up-new-pkey-syscalls.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
+		wdir="fixes"
+		number=4
 		cleanup
 	fi
 }
@@ -886,8 +904,8 @@ more_fixes () {
 
 ###
 #backports
-#reverts
-#fixes
+reverts
+fixes
 drivers
 soc
 beaglebone
