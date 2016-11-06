@@ -286,7 +286,7 @@ reverts () {
 	${git} "${DIR}/patches/reverts/0001-Revert-eeprom-at24-check-if-the-chip-is-functional-i.patch"
 
 	#https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/log/drivers/net/wireless/ti
-#	${git} "${DIR}/patches/reverts/0002-Revert-wlcore-sdio-drop-kfree-for-memory-allocated-w.patch"
+	${git} "${DIR}/patches/reverts/0002-Revert-wlcore-sdio-drop-kfree-for-memory-allocated-w.patch"
 	${git} "${DIR}/patches/reverts/0003-Revert-wlcore-wl18xx-Use-chip-specific-configuration.patch"
 	${git} "${DIR}/patches/reverts/0004-Revert-wlcore-Fix-config-firmware-loading-issues.patch"
 	${git} "${DIR}/patches/reverts/0005-Revert-wlcore-spi-Populate-config-firmware-data.patch"
@@ -296,22 +296,6 @@ reverts () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
 		number=7
-		cleanup
-	fi
-}
-
-fixes () {
-	echo "dir: fixes"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/fixes/0004-ARM-wire-up-new-pkey-syscalls.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="fixes"
-		number=1
 		cleanup
 	fi
 }
@@ -622,7 +606,6 @@ beaglebone () {
 ###
 #backports
 reverts
-fixes
 build
 drivers
 soc
