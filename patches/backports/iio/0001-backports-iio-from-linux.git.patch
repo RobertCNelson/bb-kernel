@@ -1,6 +1,6 @@
-From b367644c8f9b605f11b7338fb9467a12aa3f57dc Mon Sep 17 00:00:00 2001
+From 6545147b4bc2ae3c36e5b7d5a631567e162b2eb8 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 15 Nov 2016 10:02:26 -0600
+Date: Sat, 19 Nov 2016 17:38:25 -0600
 Subject: [PATCH] backports: iio: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -19,7 +19,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/accel/mma7660.c                        |    1 +
  drivers/iio/accel/mxc6255.c                        |    4 +-
  drivers/iio/accel/ssp_accel_sensor.c               |    2 +-
- drivers/iio/accel/st_accel_core.c                  |   12 +-
  drivers/iio/adc/Kconfig                            |   63 +
  drivers/iio/adc/Makefile                           |    5 +
  drivers/iio/adc/ad7266.c                           |    4 +-
@@ -41,10 +40,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/chemical/Kconfig                       |    1 +
  drivers/iio/chemical/atlas-ph-sensor.c             |   81 +-
  drivers/iio/chemical/vz89x.c                       |  201 ++-
- .../iio/common/hid-sensors/hid-sensor-attributes.c |   56 +-
  .../iio/common/hid-sensors/hid-sensor-trigger.c    |   29 +-
  drivers/iio/common/st_sensors/st_sensors_buffer.c  |    2 +-
- drivers/iio/common/st_sensors/st_sensors_core.c    |   61 +-
+ drivers/iio/common/st_sensors/st_sensors_core.c    |   53 +-
  drivers/iio/common/st_sensors/st_sensors_trigger.c |    4 +-
  drivers/iio/dac/Kconfig                            |   29 +-
  drivers/iio/dac/Makefile                           |    3 +-
@@ -63,7 +61,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/magnetometer/Makefile                  |    1 +
  drivers/iio/magnetometer/ak8974.c                  |  860 ++++++++++
  drivers/iio/magnetometer/mag3110.c                 |   23 +-
- drivers/iio/orientation/hid-sensor-rotation.c      |    1 +
  drivers/iio/pressure/Kconfig                       |   24 +-
  drivers/iio/pressure/Makefile                      |    3 +
  drivers/iio/pressure/ms5611_core.c                 |    6 +-
@@ -78,7 +75,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/staging/iio/accel/sca3000.h                |    1 +
  drivers/staging/iio/accel/sca3000_core.c           |  246 +--
  drivers/staging/iio/adc/ad7280a.c                  |    2 +-
- drivers/staging/iio/impedance-analyzer/ad5933.c    |   55 +-
+ drivers/staging/iio/impedance-analyzer/ad5933.c    |   38 +-
  drivers/staging/iio/light/isl29018.c               |  138 +-
  drivers/staging/iio/light/isl29028.c               |  103 +-
  drivers/staging/iio/light/tsl2583.c                |    2 +-
@@ -90,7 +87,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/iio/iio.h                            |    3 +
  include/linux/iio/trigger.h                        |   26 +
  include/linux/iio/triggered_buffer.h               |    8 +
- 85 files changed, 8841 insertions(+), 679 deletions(-)
+ 82 files changed, 8789 insertions(+), 637 deletions(-)
  create mode 100644 drivers/iio/accel/dmard06.c
  create mode 100644 drivers/iio/accel/dmard09.c
  create mode 100644 drivers/iio/accel/kxsd9-i2c.c
@@ -1666,37 +1663,6 @@ index 4ae05fc..31db009 100644
  	.read_raw = &ssp_accel_read_raw,
  	.write_raw = &ssp_accel_write_raw,
  };
-diff --git a/drivers/iio/accel/st_accel_core.c b/drivers/iio/accel/st_accel_core.c
-index da3fb06..ce69048 100644
---- a/drivers/iio/accel/st_accel_core.c
-+++ b/drivers/iio/accel/st_accel_core.c
-@@ -743,8 +743,8 @@ static int st_accel_read_raw(struct iio_dev *indio_dev,
- 
- 		return IIO_VAL_INT;
- 	case IIO_CHAN_INFO_SCALE:
--		*val = 0;
--		*val2 = adata->current_fullscale->gain;
-+		*val = adata->current_fullscale->gain / 1000000;
-+		*val2 = adata->current_fullscale->gain % 1000000;
- 		return IIO_VAL_INT_PLUS_MICRO;
- 	case IIO_CHAN_INFO_SAMP_FREQ:
- 		*val = adata->odr;
-@@ -763,9 +763,13 @@ static int st_accel_write_raw(struct iio_dev *indio_dev,
- 	int err;
- 
- 	switch (mask) {
--	case IIO_CHAN_INFO_SCALE:
--		err = st_sensors_set_fullscale_by_gain(indio_dev, val2);
-+	case IIO_CHAN_INFO_SCALE: {
-+		int gain;
-+
-+		gain = val * 1000000 + val2;
-+		err = st_sensors_set_fullscale_by_gain(indio_dev, gain);
- 		break;
-+	}
- 	case IIO_CHAN_INFO_SAMP_FREQ:
- 		if (val2)
- 			return -EINVAL;
 diff --git a/drivers/iio/adc/Kconfig b/drivers/iio/adc/Kconfig
 index 7675772..99c0514 100644
 --- a/drivers/iio/adc/Kconfig
@@ -4359,137 +4325,6 @@ index 652649d..8e0e441 100644
  static struct i2c_driver vz89x_driver = {
  	.driver = {
  		.name	= "vz89x",
-diff --git a/drivers/iio/common/hid-sensors/hid-sensor-attributes.c b/drivers/iio/common/hid-sensors/hid-sensor-attributes.c
-index dc33c1d..b5beea53 100644
---- a/drivers/iio/common/hid-sensors/hid-sensor-attributes.c
-+++ b/drivers/iio/common/hid-sensors/hid-sensor-attributes.c
-@@ -30,26 +30,26 @@ static struct {
- 	u32 usage_id;
- 	int unit; /* 0 for default others from HID sensor spec */
- 	int scale_val0; /* scale, whole number */
--	int scale_val1; /* scale, fraction in micros */
-+	int scale_val1; /* scale, fraction in nanos */
- } unit_conversion[] = {
--	{HID_USAGE_SENSOR_ACCEL_3D, 0, 9, 806650},
-+	{HID_USAGE_SENSOR_ACCEL_3D, 0, 9, 806650000},
- 	{HID_USAGE_SENSOR_ACCEL_3D,
- 		HID_USAGE_SENSOR_UNITS_METERS_PER_SEC_SQRD, 1, 0},
- 	{HID_USAGE_SENSOR_ACCEL_3D,
--		HID_USAGE_SENSOR_UNITS_G, 9, 806650},
-+		HID_USAGE_SENSOR_UNITS_G, 9, 806650000},
- 
--	{HID_USAGE_SENSOR_GYRO_3D, 0, 0, 17453},
-+	{HID_USAGE_SENSOR_GYRO_3D, 0, 0, 17453293},
- 	{HID_USAGE_SENSOR_GYRO_3D,
- 		HID_USAGE_SENSOR_UNITS_RADIANS_PER_SECOND, 1, 0},
- 	{HID_USAGE_SENSOR_GYRO_3D,
--		HID_USAGE_SENSOR_UNITS_DEGREES_PER_SECOND, 0, 17453},
-+		HID_USAGE_SENSOR_UNITS_DEGREES_PER_SECOND, 0, 17453293},
- 
--	{HID_USAGE_SENSOR_COMPASS_3D, 0, 0, 1000},
-+	{HID_USAGE_SENSOR_COMPASS_3D, 0, 0, 1000000},
- 	{HID_USAGE_SENSOR_COMPASS_3D, HID_USAGE_SENSOR_UNITS_GAUSS, 1, 0},
- 
--	{HID_USAGE_SENSOR_INCLINOMETER_3D, 0, 0, 17453},
-+	{HID_USAGE_SENSOR_INCLINOMETER_3D, 0, 0, 17453293},
- 	{HID_USAGE_SENSOR_INCLINOMETER_3D,
--		HID_USAGE_SENSOR_UNITS_DEGREES, 0, 17453},
-+		HID_USAGE_SENSOR_UNITS_DEGREES, 0, 17453293},
- 	{HID_USAGE_SENSOR_INCLINOMETER_3D,
- 		HID_USAGE_SENSOR_UNITS_RADIANS, 1, 0},
- 
-@@ -57,7 +57,7 @@ static struct {
- 	{HID_USAGE_SENSOR_ALS, HID_USAGE_SENSOR_UNITS_LUX, 1, 0},
- 
- 	{HID_USAGE_SENSOR_PRESSURE, 0, 100, 0},
--	{HID_USAGE_SENSOR_PRESSURE, HID_USAGE_SENSOR_UNITS_PASCAL, 0, 1000},
-+	{HID_USAGE_SENSOR_PRESSURE, HID_USAGE_SENSOR_UNITS_PASCAL, 0, 1000000},
- };
- 
- static int pow_10(unsigned power)
-@@ -266,15 +266,15 @@ EXPORT_SYMBOL(hid_sensor_write_raw_hyst_value);
- /*
-  * This fuction applies the unit exponent to the scale.
-  * For example:
-- * 9.806650 ->exp:2-> val0[980]val1[665000]
-- * 9.000806 ->exp:2-> val0[900]val1[80600]
-- * 0.174535 ->exp:2-> val0[17]val1[453500]
-- * 1.001745 ->exp:0-> val0[1]val1[1745]
-- * 1.001745 ->exp:2-> val0[100]val1[174500]
-- * 1.001745 ->exp:4-> val0[10017]val1[450000]
-- * 9.806650 ->exp:-2-> val0[0]val1[98066]
-+ * 9.806650000 ->exp:2-> val0[980]val1[665000000]
-+ * 9.000806000 ->exp:2-> val0[900]val1[80600000]
-+ * 0.174535293 ->exp:2-> val0[17]val1[453529300]
-+ * 1.001745329 ->exp:0-> val0[1]val1[1745329]
-+ * 1.001745329 ->exp:2-> val0[100]val1[174532900]
-+ * 1.001745329 ->exp:4-> val0[10017]val1[453290000]
-+ * 9.806650000 ->exp:-2-> val0[0]val1[98066500]
-  */
--static void adjust_exponent_micro(int *val0, int *val1, int scale0,
-+static void adjust_exponent_nano(int *val0, int *val1, int scale0,
- 				  int scale1, int exp)
- {
- 	int i;
-@@ -285,32 +285,32 @@ static void adjust_exponent_micro(int *val0, int *val1, int scale0,
- 	if (exp > 0) {
- 		*val0 = scale0 * pow_10(exp);
- 		res = 0;
--		if (exp > 6) {
-+		if (exp > 9) {
- 			*val1 = 0;
- 			return;
- 		}
- 		for (i = 0; i < exp; ++i) {
--			x = scale1 / pow_10(5 - i);
-+			x = scale1 / pow_10(8 - i);
- 			res += (pow_10(exp - 1 - i) * x);
--			scale1 = scale1 % pow_10(5 - i);
-+			scale1 = scale1 % pow_10(8 - i);
- 		}
- 		*val0 += res;
- 			*val1 = scale1 * pow_10(exp);
- 	} else if (exp < 0) {
- 		exp = abs(exp);
--		if (exp > 6) {
-+		if (exp > 9) {
- 			*val0 = *val1 = 0;
- 			return;
- 		}
- 		*val0 = scale0 / pow_10(exp);
- 		rem = scale0 % pow_10(exp);
- 		res = 0;
--		for (i = 0; i < (6 - exp); ++i) {
--			x = scale1 / pow_10(5 - i);
--			res += (pow_10(5 - exp - i) * x);
--			scale1 = scale1 % pow_10(5 - i);
-+		for (i = 0; i < (9 - exp); ++i) {
-+			x = scale1 / pow_10(8 - i);
-+			res += (pow_10(8 - exp - i) * x);
-+			scale1 = scale1 % pow_10(8 - i);
- 		}
--		*val1 = rem * pow_10(6 - exp) + res;
-+		*val1 = rem * pow_10(9 - exp) + res;
- 	} else {
- 		*val0 = scale0;
- 		*val1 = scale1;
-@@ -332,14 +332,14 @@ int hid_sensor_format_scale(u32 usage_id,
- 			unit_conversion[i].unit == attr_info->units) {
- 			exp  = hid_sensor_convert_exponent(
- 						attr_info->unit_expo);
--			adjust_exponent_micro(val0, val1,
-+			adjust_exponent_nano(val0, val1,
- 					unit_conversion[i].scale_val0,
- 					unit_conversion[i].scale_val1, exp);
- 			break;
- 		}
- 	}
- 
--	return IIO_VAL_INT_PLUS_MICRO;
-+	return IIO_VAL_INT_PLUS_NANO;
- }
- EXPORT_SYMBOL(hid_sensor_format_scale);
- 
 diff --git a/drivers/iio/common/hid-sensors/hid-sensor-trigger.c b/drivers/iio/common/hid-sensors/hid-sensor-trigger.c
 index 5b41f9d..a3cce3a 100644
 --- a/drivers/iio/common/hid-sensors/hid-sensor-trigger.c
@@ -4583,7 +4418,7 @@ index d06e728..fe7775b 100644
  	else
  		timestamp = iio_get_time_ns(indio_dev);
 diff --git a/drivers/iio/common/st_sensors/st_sensors_core.c b/drivers/iio/common/st_sensors/st_sensors_core.c
-index 2d5282e..975a1f1 100644
+index 32a5946..975a1f1 100644
 --- a/drivers/iio/common/st_sensors/st_sensors_core.c
 +++ b/drivers/iio/common/st_sensors/st_sensors_core.c
 @@ -234,39 +234,35 @@ int st_sensors_power_enable(struct iio_dev *indio_dev)
@@ -4661,28 +4496,6 @@ index 2d5282e..975a1f1 100644
  }
  EXPORT_SYMBOL(st_sensors_power_disable);
  
-@@ -619,7 +612,7 @@ EXPORT_SYMBOL(st_sensors_sysfs_sampling_frequency_avail);
- ssize_t st_sensors_sysfs_scale_avail(struct device *dev,
- 				struct device_attribute *attr, char *buf)
- {
--	int i, len = 0;
-+	int i, len = 0, q, r;
- 	struct iio_dev *indio_dev = dev_get_drvdata(dev);
- 	struct st_sensor_data *sdata = iio_priv(indio_dev);
- 
-@@ -628,8 +621,10 @@ ssize_t st_sensors_sysfs_scale_avail(struct device *dev,
- 		if (sdata->sensor_settings->fs.fs_avl[i].num == 0)
- 			break;
- 
--		len += scnprintf(buf + len, PAGE_SIZE - len, "0.%06u ",
--				sdata->sensor_settings->fs.fs_avl[i].gain);
-+		q = sdata->sensor_settings->fs.fs_avl[i].gain / 1000000;
-+		r = sdata->sensor_settings->fs.fs_avl[i].gain % 1000000;
-+
-+		len += scnprintf(buf + len, PAGE_SIZE - len, "%u.%06u ", q, r);
- 	}
- 	mutex_unlock(&indio_dev->mlock);
- 	buf[len - 1] = '\n';
 diff --git a/drivers/iio/common/st_sensors/st_sensors_trigger.c b/drivers/iio/common/st_sensors/st_sensors_trigger.c
 index e66f12e..fa73e67 100644
 --- a/drivers/iio/common/st_sensors/st_sensors_trigger.c
@@ -7980,18 +7793,6 @@ index f2be4a0..f2b3bd7 100644
  	case IIO_CHAN_INFO_SCALE:
  		switch (chan->type) {
  		case IIO_MAGN:
-diff --git a/drivers/iio/orientation/hid-sensor-rotation.c b/drivers/iio/orientation/hid-sensor-rotation.c
-index b98b9d9..a97e802c 100644
---- a/drivers/iio/orientation/hid-sensor-rotation.c
-+++ b/drivers/iio/orientation/hid-sensor-rotation.c
-@@ -335,6 +335,7 @@ static struct platform_driver hid_dev_rot_platform_driver = {
- 	.id_table = hid_dev_rot_ids,
- 	.driver = {
- 		.name	= KBUILD_MODNAME,
-+		.pm     = &hid_sensor_pm_ops,
- 	},
- 	.probe		= hid_dev_rot_probe,
- 	.remove		= hid_dev_rot_remove,
 diff --git a/drivers/iio/pressure/Kconfig b/drivers/iio/pressure/Kconfig
 index d130cdc..15cd416 100644
 --- a/drivers/iio/pressure/Kconfig
@@ -10818,7 +10619,7 @@ index 2177f1d..b460dda 100644
  };
  
 diff --git a/drivers/staging/iio/impedance-analyzer/ad5933.c b/drivers/staging/iio/impedance-analyzer/ad5933.c
-index 24c348d..3892a74 100644
+index 98d9473..3892a74 100644
 --- a/drivers/staging/iio/impedance-analyzer/ad5933.c
 +++ b/drivers/staging/iio/impedance-analyzer/ad5933.c
 @@ -156,8 +156,7 @@ static const struct iio_chan_spec ad5933_channels[] = {
@@ -10920,58 +10721,7 @@ index 24c348d..3892a74 100644
  		if (ret < 0)
  			goto out;
  		mutex_unlock(&indio_dev->mlock);
-@@ -655,6 +655,7 @@ static void ad5933_work(struct work_struct *work)
- 	__be16 buf[2];
- 	int val[2];
- 	unsigned char status;
-+	int ret;
- 
- 	mutex_lock(&indio_dev->mlock);
- 	if (st->state == AD5933_CTRL_INIT_START_FREQ) {
-@@ -662,19 +663,22 @@ static void ad5933_work(struct work_struct *work)
- 		ad5933_cmd(st, AD5933_CTRL_START_SWEEP);
- 		st->state = AD5933_CTRL_START_SWEEP;
- 		schedule_delayed_work(&st->work, st->poll_time_jiffies);
--		mutex_unlock(&indio_dev->mlock);
--		return;
-+		goto out;
- 	}
- 
--	ad5933_i2c_read(st->client, AD5933_REG_STATUS, 1, &status);
-+	ret = ad5933_i2c_read(st->client, AD5933_REG_STATUS, 1, &status);
-+	if (ret)
-+		goto out;
- 
- 	if (status & AD5933_STAT_DATA_VALID) {
- 		int scan_count = bitmap_weight(indio_dev->active_scan_mask,
- 					       indio_dev->masklength);
--		ad5933_i2c_read(st->client,
-+		ret = ad5933_i2c_read(st->client,
- 				test_bit(1, indio_dev->active_scan_mask) ?
- 				AD5933_REG_REAL_DATA : AD5933_REG_IMAG_DATA,
- 				scan_count * 2, (u8 *)buf);
-+		if (ret)
-+			goto out;
- 
- 		if (scan_count == 2) {
- 			val[0] = be16_to_cpu(buf[0]);
-@@ -686,8 +690,7 @@ static void ad5933_work(struct work_struct *work)
- 	} else {
- 		/* no data available - try again later */
- 		schedule_delayed_work(&st->work, st->poll_time_jiffies);
--		mutex_unlock(&indio_dev->mlock);
--		return;
-+		goto out;
- 	}
- 
- 	if (status & AD5933_STAT_SWEEP_DONE) {
-@@ -700,12 +703,12 @@ static void ad5933_work(struct work_struct *work)
- 		ad5933_cmd(st, AD5933_CTRL_INC_FREQ);
- 		schedule_delayed_work(&st->work, st->poll_time_jiffies);
- 	}
--
-+out:
- 	mutex_unlock(&indio_dev->mlock);
+@@ -708,7 +708,7 @@ out:
  }
  
  static int ad5933_probe(struct i2c_client *client,
