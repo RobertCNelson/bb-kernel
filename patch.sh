@@ -300,10 +300,6 @@ reverts () {
 	fi
 }
 
-build () {
-	dir 'build/kbuild'
-}
-
 drivers () {
 	dir 'drivers/spi'
 	dir 'drivers/pm_bus'
@@ -468,6 +464,7 @@ drivers () {
 	fi
 
 	dir 'drivers/ti/cpsw'
+	dir 'drivers/ti/etnaviv'
 	dir 'drivers/ti/eqep'
 	dir 'drivers/ti/mcasp'
 	dir 'drivers/ti/mmc'
@@ -591,7 +588,6 @@ beaglebone () {
 ###
 #backports
 reverts
-build
 drivers
 soc
 beaglebone
