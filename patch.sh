@@ -192,10 +192,6 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-	${git_bin} revert --no-edit 56df604296c2b6f785e627681757949a461b3a34
-	${git_bin} revert --no-edit 1c7727d0bca0c620850834d8e4913a1f5bdc6cb7
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -259,7 +255,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.9-rc6"
+	backport_tag="v4.9-rc7"
 
 	subsystem="iio"
 	#regenerate="enable"
