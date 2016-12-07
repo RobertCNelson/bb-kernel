@@ -583,6 +583,7 @@ drivers
 soc
 beaglebone
 dir 'build/gcc'
+#dir 'drivers/ti/sgx'
 
 packaging () {
 	echo "dir: packaging"
