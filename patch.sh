@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash -e
 #
 # Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
 #
@@ -21,6 +21,8 @@
 # THE SOFTWARE.
 
 # Split out, so build_kernel.sh and build_deb.sh can share..
+
+shopt -s nullglob
 
 . ${DIR}/version.sh
 if [ -f ${DIR}/system.sh ] ; then
@@ -64,6 +66,28 @@ cleanup () {
 	exit 2
 }
 
+dir () {
+	wdir="$1"
+	if [ -d "${DIR}/patches/$wdir" ]; then
+		echo "dir: $wdir"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		number=
+		for p in "${DIR}/patches/$wdir/"*.patch; do
+			${git} "$p"
+			number=$(( $number + 1 ))
+		done
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			cleanup
+		fi
+	fi
+	unset wdir
+}
+
 pick () {
 	if [ ! -d ../patches/${pick_dir} ] ; then
 		mkdir -p ../patches/${pick_dir}
@@ -76,6 +100,7 @@ external_git () {
 	git_tag=""
 	echo "pulling: ${git_tag}"
 	${git_bin} pull --no-edit ${git_patchset} ${git_tag}
+	${git_bin} describe
 }
 
 rt_cleanup () {
