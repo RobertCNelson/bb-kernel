@@ -255,7 +255,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.9-rc7"
+	backport_tag="v4.9-rc8"
 
 	subsystem="iio"
 	#regenerate="enable"
