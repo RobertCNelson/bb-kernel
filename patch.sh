@@ -357,7 +357,7 @@ lts44_backports () {
 	patch_backports
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	backport_tag="v4.8.12"
+	backport_tag="v4.8.13"
 
 	subsystem="touchscreen"
 	#regenerate="enable"
