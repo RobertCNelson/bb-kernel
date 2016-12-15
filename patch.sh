@@ -164,6 +164,8 @@ aufs4 () {
 		${git_bin} commit -a -m 'merge: aufs4' -s
 		${git_bin} format-patch -5 -o ../patches/aufs4/
 
+		rm -rf ../aufs4-standalone || true
+
 		exit 2
 	fi
 
@@ -192,6 +194,10 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
+
+	${git_bin} revert --no-edit 2386c6b188c52c33aae263c95d0e0a5df4598d8a
+	${git_bin} revert --no-edit 7b2347c8e8030d7d525bbdf2203567e376ae75b3
+
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -245,8 +251,6 @@ post_backports () {
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
-
-	exit 2
 }
 
 patch_backports (){
@@ -255,7 +259,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.9-rc8"
+	backport_tag="v4.9"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -269,8 +273,10 @@ backports () {
 		cp -v  ~/linux-src/include/uapi/linux/iio/types.h ./include/uapi/linux/iio/types.h
 
 		post_backports
+		exit 2
+	else
+		patch_backports
 	fi
-	patch_backports
 }
 
 drivers () {
