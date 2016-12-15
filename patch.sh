@@ -169,6 +169,8 @@ aufs4 () {
 		${git_bin} commit -a -m 'merge: aufs4' -s
 		${git_bin} format-patch -5 -o ../patches/aufs4/
 
+		rm -rf ../aufs4-standalone || true
+
 		exit 2
 	fi
 
@@ -198,10 +200,6 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-	${git_bin} revert --no-edit 147117cf23c0ba452f80409aec9c0be978232698
-	${git_bin} revert --no-edit f740b5cc39dd4f3dd301a2b60afe8b70e45554da
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -270,8 +268,6 @@ post_backports () {
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
-
-	exit 2
 }
 
 patch_backports (){
@@ -307,8 +303,9 @@ lts44_backports () {
 		cp -v ~/linux-src/include/uapi/linux/serial.h ./include/uapi/linux/
 
 		post_backports
+	else
+		patch_backports
 	fi
-	patch_backports
 	${git} "${DIR}/patches/backports/tty/rt-serial-warn-fix.patch"
 
 	subsystem="fbtft"
@@ -320,8 +317,9 @@ lts44_backports () {
 		cp -v ~/linux-src/include/video/mipi_display.h ./include/video/mipi_display.h
 
 		post_backports
+	else
+		patch_backports
 	fi
-	patch_backports
 
 	backport_tag="v4.7.10"
 
@@ -335,8 +333,9 @@ lts44_backports () {
 		cp -v  ~/linux-src/include/linux/i2c.h ./include/linux/
 
 		post_backports
+	else
+		patch_backports
 	fi
-	patch_backports
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -353,11 +352,12 @@ lts44_backports () {
 		cp -v  ~/linux-src/include/uapi/linux/iio/types.h ./include/uapi/linux/iio/types.h
 
 		post_backports
+	else
+		patch_backports
 	fi
-	patch_backports
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	backport_tag="v4.8.14"
+	backport_tag="v4.8.15"
 
 	subsystem="touchscreen"
 	#regenerate="enable"
@@ -368,8 +368,10 @@ lts44_backports () {
 		cp -v ~/linux-src/include/linux/input/touchscreen.h ./include/linux/input/touchscreen.h
 
 		post_backports
+		exit 2
+	else
+		patch_backports
 	fi
-	patch_backports
 
 	echo "dir: lts44_backports"
 	#regenerate="enable"
