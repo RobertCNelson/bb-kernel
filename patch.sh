@@ -168,6 +168,8 @@ aufs4 () {
 		${git_bin} commit -a -m 'merge: aufs4' -s
 		${git_bin} format-patch -5 -o ../patches/aufs4/
 
+		rm -rf ../aufs4-standalone/ || true
+
 		exit 2
 	fi
 
@@ -248,6 +250,8 @@ tinydrm () {
 		${git_bin} commit -a -m 'merge: tinydrm' -s
 		${git_bin} format-patch -1 -o ../patches/drivers/tinydrm/
 
+		rm -rf ../tinydrm/ || true
+
 		exit 2
 	fi
 
@@ -272,7 +276,7 @@ local_patch () {
 
 #external_git
 sync_cherrypicks
-#aufs4
+aufs4
 #rt
 tinydrm
 #local_patch
