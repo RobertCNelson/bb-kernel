@@ -277,7 +277,7 @@ local_patch () {
 #external_git
 sync_cherrypicks
 aufs4
-#rt
+rt
 tinydrm
 #local_patch
 
