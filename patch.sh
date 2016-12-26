@@ -104,7 +104,26 @@ external_git () {
 }
 
 sync_cherrypicks () {
-	dir 'ti_4.9.x/pm_opp'
+	echo "dir: ti_4.9.x/pm_opp"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0001-Documentation-dt-add-bindings-for-ti-cpufreq.patch"
+	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0002-cpufreq-ti-Add-cpufreq-driver-to-determine-available.patch"
+	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0003-cpufreq-dt-Don-t-use-generic-platdev-driver-for-ti-c.patch"
+	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0004-ARM-dts-am33xx-Add-updated-operating-points-v2-table.patch"
+	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0005-ARM-dts-am335x-boneblack-Enable-1GHz-OPP-for-cpu.patch"
+	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0006-ARM-dts-am4372-Update-operating-points-v2-table-for-.patch"
+	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0007-ARM-dts-dra7-Add-updated-operating-points-v2-table-f.patch"
+	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0008-PM-OPP-Expose-_of_get_opp_desc_node-as-dev_pm_opp-AP.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="ti_4.9.x/pm_opp"
+		number=8
+		cleanup
+	fi
 }
 
 aufs_fail () {
@@ -275,8 +294,8 @@ local_patch () {
 }
 
 #external_git
-sync_cherrypicks
-aufs4
+#sync_cherrypicks
+#aufs4
 #rt
 tinydrm
 #local_patch
@@ -357,10 +376,6 @@ reverts () {
 
 drivers () {
 	dir 'drivers/pm_bus'
-
-	#[PATCH V5 00/10] PM / OPP: Multiple regulator support
-	dir 'drivers/pm_opp'
-
 	dir 'drivers/spi'
 	dir 'drivers/tsl2550'
 	dir 'drivers/tps65217'
@@ -477,9 +492,7 @@ drivers () {
 	dir 'drivers/ti/eqep'
 	dir 'drivers/ti/mcasp'
 	dir 'drivers/ti/mmc'
-	dir 'drivers/ti/omapdrm'
 	dir 'drivers/ti/rpmsg'
-	dir 'drivers/ti/rtc'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/spi'
 	dir 'drivers/ti/uio'
