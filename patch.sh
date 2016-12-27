@@ -626,6 +626,28 @@ sync_mainline_dtc () {
 	fi
 }
 
+mainline () {
+	echo "for mainline"
+	${git} "${DIR}/patches/drivers/ti/firmware/0001-add-am33x-firmware.patch"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/upstream/0001-ARM-dts-Move-most-of-am335x-boneblack.dts-to-am335x-.patch"
+	${git} "${DIR}/patches/upstream/0002-ARM-dts-Add-am335x-boneblack-wireless.patch"
+	${git} "${DIR}/patches/upstream/0003-ARM-dts-Move-most-of-am335x-bonegreen.dts-to-am335x-.patch"
+	${git} "${DIR}/patches/upstream/0004-ARM-dts-Add-am335x-bonegreen-wireless.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="upstream"
+		number=4
+		cleanup
+	fi
+
+}
+
 ###
 #backports
 reverts
@@ -635,6 +657,8 @@ beaglebone
 dir 'build/gcc'
 sync_mainline_dtc
 #dir 'drivers/ti/sgx'
+
+#mainline
 
 packaging () {
 	echo "dir: packaging"
