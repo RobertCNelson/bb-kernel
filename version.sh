@@ -27,9 +27,9 @@ toolchain="gcc_linaro_gnueabihf_4_9"
 
 #Kernel/Build
 KERNEL_REL=4.1
-KERNEL_TAG=${KERNEL_REL}.36
+KERNEL_TAG=${KERNEL_REL}.37
 BUILD=${build_prefix}24
-kernel_rt=".35-rt41"
+kernel_rt=".36-rt42"
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
