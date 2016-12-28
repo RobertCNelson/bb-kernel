@@ -126,12 +126,16 @@ check_dpkg () {
 
 debian_regs () {
 	unset deb_pkgs
+	pkg="bash"
+	check_dpkg
 	pkg="bc"
 	check_dpkg
 	pkg="build-essential"
 	check_dpkg
-	pkg="device-tree-compiler"
-	check_dpkg
+	if ! type dtc >/dev/null; then
+		pkg="device-tree-compiler"
+		check_dpkg
+	fi
 	pkg="fakeroot"
 	check_dpkg
 	pkg="lsb-release"
@@ -334,6 +338,11 @@ debian_regs () {
 		sarah)
 			#18
 			#http://blog.linuxmint.com/?p=2975
+			deb_distro="xenial"
+			;;
+		serena)
+			#18.1
+			#http://packages.linuxmint.com/index.php
 			deb_distro="xenial"
 			;;
 		esac
@@ -541,6 +550,9 @@ ignore_32bit="false"
 if [ "x${ARCH}" = "xx86_64" ] ; then
 	case "${toolchain}" in
 	gcc_linaro_eabi_5|gcc_linaro_gnueabihf_5|gcc_linaro_aarch64_gnu_5)
+		ignore_32bit="true"
+		;;
+	gcc_linaro_eabi_6|gcc_linaro_gnueabihf_6|gcc_linaro_aarch64_gnu_6)
 		ignore_32bit="true"
 		;;
 	*)
