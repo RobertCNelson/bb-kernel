@@ -1165,13 +1165,45 @@ gcc6 () {
 	fi
 
 	${git} "${DIR}/patches/gcc6/0001-gcc6-backport-compiler-gcc-integrate-the-various-com.patch"
+	${git} "${DIR}/patches/gcc6/0002-kbuild-add-fno-PIE.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="gcc6"
-		number=1
+		number=2
 		cleanup
 	fi
 }
+
+clone_board () {
+	cp -v ./arch/arm/boot/dts/${base}s ./arch/arm/boot/dts/${clone}s
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$clone'b \\:g' arch/arm/boot/dts/Makefile
+	${git} add ./arch/arm/boot/dts/${clone}s
+}
+
+more_boards () {
+	echo "dir: more_boards"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		base="am335x-boneblack.dt"
+		clone="am335x-boneblack-wireless.dt"
+		clone_board
+
+		base="am335x-bonegreen.dt"
+		clone="am335x-bonegreen-wireless.dt"
+		clone_board
+
+		${git} commit -a -m 'auto generated: more_boards' -s
+		if [ ! -f ../patches/more_boards/ ] ; then
+			mkdir -p ../patches/more_boards/
+		fi
+		${git} format-patch -1 -o ../patches/more_boards/
+		exit 2
+	fi
+
+	${git} "${DIR}/patches/more_boards/0001-auto-generated-more_boards.patch"
+}
+
 
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
@@ -1272,6 +1304,7 @@ gcc5
 emmc
 cape_universal
 gcc6
+more_boards
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
