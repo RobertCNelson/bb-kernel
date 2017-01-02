@@ -18,6 +18,14 @@ config_disable () {
 	fi
 }
 
+config_module_special () {
+	test_module=$(cat .config | grep ${config} || true)
+	if [ "x${test_module}" = "x# ${config} is not set" ] ; then
+		echo "Setting: ${config}=m"
+		sed -i -e 's:# '$config' is not set:'$config'=m:g' .config
+	fi
+}
+
 config_module () {
 	ret=$(./scripts/config --state ${config})
 	if [ ! "x${ret}" = "xm" ] ; then
@@ -51,6 +59,12 @@ config="CONFIG_KERNEL_XZ" ; config_disable
 config="CONFIG_KERNEL_LZO" ; config_enable
 
 #
+# Bus support
+#
+config="CONFIG_PCI" ; config_disable
+config="CONFIG_PCI_SYSCALL" ; config_disable
+
+#
 # CPU Core family selection
 #
 config="CONFIG_ARCH_MXC" ; config_disable
@@ -67,8 +81,12 @@ config="CONFIG_SOC_DRA7XX" ; config_disable
 #
 # OMAP Legacy Platform Data Board Type
 #
+config="CONFIG_ARCH_EXYNOS" ; config_disable
+config="CONFIG_ARCH_ROCKCHIP" ; config_disable
+config="CONFIG_ARCH_SOCFPGA" ; config_disable
 config="CONFIG_ARCH_SUNXI" ; config_disable
 config="CONFIG_ARCH_TEGRA" ; config_disable
+config="CONFIG_ARCH_ZYNQ" ; config_disable
 
 #
 # Processor Features
@@ -82,6 +100,12 @@ config="CONFIG_SMP" ; config_disable
 config="CONFIG_THUMB2_KERNEL" ; config_enable
 
 #
+# CPU frequency scaling drivers
+#
+config="CONFIG_QORIQ_CPUFREQ" ; config_disable
+config="CONFIG_CLK_QORIQ" ; config_disable
+
+#
 # Serial drivers
 #
 config="CONFIG_SERIAL_8250_DMA" ; config_disable
@@ -93,6 +117,7 @@ config="CONFIG_SERIAL_8250_OMAP_TTYO_FIXUP" ; config_enable
 #
 config="CONFIG_SERIAL_OMAP" ; config_disable
 config="CONFIG_SERIAL_FSL_LPUART" ; config_disable
+config="CONFIG_SERIAL_XILINX_PS_UART" ; config_disable
 
 #
 # Input Device Drivers
@@ -124,6 +149,10 @@ config="CONFIG_USB_MUSB_AM35X" ; config_disable
 config="CONFIG_USB_MUSB_DSPS" ; config_enable
 config="CONFIG_USB_MUSB_UX500" ; config_disable
 config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
+
+#
+# MUSB DMA mode
+#
 config="CONFIG_MUSB_PIO_ONLY" ; config_enable
 
 #
@@ -177,7 +206,7 @@ config="CONFIG_USB_G_NOKIA" ; config_module
 config="CONFIG_USB_G_ACM_MS" ; config_module
 config="CONFIG_USB_G_MULTI" ; config_module
 config="CONFIG_USB_G_MULTI_RNDIS" ; config_enable
-config="CONFIG_USB_G_MULTI_CDC" ; config_enable
+config="CONFIG_USB_G_MULTI_CDC" ; config_disable
 config="CONFIG_USB_G_HID" ; config_module
 config="CONFIG_USB_G_DBGP" ; config_module
 config="CONFIG_USB_G_DBGP_PRINTK" ; config_disable
@@ -192,8 +221,10 @@ config="CONFIG_RTC_DRV_OMAP" ; config_enable
 #
 # Graphics support
 #
+config="CONFIG_DRM_EXYNOS" ; config_disable
 config="CONFIG_DRM_OMAP" ; config_disable
 config="CONFIG_DRM_IMX" ; config_disable
+config="CONFIG_DRM_ETNAVIV" ; config_disable
 
 #breaks tilcd + tfp410...
 config="CONFIG_OMAP2_DSS" ; config_disable
@@ -205,6 +236,12 @@ config="CONFIG_BEAGLEBONE_PINMUX_HELPER" ; config_enable
 #Reset Controller:
 config="CONFIG_STMMAC_ETH" ; config_disable
 config="CONFIG_RESET_CONTROLLER" ; config_disable
+
+#
+# FPGA Configuration Support
+#
+config="CONFIG_FPGA" ; config_disable
+config="CONFIG_FPGA_MGR_SOCFPGA" ; config_disable
 
 #overlay bugs...
 
