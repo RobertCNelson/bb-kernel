@@ -169,7 +169,7 @@ aufs4 () {
 		${git_bin} commit -a -m 'merge: aufs4' -s
 		${git_bin} format-patch -5 -o ../patches/aufs4/
 
-		rm -rf ../aufs4-standalone || true
+		rm -rf ../aufs4-standalone/ || true
 
 		exit 2
 	fi
@@ -309,7 +309,6 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/tty/rt-serial-warn-fix.patch"
 
 	subsystem="fbtft"
-	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
@@ -322,9 +321,7 @@ lts44_backports () {
 	fi
 
 	backport_tag="v4.7.10"
-
 	subsystem="i2c"
-	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
@@ -338,7 +335,6 @@ lts44_backports () {
 	fi
 
 	subsystem="iio"
-	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
@@ -360,7 +356,6 @@ lts44_backports () {
 	backport_tag="v4.8.15"
 
 	subsystem="touchscreen"
-	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
@@ -698,8 +693,10 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/0036-of-rename-_node_sysfs-to-_node_post.patch"
 	${git} "${DIR}/patches/bbb_overlays/0037-of-Support-hashtable-lookups-for-phandles.patch"
 
+	${git} "${DIR}/patches/bbb_overlays/0038-bone_capemgr-uboot_capemgr_enabled-flag.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=37
+		number=38
 		cleanup
 	fi
 }
@@ -959,6 +956,7 @@ beaglebone () {
 	${git} "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="beaglebone/dtbs"
 		number=1
 		cleanup
 	fi
@@ -1087,6 +1085,47 @@ gcc6 () {
 	fi
 }
 
+sync_mainline_dtc () {
+	echo "dir: dtc"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./dtc ] ; then
+			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
+			cd ./dtc
+			${git_bin} checkout origin/master -b tmp
+			cd ../
+		else
+			rm -rf ./dtc || true
+			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
+			cd ./dtc
+			${git_bin} checkout origin/master -b tmp
+			cd ../
+		fi
+		cd ./KERNEL/
+
+		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh
+		./scripts/dtc/update-dtc-source.sh
+		sed -i -e 's:#git commit:git commit:g' ./scripts/dtc/update-dtc-source.sh
+		git commit -a -m "scripts/dtc: Update to upstream version overlays" -s
+		git format-patch -1 -o ../patches/dtc/
+		exit 2
+	else
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		${git} "${DIR}/patches/dtc/0001-scripts-dtc-Update-to-upstream-version-overlays.patch"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wdir="dtc"
+			number=1
+			cleanup
+		fi
+	fi
+}
+
 sgx () {
 	echo "dir: sgx"
 	#regenerate="enable"
@@ -1121,6 +1160,7 @@ bbb_overlays
 beaglebone
 quieter
 gcc6
+sync_mainline_dtc
 sgx
 
 packaging () {
