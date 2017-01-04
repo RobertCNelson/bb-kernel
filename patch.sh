@@ -1202,6 +1202,7 @@ more_boards () {
 	fi
 
 	${git} "${DIR}/patches/more_boards/0001-auto-generated-more_boards.patch"
+	${git} "${DIR}/patches/more_boards/0002-bbgw-bbbw-disable-mac.patch"
 }
 
 
