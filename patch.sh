@@ -348,9 +348,12 @@ reverts () {
 
 	${git} "${DIR}/patches/reverts/0001-Revert-eeprom-at24-check-if-the-chip-is-functional-i.patch"
 
+	#conflicts with: 0005-PM-OPP-Add-infrastructure-to-manage-multiple-regulat.patch
+	${git} "${DIR}/patches/reverts/0002-Revert-PM-OPP-Pass-opp_table-to-dev_pm_opp_put_regul.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=1
+		number=2
 		cleanup
 	fi
 }
@@ -596,6 +599,9 @@ sync_mainline_dtc () {
 		sed -i -e 's:#git commit:git commit:g' ./scripts/dtc/update-dtc-source.sh
 		git commit -a -m "scripts/dtc: Update to upstream version overlays" -s
 		git format-patch -1 -o ../patches/dtc/
+
+		rm -rf ../dtc/ || true
+
 		exit 2
 	else
 		#regenerate="enable"
