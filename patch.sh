@@ -194,10 +194,6 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-	${git_bin} revert --no-edit 2386c6b188c52c33aae263c95d0e0a5df4598d8a
-	${git_bin} revert --no-edit 7b2347c8e8030d7d525bbdf2203567e376ae75b3
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -259,7 +255,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.9"
+	backport_tag="v4.9.1"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -339,9 +335,11 @@ drivers () {
 	${git} "${DIR}/patches/drivers/ti/bbb_overlays/0039-boneblack-defconfig.patch"
 	fi
 
+	${git} "${DIR}/patches/drivers/ti/bbb_overlays/0040-bone_capemgr-uboot_capemgr_enabled-flag.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="drivers/ti/bbb_overlays"
-		number=39
+		number=40
 		cleanup
 	fi
 
@@ -501,6 +499,50 @@ beaglebone () {
 	fi
 }
 
+sync_mainline_dtc () {
+	echo "dir: dtc"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./dtc ] ; then
+			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
+			cd ./dtc
+			${git_bin} checkout origin/master -b tmp
+			cd ../
+		else
+			rm -rf ./dtc || true
+			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
+			cd ./dtc
+			${git_bin} checkout origin/master -b tmp
+			cd ../
+		fi
+		cd ./KERNEL/
+
+		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh
+		./scripts/dtc/update-dtc-source.sh
+		sed -i -e 's:#git commit:git commit:g' ./scripts/dtc/update-dtc-source.sh
+		git commit -a -m "scripts/dtc: Update to upstream version overlays" -s
+		git format-patch -1 -o ../patches/dtc/
+
+		rm -rf ../dtc || true
+
+		exit 2
+	else
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		${git} "${DIR}/patches/dtc/0001-scripts-dtc-Update-to-upstream-version-overlays.patch"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wdir="dtc"
+			number=1
+			cleanup
+		fi
+	fi
+}
+
 ###
 backports
 drivers
@@ -508,6 +550,7 @@ soc
 beaglebone
 dir 'quieter'
 dir 'more_fixes'
+sync_mainline_dtc
 
 packaging () {
 	echo "dir: packaging"
