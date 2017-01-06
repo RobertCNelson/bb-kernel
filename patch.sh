@@ -353,7 +353,7 @@ lts44_backports () {
 	fi
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	backport_tag="v4.8.15"
+	backport_tag="v4.8.16"
 
 	subsystem="touchscreen"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -1160,7 +1160,7 @@ bbb_overlays
 beaglebone
 quieter
 gcc6
-sync_mainline_dtc
+#sync_mainline_dtc
 sgx
 
 packaging () {
