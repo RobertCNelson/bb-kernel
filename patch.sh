@@ -200,6 +200,9 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
+
+	${git_bin} revert --no-edit d78006d2345f87889918a8a7aa3764628ff84263
+
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -321,6 +324,7 @@ lts44_backports () {
 	fi
 
 	backport_tag="v4.7.10"
+
 	subsystem="i2c"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
@@ -353,7 +357,7 @@ lts44_backports () {
 	fi
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 
-	backport_tag="v4.8.16"
+	backport_tag="v4.8.17"
 
 	subsystem="touchscreen"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -1109,6 +1113,9 @@ sync_mainline_dtc () {
 		sed -i -e 's:#git commit:git commit:g' ./scripts/dtc/update-dtc-source.sh
 		git commit -a -m "scripts/dtc: Update to upstream version overlays" -s
 		git format-patch -1 -o ../patches/dtc/
+
+		rm -rf ../dtc/ || true
+
 		exit 2
 	else
 		#regenerate="enable"
@@ -1117,10 +1124,12 @@ sync_mainline_dtc () {
 		fi
 
 		${git} "${DIR}/patches/dtc/0001-scripts-dtc-Update-to-upstream-version-overlays.patch"
+		${git} "${DIR}/patches/dtc/0002-dtc-turn-off-dtc-unit-address-warnings-by-default.patch"
+		${git} "${DIR}/patches/dtc/0003-ARM-boot-Add-an-implementation-of-strnlen-for-libfdt.patch"
 
 		if [ "x${regenerate}" = "xenable" ] ; then
 			wdir="dtc"
-			number=1
+			number=3
 			cleanup
 		fi
 	fi
@@ -1160,7 +1169,7 @@ bbb_overlays
 beaglebone
 quieter
 gcc6
-#sync_mainline_dtc
+sync_mainline_dtc
 sgx
 
 packaging () {
