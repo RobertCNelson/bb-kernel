@@ -356,6 +356,7 @@ lts44_backports () {
 		patch_backports
 	fi
 	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
+	${git} "${DIR}/patches/backports/iio/0003-staging-iio-ad7606-fix-improper-setting-of-oversampl.patch"
 
 	backport_tag="v4.8.17"
 
