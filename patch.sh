@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash -e
 #
 # Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
 #
@@ -22,24 +22,22 @@
 
 # Split out, so build_kernel.sh and build_deb.sh can share..
 
+shopt -s nullglob
+
 . ${DIR}/version.sh
 if [ -f ${DIR}/system.sh ] ; then
 	. ${DIR}/system.sh
 fi
+git_bin=$(which git)
+#git hard requirements:
+#git: --no-edit
 
-#Debian 7 (Wheezy): git version 1.7.10.4 and later needs "--no-edit"
-unset git_opts
-git_no_edit=$(LC_ALL=C git help pull | grep -m 1 -e "--no-edit" || true)
-if [ ! "x${git_no_edit}" = "x" ] ; then
-	git_opts="--no-edit"
-fi
-
-git="git am"
+git="${git_bin} am"
 #git_patchset=""
 #git_opts
 
 if [ "${RUN_BISECT}" ] ; then
-	git="git apply"
+	git="${git_bin} apply"
 fi
 
 echo "Starting patch.sh"
@@ -49,38 +47,64 @@ merged_in_4_6="enable"
 #unset merged_in_4_6
 
 git_add () {
-	git add .
-	git commit -a -m 'testing patchset'
+	${git_bin} add .
+	${git_bin} commit -a -m 'testing patchset'
 }
 
 start_cleanup () {
-	git="git am --whitespace=fix"
+	git="${git_bin} am --whitespace=fix"
 }
 
 cleanup () {
 	if [ "${number}" ] ; then
 		if [ "x${wdir}" = "x" ] ; then
-			git format-patch -${number} -o ${DIR}/patches/
+			${git_bin} format-patch -${number} -o ${DIR}/patches/
 		else
-			git format-patch -${number} -o ${DIR}/patches/${wdir}/
+			if [ ! -d ${DIR}/patches/${wdir}/ ] ; then
+				mkdir -p ${DIR}/patches/${wdir}/
+			fi
+			${git_bin} format-patch -${number} -o ${DIR}/patches/${wdir}/
 			unset wdir
 		fi
 	fi
 	exit 2
 }
 
+dir () {
+	wdir="$1"
+	if [ -d "${DIR}/patches/$wdir" ]; then
+		echo "dir: $wdir"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		number=
+		for p in "${DIR}/patches/$wdir/"*.patch; do
+			${git} "$p"
+			number=$(( $number + 1 ))
+		done
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			cleanup
+		fi
+	fi
+	unset wdir
+}
+
 cherrypick () {
 	if [ ! -d ../patches/${cherrypick_dir} ] ; then
 		mkdir -p ../patches/${cherrypick_dir}
 	fi
-	git format-patch -1 ${SHA} --start-number ${num} -o ../patches/${cherrypick_dir}
+	${git_bin} format-patch -1 ${SHA} --start-number ${num} -o ../patches/${cherrypick_dir}
 	num=$(($num+1))
 }
 
 external_git () {
 	git_tag=""
 	echo "pulling: ${git_tag}"
-	git pull ${git_opts} ${git_patchset} ${git_tag}
+	${git_bin} pull --no-edit ${git_patchset} ${git_tag}
+	${git_bin} describe
 }
 
 aufs_fail () {
@@ -95,45 +119,40 @@ aufs4 () {
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-kbuild.patch
 		patch -p1 < aufs4-kbuild.patch || aufs_fail
 		rm -rf aufs4-kbuild.patch
-		git add .
-		git commit -a -m 'merge: aufs4-kbuild' -s
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs4-kbuild' -s
 
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-base.patch
 		patch -p1 < aufs4-base.patch || aufs_fail
 		rm -rf aufs4-base.patch
-		git add .
-		git commit -a -m 'merge: aufs4-base' -s
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs4-base' -s
 
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-mmap.patch
 		patch -p1 < aufs4-mmap.patch || aufs_fail
 		rm -rf aufs4-mmap.patch
-		git add .
-		git commit -a -m 'merge: aufs4-mmap' -s
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs4-mmap' -s
 
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-standalone.patch
 		patch -p1 < aufs4-standalone.patch || aufs_fail
 		rm -rf aufs4-standalone.patch
-		git add .
-		git commit -a -m 'merge: aufs4-standalone' -s
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs4-standalone' -s
 
-		git format-patch -4 -o ../patches/aufs4/
-		exit 2
-	fi
-
-	${git} "${DIR}/patches/aufs4/0001-merge-aufs4-kbuild.patch"
-	${git} "${DIR}/patches/aufs4/0002-merge-aufs4-base.patch"
-	${git} "${DIR}/patches/aufs4/0003-merge-aufs4-mmap.patch"
-	${git} "${DIR}/patches/aufs4/0004-merge-aufs4-standalone.patch"
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		echo "dir: aufs4"
+		${git_bin} format-patch -4 -o ../patches/aufs4/
 
 		cd ../
-		if [ ! -f ./aufs4-standalone ] ; then
-			git clone https://github.com/sfjro/aufs4-standalone
+		if [ ! -d ./aufs4-standalone ] ; then
+			${git_bin} clone https://github.com/sfjro/aufs4-standalone
 			cd ./aufs4-standalone
-			git checkout origin/aufs${KERNEL_REL} -b tmp
+			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
+			cd ../
+		else
+			rm -rf ./aufs4-standalone || true
+			${git_bin} clone https://github.com/sfjro/aufs4-standalone
+			cd ./aufs4-standalone
+			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
 			cd ../
 		fi
 		cd ./KERNEL/
@@ -145,9 +164,11 @@ aufs4 () {
 		cp -v ../aufs4-standalone/fs/aufs/* ./fs/aufs/
 		cp -v ../aufs4-standalone/include/uapi/linux/aufs_type.h ./include/uapi/linux/
 
-		git add .
-		git commit -a -m 'merge: aufs4' -s
-		git format-patch -5 -o ../patches/aufs4/
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs4' -s
+		${git_bin} format-patch -5 -o ../patches/aufs4/
+
+		rm -rf ../aufs4-standalone/ || true
 
 		exit 2
 	fi
@@ -157,11 +178,16 @@ aufs4 () {
 		start_cleanup
 	fi
 
+	${git} "${DIR}/patches/aufs4/0001-merge-aufs4-kbuild.patch"
+	${git} "${DIR}/patches/aufs4/0002-merge-aufs4-base.patch"
+	${git} "${DIR}/patches/aufs4/0003-merge-aufs4-mmap.patch"
+	${git} "${DIR}/patches/aufs4/0004-merge-aufs4-standalone.patch"
 	${git} "${DIR}/patches/aufs4/0005-merge-aufs4.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		git format-patch -5 -o ../patches/aufs4/
-		exit 2
+		wdir="aufs4"
+		number=5
+		cleanup
 	fi
 }
 
@@ -179,9 +205,9 @@ rt () {
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz
 		rm -f localversion-rt
-		git add .
-		git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
-		git format-patch -1 -o ../patches/rt/
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
+		${git_bin} format-patch -1 -o ../patches/rt/
 
 		exit 2
 	fi
@@ -203,10 +229,11 @@ pre_backports () {
 	echo "dir: backports/${subsystem}"
 
 	cd ~/linux-src/
-	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
-	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
-		git checkout ${backport_tag} -b tmp
+		${git_bin} checkout ${backport_tag} -b tmp
 	fi
 	cd -
 }
@@ -215,12 +242,12 @@ pre_backports_tty () {
 	echo "dir: backports/${subsystem}"
 
 	cd ~/linux-src/
-	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
-	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
-		git checkout ${backport_tag} -b tmp
-		git revert --no-edit be7635e7287e0e8013af3c89a6354a9e0182594c
-		git revert --no-edit c74ba8b3480da6ddaea17df2263ec09b869ac496
+		${git_bin} checkout ${backport_tag} -b tmp
+		${git_bin} revert --no-edit be7635e7287e0e8013af3c89a6354a9e0182594c
+		${git_bin} revert --no-edit c74ba8b3480da6ddaea17df2263ec09b869ac496
 	fi
 	cd -
 }
@@ -228,15 +255,16 @@ pre_backports_tty () {
 post_backports () {
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		cd ~/linux-src/
-		git checkout master -f ; git branch -D tmp
+		${git_bin} checkout master -f ; ${git_bin} branch -D tmp
 		cd -
 	fi
 
-	git add .
-	git commit -a -m "backports: ${subsystem}: from: linux.git" -s
-	git format-patch -1 -o ../patches/backports/${subsystem}/
-
-	exit 2
+	${git_bin} add .
+	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -s
+	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
+		mkdir -p ../patches/backports/${subsystem}/
+	fi
+	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 }
 
 patch_backports (){
@@ -272,11 +300,11 @@ lts44_backports () {
 		cp -v ~/linux-src/include/uapi/linux/serial.h ./include/uapi/linux/
 
 		post_backports
+	else
+		patch_backports
 	fi
-	patch_backports
 
 	subsystem="fbtft"
-	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
@@ -284,11 +312,11 @@ lts44_backports () {
 		cp -v ~/linux-src/include/video/mipi_display.h ./include/video/mipi_display.h
 
 		post_backports
+	else
+		patch_backports
 	fi
-	patch_backports
 
 	subsystem="iio"
-	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
@@ -300,17 +328,18 @@ lts44_backports () {
 		cp -v  ~/linux-src/include/uapi/linux/iio/types.h ./include/uapi/linux/iio/types.h
 
 		post_backports
+	else
+		patch_backports
 	fi
-	patch_backports
 
 	subsystem="edt-ft5x06"
-	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
 		cp -v ~/linux-src/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/edt-ft5x06.c
 
 		post_backports
+		exit 2
 	fi
 	#patch_backports
 	${git} "${DIR}/patches/backports/edt-ft5x06/0002-edt-ft5x06-add-invert_x-invert_y-swap_xy.patch"
@@ -467,16 +496,16 @@ bbb_overlays () {
 		if [ -d dtc ] ; then
 			rm -rf dtc
 		fi
-		git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
+		${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
 		cd dtc
-		git pull --no-edit https://github.com/RobertCNelson/dtc bb.org-4.1-dt-overlays5-dtc-b06e55c88b9b
+		${git_bin} pull --no-edit https://github.com/RobertCNelson/dtc bb.org-4.1-dt-overlays5-dtc-b06e55c88b9b
 
 		cd ../KERNEL/
 		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh
 		./scripts/dtc/update-dtc-source.sh
 		sed -i -e 's:#git commit:git commit:g' ./scripts/dtc/update-dtc-source.sh
-		git commit -a -m "scripts/dtc: Update to upstream version overlays" -s
-		git format-patch -1 -o ../patches/bbb_overlays/dtc/
+		${git_bin} commit -a -m "scripts/dtc: Update to upstream version overlays" -s
+		${git_bin} format-patch -1 -o ../patches/bbb_overlays/dtc/
 		exit 2
 	else
 		#regenerate="enable"
@@ -943,8 +972,8 @@ beaglebone () {
 		#device="am335x-boneblack-ctag-face.dtb" ; dtb_makefile_append
 		#device="am335x-bonegreen-ctag-face.dtb" ; dtb_makefile_append
 
-		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
-		git format-patch -1 -o ../patches/beaglebone/generated/
+		${git_bin} commit -a -m 'auto generated: capes: add dtbs to makefile' -s
+		${git_bin} format-patch -1 -o ../patches/beaglebone/generated/
 		exit 2
 	else
 		${git} "${DIR}/patches/beaglebone/generated/0001-auto-generated-capes-add-dtbs-to-makefile.patch"
@@ -1054,8 +1083,8 @@ packaging () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
-		git commit -a -m 'packaging: sync builddeb changes' -s
-		git format-patch -1 -o "${DIR}/patches/packaging"
+		${git_bin} commit -a -m 'packaging: sync builddeb changes' -s
+		${git_bin} format-patch -1 -o "${DIR}/patches/packaging"
 		exit 2
 	else
 		${git} "${DIR}/patches/packaging/0001-packaging-sync-builddeb-changes.patch"
