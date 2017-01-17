@@ -244,6 +244,7 @@ pre_backports_tty () {
 	cd ~/linux-src/
 	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
 	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		${git_bin} checkout ${backport_tag} -b tmp
 		${git_bin} revert --no-edit be7635e7287e0e8013af3c89a6354a9e0182594c
@@ -670,8 +671,10 @@ bbb_overlays () {
 	${git} "${DIR}/patches/bbb_overlays/0036-of-rename-_node_sysfs-to-_node_post.patch"
 	${git} "${DIR}/patches/bbb_overlays/0037-of-Support-hashtable-lookups-for-phandles.patch"
 
+	${git} "${DIR}/patches/bbb_overlays/0038-bone_capemgr-uboot_capemgr_enabled-flag.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=37
+		number=38
 		cleanup
 	fi
 }
@@ -1044,6 +1047,52 @@ quieter () {
 	fi
 }
 
+sync_mainline_dtc () {
+	echo "dir: dtc"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./dtc ] ; then
+			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
+			cd ./dtc
+			${git_bin} checkout origin/master -b tmp
+			cd ../
+		else
+			rm -rf ./dtc || true
+			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
+			cd ./dtc
+			${git_bin} checkout origin/master -b tmp
+			cd ../
+		fi
+		cd ./KERNEL/
+
+		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh
+		./scripts/dtc/update-dtc-source.sh
+		sed -i -e 's:#git commit:git commit:g' ./scripts/dtc/update-dtc-source.sh
+		git commit -a -m "scripts/dtc: Update to upstream version overlays" -s
+		git format-patch -1 -o ../patches/dtc/
+
+		rm -rf ../dtc/ || true
+
+		exit 2
+	else
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		${git} "${DIR}/patches/dtc/0001-scripts-dtc-Update-to-upstream-version-overlays.patch"
+		${git} "${DIR}/patches/dtc/0002-dtc-turn-off-dtc-unit-address-warnings-by-default.patch"
+		${git} "${DIR}/patches/dtc/0003-ARM-boot-Add-an-implementation-of-strnlen-for-libfdt.patch"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wdir="dtc"
+			number=3
+			cleanup
+		fi
+	fi
+}
+
 sgx () {
 	echo "dir: sgx"
 	#regenerate="enable"
@@ -1076,6 +1125,7 @@ pru_rpmsg
 bbb_overlays
 beaglebone
 quieter
+sync_mainline_dtc
 #sgx
 
 packaging () {
