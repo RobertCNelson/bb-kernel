@@ -337,6 +337,8 @@ lts44_backports () {
 	else
 		patch_backports
 	fi
+	${git} "${DIR}/patches/backports/i2c/0001-i2c-print-correct-device-invalid-address.patch"
+	${git} "${DIR}/patches/backports/i2c/0002-i2c-fix-kernel-memory-disclosure-in-dev-interface.patch"
 
 	subsystem="iio"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -355,7 +357,7 @@ lts44_backports () {
 	else
 		patch_backports
 	fi
-	${git} "${DIR}/patches/backports/${subsystem}/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
+	${git} "${DIR}/patches/backports/iio/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 	${git} "${DIR}/patches/backports/iio/0003-staging-iio-ad7606-fix-improper-setting-of-oversampl.patch"
 
 	backport_tag="v4.8.17"
@@ -372,6 +374,7 @@ lts44_backports () {
 	else
 		patch_backports
 	fi
+	${git} "${DIR}/patches/backports/touchscreen/0002-Input-elants_i2c-avoid-divide-by-0-errors-on-bad-tou.patch"
 
 	echo "dir: lts44_backports"
 	#regenerate="enable"
@@ -945,6 +948,19 @@ beaglebone () {
 		cleanup
 	fi
 
+	echo "dir: soc/ti/uboot"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/soc/ti/uboot/0001-add-am335x-boneblack-uboot.dts.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=1
+		cleanup
+	fi
+
 	#This has to be last...
 	echo "dir: beaglebone/dtbs"
 	#regenerate="enable"
@@ -1001,6 +1017,8 @@ beaglebone () {
 
 		#device="am335x-boneblack-ctag-face.dtb" ; dtb_makefile_append
 		#device="am335x-bonegreen-ctag-face.dtb" ; dtb_makefile_append
+
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
