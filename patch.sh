@@ -199,7 +199,7 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 
-	${git_bin} revert --no-edit a0357979d62049bd029e4b6efbaedbf4b0ea15ff
+	${git_bin} revert --no-edit 28dad9aa9b367b81f99a36a06d16e89e649133ce
 
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
@@ -509,6 +509,7 @@ soc () {
 	dir 'soc/ti/abbbi'
 	dir 'soc/ti/am335x_olimex_som'
 	dir 'soc/ti/beaglebone_capes'
+	dir 'soc/ti/uboot'
 }
 
 dtb_makefile_append () {
@@ -569,6 +570,8 @@ beaglebone () {
 		device="am335x-boneblack-wireless-roboticscape.dtb" ; dtb_makefile_append
 
 		device="am335x-sancloud-bbe.dtb" ; dtb_makefile_append
+
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
