@@ -2,6 +2,8 @@ This is just a set of scripts to rebuild a known working kernel for ARM devices.
 
 Script Bugs: "bugs@rcn-ee.com"
 
+Note, for older git tag's please use: https://github.com/RobertCNelson/yakbuild
+
 Dependencies: GCC ARM Cross ToolChain
 
 Linaro:
@@ -23,11 +25,15 @@ git clone directory.
 
 Build Kernel Image:
 
+```
 ./build_kernel.sh
+```
 
 Optional: Build Debian Package:
 
+```
 ./build_deb.sh
+```
 
 Development/Hacking:
 

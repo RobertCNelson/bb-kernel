@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,31 +23,41 @@
 #yeah, i'm getting lazy..
 
 DIR=$PWD
+git_bin=$(which git)
 
 repo="git@github.com:beagleboard/linux.git"
 example="bb.org"
+compare="https://github.com/RobertCNelson/ti-linux-kernel/compare"
 
 if [ -e ${DIR}/version.sh ]; then
 	unset BRANCH
 	. ${DIR}/version.sh
 
 	cd ${DIR}/KERNEL/
-	make ARCH=arm distclean
+	make ARCH=${KERNEL_ARCH} distclean
 
-	cp ${DIR}/patches/defconfig ${DIR}/KERNEL/arch/arm/configs/${example}_defconfig
-	git add arch/arm/configs/${example}_defconfig
+	cp ${DIR}/patches/defconfig ${DIR}/KERNEL/.config
+	make ARCH=${KERNEL_ARCH} savedefconfig
+	cp ${DIR}/KERNEL/defconfig ${DIR}/KERNEL/arch/${KERNEL_ARCH}/configs/${example}_defconfig
+	${git_bin} add arch/${KERNEL_ARCH}/configs/${example}_defconfig
 
-	git commit -a -m "${KERNEL_TAG}-${BUILD} ${example}_defconfig" -s
-	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}" -f
+	if [ "x${ti_git_old_release}" = "x${ti_git_post}" ] ; then
+		${git_bin} commit -a -m "${KERNEL_TAG}${BUILD} ${example}_defconfig" -s
+	else
+		${git_bin} commit -a -m "${KERNEL_TAG}${BUILD} ${example}_defconfig" -m "${KERNEL_REL} TI Delta: ${compare}/${ti_git_old_release}...${ti_git_post}" -s
+	fi
+
+	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}" -f
 
 	#push tag
-	git push -f ${repo} "${KERNEL_TAG}-${BUILD}"
+	${git_bin} push -f ${repo} "${KERNEL_TAG}${BUILD}"
 
-	git branch -D ${KERNEL_REL} || true
-	git branch -m v${KERNEL_TAG}-${BUILD} ${KERNEL_REL}
+	${git_bin} branch -D ${KERNEL_REL} || true
+	${git_bin} branch -m v${KERNEL_TAG}${BUILD} ${KERNEL_REL}
 
 	#push branch
-	git push -f ${repo} ${KERNEL_REL}
+	echo "log: git push -f ${repo} ${KERNEL_REL}"
+	${git_bin} push -f ${repo} ${KERNEL_REL}
 
 	cd ${DIR}/
 fi

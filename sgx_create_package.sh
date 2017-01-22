@@ -186,8 +186,8 @@ build_sgx_modules () {
 
 installing_sgx_modules () {
 	echo "-----------------------------"
-	echo "Installing es$2 modules"
-	echo "-----------------------------"
+#	echo "Installing es$2 modules"
+#	echo "-----------------------------"
 	cd "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/"
 
 	DESTDIR="${DIR}/deploy/$2"
@@ -198,9 +198,9 @@ installing_sgx_modules () {
 	mkdir -p ${DESTDIR}/etc/init.d/ || true
 	mkdir -p ${DESTDIR}/opt/ || true
 
-	mkdir -p ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
-	cp -v "${DIR}"/ignore/ti-sdk-pvr/Graphics_SDK/gfx_rel_es$2/*.ko ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
-	echo "-----------------------------"
+#	mkdir -p ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
+#	cp -v "${DIR}"/ignore/ti-sdk-pvr/Graphics_SDK/gfx_rel_es$2/*.ko ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
+#	echo "-----------------------------"
 
 	INSTALL_HOME="${DIR}/ignore/SDK_BIN/"
 	GRAPHICS_INSTALL_DIR="${INSTALL_HOME}Graphics_SDK_setuplinux_${sdk_version}"
@@ -224,68 +224,66 @@ installing_sgx_modules () {
 	cd ${DESTDIR}/
 	tar czf ${DIR}/deploy/GFX_${SDK}_es${2}.tar.gz *
 	cd "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/"
+
+	echo "-----------------------------"
+	echo "GFX archive: deploy/GFX_${SDK}_es${2}.tar.gz"
+	echo "-----------------------------"
 }
 
-if [ -e ${DIR}/system.sh ] ; then
-	source ${DIR}/system.sh
-	source ${DIR}/version.sh
+if [ ! -f ${DIR}/system.sh ] ; then
+	cp -v ${DIR}/system.sh.sample ${DIR}/system.sh
+fi
 
-	if [ ! -d "${DIR}/ignore/" ] ; then
-		mkdir "${DIR}/ignore/"
-	fi
+source ${DIR}/system.sh
+source ${DIR}/version.sh
 
-	dl_n_verify_sdk
-	install_sgx
+if [ ! -d "${DIR}/ignore/" ] ; then
+	mkdir "${DIR}/ignore/"
+fi
 
-	set_sgx_make_vars
+dl_n_verify_sdk
+install_sgx
 
-	git_sgx_modules
-	copy_sgx_binaries
+set_sgx_make_vars
 
-	#No reason to rebuild the sdk...
-	sed -i -e 's:all_km all_sdk:all_km:g' "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/Makefile"
-	sed -i -e 's:install_km install_sdk:install_km:g' "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/Makefile"
+git_sgx_modules
+copy_sgx_binaries
 
-	#Disable building of devmem2, as it breaks with hardfp based cross compilers, and we use the distro package anyways...
-	sed -i -e 's:prepare_km buildkernel builddevmem2:prepare_km buildkernel:g' "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/Makefile.KM"
+#No reason to rebuild the sdk...
+sed -i -e 's:all_km all_sdk:all_km:g' "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/Makefile"
+sed -i -e 's:install_km install_sdk:install_km:g' "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/Makefile"
 
-	if [ ! -f "${DIR}/KERNEL/Makefile" ] ; then
-		echo ""
-		echo "ERROR: Run: ./build_kernel.sh first"
-		echo ""
-		exit
-	fi
+#Disable building of devmem2, as it breaks with hardfp based cross compilers, and we use the distro package anyways...
+sed -i -e 's:prepare_km buildkernel builddevmem2:prepare_km buildkernel:g' "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/Makefile.KM"
 
-	#Build:
-	#make BUILD={debug | release} OMAPES={5.x | 8.x | 9.x} FBDEV={yes | no} all
-	#Install:
-	#make BUILD=(debug | release} OMAPES={5.x | 8.x | 9.x} install
+#if [ ! -f "${DIR}/KERNEL/Makefile" ] ; then
+#	echo ""
+#	echo "ERROR: Run: ./build_kernel.sh first"
+#	echo ""
+#	exit
+#fi
+
+#Build:
+#make BUILD={debug | release} OMAPES={5.x | 8.x | 9.x} FBDEV={yes | no} all
+#Install:
+#make BUILD=(debug | release} OMAPES={5.x | 8.x | 9.x} install
 
 #	clean_sgx_modules
 #	build_sgx_modules release 5.x yes all
 
-	clean_sgx_modules
-#	build_sgx_modules release 8.x yes all
-	installing_sgx_modules release 8.x install
+clean_sgx_modules
+#build_sgx_modules release 8.x yes all
+installing_sgx_modules release 8.x install
 
 #	clean_sgx_modules
 #	build_sgx_modules release 9.x yes all
 #	installing_sgx_modules release 9.x install
 
-	#Disable when debugging...
-	if [ -d "${DIR}/ignore/ti-sdk-pvr/pkg/" ] ; then
-		rm -rf "${DIR}/ignore/ti-sdk-pvr/pkg" || true
-	fi
-	if [ -d "${DIR}/ignore/ti-sdk-pvr/examples/" ] ; then
-		rm -rf "${DIR}/ignore/ti-sdk-pvr/examples" || true
-	fi
-
-else
-	echo ""
-	echo "ERROR: Missing (your system) specific system.sh, please copy system.sh.sample to system.sh and edit as needed."
-	echo ""
-	echo "example: cp system.sh.sample system.sh"
-	echo "example: gedit system.sh"
-	echo ""
+#Disable when debugging...
+if [ -d "${DIR}/ignore/ti-sdk-pvr/pkg/" ] ; then
+	rm -rf "${DIR}/ignore/ti-sdk-pvr/pkg" || true
+fi
+if [ -d "${DIR}/ignore/ti-sdk-pvr/examples/" ] ; then
+	rm -rf "${DIR}/ignore/ti-sdk-pvr/examples" || true
 fi
 
