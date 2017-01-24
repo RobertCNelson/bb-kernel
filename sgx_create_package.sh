@@ -186,8 +186,8 @@ build_sgx_modules () {
 
 installing_sgx_modules () {
 	echo "-----------------------------"
-	echo "Installing es$2 modules"
-	echo "-----------------------------"
+#	echo "Installing es$2 modules"
+#	echo "-----------------------------"
 	cd "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/"
 
 	DESTDIR="${DIR}/deploy/$2"
@@ -198,9 +198,9 @@ installing_sgx_modules () {
 	mkdir -p ${DESTDIR}/etc/init.d/ || true
 	mkdir -p ${DESTDIR}/opt/ || true
 
-	mkdir -p ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
-	cp -v "${DIR}"/ignore/ti-sdk-pvr/Graphics_SDK/gfx_rel_es$2/*.ko ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
-	echo "-----------------------------"
+#	mkdir -p ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
+#	cp -v "${DIR}"/ignore/ti-sdk-pvr/Graphics_SDK/gfx_rel_es$2/*.ko ${DESTDIR}/opt/gfxmodules/gfx_rel_es$2 || true
+#	echo "-----------------------------"
 
 	INSTALL_HOME="${DIR}/ignore/SDK_BIN/"
 	GRAPHICS_INSTALL_DIR="${INSTALL_HOME}Graphics_SDK_setuplinux_${sdk_version}"
@@ -224,6 +224,10 @@ installing_sgx_modules () {
 	cd ${DESTDIR}/
 	tar czf ${DIR}/deploy/GFX_${SDK}_es${2}.tar.gz *
 	cd "${DIR}/ignore/ti-sdk-pvr/Graphics_SDK/"
+
+	echo "-----------------------------"
+	echo "GFX archive: deploy/GFX_${SDK}_es${2}.tar.gz"
+	echo "-----------------------------"
 }
 
 if [ ! -f ${DIR}/system.sh ] ; then
