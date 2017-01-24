@@ -26,7 +26,17 @@ install_bin () {
 	fi
 }
 
-distro=$(lsb_release -si)
+if [ -f /usr/bin/lsb_release ] ; then
+	distro=$(lsb_release -si)
+else
+	if [ -f /etc/rcn-ee.conf ] ; then
+		. /etc/rcn-ee.conf
+	fi
+fi
+
+if [ "x${distro}" = "x" ] ; then
+	echo "install lsb-release"
+fi
 
 if [ ! -f /lib/modules/`uname -r`/extra/es8.x/pvrsrvkm.ko ] ; then
 	if [ -f /opt/gfxmodules/gfx_rel_es8.x/pvrsrvkm.ko ] ; then
@@ -120,14 +130,18 @@ case "${distro}" in
 Debian)
 	if [ -f /opt/gfxinstall/scripts/sgx-startup-sysv.sh ] ; then
 		if [ -f /etc/init.d/sgx-startup.sh ] ; then
-			insserv --remove sgx-startup.sh
+			if [ -f /sbin/insserv ] ; then
+				insserv --remove sgx-startup.sh
+			fi
 			rm -rf /etc/init.d/sgx-startup.sh || true
 		fi
 
 		cp -v /opt/gfxinstall/scripts/sgx-startup-sysv.sh /etc/init.d/sgx-startup.sh
 		chown root:root /etc/init.d/sgx-startup.sh
 		chmod +x /etc/init.d/sgx-startup.sh
-		insserv sgx-startup.sh || true
+		if [ -f /sbin/insserv ] ; then
+			insserv sgx-startup.sh || true
+		fi
 	fi
 	;;
 Ubuntu)
