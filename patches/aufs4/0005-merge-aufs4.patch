@@ -1,6 +1,6 @@
-From 472225904e67d75009dabe2dbb36ac1f273411af Mon Sep 17 00:00:00 2001
+From 6d5e40282b7d8d9a24d40d98b388453de3f174f7 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 26 Jan 2017 09:25:34 -0600
+Date: Wed, 1 Feb 2017 12:45:01 -0600
 Subject: [PATCH 5/5] merge: aufs4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -51,13 +51,13 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/hfsnotify.c                                |  287 +++
  fs/aufs/hfsplus.c                                  |   56 +
  fs/aufs/hnotify.c                                  |  723 ++++++++
- fs/aufs/i_op.c                                     | 1444 +++++++++++++++
+ fs/aufs/i_op.c                                     | 1449 +++++++++++++++
  fs/aufs/i_op_add.c                                 |  928 ++++++++++
  fs/aufs/i_op_del.c                                 |  511 ++++++
  fs/aufs/i_op_ren.c                                 | 1165 ++++++++++++
  fs/aufs/iinfo.c                                    |  285 +++
  fs/aufs/inode.c                                    |  519 ++++++
- fs/aufs/inode.h                                    |  691 ++++++++
+ fs/aufs/inode.h                                    |  692 ++++++++
  fs/aufs/ioctl.c                                    |  219 +++
  fs/aufs/loop.c                                     |  147 ++
  fs/aufs/loop.h                                     |   52 +
@@ -69,30 +69,30 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/opts.h                                     |  213 +++
  fs/aufs/plink.c                                    |  514 ++++++
  fs/aufs/poll.c                                     |   52 +
- fs/aufs/posix_acl.c                                |   98 +
+ fs/aufs/posix_acl.c                                |  102 ++
  fs/aufs/procfs.c                                   |  169 ++
  fs/aufs/rdu.c                                      |  381 ++++
  fs/aufs/rwsem.h                                    |  198 +++
  fs/aufs/sbinfo.c                                   |  355 ++++
  fs/aufs/spl.h                                      |  113 ++
- fs/aufs/super.c                                    | 1046 +++++++++++
+ fs/aufs/super.c                                    | 1044 +++++++++++
  fs/aufs/super.h                                    |  639 +++++++
  fs/aufs/sysaufs.c                                  |  104 ++
  fs/aufs/sysaufs.h                                  |  101 ++
  fs/aufs/sysfs.c                                    |  376 ++++
  fs/aufs/sysrq.c                                    |  157 ++
  fs/aufs/vdir.c                                     |  900 ++++++++++
- fs/aufs/vfsub.c                                    |  886 ++++++++++
- fs/aufs/vfsub.h                                    |  316 ++++
+ fs/aufs/vfsub.c                                    |  899 ++++++++++
+ fs/aufs/vfsub.h                                    |  318 ++++
  fs/aufs/wbr_policy.c                               |  830 +++++++++
  fs/aufs/whout.c                                    | 1061 +++++++++++
  fs/aufs/whout.h                                    |   85 +
  fs/aufs/wkq.c                                      |  213 +++
  fs/aufs/wkq.h                                      |   93 +
- fs/aufs/xattr.c                                    |  332 ++++
+ fs/aufs/xattr.c                                    |  357 ++++
  fs/aufs/xino.c                                     | 1318 ++++++++++++++
  include/uapi/linux/aufs_type.h                     |  419 +++++
- 87 files changed, 34788 insertions(+)
+ 87 files changed, 34836 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -15224,10 +15224,10 @@ index 000000000000..4444fe1250cf
 +}
 diff --git a/fs/aufs/i_op.c b/fs/aufs/i_op.c
 new file mode 100644
-index 000000000000..bcdf99559b30
+index 000000000000..804447dd075f
 --- /dev/null
 +++ b/fs/aufs/i_op.c
-@@ -0,0 +1,1444 @@
+@@ -0,0 +1,1449 @@
 +/*
 + * Copyright (C) 2005-2016 Junjiro R. Okajima
 + *
@@ -16362,7 +16362,8 @@ index 000000000000..bcdf99559b30
 + * returns zero or negative (an error).
 + * @dentry will be read-locked in success.
 + */
-+int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path)
++int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path,
++		      int locked)
 +{
 +	int err;
 +	unsigned int mnt_flags, sigen;
@@ -16378,6 +16379,9 @@ index 000000000000..bcdf99559b30
 +	sb = dentry->d_sb;
 +	mnt_flags = au_mntflags(sb);
 +	udba_none = !!au_opt_test(mnt_flags, UDBA_NONE);
++
++	if (unlikely(locked))
++		goto body; /* skip locking dinfo */
 +
 +	/* support fstat(2) */
 +	if (!d_unlinked(dentry) && !udba_none) {
@@ -16406,6 +16410,7 @@ index 000000000000..bcdf99559b30
 +	} else
 +		di_read_lock_child(dentry, AuLock_IR);
 +
++body:
 +	inode = d_inode(dentry);
 +	bindex = au_ibtop(inode);
 +	h_path->mnt = au_sbr_mnt(sb, bindex);
@@ -16444,7 +16449,7 @@ index 000000000000..bcdf99559b30
 +	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
 +	if (unlikely(err))
 +		goto out;
-+	err = au_h_path_getattr(dentry, /*force*/0, &h_path);
++	err = au_h_path_getattr(dentry, /*force*/0, &h_path, /*locked*/0);
 +	if (unlikely(err))
 +		goto out_si;
 +	if (unlikely(!h_path.dentry))
@@ -20112,10 +20117,10 @@ index 000000000000..16f0a372e979
 +}
 diff --git a/fs/aufs/inode.h b/fs/aufs/inode.h
 new file mode 100644
-index 000000000000..cae6cf0044de
+index 000000000000..7a6ecf4f464e
 --- /dev/null
 +++ b/fs/aufs/inode.h
-@@ -0,0 +1,691 @@
+@@ -0,0 +1,692 @@
 +/*
 + * Copyright (C) 2005-2016 Junjiro R. Okajima
 + *
@@ -20328,7 +20333,8 @@ index 000000000000..cae6cf0044de
 +int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 +		     struct au_icpup_args *a);
 +
-+int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path);
++int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path,
++		      int locked);
 +
 +/* i_op_add.c */
 +int au_may_add(struct dentry *dentry, aufs_bindex_t bindex,
@@ -25165,10 +25171,10 @@ index 000000000000..720b2eda1f95
 +}
 diff --git a/fs/aufs/posix_acl.c b/fs/aufs/posix_acl.c
 new file mode 100644
-index 000000000000..daa8cadb07cb
+index 000000000000..fe943939d88e
 --- /dev/null
 +++ b/fs/aufs/posix_acl.c
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,102 @@
 +/*
 + * Copyright (C) 2014-2016 Junjiro R. Okajima
 + *
@@ -25220,6 +25226,8 @@ index 000000000000..daa8cadb07cb
 +
 +	/* always topmost only */
 +	acl = get_acl(h_inode, type);
++	if (!IS_ERR_OR_NULL(acl))
++		set_cached_acl(inode, type, acl);
 +
 +out:
 +	ii_read_unlock(inode);
@@ -25261,8 +25269,10 @@ index 000000000000..daa8cadb07cb
 +	ssz = au_sxattr(dentry, inode, &arg);
 +	dput(dentry);
 +	err = ssz;
-+	if (ssz >= 0)
++	if (ssz >= 0) {
 +		err = 0;
++		set_cached_acl(inode, type, acl);
++	}
 +
 +out:
 +	return err;
@@ -26515,10 +26525,10 @@ index 000000000000..411f6c80d36d
 +#endif /* __AUFS_SPL_H__ */
 diff --git a/fs/aufs/super.c b/fs/aufs/super.c
 new file mode 100644
-index 000000000000..0c78d57405d2
+index 000000000000..86d9c07563d3
 --- /dev/null
 +++ b/fs/aufs/super.c
-@@ -0,0 +1,1046 @@
+@@ -0,0 +1,1044 @@
 +/*
 + * Copyright (C) 2005-2016 Junjiro R. Okajima
 + *
@@ -26968,12 +26978,10 @@ index 000000000000..0c78d57405d2
 +			continue;
 +
 +		h_sb = au_sbr_sb(sb, bindex);
-+		if (h_sb->s_op->sync_fs) {
-+			e = h_sb->s_op->sync_fs(h_sb, wait);
-+			if (unlikely(e && !err))
-+				err = e;
-+			/* go on even if an error happens */
-+		}
++		e = vfsub_sync_filesystem(h_sb);
++		if (unlikely(e && !err))
++			err = e;
++		/* go on even if an error happens */
 +	}
 +	si_read_unlock(sb);
 +
@@ -29880,10 +29888,10 @@ index 000000000000..1ca6760f4016
 +}
 diff --git a/fs/aufs/vfsub.c b/fs/aufs/vfsub.c
 new file mode 100644
-index 000000000000..9b6e31642358
+index 000000000000..6a73e77d91e5
 --- /dev/null
 +++ b/fs/aufs/vfsub.c
-@@ -0,0 +1,886 @@
+@@ -0,0 +1,899 @@
 +/*
 + * Copyright (C) 2005-2016 Junjiro R. Okajima
 + *
@@ -29927,6 +29935,19 @@ index 000000000000..9b6e31642358
 +	return real_mount(mnt)->mnt_ns == ns->mnt_ns ? 0 : -EACCES;
 +}
 +#endif
++
++int vfsub_sync_filesystem(struct super_block *h_sb)
++{
++	int err;
++
++	lockdep_off();
++	down_read(&h_sb->s_umount);
++	err = sync_filesystem(h_sb);
++	up_read(&h_sb->s_umount);
++	lockdep_on();
++
++	return err;
++}
 +
 +/* ---------------------------------------------------------------------- */
 +
@@ -30772,10 +30793,10 @@ index 000000000000..9b6e31642358
 +}
 diff --git a/fs/aufs/vfsub.h b/fs/aufs/vfsub.h
 new file mode 100644
-index 000000000000..babd9c38df7a
+index 000000000000..695e67777358
 --- /dev/null
 +++ b/fs/aufs/vfsub.h
-@@ -0,0 +1,316 @@
+@@ -0,0 +1,318 @@
 +/*
 + * Copyright (C) 2005-2016 Junjiro R. Okajima
 + *
@@ -30860,6 +30881,8 @@ index 000000000000..babd9c38df7a
 +#else
 +AuStubInt0(vfsub_test_mntns, struct vfsmount *mnt, struct super_block *h_sb);
 +#endif
++
++int vfsub_sync_filesystem(struct super_block *h_sb);
 +
 +/* ---------------------------------------------------------------------- */
 +
@@ -33406,10 +33429,10 @@ index 000000000000..9b878361fe67
 +#endif /* __AUFS_WKQ_H__ */
 diff --git a/fs/aufs/xattr.c b/fs/aufs/xattr.c
 new file mode 100644
-index 000000000000..d0834e47d94b
+index 000000000000..c3ff09e5b0ff
 --- /dev/null
 +++ b/fs/aufs/xattr.c
-@@ -0,0 +1,332 @@
+@@ -0,0 +1,357 @@
 +/*
 + * Copyright (C) 2014-2016 Junjiro R. Okajima
 + *
@@ -33431,6 +33454,8 @@ index 000000000000..d0834e47d94b
 + * handling xattr functions
 + */
 +
++#include <linux/fs.h>
++#include <linux/posix_acl_xattr.h>
 +#include <linux/xattr.h>
 +#include "aufs.h"
 +
@@ -33603,6 +33628,19 @@ index 000000000000..d0834e47d94b
 +
 +/* ---------------------------------------------------------------------- */
 +
++static int au_smack_reentering(struct super_block *sb)
++{
++#if IS_ENABLED(CONFIG_SECURITY_SMACK)
++	/*
++	 * as a part of lookup, smack_d_instantiate() is called, and it calls
++	 * i_op->getxattr(). ouch.
++	 */
++	return si_pid_test(sb);
++#else
++	return 0;
++#endif
++}
++
 +enum {
 +	AU_XATTR_LIST,
 +	AU_XATTR_GET
@@ -33626,14 +33664,18 @@ index 000000000000..d0834e47d94b
 +static ssize_t au_lgxattr(struct dentry *dentry, struct au_lgxattr *arg)
 +{
 +	ssize_t err;
++	int reenter;
 +	struct path h_path;
 +	struct super_block *sb;
 +
 +	sb = dentry->d_sb;
-+	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
-+	if (unlikely(err))
-+		goto out;
-+	err = au_h_path_getattr(dentry, /*force*/1, &h_path);
++	reenter = au_smack_reentering(sb);
++	if (!reenter) {
++		err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
++		if (unlikely(err))
++			goto out;
++	}
++	err = au_h_path_getattr(dentry, /*force*/1, &h_path, reenter);
 +	if (unlikely(err))
 +		goto out_si;
 +	if (unlikely(!h_path.dentry))
@@ -33655,9 +33697,11 @@ index 000000000000..d0834e47d94b
 +	}
 +
 +out_di:
-+	di_read_unlock(dentry, AuLock_IR);
++	if (!reenter)
++		di_read_unlock(dentry, AuLock_IR);
 +out_si:
-+	si_read_unlock(sb);
++	if (!reenter)
++		si_read_unlock(sb);
 +out:
 +	AuTraceErr(err);
 +	return err;
@@ -33734,7 +33778,11 @@ index 000000000000..d0834e47d94b
 +};
 +
 +static const struct xattr_handler *au_xattr_handlers[] = {
-+	&au_xattr_handler,
++#ifdef CONFIG_FS_POSIX_ACL
++	&posix_acl_access_xattr_handler,
++	&posix_acl_default_xattr_handler,
++#endif
++	&au_xattr_handler, /* must be last */
 +	NULL
 +};
 +
@@ -35068,7 +35116,7 @@ index 000000000000..7f62beb75426
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..3760ef3309a8
+index 000000000000..1ce714ad0f48
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,419 @@
@@ -35113,7 +35161,7 @@ index 000000000000..3760ef3309a8
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.9-20161219"
++#define AUFS_VERSION	"4.9-20170130"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
