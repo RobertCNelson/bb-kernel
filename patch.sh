@@ -1177,9 +1177,14 @@ gcc6 () {
 	fi
 }
 
+add_board_to_kernel_makefile () {
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$board' \\:g' arch/arm/boot/dts/Makefile
+}
+
 clone_board () {
 	cp -v ./arch/arm/boot/dts/${base}s ./arch/arm/boot/dts/${clone}s
-	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$clone'b \\:g' arch/arm/boot/dts/Makefile
+	board=${clone}b
+	add_board_to_kernel_makefile
 	${git} add ./arch/arm/boot/dts/${clone}s
 }
 
