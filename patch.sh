@@ -1202,6 +1202,21 @@ gcc6 () {
 	fi
 }
 
+touchscreens () {
+	echo "dir: touchscreens"
+	#regenerate="enable"
+        if [ "x${regenerate}" = "xenable" ] ; then
+                start_cleanup
+        fi
+
+        ${git} "${DIR}/patches/touchscreens/0001-touchscreen-add-mchpar1xxx-driver-to-support-Microch.patch"
+
+        if [ "x${regenerate}" = "xenable" ] ; then
+                number=1
+                cleanup
+        fi
+}
+
 add_board_to_kernel_makefile () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$board' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -1279,6 +1294,7 @@ gcc5
 emmc
 cape_universal
 gcc6
+touchscreens
 more_boards
 sirius
 
