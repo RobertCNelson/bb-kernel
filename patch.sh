@@ -1213,6 +1213,12 @@ more_boards () {
 	${git} "${DIR}/patches/more_boards/0002-bbgw-bbbw-disable-mac.patch"
 }
 
+sirius () {
+	echo "dir: sirius"
+	board="am335x-siriusDEB.dtb"
+	add_board_to_kernel_makefile
+	${git} "${DIR}/patches/sirius/0001-arm-dts-add-support-for-neo-sirius-board.patch"
+}
 
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
@@ -1249,6 +1255,7 @@ emmc
 cape_universal
 gcc6
 more_boards
+sirius
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
