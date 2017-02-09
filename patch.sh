@@ -1049,6 +1049,29 @@ backports () {
 		number=5
 		cleanup
 	fi
+
+	echo "dir: backports/serial_fixes"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/backports/serial_fixes/0001-serial-omap-add-the-functionality-of-a-9-bit-UART-wi.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0002-OMAP-serial-Support-1Mbaud-and-similar-baudrates-tha.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0003-OMAP-serial-Fix-incorrect-Rx-FIFO-threshold-setting-.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0004-OMAP-serial-Revert-bad-fix-of-Rx-FIFO-threshold-gran.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0005-OMAP2-UART-enable-tx-wakeup-bit-for-wer-reg.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0006-OMAP-UART-Fix-the-revision-register-read.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0007-serial-omap-Initialize-platform_data.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0008-serial-omap-enable-PM-runtime-only-when-its-fully-co.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0009-OMAP-serial-Fix-misnamed-variable.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0010-OMAP-serial-Fix-Mode13-vs-Mode16-priority.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=10
+		cleanup
+	fi
 }
 
 probotix () {
