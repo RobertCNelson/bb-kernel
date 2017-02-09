@@ -980,7 +980,8 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0015-Add-MODULE_ALIAS.patch"
 	${git} "${DIR}/patches/fixes/0016-Updated-defines-to-fully-work-with-BeagleBone.patch"
 	${git} "${DIR}/patches/fixes/0017-backlight-tps65217_bl-fix-initialization-when-backli.patch"
-	${git} "${DIR}/patched/fixes/0018-backlight-tps65217_bl-disable-backlight-when-system-.patch"
+	${git} "${DIR}/patches/fixes/0018-backlight-tps65217_bl-disable-backlight-when-system-.patch"
+	${git} "${DIR}/patches/fixes/0019-bone-iio-helper-fix-driver-initialization-order.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=16
