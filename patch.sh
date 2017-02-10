@@ -979,6 +979,9 @@ am33x_after () {
 	${git} "${DIR}/patches/fixes/0014-Add-MODULE_ALIAS.patch"
 	${git} "${DIR}/patches/fixes/0015-Add-MODULE_ALIAS.patch"
 	${git} "${DIR}/patches/fixes/0016-Updated-defines-to-fully-work-with-BeagleBone.patch"
+	${git} "${DIR}/patches/fixes/0017-backlight-tps65217_bl-fix-initialization-when-backli.patch"
+	${git} "${DIR}/patches/fixes/0018-backlight-tps65217_bl-disable-backlight-when-system-.patch"
+	${git} "${DIR}/patches/fixes/0019-bone-iio-helper-fix-driver-initialization-order.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=16
@@ -1043,6 +1046,29 @@ backports () {
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		number=5
+		cleanup
+	fi
+
+	echo "dir: backports/serial_fixes"
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/backports/serial_fixes/0001-serial-omap-add-the-functionality-of-a-9-bit-UART-wi.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0002-OMAP-serial-Support-1Mbaud-and-similar-baudrates-tha.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0003-OMAP-serial-Fix-incorrect-Rx-FIFO-threshold-setting-.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0004-OMAP-serial-Revert-bad-fix-of-Rx-FIFO-threshold-gran.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0005-OMAP2-UART-enable-tx-wakeup-bit-for-wer-reg.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0006-OMAP-UART-Fix-the-revision-register-read.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0007-serial-omap-Initialize-platform_data.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0008-serial-omap-enable-PM-runtime-only-when-its-fully-co.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0009-OMAP-serial-Fix-misnamed-variable.patch"
+	${git} "${DIR}/patches/backports/serial_fixes/0010-OMAP-serial-Fix-Mode13-vs-Mode16-priority.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		number=10
 		cleanup
 	fi
 }
@@ -1174,9 +1200,29 @@ gcc6 () {
 	fi
 }
 
+touchscreens () {
+	echo "dir: touchscreens"
+	#regenerate="enable"
+        if [ "x${regenerate}" = "xenable" ] ; then
+                start_cleanup
+        fi
+
+        ${git} "${DIR}/patches/touchscreens/0001-touchscreen-add-mchpar1xxx-driver-to-support-Microch.patch"
+
+        if [ "x${regenerate}" = "xenable" ] ; then
+                number=1
+                cleanup
+        fi
+}
+
+add_board_to_kernel_makefile () {
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$board' \\:g' arch/arm/boot/dts/Makefile
+}
+
 clone_board () {
 	cp -v ./arch/arm/boot/dts/${base}s ./arch/arm/boot/dts/${clone}s
-	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$clone'b \\:g' arch/arm/boot/dts/Makefile
+	board=${clone}b
+	add_board_to_kernel_makefile
 	${git} add ./arch/arm/boot/dts/${clone}s
 }
 
@@ -1205,6 +1251,12 @@ more_boards () {
 	${git} "${DIR}/patches/more_boards/0002-bbgw-bbbw-disable-mac.patch"
 }
 
+sirius () {
+	echo "dir: sirius"
+	board="am335x-siriusDEB.dtb"
+	add_board_to_kernel_makefile
+	${git} "${DIR}/patches/sirius/0001-arm-dts-add-support-for-neo-sirius-board.patch"
+}
 
 bb_view_lcd () {
 #element14_bb_view: breaks lcd4
@@ -1305,7 +1357,9 @@ gcc5
 emmc
 cape_universal
 gcc6
+touchscreens
 more_boards
+sirius
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
