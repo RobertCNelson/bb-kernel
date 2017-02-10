@@ -1,0 +1,68 @@
+From b6d7e7c9de3d97c6c09dfff6a74031b65bbb7ea9 Mon Sep 17 00:00:00 2001
+From: Grygorii Strashko <grygorii.strashko@ti.com>
+Date: Mon, 22 Jul 2013 15:31:15 +0530
+Subject: [PATCH 08/20] serial: omap: enable PM runtime only when its fully
+ configured
+
+If earlyprintk is enabled and current UART is console port the platform
+code can mark it as RPM_ACTIVE to sync real IP state with PM Runtime and
+avoid resuming of already active device, but now, driver initialization
+will be performed in the wrong way:
+
+	pm_runtime_enable(&pdev->dev);
+    <-- PM runtime alowed (device state RPM_ACTIVE)
+	if (omap_up_info->autosuspend_timeout == 0)
+		omap_up_info->autosuspend_timeout = -1;
+	device_init_wakeup(up->dev, true);
+	pm_runtime_use_autosuspend(&pdev->dev);
+	<-- update_autosuspend() will be called and it will disable device
+        (device state RPM_SUSPENDED)
+	pm_runtime_set_autosuspend_delay(&pdev->dev,
+			omap_up_info->autosuspend_timeout);
+	<-- update_autosuspend() will be called which will re-enable device
+        (device state RPM_ACTIVE), because autosuspend_timeout < 0
+
+	pm_runtime_irq_safe(&pdev->dev);
+	pm_runtime_get_sync(&pdev->dev);
+	<-- will do nothing
+
+Such behavior isn't expected by OMAP serial drivers and causes
+unpredictable calls of serial_omap_runtime_suspend() and
+serial_omap_runtime_resume().
+
+Hence, fix it by allowing PM runtime only after all its parameters are
+configured.
+
+CC: Tony Lindgren <tony@atomide.com>
+CC: Rajendra Nayak <rnayak@ti.com>
+CC: Felipe Balbi <balbi@ti.com>
+CC: Kevin Hilman <khilman@linaro.org>
+Tested-by: Mark Jackson <mpfj-list@newflow.co.uk>
+Signed-off-by: Grygorii Strashko <grygorii.strashko@ti.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/omap-serial.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/tty/serial/omap-serial.c b/drivers/tty/serial/omap-serial.c
+index bba7e7e..49feef1 100644
+--- a/drivers/tty/serial/omap-serial.c
++++ b/drivers/tty/serial/omap-serial.c
+@@ -1520,12 +1520,13 @@ static int serial_omap_probe(struct platform_device *pdev)
+ 	INIT_WORK(&up->qos_work, serial_omap_uart_qos_work);
+ 
+ 	platform_set_drvdata(pdev, up);
+-	pm_runtime_enable(&pdev->dev);
+ 	pm_runtime_use_autosuspend(&pdev->dev);
+ 	pm_runtime_set_autosuspend_delay(&pdev->dev,
+ 			omap_up_info->autosuspend_timeout);
+ 
+ 	pm_runtime_irq_safe(&pdev->dev);
++	pm_runtime_enable(&pdev->dev);
++
+ 	pm_runtime_get_sync(&pdev->dev);
+ 
+ 	omap_serial_fill_features_erratas(up);
+-- 
+2.7.4
+

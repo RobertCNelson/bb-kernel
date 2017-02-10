@@ -1,0 +1,92 @@
+From 2cd6041e35dca06b7f09ba0b4e73b30206f185dc Mon Sep 17 00:00:00 2001
+From: "Govindraj.R" <govindraj.raja@ti.com>
+Date: Fri, 5 Jul 2013 18:25:59 +0300
+Subject: [PATCH 05/20] OMAP2+: UART: enable tx wakeup bit for wer reg
+
+wer has TX wakeup bit available enable the same
+by populating the necessary tx wakeup flag for the
+applicable module ip blocks and use the same
+while configuaring wer reg.
+
+Also wer is not context restored, restore wer when
+context is lost.
+
+Cc: Paul Walmsley <paul@pwsan.com>
+Cc: Felipe Balbi <balbi@ti.com>
+Cc: Kevin Hilman <kevin.hilman@linaro.org>
+Acked-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+(for drivers/tty changes)
+Signed-off-by: Govindraj.R <govindraj.raja@ti.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/omap-serial.c | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/tty/serial/omap-serial.c b/drivers/tty/serial/omap-serial.c
+index c149d1b..4af4b03 100644
+--- a/drivers/tty/serial/omap-serial.c
++++ b/drivers/tty/serial/omap-serial.c
+@@ -52,6 +52,11 @@
+ #define OMAP_UART_REV_52 0x0502
+ #define OMAP_UART_REV_63 0x0603
+ 
++#define OMAP_UART_TX_WAKEUP_EN		BIT(7)
++
++/* Feature flags */
++#define OMAP_UART_WER_HAS_TX_WAKEUP	BIT(0)
++
+ #define UART_ERRATA_i202_MDR1_ACCESS	BIT(0)
+ #define UART_ERRATA_i291_DMA_FORCEIDLE	BIT(1)
+ 
+@@ -137,6 +142,7 @@ struct uart_omap_port {
+ 	unsigned char		dlh;
+ 	unsigned char		mdr1;
+ 	unsigned char		scr;
++	unsigned char		wer;
+ 
+ 	int			use_dma;
+ 	/*
+@@ -151,6 +157,7 @@ struct uart_omap_port {
+ 	int			context_loss_cnt;
+ 	u32			errata;
+ 	u8			wakeups_enabled;
++	u32			features;
+ 
+ 	int			DTR_gpio;
+ 	int			DTR_inverted;
+@@ -706,7 +713,11 @@ static int serial_omap_startup(struct uart_port *port)
+ 	serial_out(up, UART_IER, up->ier);
+ 
+ 	/* Enable module level wake up */
+-	serial_out(up, UART_OMAP_WER, OMAP_UART_WER_MOD_WKUP);
++	up->wer = OMAP_UART_WER_MOD_WKUP;
++	if (up->features & OMAP_UART_WER_HAS_TX_WAKEUP)
++		up->wer |= OMAP_UART_TX_WAKEUP_EN;
++
++	serial_out(up, UART_OMAP_WER, up->wer);
+ 
+ 	pm_runtime_mark_last_busy(up->dev);
+ 	pm_runtime_put_autosuspend(up->dev);
+@@ -1377,9 +1388,11 @@ static void omap_serial_fill_features_erratas(struct uart_omap_port *up)
+ 	case OMAP_UART_REV_52:
+ 		up->errata |= (UART_ERRATA_i202_MDR1_ACCESS |
+ 				UART_ERRATA_i291_DMA_FORCEIDLE);
++		up->features |= OMAP_UART_WER_HAS_TX_WAKEUP;
+ 		break;
+ 	case OMAP_UART_REV_63:
+ 		up->errata |= UART_ERRATA_i202_MDR1_ACCESS;
++		up->features |= OMAP_UART_WER_HAS_TX_WAKEUP;
+ 		break;
+ 	default:
+ 		break;
+@@ -1610,6 +1623,7 @@ static void serial_omap_restore_context(struct uart_omap_port *up)
+ 		serial_omap_mdr1_errataset(up, up->mdr1);
+ 	else
+ 		serial_out(up, UART_OMAP_MDR1, up->mdr1);
++	serial_out(up, UART_OMAP_WER, up->wer);
+ }
+ 
+ static int serial_omap_runtime_suspend(struct device *dev)
+-- 
+2.7.4
+
