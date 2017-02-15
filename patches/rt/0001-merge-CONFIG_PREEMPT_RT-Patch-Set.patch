@@ -1,6 +1,6 @@
-From 280a193f5b00bf1c69d17365798059e86b4bdf94 Mon Sep 17 00:00:00 2001
+From 5d0ab88e5155ea6c7f619f995f13b41cd61ca4ce Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 10 Feb 2017 12:19:11 -0600
+Date: Wed, 15 Feb 2017 09:30:02 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -17,6 +17,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm/kernel/asm-offsets.c                      |    1 +
  arch/arm/kernel/entry-armv.S                       |   19 +-
  arch/arm/kernel/entry-common.S                     |    9 +-
+ arch/arm/kernel/patch.c                            |    6 +-
  arch/arm/kernel/process.c                          |   24 +
  arch/arm/kernel/signal.c                           |    3 +-
  arch/arm/kernel/smp.c                              |    5 +-
@@ -232,7 +233,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/mm_types.h                           |    4 +
  include/linux/mutex.h                              |   20 +-
  include/linux/mutex_rt.h                           |   84 ++
- include/linux/netdevice.h                          |   10 +
+ include/linux/netdevice.h                          |   22 +
  include/linux/netfilter/x_tables.h                 |    7 +
  include/linux/notifier.h                           |   34 +-
  include/linux/percpu.h                             |   29 +
@@ -360,7 +361,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/trace_output.c                        |   18 +-
  kernel/user.c                                      |    4 +-
  kernel/watchdog.c                                  |   13 +-
- kernel/workqueue.c                                 |  234 ++--
+ kernel/workqueue.c                                 |  236 ++--
  kernel/workqueue_internal.h                        |    5 +-
  lib/Kconfig                                        |    1 +
  lib/debugobjects.c                                 |    5 +-
@@ -387,7 +388,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/vmstat.c                                        |    6 +
  mm/workingset.c                                    |   23 +-
  mm/zsmalloc.c                                      |    6 +-
- net/core/dev.c                                     |  157 ++-
+ net/core/dev.c                                     |  167 ++-
  net/core/skbuff.c                                  |   28 +-
  net/core/sock.c                                    |    3 +-
  net/ipv4/icmp.c                                    |   38 +
@@ -403,7 +404,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  sound/core/pcm_native.c                            |    8 +-
  virt/kvm/async_pf.c                                |    4 +-
  virt/kvm/kvm_main.c                                |   17 +-
- 398 files changed, 12625 insertions(+), 3394 deletions(-)
+ 399 files changed, 12652 insertions(+), 3397 deletions(-)
  create mode 100644 Documentation/hwlat_detector.txt
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 drivers/misc/hwlat_detector.c
@@ -732,7 +733,7 @@ index 000000000000..6f2aeabf7faa
 +
 +These data are also reset when the wakeup histogram is reset.
 diff --git a/Makefile b/Makefile
-index 0793cd412656..eedfb7941ecc 100644
+index 5fab6d4068b5..2368d27485d4 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -785,6 +785,9 @@ KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
@@ -933,6 +934,37 @@ index 30a7228eaceb..c3bd6cbfce4b 100644
   UNWIND(.fnend		)
  ENDPROC(ret_fast_syscall)
  
+diff --git a/arch/arm/kernel/patch.c b/arch/arm/kernel/patch.c
+index 69bda1a5707e..1f665acaa6a9 100644
+--- a/arch/arm/kernel/patch.c
++++ b/arch/arm/kernel/patch.c
+@@ -15,7 +15,7 @@ struct patch {
+ 	unsigned int insn;
+ };
+ 
+-static DEFINE_SPINLOCK(patch_lock);
++static DEFINE_RAW_SPINLOCK(patch_lock);
+ 
+ static void __kprobes *patch_map(void *addr, int fixmap, unsigned long *flags)
+ 	__acquires(&patch_lock)
+@@ -32,7 +32,7 @@ static void __kprobes *patch_map(void *addr, int fixmap, unsigned long *flags)
+ 		return addr;
+ 
+ 	if (flags)
+-		spin_lock_irqsave(&patch_lock, *flags);
++		raw_spin_lock_irqsave(&patch_lock, *flags);
+ 	else
+ 		__acquire(&patch_lock);
+ 
+@@ -47,7 +47,7 @@ static void __kprobes patch_unmap(int fixmap, unsigned long *flags)
+ 	clear_fixmap(fixmap);
+ 
+ 	if (flags)
+-		spin_unlock_irqrestore(&patch_lock, *flags);
++		raw_spin_unlock_irqrestore(&patch_lock, *flags);
+ 	else
+ 		__release(&patch_lock);
+ }
 diff --git a/arch/arm/kernel/process.c b/arch/arm/kernel/process.c
 index 4adfb46e3ee9..15f1d94b47c5 100644
 --- a/arch/arm/kernel/process.c
@@ -1743,7 +1775,7 @@ index c4ad6eae67fa..e830b20b212f 100644
  	return pen_release != -1 ? -ENOSYS : 0;
  }
 diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
-index daafcf121ce0..b8aa1e9ee8ee 100644
+index c095455d496e..276ac73f8650 100644
 --- a/arch/arm/mm/fault.c
 +++ b/arch/arm/mm/fault.c
 @@ -430,6 +430,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
@@ -3204,7 +3236,7 @@ index e75907601a41..a29fc4f84fc4 100644
  /* --------------------------------------------------------------------------
                                Boot-time Configuration
 diff --git a/arch/x86/kernel/apic/io_apic.c b/arch/x86/kernel/apic/io_apic.c
-index 1e5d2f07416b..ac0127bb155e 100644
+index 8ca533b8c606..7bfb538080f7 100644
 --- a/arch/x86/kernel/apic/io_apic.c
 +++ b/arch/x86/kernel/apic/io_apic.c
 @@ -1711,7 +1711,8 @@ static bool io_apic_level_ack_pending(struct mp_chip_data *data)
@@ -9142,7 +9174,7 @@ index 0f42a2782afc..80a1db09a379 100644
  	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
  
 diff --git a/drivers/gpu/drm/i915/intel_display.c b/drivers/gpu/drm/i915/intel_display.c
-index 909d1d71d130..8688709b4ffa 100644
+index 4f5d07bb3511..8ecd5c016dba 100644
 --- a/drivers/gpu/drm/i915/intel_display.c
 +++ b/drivers/gpu/drm/i915/intel_display.c
 @@ -11400,7 +11400,7 @@ void intel_check_page_flip(struct drm_device *dev, int pipe)
@@ -13668,10 +13700,30 @@ index 000000000000..c38a44b14da5
 +
 +#endif
 diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
-index 93a6a2c66d15..0590f5380814 100644
+index 93a6a2c66d15..b3fa55658bd2 100644
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -2286,11 +2286,20 @@ void netdev_freemem(struct net_device *dev);
+@@ -390,7 +390,19 @@ typedef enum rx_handler_result rx_handler_result_t;
+ typedef rx_handler_result_t rx_handler_func_t(struct sk_buff **pskb);
+ 
+ void __napi_schedule(struct napi_struct *n);
++
++/*
++ * When PREEMPT_RT_FULL is defined, all device interrupt handlers
++ * run as threads, and they can also be preempted (without PREEMPT_RT
++ * interrupt threads can not be preempted). Which means that calling
++ * __napi_schedule_irqoff() from an interrupt handler can be preempted
++ * and can corrupt the napi->poll_list.
++ */
++#ifdef CONFIG_PREEMPT_RT_FULL
++#define __napi_schedule_irqoff(n) __napi_schedule(n)
++#else
+ void __napi_schedule_irqoff(struct napi_struct *n);
++#endif
+ 
+ static inline bool napi_disable_pending(struct napi_struct *n)
+ {
+@@ -2286,11 +2298,20 @@ void netdev_freemem(struct net_device *dev);
  void synchronize_net(void);
  int init_dummy_netdev(struct net_device *dev);
  
@@ -13692,7 +13744,7 @@ index 93a6a2c66d15..0590f5380814 100644
  
  struct net_device *dev_get_by_index(struct net *net, int ifindex);
  struct net_device *__dev_get_by_index(struct net *net, int ifindex);
-@@ -2606,6 +2615,7 @@ struct softnet_data {
+@@ -2606,6 +2627,7 @@ struct softnet_data {
  	unsigned int		dropped;
  	struct sk_buff_head	input_pkt_queue;
  	struct napi_struct	backlog;
@@ -28279,7 +28331,7 @@ index c1e0b5f429b6..fa2e079cc314 100644
  	/* Enable the perf event */
  	watchdog_nmi_enable(cpu);
 diff --git a/kernel/workqueue.c b/kernel/workqueue.c
-index 2c2f971f3e75..965d5f65e847 100644
+index 2c2f971f3e75..d5b0f4fc0eb0 100644
 --- a/kernel/workqueue.c
 +++ b/kernel/workqueue.c
 @@ -48,6 +48,8 @@
@@ -28553,7 +28605,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  }
  
  /**
-@@ -1108,12 +1132,12 @@ static void put_pwq_unlocked(struct pool_workqueue *pwq)
+@@ -1108,12 +1132,14 @@ static void put_pwq_unlocked(struct pool_workqueue *pwq)
  {
  	if (pwq) {
  		/*
@@ -28562,14 +28614,16 @@ index 2c2f971f3e75..965d5f65e847 100644
  		 * following lock operations are safe.
  		 */
 -		spin_lock_irq(&pwq->pool->lock);
++		rcu_read_lock();
 +		local_spin_lock_irq(pendingb_lock, &pwq->pool->lock);
  		put_pwq(pwq);
 -		spin_unlock_irq(&pwq->pool->lock);
 +		local_spin_unlock_irq(pendingb_lock, &pwq->pool->lock);
++		rcu_read_unlock();
  	}
  }
  
-@@ -1215,7 +1239,7 @@ static int try_to_grab_pending(struct work_struct *work, bool is_dwork,
+@@ -1215,7 +1241,7 @@ static int try_to_grab_pending(struct work_struct *work, bool is_dwork,
  	struct worker_pool *pool;
  	struct pool_workqueue *pwq;
  
@@ -28578,7 +28632,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	/* try to steal the timer if it exists */
  	if (is_dwork) {
-@@ -1234,6 +1258,7 @@ static int try_to_grab_pending(struct work_struct *work, bool is_dwork,
+@@ -1234,6 +1260,7 @@ static int try_to_grab_pending(struct work_struct *work, bool is_dwork,
  	if (!test_and_set_bit(WORK_STRUCT_PENDING_BIT, work_data_bits(work)))
  		return 0;
  
@@ -28586,7 +28640,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	/*
  	 * The queueing is in progress, or it is already queued. Try to
  	 * steal it from ->worklist without clearing WORK_STRUCT_PENDING.
-@@ -1272,14 +1297,16 @@ static int try_to_grab_pending(struct work_struct *work, bool is_dwork,
+@@ -1272,14 +1299,16 @@ static int try_to_grab_pending(struct work_struct *work, bool is_dwork,
  		set_work_pool_and_keep_pending(work, pool->id);
  
  		spin_unlock(&pool->lock);
@@ -28605,7 +28659,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	return -EAGAIN;
  }
  
-@@ -1348,7 +1375,7 @@ static void __queue_work(int cpu, struct workqueue_struct *wq,
+@@ -1348,7 +1377,7 @@ static void __queue_work(int cpu, struct workqueue_struct *wq,
  	 * queued or lose PENDING.  Grabbing PENDING and queueing should
  	 * happen with IRQ disabled.
  	 */
@@ -28614,7 +28668,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	debug_work_activate(work);
  
-@@ -1356,6 +1383,8 @@ static void __queue_work(int cpu, struct workqueue_struct *wq,
+@@ -1356,6 +1385,8 @@ static void __queue_work(int cpu, struct workqueue_struct *wq,
  	if (unlikely(wq->flags & __WQ_DRAINING) &&
  	    WARN_ON_ONCE(!is_chained_work(wq)))
  		return;
@@ -28623,7 +28677,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  retry:
  	if (req_cpu == WORK_CPU_UNBOUND)
  		cpu = raw_smp_processor_id();
-@@ -1412,10 +1441,8 @@ retry:
+@@ -1412,10 +1443,8 @@ retry:
  	/* pwq determined, queue */
  	trace_workqueue_queue_work(req_cpu, pwq, work);
  
@@ -28636,7 +28690,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	pwq->nr_in_flight[pwq->work_color]++;
  	work_flags = work_color_to_flags(pwq->work_color);
-@@ -1431,7 +1458,9 @@ retry:
+@@ -1431,7 +1460,9 @@ retry:
  
  	insert_work(pwq, work, worklist, work_flags);
  
@@ -28646,7 +28700,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  }
  
  /**
-@@ -1451,14 +1480,14 @@ bool queue_work_on(int cpu, struct workqueue_struct *wq,
+@@ -1451,14 +1482,14 @@ bool queue_work_on(int cpu, struct workqueue_struct *wq,
  	bool ret = false;
  	unsigned long flags;
  
@@ -28663,7 +28717,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	return ret;
  }
  EXPORT_SYMBOL(queue_work_on);
-@@ -1525,14 +1554,14 @@ bool queue_delayed_work_on(int cpu, struct workqueue_struct *wq,
+@@ -1525,14 +1556,14 @@ bool queue_delayed_work_on(int cpu, struct workqueue_struct *wq,
  	unsigned long flags;
  
  	/* read the comment in __queue_work() */
@@ -28680,7 +28734,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	return ret;
  }
  EXPORT_SYMBOL(queue_delayed_work_on);
-@@ -1567,7 +1596,7 @@ bool mod_delayed_work_on(int cpu, struct workqueue_struct *wq,
+@@ -1567,7 +1598,7 @@ bool mod_delayed_work_on(int cpu, struct workqueue_struct *wq,
  
  	if (likely(ret >= 0)) {
  		__queue_delayed_work(cpu, wq, dwork, delay);
@@ -28689,7 +28743,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	}
  
  	/* -ENOENT from try_to_grab_pending() becomes %true */
-@@ -1600,7 +1629,9 @@ static void worker_enter_idle(struct worker *worker)
+@@ -1600,7 +1631,9 @@ static void worker_enter_idle(struct worker *worker)
  	worker->last_active = jiffies;
  
  	/* idle_list is LIFO */
@@ -28699,7 +28753,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	if (too_many_workers(pool) && !timer_pending(&pool->idle_timer))
  		mod_timer(&pool->idle_timer, jiffies + IDLE_WORKER_TIMEOUT);
-@@ -1633,7 +1664,9 @@ static void worker_leave_idle(struct worker *worker)
+@@ -1633,7 +1666,9 @@ static void worker_leave_idle(struct worker *worker)
  		return;
  	worker_clr_flags(worker, WORKER_IDLE);
  	pool->nr_idle--;
@@ -28709,7 +28763,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  }
  
  static struct worker *alloc_worker(int node)
-@@ -1799,7 +1832,9 @@ static void destroy_worker(struct worker *worker)
+@@ -1799,7 +1834,9 @@ static void destroy_worker(struct worker *worker)
  	pool->nr_workers--;
  	pool->nr_idle--;
  
@@ -28719,7 +28773,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	worker->flags |= WORKER_DIE;
  	wake_up_process(worker->task);
  }
-@@ -2716,14 +2751,14 @@ static bool start_flush_work(struct work_struct *work, struct wq_barrier *barr)
+@@ -2716,14 +2753,14 @@ static bool start_flush_work(struct work_struct *work, struct wq_barrier *barr)
  
  	might_sleep();
  
@@ -28737,7 +28791,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	/* see the comment in try_to_grab_pending() with the same code */
  	pwq = get_work_pwq(work);
  	if (pwq) {
-@@ -2750,10 +2785,11 @@ static bool start_flush_work(struct work_struct *work, struct wq_barrier *barr)
+@@ -2750,10 +2787,11 @@ static bool start_flush_work(struct work_struct *work, struct wq_barrier *barr)
  	else
  		lock_map_acquire_read(&pwq->wq->lockdep_map);
  	lock_map_release(&pwq->wq->lockdep_map);
@@ -28750,7 +28804,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	return false;
  }
  
-@@ -2840,7 +2876,7 @@ static bool __cancel_work_timer(struct work_struct *work, bool is_dwork)
+@@ -2840,7 +2878,7 @@ static bool __cancel_work_timer(struct work_struct *work, bool is_dwork)
  
  	/* tell other tasks trying to grab @work to back off */
  	mark_work_canceling(work);
@@ -28759,7 +28813,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	flush_work(work);
  	clear_work_data(work);
-@@ -2895,10 +2931,10 @@ EXPORT_SYMBOL_GPL(cancel_work_sync);
+@@ -2895,10 +2933,10 @@ EXPORT_SYMBOL_GPL(cancel_work_sync);
   */
  bool flush_delayed_work(struct delayed_work *dwork)
  {
@@ -28772,7 +28826,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	return flush_work(&dwork->work);
  }
  EXPORT_SYMBOL(flush_delayed_work);
-@@ -2933,7 +2969,7 @@ bool cancel_delayed_work(struct delayed_work *dwork)
+@@ -2933,7 +2971,7 @@ bool cancel_delayed_work(struct delayed_work *dwork)
  
  	set_work_pool_and_clear_pending(&dwork->work,
  					get_work_pool_id(&dwork->work));
@@ -28781,7 +28835,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	return ret;
  }
  EXPORT_SYMBOL(cancel_delayed_work);
-@@ -3161,7 +3197,7 @@ static void rcu_free_pool(struct rcu_head *rcu)
+@@ -3161,7 +3199,7 @@ static void rcu_free_pool(struct rcu_head *rcu)
   * put_unbound_pool - put a worker_pool
   * @pool: worker_pool to put
   *
@@ -28790,7 +28844,7 @@ index 2c2f971f3e75..965d5f65e847 100644
   * safe manner.  get_unbound_pool() calls this function on its failure path
   * and this function should be able to release pools which went through,
   * successfully or not, init_worker_pool().
-@@ -3215,8 +3251,8 @@ static void put_unbound_pool(struct worker_pool *pool)
+@@ -3215,8 +3253,8 @@ static void put_unbound_pool(struct worker_pool *pool)
  	del_timer_sync(&pool->idle_timer);
  	del_timer_sync(&pool->mayday_timer);
  
@@ -28801,7 +28855,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  }
  
  /**
-@@ -3323,14 +3359,14 @@ static void pwq_unbound_release_workfn(struct work_struct *work)
+@@ -3323,14 +3361,14 @@ static void pwq_unbound_release_workfn(struct work_struct *work)
  	put_unbound_pool(pool);
  	mutex_unlock(&wq_pool_mutex);
  
@@ -28818,7 +28872,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  }
  
  /**
-@@ -3983,7 +4019,7 @@ void destroy_workqueue(struct workqueue_struct *wq)
+@@ -3983,7 +4021,7 @@ void destroy_workqueue(struct workqueue_struct *wq)
  		 * The base ref is never dropped on per-cpu pwqs.  Directly
  		 * schedule RCU free.
  		 */
@@ -28827,7 +28881,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	} else {
  		/*
  		 * We're the sole accessor of @wq at this point.  Directly
-@@ -4076,7 +4112,8 @@ bool workqueue_congested(int cpu, struct workqueue_struct *wq)
+@@ -4076,7 +4114,8 @@ bool workqueue_congested(int cpu, struct workqueue_struct *wq)
  	struct pool_workqueue *pwq;
  	bool ret;
  
@@ -28837,7 +28891,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	if (cpu == WORK_CPU_UNBOUND)
  		cpu = smp_processor_id();
-@@ -4087,7 +4124,8 @@ bool workqueue_congested(int cpu, struct workqueue_struct *wq)
+@@ -4087,7 +4126,8 @@ bool workqueue_congested(int cpu, struct workqueue_struct *wq)
  		pwq = unbound_pwq_by_node(wq, cpu_to_node(cpu));
  
  	ret = !list_empty(&pwq->delayed_works);
@@ -28847,7 +28901,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	return ret;
  }
-@@ -4113,15 +4151,15 @@ unsigned int work_busy(struct work_struct *work)
+@@ -4113,15 +4153,15 @@ unsigned int work_busy(struct work_struct *work)
  	if (work_pending(work))
  		ret |= WORK_BUSY_PENDING;
  
@@ -28867,7 +28921,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	return ret;
  }
-@@ -4310,7 +4348,7 @@ void show_workqueue_state(void)
+@@ -4310,7 +4350,7 @@ void show_workqueue_state(void)
  	unsigned long flags;
  	int pi;
  
@@ -28876,7 +28930,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  
  	pr_info("Showing busy workqueues and worker pools:\n");
  
-@@ -4361,7 +4399,7 @@ void show_workqueue_state(void)
+@@ -4361,7 +4401,7 @@ void show_workqueue_state(void)
  		spin_unlock_irqrestore(&pool->lock, flags);
  	}
  
@@ -28885,7 +28939,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  }
  
  /*
-@@ -4722,16 +4760,16 @@ bool freeze_workqueues_busy(void)
+@@ -4722,16 +4762,16 @@ bool freeze_workqueues_busy(void)
  		 * nr_active is monotonically decreasing.  It's safe
  		 * to peek without lock.
  		 */
@@ -28905,7 +28959,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	}
  out_unlock:
  	mutex_unlock(&wq_pool_mutex);
-@@ -4921,7 +4959,8 @@ static ssize_t wq_pool_ids_show(struct device *dev,
+@@ -4921,7 +4961,8 @@ static ssize_t wq_pool_ids_show(struct device *dev,
  	const char *delim = "";
  	int node, written = 0;
  
@@ -28915,7 +28969,7 @@ index 2c2f971f3e75..965d5f65e847 100644
  	for_each_node(node) {
  		written += scnprintf(buf + written, PAGE_SIZE - written,
  				     "%s%d:%d", delim, node,
-@@ -4929,7 +4968,8 @@ static ssize_t wq_pool_ids_show(struct device *dev,
+@@ -4929,7 +4970,8 @@ static ssize_t wq_pool_ids_show(struct device *dev,
  		delim = " ";
  	}
  	written += scnprintf(buf + written, PAGE_SIZE - written, "\n");
@@ -30854,7 +30908,7 @@ index c1ea19478119..529552c3716d 100644
  }
  EXPORT_SYMBOL_GPL(zs_unmap_object);
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 0798a0f1b395..a48dbd37dd43 100644
+index 0798a0f1b395..d63b1f9ca08f 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -186,6 +186,7 @@ static unsigned int napi_gen_id;
@@ -31183,7 +31237,7 @@ index 0798a0f1b395..a48dbd37dd43 100644
  }
  
  static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
-@@ -4629,6 +4710,7 @@ void __napi_schedule(struct napi_struct *n)
+@@ -4629,9 +4710,11 @@ void __napi_schedule(struct napi_struct *n)
  	local_irq_save(flags);
  	____napi_schedule(this_cpu_ptr(&softnet_data), n);
  	local_irq_restore(flags);
@@ -31191,7 +31245,41 @@ index 0798a0f1b395..a48dbd37dd43 100644
  }
  EXPORT_SYMBOL(__napi_schedule);
  
-@@ -4905,7 +4987,7 @@ static void net_rx_action(struct softirq_action *h)
++#ifndef CONFIG_PREEMPT_RT_FULL
+ /**
+  * __napi_schedule_irqoff - schedule for receive
+  * @n: entry to schedule
+@@ -4643,6 +4726,7 @@ void __napi_schedule_irqoff(struct napi_struct *n)
+ 	____napi_schedule(this_cpu_ptr(&softnet_data), n);
+ }
+ EXPORT_SYMBOL(__napi_schedule_irqoff);
++#endif
+ 
+ void __napi_complete(struct napi_struct *n)
+ {
+@@ -4869,13 +4953,21 @@ static void net_rx_action(struct softirq_action *h)
+ 	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
+ 	unsigned long time_limit = jiffies + 2;
+ 	int budget = netdev_budget;
++	struct sk_buff_head tofree_q;
++	struct sk_buff *skb;
+ 	LIST_HEAD(list);
+ 	LIST_HEAD(repoll);
+ 
++	__skb_queue_head_init(&tofree_q);
++
+ 	local_irq_disable();
++	skb_queue_splice_init(&sd->tofree_queue, &tofree_q);
+ 	list_splice_init(&sd->poll_list, &list);
+ 	local_irq_enable();
+ 
++	while ((skb = __skb_dequeue(&tofree_q)))
++		kfree_skb(skb);
++
+ 	for (;;) {
+ 		struct napi_struct *n;
+ 
+@@ -4905,7 +4997,7 @@ static void net_rx_action(struct softirq_action *h)
  	list_splice_tail(&repoll, &list);
  	list_splice(&list, &sd->poll_list);
  	if (!list_empty(&sd->poll_list))
@@ -31200,7 +31288,7 @@ index 0798a0f1b395..a48dbd37dd43 100644
  
  	net_rps_action_and_irq_enable(sd);
  }
-@@ -7244,7 +7326,7 @@ EXPORT_SYMBOL(free_netdev);
+@@ -7244,7 +7336,7 @@ EXPORT_SYMBOL(free_netdev);
  void synchronize_net(void)
  {
  	might_sleep();
@@ -31209,7 +31297,7 @@ index 0798a0f1b395..a48dbd37dd43 100644
  		synchronize_rcu_expedited();
  	else
  		synchronize_rcu();
-@@ -7485,16 +7567,20 @@ static int dev_cpu_callback(struct notifier_block *nfb,
+@@ -7485,16 +7577,20 @@ static int dev_cpu_callback(struct notifier_block *nfb,
  
  	raise_softirq_irqoff(NET_TX_SOFTIRQ);
  	local_irq_enable();
@@ -31231,7 +31319,7 @@ index 0798a0f1b395..a48dbd37dd43 100644
  
  	return NOTIFY_OK;
  }
-@@ -7796,8 +7882,9 @@ static int __init net_dev_init(void)
+@@ -7796,8 +7892,9 @@ static int __init net_dev_init(void)
  	for_each_possible_cpu(i) {
  		struct softnet_data *sd = &per_cpu(softnet_data, i);
  
