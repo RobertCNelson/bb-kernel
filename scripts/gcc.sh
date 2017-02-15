@@ -98,7 +98,7 @@ gcc_toolchain () {
 		;;
 	gcc_linaro_eabi_4_9)
 		#
-		#http://releases.linaro.org/components/toolchain/binaries/4.9-2017.01/arm-eabi/gcc-linaro-4.9.4-2017.01-x86_64_arm-eabi.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/4.9-2017.01/arm-eabi/gcc-linaro-4.9.4-2017.01-x86_64_arm-eabi.tar.xz
 		#
 
 		gcc_version="4.9"
@@ -318,19 +318,11 @@ gcc_toolchain () {
 
 if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] ; then
 	if [ "x${ARCH}" = "xi686" ] ; then
-		echo ""
-		echo "Warning: 32bit is no longer supported by linaro..."
 		if [ "x${toolchain}" = "xgcc_linaro_eabi_4_9" ] ; then
-			echo ""
-			echo "Warning: 32bit is no longer supported by linaro, using old 14.09 gcc-4.9 release..."
-			echo ""
 			toolchain="gcc_linaro_eabi_4_9_i686"
 		fi
 
 		if [ "x${toolchain}" = "xgcc_linaro_gnueabihf_4_9" ] ; then
-			echo ""
-			echo "Warning: 32bit is no longer supported by linaro, using old 14.09 gcc-4.9 release..."
-			echo ""
 			toolchain="gcc_linaro_gnueabihf_4_9_i686"
 		fi
 
