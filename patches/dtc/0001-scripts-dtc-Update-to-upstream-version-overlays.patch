@@ -1,11 +1,11 @@
-From f46fc7e048fd7dec5c0232a1a18be429eeccfcf0 Mon Sep 17 00:00:00 2001
+From 4727a6886950a2dd64387fa7a972b86bab8b6c39 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 10 Feb 2017 13:12:27 -0600
+Date: Wed, 15 Feb 2017 09:33:14 -0600
 Subject: [PATCH 1/3] scripts/dtc: Update to upstream version overlays
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- scripts/dtc/checks.c                 | 467 +++++++++++-------------
+ scripts/dtc/checks.c                 | 510 +++++++++++++-------------
  scripts/dtc/dtc-lexer.l              |  55 +--
  scripts/dtc/dtc-lexer.lex.c_shipped  | 332 ++++++++---------
  scripts/dtc/dtc-parser.tab.c_shipped | 670 ++++++++++++++++++-----------------
@@ -23,17 +23,17 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  scripts/dtc/libfdt/fdt_wip.c         |  29 +-
  scripts/dtc/libfdt/libfdt.h          | 281 +++++++++++++--
  scripts/dtc/libfdt/libfdt_env.h      |   1 +
- scripts/dtc/livetree.c               | 301 +++++++++++++++-
+ scripts/dtc/livetree.c               | 305 +++++++++++++++-
  scripts/dtc/srcpos.c                 |  37 +-
  scripts/dtc/srcpos.h                 |   1 -
  scripts/dtc/treesource.c             |  14 +-
  scripts/dtc/util.c                   |  33 +-
  scripts/dtc/util.h                   |   1 +
  scripts/dtc/version_gen.h            |   2 +-
- 25 files changed, 1671 insertions(+), 1185 deletions(-)
+ 25 files changed, 1718 insertions(+), 1185 deletions(-)
 
 diff --git a/scripts/dtc/checks.c b/scripts/dtc/checks.c
-index c0326d1e9519..3d18e45374c8 100644
+index c0326d1e9519..cce0cca13058 100644
 --- a/scripts/dtc/checks.c
 +++ b/scripts/dtc/checks.c
 @@ -40,16 +40,11 @@ enum checkstatus {
@@ -237,7 +237,7 @@ index c0326d1e9519..3d18e45374c8 100644
  					   struct node *node)
  {
  	struct property *prop, *prop2;
-@@ -267,14 +233,14 @@ static void check_duplicate_property_names(struct check *c, struct node *dt,
+@@ -267,14 +233,15 @@ static void check_duplicate_property_names(struct check *c, struct node *dt,
  		}
  	}
  }
@@ -248,18 +248,30 @@ index c0326d1e9519..3d18e45374c8 100644
  #define UPPERCASE	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
  #define DIGITS		"0123456789"
  #define PROPNODECHARS	LOWERCASE UPPERCASE DIGITS ",._+*#?-"
++#define PROPNODECHARSSTRICT	LOWERCASE UPPERCASE DIGITS ",-"
  
 -static void check_node_name_chars(struct check *c, struct node *dt,
 +static void check_node_name_chars(struct check *c, struct dt_info *dti,
  				  struct node *node)
  {
  	int n = strspn(node->name, c->data);
-@@ -283,27 +249,55 @@ static void check_node_name_chars(struct check *c, struct node *dt,
+@@ -283,27 +250,98 @@ static void check_node_name_chars(struct check *c, struct node *dt,
  		FAIL(c, "Bad character '%c' in node %s",
  		     node->name[n], node->fullpath);
  }
 -NODE_ERROR(node_name_chars, PROPNODECHARS "@");
 +ERROR(node_name_chars, check_node_name_chars, PROPNODECHARS "@");
++
++static void check_node_name_chars_strict(struct check *c, struct dt_info *dti,
++					 struct node *node)
++{
++	int n = strspn(node->name, c->data);
++
++	if (n < node->basenamelen)
++		FAIL(c, "Character '%c' not recommended in node %s",
++		     node->name[n], node->fullpath);
++}
++CHECK(node_name_chars_strict, check_node_name_chars_strict, PROPNODECHARSSTRICT);
  
 -static void check_node_name_format(struct check *c, struct node *dt,
 +static void check_node_name_format(struct check *c, struct dt_info *dti,
@@ -271,19 +283,13 @@ index c0326d1e9519..3d18e45374c8 100644
  }
 -NODE_ERROR(node_name_format, NULL, &node_name_chars);
 +ERROR(node_name_format, check_node_name_format, NULL, &node_name_chars);
- 
--static void check_property_name_chars(struct check *c, struct node *dt,
--				      struct node *node, struct property *prop)
++
 +static void check_unit_address_vs_reg(struct check *c, struct dt_info *dti,
 +				      struct node *node)
- {
--	int n = strspn(prop->name, c->data);
++{
 +	const char *unitname = get_unitname(node);
 +	struct property *prop = get_property(node, "reg");
- 
--	if (n < strlen(prop->name))
--		FAIL(c, "Bad character '%c' in property name \"%s\", node %s",
--		     prop->name[n], prop->name, node->fullpath);
++
 +	if (!prop) {
 +		prop = get_property(node, "ranges");
 +		if (prop && !prop->val.len)
@@ -299,15 +305,20 @@ index c0326d1e9519..3d18e45374c8 100644
 +			FAIL(c, "Node %s has a unit name, but no reg property",
 +			    node->fullpath);
 +	}
- }
--PROP_ERROR(property_name_chars, PROPNODECHARS);
++}
 +WARNING(unit_address_vs_reg, check_unit_address_vs_reg, NULL);
-+
+ 
+-static void check_property_name_chars(struct check *c, struct node *dt,
+-				      struct node *node, struct property *prop)
 +static void check_property_name_chars(struct check *c, struct dt_info *dti,
 +				      struct node *node)
-+{
+ {
+-	int n = strspn(prop->name, c->data);
 +	struct property *prop;
-+
+ 
+-	if (n < strlen(prop->name))
+-		FAIL(c, "Bad character '%c' in property name \"%s\", node %s",
+-		     prop->name[n], prop->name, node->fullpath);
 +	for_each_property(node, prop) {
 +		int n = strspn(prop->name, c->data);
 +
@@ -315,12 +326,45 @@ index c0326d1e9519..3d18e45374c8 100644
 +			FAIL(c, "Bad character '%c' in property name \"%s\", node %s",
 +			     prop->name[n], prop->name, node->fullpath);
 +	}
-+}
+ }
+-PROP_ERROR(property_name_chars, PROPNODECHARS);
 +ERROR(property_name_chars, check_property_name_chars, PROPNODECHARS);
++
++static void check_property_name_chars_strict(struct check *c,
++					     struct dt_info *dti,
++					     struct node *node)
++{
++	struct property *prop;
++
++	for_each_property(node, prop) {
++		const char *name = prop->name;
++		int n = strspn(name, c->data);
++
++		if (n == strlen(prop->name))
++			continue;
++
++		/* Certain names are whitelisted */
++		if (streq(name, "device_type"))
++			continue;
++
++		/*
++		 * # is only allowed at the beginning of property names not counting
++		 * the vendor prefix.
++		 */
++		if (name[n] == '#' && ((n == 0) || (name[n-1] == ','))) {
++			name += n + 1;
++			n = strspn(name, c->data);
++		}
++		if (n < strlen(name))
++			FAIL(c, "Character '%c' not recommended in property name \"%s\", node %s",
++			     name[n], prop->name, node->fullpath);
++	}
++}
++CHECK(property_name_chars_strict, check_property_name_chars_strict, PROPNODECHARSSTRICT);
  
  #define DESCLABEL_FMT	"%s%s%s%s%s"
  #define DESCLABEL_ARGS(node,prop,mark)		\
-@@ -312,10 +306,11 @@ PROP_ERROR(property_name_chars, PROPNODECHARS);
+@@ -312,10 +350,11 @@ PROP_ERROR(property_name_chars, PROPNODECHARS);
  	((prop) ? (prop)->name : ""), \
  	((prop) ? "' in " : ""), (node)->fullpath
  
@@ -333,7 +377,7 @@ index c0326d1e9519..3d18e45374c8 100644
  	struct node *othernode = NULL;
  	struct property *otherprop = NULL;
  	struct marker *othermark = NULL;
-@@ -338,44 +333,43 @@ static void check_duplicate_label(struct check *c, struct node *dt,
+@@ -338,44 +377,43 @@ static void check_duplicate_label(struct check *c, struct node *dt,
  		     DESCLABEL_ARGS(othernode, otherprop, othermark));
  }
  
@@ -353,17 +397,17 @@ index c0326d1e9519..3d18e45374c8 100644
 -	struct marker *m = prop->val.markers;
 -	struct label *l;
 +		check_duplicate_label(c, dti, l->label, node, NULL, NULL);
-+
-+	for_each_property(node, prop) {
-+		struct marker *m = prop->val.markers;
  
 -	for_each_label(prop->labels, l)
 -		check_duplicate_label(c, dt, l->label, node, prop, NULL);
-+		for_each_label(prop->labels, l)
-+			check_duplicate_label(c, dti, l->label, node, prop, NULL);
++	for_each_property(node, prop) {
++		struct marker *m = prop->val.markers;
  
 -	for_each_marker_of_type(m, LABEL)
 -		check_duplicate_label(c, dt, m->ref, node, prop, m);
++		for_each_label(prop->labels, l)
++			check_duplicate_label(c, dti, l->label, node, prop, NULL);
++
 +		for_each_marker_of_type(m, LABEL)
 +			check_duplicate_label(c, dti, m->ref, node, prop, m);
 +	}
@@ -398,7 +442,7 @@ index c0326d1e9519..3d18e45374c8 100644
  	}
  
  	m = prop->val.markers;
-@@ -387,14 +381,13 @@ static void check_explicit_phandles(struct check *c, struct node *root,
+@@ -387,14 +425,13 @@ static void check_explicit_phandles(struct check *c, struct node *root,
  			 * by construction. */ {
  			FAIL(c, "%s in %s is a reference to another node",
  			     prop->name, node->fullpath);
@@ -415,7 +459,7 @@ index c0326d1e9519..3d18e45374c8 100644
  	}
  
  	phandle = propval_cell(prop);
-@@ -402,12 +395,36 @@ static void check_explicit_phandles(struct check *c, struct node *root,
+@@ -402,12 +439,36 @@ static void check_explicit_phandles(struct check *c, struct node *root,
  	if ((phandle == 0) || (phandle == -1)) {
  		FAIL(c, "%s has bad value (0x%x) in %s property",
  		     node->fullpath, phandle, prop->name);
@@ -456,7 +500,7 @@ index c0326d1e9519..3d18e45374c8 100644
  
  	other = get_node_by_phandle(root, phandle);
  	if (other && (other != node)) {
-@@ -418,9 +435,9 @@ static void check_explicit_phandles(struct check *c, struct node *root,
+@@ -418,9 +479,9 @@ static void check_explicit_phandles(struct check *c, struct node *root,
  
  	node->phandle = phandle;
  }
@@ -468,7 +512,7 @@ index c0326d1e9519..3d18e45374c8 100644
  				  struct node *node)
  {
  	struct property **pp, *prop = NULL;
-@@ -448,121 +465,73 @@ static void check_name_properties(struct check *c, struct node *root,
+@@ -448,121 +509,73 @@ static void check_name_properties(struct check *c, struct node *root,
  	}
  }
  ERROR_IF_NOT_STRING(name_is_string, "name");
@@ -556,9 +600,7 @@ index c0326d1e9519..3d18e45374c8 100644
 -			*((cell_t *)(prop->val.val + m->offset)) =
 -				cpu_to_fdt32(0xdeadbeef);
 -			continue;
-+			phandle = get_node_phandle(dt, refnode);
-+			*((cell_t *)(prop->val.val + m->offset)) = cpu_to_fdt32(phandle);
- 		}
+-		}
 -
 -		/* if it's a local reference, we need to record it */
 -		if (symbol_fixup_support) {
@@ -576,7 +618,9 @@ index c0326d1e9519..3d18e45374c8 100644
 -			while (*fep)
 -				fep = &(*fep)->next;
 -			*fep = fe;
--		}
++			phandle = get_node_phandle(dt, refnode);
++			*((cell_t *)(prop->val.val + m->offset)) = cpu_to_fdt32(phandle);
+ 		}
 -
 -		phandle = get_node_phandle(dt, refnode);
 -		*((cell_t *)(prop->val.val + m->offset)) = cpu_to_fdt32(phandle);
@@ -595,37 +639,35 @@ index c0326d1e9519..3d18e45374c8 100644
 -	struct marker *m = prop->val.markers;
 -	struct node *refnode;
 -	char *path;
--
++	struct node *dt = dti->dt;
++	struct property *prop;
+ 
 -	for_each_marker_of_type(m, REF_PATH) {
 -		assert(m->offset <= prop->val.len);
--
++	for_each_property(node, prop) {
++		struct marker *m = prop->val.markers;
++		struct node *refnode;
++		char *path;
+ 
 -		refnode = get_node_by_ref(dt, m->ref);
 -		if (!refnode) {
 -			FAIL(c, "Reference to non-existent node or label \"%s\"\n",
 -			     m->ref);
 -			continue;
 -		}
-+	struct node *dt = dti->dt;
-+	struct property *prop;
-+
-+	for_each_property(node, prop) {
-+		struct marker *m = prop->val.markers;
-+		struct node *refnode;
-+		char *path;
-+
 +		for_each_marker_of_type(m, REF_PATH) {
 +			assert(m->offset <= prop->val.len);
-+
+ 
+-		path = refnode->fullpath;
+-		prop->val = data_insert_at_marker(prop->val, m, path,
+-						  strlen(path) + 1);
 +			refnode = get_node_by_ref(dt, m->ref);
 +			if (!refnode) {
 +				FAIL(c, "Reference to non-existent node or label \"%s\"\n",
 +				     m->ref);
 +				continue;
 +			}
- 
--		path = refnode->fullpath;
--		prop->val = data_insert_at_marker(prop->val, m, path,
--						  strlen(path) + 1);
++
 +			path = refnode->fullpath;
 +			prop->val = data_insert_at_marker(prop->val, m, path,
 +							  strlen(path) + 1);
@@ -638,7 +680,7 @@ index c0326d1e9519..3d18e45374c8 100644
  
  /*
   * Semantic checks
-@@ -575,7 +544,7 @@ WARNING_IF_NOT_STRING(device_type_is_string, "device_type");
+@@ -575,7 +588,7 @@ WARNING_IF_NOT_STRING(device_type_is_string, "device_type");
  WARNING_IF_NOT_STRING(model_is_string, "model");
  WARNING_IF_NOT_STRING(status_is_string, "status");
  
@@ -647,7 +689,7 @@ index c0326d1e9519..3d18e45374c8 100644
  				  struct node *node)
  {
  	struct property *prop;
-@@ -591,7 +560,7 @@ static void fixup_addr_size_cells(struct check *c, struct node *dt,
+@@ -591,7 +604,7 @@ static void fixup_addr_size_cells(struct check *c, struct node *dt,
  	if (prop)
  		node->size_cells = propval_cell(prop);
  }
@@ -656,7 +698,7 @@ index c0326d1e9519..3d18e45374c8 100644
  	&address_cells_is_cell, &size_cells_is_cell);
  
  #define node_addr_cells(n) \
-@@ -599,7 +568,7 @@ WARNING(addr_size_cells, NULL, fixup_addr_size_cells, NULL, NULL,
+@@ -599,7 +612,7 @@ WARNING(addr_size_cells, NULL, fixup_addr_size_cells, NULL, NULL,
  #define node_size_cells(n) \
  	(((n)->size_cells == -1) ? 1 : (n)->size_cells)
  
@@ -665,7 +707,7 @@ index c0326d1e9519..3d18e45374c8 100644
  			     struct node *node)
  {
  	struct property *prop;
-@@ -626,9 +595,9 @@ static void check_reg_format(struct check *c, struct node *dt,
+@@ -626,9 +639,9 @@ static void check_reg_format(struct check *c, struct node *dt,
  		     "(#address-cells == %d, #size-cells == %d)",
  		     node->fullpath, prop->val.len, addr_cells, size_cells);
  }
@@ -677,7 +719,7 @@ index c0326d1e9519..3d18e45374c8 100644
  				struct node *node)
  {
  	struct property *prop;
-@@ -667,12 +636,12 @@ static void check_ranges_format(struct check *c, struct node *dt,
+@@ -667,12 +680,12 @@ static void check_ranges_format(struct check *c, struct node *dt,
  		     p_addr_cells, c_addr_cells, c_size_cells);
  	}
  }
@@ -692,7 +734,7 @@ index c0326d1e9519..3d18e45374c8 100644
  					  struct node *node)
  {
  	struct property *reg, *ranges;
-@@ -694,14 +663,21 @@ static void check_avoid_default_addr_size(struct check *c, struct node *dt,
+@@ -694,14 +707,21 @@ static void check_avoid_default_addr_size(struct check *c, struct node *dt,
  		FAIL(c, "Relying on default #size-cells value for %s",
  		     node->fullpath);
  }
@@ -716,7 +758,7 @@ index c0326d1e9519..3d18e45374c8 100644
  	chosen = get_node_by_path(dt, "/chosen");
  	if (!chosen)
  		return;
-@@ -711,46 +687,8 @@ static void check_obsolete_chosen_interrupt_controller(struct check *c,
+@@ -711,46 +731,8 @@ static void check_obsolete_chosen_interrupt_controller(struct check *c,
  		FAIL(c, "/chosen has obsolete \"interrupt-controller\" "
  		     "property");
  }
@@ -765,8 +807,13 @@ index c0326d1e9519..3d18e45374c8 100644
  
  static struct check *check_table[] = {
  	&duplicate_node_names, &duplicate_property_names,
-@@ -767,11 +705,11 @@ static struct check *check_table[] = {
+@@ -765,13 +747,16 @@ static struct check *check_table[] = {
+ 	&address_cells_is_cell, &size_cells_is_cell, &interrupt_cells_is_cell,
+ 	&device_type_is_string, &model_is_string, &status_is_string,
  
++	&property_name_chars_strict,
++	&node_name_chars_strict,
++
  	&addr_size_cells, &reg_format, &ranges_format,
  
 +	&unit_address_vs_reg,
@@ -779,7 +826,7 @@ index c0326d1e9519..3d18e45374c8 100644
  	&always_fail,
  };
  
-@@ -836,9 +774,8 @@ void parse_checks_option(bool warn, bool error, const char *arg)
+@@ -836,9 +821,8 @@ void parse_checks_option(bool warn, bool error, const char *arg)
  	die("Unrecognized check name \"%s\"\n", name);
  }
  
@@ -790,7 +837,7 @@ index c0326d1e9519..3d18e45374c8 100644
  	int i;
  	int error = 0;
  
-@@ -846,7 +783,7 @@ void process_checks(bool force, struct boot_info *bi)
+@@ -846,7 +830,7 @@ void process_checks(bool force, struct boot_info *bi)
  		struct check *c = check_table[i];
  
  		if (c->warn || c->error)
@@ -4725,7 +4772,7 @@ index 9dea97dfff81..99f936dacc60 100644
  
  #ifdef __CHECKER__
 diff --git a/scripts/dtc/livetree.c b/scripts/dtc/livetree.c
-index e229b84432f9..994b6c252013 100644
+index e229b84432f9..36be9afefd53 100644
 --- a/scripts/dtc/livetree.c
 +++ b/scripts/dtc/livetree.c
 @@ -204,7 +204,7 @@ struct node *merge_nodes(struct node *old_node, struct node *new_node)
@@ -4737,6 +4784,24 @@ index e229b84432f9..994b6c252013 100644
  		if (new_child)
  			add_child(old_node, new_child);
  	}
+@@ -242,7 +242,7 @@ void delete_property_by_name(struct node *node, char *name)
+ 	struct property *prop = node->proplist;
+ 
+ 	while (prop) {
+-		if (!strcmp(prop->name, name)) {
++		if (streq(prop->name, name)) {
+ 			delete_property(prop);
+ 			return;
+ 		}
+@@ -275,7 +275,7 @@ void delete_node_by_name(struct node *parent, char *name)
+ 	struct node *node = parent->children;
+ 
+ 	while (node) {
+-		if (!strcmp(node->name, name)) {
++		if (streq(node->name, name)) {
+ 			delete_node(node);
+ 			return;
+ 		}
 @@ -296,6 +296,23 @@ void delete_node(struct node *node)
  	delete_labels(&node->labels);
  }
@@ -5286,12 +5351,12 @@ index f800b6011fb1..f5c4f1b50d30 100644
  
  /**
 diff --git a/scripts/dtc/version_gen.h b/scripts/dtc/version_gen.h
-index 88fd4cc41587..3d9421b832d8 100644
+index 88fd4cc41587..ddb3030cf8c4 100644
 --- a/scripts/dtc/version_gen.h
 +++ b/scripts/dtc/version_gen.h
 @@ -1 +1 @@
 -#define DTC_VERSION "DTC 1.4.1-g5aaeb52e"
-+#define DTC_VERSION "DTC 1.4.2-g00d7bb1f"
++#define DTC_VERSION "DTC 1.4.2-g120775eb"
 -- 
 2.11.0
 
