@@ -145,16 +145,10 @@ aufs4 () {
 
 		cd ../
 		if [ ! -d ./aufs4-standalone ] ; then
-			${git_bin} clone https://github.com/sfjro/aufs4-standalone
-			cd ./aufs4-standalone
-			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
-			cd ../
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
 		else
 			rm -rf ./aufs4-standalone || true
-			${git_bin} clone https://github.com/sfjro/aufs4-standalone
-			cd ./aufs4-standalone
-			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
-			cd ../
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
 		fi
 		cd ./KERNEL/
 
@@ -1105,52 +1099,6 @@ gcc6 () {
 	fi
 }
 
-sync_mainline_dtc () {
-	echo "dir: dtc"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ ! -d ./dtc ] ; then
-			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
-			cd ./dtc
-			${git_bin} checkout origin/master -b tmp
-			cd ../
-		else
-			rm -rf ./dtc || true
-			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
-			cd ./dtc
-			${git_bin} checkout origin/master -b tmp
-			cd ../
-		fi
-		cd ./KERNEL/
-
-		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh
-		./scripts/dtc/update-dtc-source.sh
-		sed -i -e 's:#git commit:git commit:g' ./scripts/dtc/update-dtc-source.sh
-		git commit -a -m "scripts/dtc: Update to upstream version overlays" -s
-		git format-patch -1 -o ../patches/dtc/
-
-		rm -rf ../dtc/ || true
-
-		exit 2
-	else
-		#regenerate="enable"
-		if [ "x${regenerate}" = "xenable" ] ; then
-			start_cleanup
-		fi
-
-		${git} "${DIR}/patches/dtc/0001-scripts-dtc-Update-to-upstream-version-overlays.patch"
-		${git} "${DIR}/patches/dtc/0002-dtc-turn-off-dtc-unit-address-warnings-by-default.patch"
-		${git} "${DIR}/patches/dtc/0003-ARM-boot-Add-an-implementation-of-strnlen-for-libfdt.patch"
-
-		if [ "x${regenerate}" = "xenable" ] ; then
-			wdir="dtc"
-			number=3
-			cleanup
-		fi
-	fi
-}
-
 sgx () {
 	echo "dir: sgx"
 	#regenerate="enable"
@@ -1185,8 +1133,47 @@ bbb_overlays
 beaglebone
 quieter
 gcc6
-sync_mainline_dtc
 sgx
+
+sync_mainline_dtc () {
+	echo "dir: dtc"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./dtc ] ; then
+			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=1
+		else
+			rm -rf ./dtc || true
+			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=1
+		fi
+		cd ./KERNEL/
+
+		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh
+		./scripts/dtc/update-dtc-source.sh
+		sed -i -e 's:#git commit:git commit:g' ./scripts/dtc/update-dtc-source.sh
+		git commit -a -m "scripts/dtc: Update to upstream version overlays" -s
+		git format-patch -1 -o ../patches/dtc/
+
+		rm -rf ../dtc/ || true
+
+		exit 2
+	else
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		${git} "${DIR}/patches/dtc/0001-scripts-dtc-Update-to-upstream-version-overlays.patch"
+		${git} "${DIR}/patches/dtc/0002-dtc-turn-off-dtc-unit-address-warnings-by-default.patch"
+		${git} "${DIR}/patches/dtc/0003-ARM-boot-Add-an-implementation-of-strnlen-for-libfdt.patch"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wdir="dtc"
+			number=3
+			cleanup
+		fi
+	fi
+}
 
 packaging () {
 	echo "dir: packaging"
@@ -1201,5 +1188,6 @@ packaging () {
 	fi
 }
 
+sync_mainline_dtc
 packaging
 echo "patch.sh ran successfully"
