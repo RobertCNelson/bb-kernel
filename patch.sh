@@ -163,16 +163,10 @@ aufs4 () {
 
 		cd ../
 		if [ ! -d ./aufs4-standalone ] ; then
-			${git_bin} clone https://github.com/sfjro/aufs4-standalone
-			cd ./aufs4-standalone
-			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
-			cd ../
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
 		else
 			rm -rf ./aufs4-standalone || true
-			${git_bin} clone https://github.com/sfjro/aufs4-standalone
-			cd ./aufs4-standalone
-			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
-			cd ../
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
 		fi
 		cd ./KERNEL/
 
@@ -586,22 +580,25 @@ beaglebone () {
 	fi
 }
 
+###
+#backports
+reverts
+drivers
+soc
+beaglebone
+dir 'build/gcc'
+#dir 'drivers/ti/sgx'
+
 sync_mainline_dtc () {
 	echo "dir: dtc"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
 		if [ ! -d ./dtc ] ; then
-			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
-			cd ./dtc
-			${git_bin} checkout origin/master -b tmp
-			cd ../
+			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=1
 		else
 			rm -rf ./dtc || true
-			${git_bin} clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git
-			cd ./dtc
-			${git_bin} checkout origin/master -b tmp
-			cd ../
+			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=1
 		fi
 		cd ./KERNEL/
 
@@ -630,40 +627,6 @@ sync_mainline_dtc () {
 	fi
 }
 
-mainline () {
-	echo "for mainline"
-	${git} "${DIR}/patches/drivers/ti/firmware/0001-add-am33x-firmware.patch"
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/upstream/0001-ARM-dts-Move-most-of-am335x-boneblack.dts-to-am335x-.patch"
-	${git} "${DIR}/patches/upstream/0002-ARM-dts-Add-am335x-boneblack-wireless.patch"
-	${git} "${DIR}/patches/upstream/0003-ARM-dts-Move-most-of-am335x-bonegreen.dts-to-am335x-.patch"
-	${git} "${DIR}/patches/upstream/0004-ARM-dts-Add-am335x-bonegreen-wireless.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="upstream"
-		number=4
-		cleanup
-	fi
-
-}
-
-###
-#backports
-reverts
-drivers
-soc
-beaglebone
-dir 'build/gcc'
-sync_mainline_dtc
-#dir 'drivers/ti/sgx'
-
-#mainline
-
 packaging () {
 	echo "dir: packaging"
 	#regenerate="enable"
@@ -677,5 +640,6 @@ packaging () {
 	fi
 }
 
+sync_mainline_dtc
 packaging
 echo "patch.sh ran successfully"
