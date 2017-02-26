@@ -209,60 +209,6 @@ rt () {
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
 }
 
-tinydrm () {
-	echo "dir: tinydrm"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ ! -d ./tinydrm ] ; then
-			${git_bin} clone https://github.com/notro/tinydrm
-			cd ./tinydrm
-			${git_bin} checkout origin/master -b tmp
-			cd ../
-		else
-			rm -rf ./tinydrm || true
-			${git_bin} clone https://github.com/notro/tinydrm
-			cd ./tinydrm
-			${git_bin} checkout origin/master -b tmp
-			cd ../
-		fi
-		cd ./KERNEL/
-
-		mkdir -p ./drivers/gpu/drm/tinydrm/core/
-		cp -v ../tinydrm/Kconfig ./drivers/gpu/drm/tinydrm/
-		cp -v ../tinydrm/Makefile ./drivers/gpu/drm/tinydrm/
-		cp -rv ../tinydrm/core/* ./drivers/gpu/drm/tinydrm/core/
-		cp -rv ../tinydrm/*.c ./drivers/gpu/drm/tinydrm/
-		mkdir -p ./include/drm/tinydrm
-		cp -v ../tinydrm/include/drm/tinydrm/*.h ./include/drm/tinydrm
-		cp -v ../tinydrm/include/uapi/drm/*.h ./include/uapi/drm
-
-		echo "obj-\$(CONFIG_DRM_TINYDRM)+= tinydrm/" >> ./drivers/gpu/drm/Makefile
-		echo "source \"drivers/gpu/drm/tinydrm/Kconfig\"" >> ./drivers/gpu/drm/Kconfig
-
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: tinydrm' -s
-		${git_bin} format-patch -1 -o ../patches/drivers/tinydrm/
-
-		rm -rf ../tinydrm/ || true
-
-		exit 2
-	fi
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/drivers/tinydrm/0001-merge-tinydrm.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="drivers/tinydrm"
-		number=1
-		cleanup
-	fi
-}
-
 local_patch () {
 	echo "dir: dir"
 	${git} "${DIR}/patches/dir/0001-patch.patch"
@@ -272,7 +218,6 @@ local_patch () {
 sync_cherrypicks
 aufs4
 #rt
-tinydrm
 #local_patch
 
 pre_backports () {
@@ -316,7 +261,8 @@ backports () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		cp -v ~/linux-src/x/ ./x/
+		mkdir -p ./x/
+		cp -v ~/linux-src/x/* ./x/
 
 		post_backports
 		exit 2
