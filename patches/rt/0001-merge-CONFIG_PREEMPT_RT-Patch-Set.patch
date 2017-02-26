@@ -1,6 +1,6 @@
-From 54d4f899156874fa4c676733c35c6a0700c0b6c5 Mon Sep 17 00:00:00 2001
+From e433ad859abe6bff3f57e1c2be4c3461d940ee7d Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sat, 18 Feb 2017 13:49:38 -0600
+Date: Sat, 25 Feb 2017 18:34:00 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -195,6 +195,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/list_bl.h                            |   30 +-
  include/linux/locallock.h                          |  278 +++++
  include/linux/mm_types.h                           |    4 +
+ include/linux/module.h                             |    1 +
  include/linux/mutex.h                              |   20 +-
  include/linux/mutex_rt.h                           |   89 ++
  include/linux/netdevice.h                          |   54 +-
@@ -203,7 +204,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/nfs_xdr.h                            |    2 +-
  include/linux/notifier.h                           |   34 +-
  include/linux/percpu-rwsem.h                       |   30 +-
- include/linux/percpu.h                             |   29 +
+ include/linux/percpu.h                             |   30 +
  include/linux/pid.h                                |    1 +
  include/linux/preempt.h                            |   78 +-
  include/linux/printk.h                             |    2 +
@@ -273,14 +274,15 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/irq_work.c                                  |   56 +-
  kernel/ksysfs.c                                    |   12 +
  kernel/locking/Makefile                            |    9 +-
- kernel/locking/lockdep.c                           |    2 +
+ kernel/locking/lockdep.c                           |   35 +-
  kernel/locking/locktorture.c                       |    1 -
  kernel/locking/percpu-rwsem.c                      |    6 +-
  kernel/locking/rt.c                                |  498 +++++++++
- kernel/locking/rtmutex.c                           |  826 +++++++++++++-
+ kernel/locking/rtmutex.c                           |  823 +++++++++++++-
  kernel/locking/rtmutex_common.h                    |   17 +-
  kernel/locking/spinlock.c                          |    7 +
  kernel/locking/spinlock_debug.c                    |    5 +
+ kernel/module.c                                    |   31 +-
  kernel/panic.c                                     |    2 +
  kernel/power/hibernate.c                           |   14 +
  kernel/power/suspend.c                             |    9 +
@@ -294,11 +296,11 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/sched/Makefile                              |    2 +-
  kernel/sched/completion.c                          |   32 +-
  kernel/sched/core.c                                |  422 +++++--
- kernel/sched/deadline.c                            |    1 +
+ kernel/sched/deadline.c                            |    4 +-
  kernel/sched/debug.c                               |    7 +
  kernel/sched/fair.c                                |   16 +-
  kernel/sched/features.h                            |    8 +
- kernel/sched/rt.c                                  |    2 +
+ kernel/sched/rt.c                                  |    5 +-
  kernel/sched/sched.h                               |   10 +
  kernel/sched/swait.c                               |   21 +
  kernel/sched/swork.c                               |  173 +++
@@ -346,6 +348,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/memcontrol.c                                    |   41 +-
  mm/mmu_context.c                                   |    2 +
  mm/page_alloc.c                                    |  153 ++-
+ mm/percpu.c                                        |   37 +-
  mm/slab.h                                          |    4 +
  mm/slub.c                                          |  135 ++-
  mm/swap.c                                          |   80 +-
@@ -373,7 +376,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/sunrpc/svc_xprt.c                              |    6 +-
  scripts/mkcompile_h                                |    4 +-
  sound/core/pcm_native.c                            |    8 +-
- 368 files changed, 10130 insertions(+), 1922 deletions(-)
+ 371 files changed, 10198 insertions(+), 1960 deletions(-)
  create mode 100644 Documentation/trace/histograms.txt
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -8090,6 +8093,18 @@ index 836f637fb981..7d15294650f3 100644
  #ifdef CONFIG_X86_INTEL_MPX
  	/* address of the bounds directory */
  	void __user *bd_addr;
+diff --git a/include/linux/module.h b/include/linux/module.h
+index 0c3207d26ac0..3d3d2188c7d9 100644
+--- a/include/linux/module.h
++++ b/include/linux/module.h
+@@ -496,6 +496,7 @@ static inline int module_is_live(struct module *mod)
+ struct module *__module_text_address(unsigned long addr);
+ struct module *__module_address(unsigned long addr);
+ bool is_module_address(unsigned long addr);
++bool __is_module_percpu_address(unsigned long addr, unsigned long *can_addr);
+ bool is_module_percpu_address(unsigned long addr);
+ bool is_module_text_address(unsigned long addr);
+ 
 diff --git a/include/linux/mutex.h b/include/linux/mutex.h
 index 2cb7531e7d7a..b3fdfc820216 100644
 --- a/include/linux/mutex.h
@@ -8554,7 +8569,7 @@ index 5b2e6159b744..ea940f451606 100644
  extern void percpu_up_write(struct percpu_rw_semaphore *);
  
 diff --git a/include/linux/percpu.h b/include/linux/percpu.h
-index 56939d3f6e53..1c7e33fc83e4 100644
+index 56939d3f6e53..b988bf40ad3e 100644
 --- a/include/linux/percpu.h
 +++ b/include/linux/percpu.h
 @@ -18,6 +18,35 @@
@@ -8593,6 +8608,14 @@ index 56939d3f6e53..1c7e33fc83e4 100644
  /* minimum unit size, also is the maximum supported allocation size */
  #define PCPU_MIN_UNIT_SIZE		PFN_ALIGN(32 << 10)
  
+@@ -110,6 +139,7 @@ extern int __init pcpu_page_first_chunk(size_t reserved_size,
+ #endif
+ 
+ extern void __percpu *__alloc_reserved_percpu(size_t size, size_t align);
++extern bool __is_kernel_percpu_address(unsigned long addr, unsigned long *can_addr);
+ extern bool is_kernel_percpu_address(unsigned long addr);
+ 
+ #if !defined(CONFIG_SMP) || !defined(CONFIG_HAVE_SETUP_PER_CPU_AREA)
 diff --git a/include/linux/pid.h b/include/linux/pid.h
 index 23705a53abba..2cc64b779f03 100644
 --- a/include/linux/pid.h
@@ -12163,7 +12186,7 @@ index f1751cb9c57d..910169f1eb74 100644
  	p->utime = p->stime = p->gtime = 0;
  	p->utimescaled = p->stimescaled = 0;
 diff --git a/kernel/futex.c b/kernel/futex.c
-index 2c4be467fecd..064917c2d9a5 100644
+index 38b68c2735c5..6450a8d81667 100644
 --- a/kernel/futex.c
 +++ b/kernel/futex.c
 @@ -904,7 +904,9 @@ void exit_pi_state_list(struct task_struct *curr)
@@ -12758,10 +12781,86 @@ index 6f88e352cd4f..5e27fb1079e7 100644
  obj-$(CONFIG_QUEUED_RWLOCKS) += qrwlock.o
  obj-$(CONFIG_LOCK_TORTURE_TEST) += locktorture.o
 diff --git a/kernel/locking/lockdep.c b/kernel/locking/lockdep.c
-index 4d7ffc0a0d00..9e52009c192e 100644
+index 4d7ffc0a0d00..3d157b3128eb 100644
 --- a/kernel/locking/lockdep.c
 +++ b/kernel/locking/lockdep.c
-@@ -3689,6 +3689,7 @@ static void check_flags(unsigned long flags)
+@@ -658,6 +658,7 @@ look_up_lock_class(struct lockdep_map *lock, unsigned int subclass)
+ 	struct lockdep_subclass_key *key;
+ 	struct hlist_head *hash_head;
+ 	struct lock_class *class;
++	bool is_static = false;
+ 
+ 	if (unlikely(subclass >= MAX_LOCKDEP_SUBCLASSES)) {
+ 		debug_locks_off();
+@@ -671,10 +672,23 @@ look_up_lock_class(struct lockdep_map *lock, unsigned int subclass)
+ 
+ 	/*
+ 	 * Static locks do not have their class-keys yet - for them the key
+-	 * is the lock object itself:
++	 * is the lock object itself. If the lock is in the per cpu area,
++	 * the canonical address of the lock (per cpu offset removed) is
++	 * used.
+ 	 */
+-	if (unlikely(!lock->key))
+-		lock->key = (void *)lock;
++	if (unlikely(!lock->key)) {
++		unsigned long can_addr, addr = (unsigned long)lock;
++
++		if (__is_kernel_percpu_address(addr, &can_addr))
++			lock->key = (void *)can_addr;
++		else if (__is_module_percpu_address(addr, &can_addr))
++			lock->key = (void *)can_addr;
++		else if (static_obj(lock))
++			lock->key = (void *)lock;
++		else
++			return ERR_PTR(-EINVAL);
++		is_static = true;
++	}
+ 
+ 	/*
+ 	 * NOTE: the class-key must be unique. For dynamic locks, a static
+@@ -706,7 +720,7 @@ look_up_lock_class(struct lockdep_map *lock, unsigned int subclass)
+ 		}
+ 	}
+ 
+-	return NULL;
++	return is_static || static_obj(lock->key) ? NULL : ERR_PTR(-EINVAL);
+ }
+ 
+ /*
+@@ -724,19 +738,18 @@ register_lock_class(struct lockdep_map *lock, unsigned int subclass, int force)
+ 	DEBUG_LOCKS_WARN_ON(!irqs_disabled());
+ 
+ 	class = look_up_lock_class(lock, subclass);
+-	if (likely(class))
++	if (likely(!IS_ERR_OR_NULL(class)))
+ 		goto out_set_class_cache;
+ 
+ 	/*
+ 	 * Debug-check: all keys must be persistent!
+- 	 */
+-	if (!static_obj(lock->key)) {
++	 */
++	if (IS_ERR(class)) {
+ 		debug_locks_off();
+ 		printk("INFO: trying to register non-static key.\n");
+ 		printk("the code is fine but needs lockdep annotation.\n");
+ 		printk("turning off the locking correctness validator.\n");
+ 		dump_stack();
+-
+ 		return NULL;
+ 	}
+ 
+@@ -3410,7 +3423,7 @@ static int match_held_lock(struct held_lock *hlock, struct lockdep_map *lock)
+ 		 * Clearly if the lock hasn't been acquired _ever_, we're not
+ 		 * holding it either, so report failure.
+ 		 */
+-		if (!class)
++		if (IS_ERR_OR_NULL(class))
+ 			return 0;
+ 
+ 		/*
+@@ -3689,6 +3702,7 @@ static void check_flags(unsigned long flags)
  		}
  	}
  
@@ -12769,7 +12868,7 @@ index 4d7ffc0a0d00..9e52009c192e 100644
  	/*
  	 * We dont accurately track softirq state in e.g.
  	 * hardirq contexts (such as on 4KSTACKS), so only
-@@ -3703,6 +3704,7 @@ static void check_flags(unsigned long flags)
+@@ -3703,6 +3717,7 @@ static void check_flags(unsigned long flags)
  			DEBUG_LOCKS_WARN_ON(!current->softirqs_enabled);
  		}
  	}
@@ -12777,6 +12876,15 @@ index 4d7ffc0a0d00..9e52009c192e 100644
  
  	if (!debug_locks)
  		print_irqtrace_events(current);
+@@ -4159,7 +4174,7 @@ void lockdep_reset_lock(struct lockdep_map *lock)
+ 		 * If the class exists we look it up and zap it:
+ 		 */
+ 		class = look_up_lock_class(lock, j);
+-		if (class)
++		if (!IS_ERR_OR_NULL(class))
+ 			zap_class(class);
+ 	}
+ 	/*
 diff --git a/kernel/locking/locktorture.c b/kernel/locking/locktorture.c
 index f8c5af52a131..788068773e61 100644
 --- a/kernel/locking/locktorture.c
@@ -13325,7 +13433,7 @@ index 000000000000..665754c00e1e
 +}
 +EXPORT_SYMBOL(atomic_dec_and_mutex_lock);
 diff --git a/kernel/locking/rtmutex.c b/kernel/locking/rtmutex.c
-index 2c49d76f96c3..9bd7e70d98a2 100644
+index 2c49d76f96c3..4f1a7663c34d 100644
 --- a/kernel/locking/rtmutex.c
 +++ b/kernel/locking/rtmutex.c
 @@ -7,6 +7,11 @@
@@ -14337,17 +14445,7 @@ index 2c49d76f96c3..9bd7e70d98a2 100644
  }
  
  /**
-@@ -1592,8 +2211,7 @@ void rt_mutex_destroy(struct rt_mutex *lock)
- 	lock->magic = NULL;
- #endif
- }
--
--EXPORT_SYMBOL_GPL(rt_mutex_destroy);
-+EXPORT_SYMBOL(rt_mutex_destroy);
- 
- /**
-  * __rt_mutex_init - initialize the rt lock
-@@ -1607,13 +2225,12 @@ EXPORT_SYMBOL_GPL(rt_mutex_destroy);
+@@ -1607,13 +2226,12 @@ EXPORT_SYMBOL_GPL(rt_mutex_destroy);
  void __rt_mutex_init(struct rt_mutex *lock, const char *name)
  {
  	lock->owner = NULL;
@@ -14362,7 +14460,7 @@ index 2c49d76f96c3..9bd7e70d98a2 100644
  
  /**
   * rt_mutex_init_proxy_locked - initialize and lock a rt_mutex on behalf of a
-@@ -1628,7 +2245,7 @@ EXPORT_SYMBOL_GPL(__rt_mutex_init);
+@@ -1628,7 +2246,7 @@ EXPORT_SYMBOL_GPL(__rt_mutex_init);
  void rt_mutex_init_proxy_locked(struct rt_mutex *lock,
  				struct task_struct *proxy_owner)
  {
@@ -14371,7 +14469,7 @@ index 2c49d76f96c3..9bd7e70d98a2 100644
  	debug_rt_mutex_proxy_lock(lock, proxy_owner);
  	rt_mutex_set_owner(lock, proxy_owner);
  	rt_mutex_deadlock_account_lock(lock, proxy_owner);
-@@ -1676,6 +2293,35 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
+@@ -1676,6 +2294,35 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
  		return 1;
  	}
  
@@ -14407,7 +14505,7 @@ index 2c49d76f96c3..9bd7e70d98a2 100644
  	/* We enforce deadlock detection for futexes */
  	ret = task_blocks_on_rt_mutex(lock, waiter, task,
  				      RT_MUTEX_FULL_CHAINWALK);
-@@ -1690,7 +2336,7 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
+@@ -1690,7 +2337,7 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
  		ret = 0;
  	}
  
@@ -14416,7 +14514,7 @@ index 2c49d76f96c3..9bd7e70d98a2 100644
  		remove_waiter(lock, waiter);
  
  	raw_spin_unlock_irq(&lock->wait_lock);
-@@ -1746,7 +2392,7 @@ int rt_mutex_finish_proxy_lock(struct rt_mutex *lock,
+@@ -1746,7 +2393,7 @@ int rt_mutex_finish_proxy_lock(struct rt_mutex *lock,
  	set_current_state(TASK_INTERRUPTIBLE);
  
  	/* sleep on the mutex */
@@ -14425,7 +14523,7 @@ index 2c49d76f96c3..9bd7e70d98a2 100644
  
  	if (unlikely(ret))
  		remove_waiter(lock, waiter);
-@@ -1761,3 +2407,89 @@ int rt_mutex_finish_proxy_lock(struct rt_mutex *lock,
+@@ -1761,3 +2408,89 @@ int rt_mutex_finish_proxy_lock(struct rt_mutex *lock,
  
  	return ret;
  }
@@ -14630,6 +14728,63 @@ index 0374a596cffa..94970338d518 100644
  }
 +
 +#endif
+diff --git a/kernel/module.c b/kernel/module.c
+index 0e54d5bf0097..289616d8ccfd 100644
+--- a/kernel/module.c
++++ b/kernel/module.c
+@@ -660,16 +660,7 @@ static void percpu_modcopy(struct module *mod,
+ 		memcpy(per_cpu_ptr(mod->percpu, cpu), from, size);
+ }
+ 
+-/**
+- * is_module_percpu_address - test whether address is from module static percpu
+- * @addr: address to test
+- *
+- * Test whether @addr belongs to module static percpu area.
+- *
+- * RETURNS:
+- * %true if @addr is from module static percpu area
+- */
+-bool is_module_percpu_address(unsigned long addr)
++bool __is_module_percpu_address(unsigned long addr, unsigned long *can_addr)
+ {
+ 	struct module *mod;
+ 	unsigned int cpu;
+@@ -683,9 +674,11 @@ bool is_module_percpu_address(unsigned long addr)
+ 			continue;
+ 		for_each_possible_cpu(cpu) {
+ 			void *start = per_cpu_ptr(mod->percpu, cpu);
++			void *va = (void *)addr;
+ 
+-			if ((void *)addr >= start &&
+-			    (void *)addr < start + mod->percpu_size) {
++			if (va >= start && va < start + mod->percpu_size) {
++				if (can_addr)
++					*can_addr = (unsigned long) (va - start);
+ 				preempt_enable();
+ 				return true;
+ 			}
+@@ -696,6 +689,20 @@ bool is_module_percpu_address(unsigned long addr)
+ 	return false;
+ }
+ 
++/**
++ * is_module_percpu_address - test whether address is from module static percpu
++ * @addr: address to test
++ *
++ * Test whether @addr belongs to module static percpu area.
++ *
++ * RETURNS:
++ * %true if @addr is from module static percpu area
++ */
++bool is_module_percpu_address(unsigned long addr)
++{
++	return __is_module_percpu_address(addr, NULL);
++}
++
+ #else /* ... !CONFIG_SMP */
+ 
+ static inline void __percpu *mod_percpu(struct module *mod)
 diff --git a/kernel/panic.c b/kernel/panic.c
 index e6480e20379e..7e9c1918a94e 100644
 --- a/kernel/panic.c
@@ -14776,7 +14931,7 @@ index 6ccb08f57fcb..c8cbb5ed2fe3 100644
  }
  EXPORT_SYMBOL(pm_suspend);
 diff --git a/kernel/printk/printk.c b/kernel/printk/printk.c
-index f7a55e9ff2f7..9277ee033271 100644
+index 9c5b231684d0..cf15bdb6855b 100644
 --- a/kernel/printk/printk.c
 +++ b/kernel/printk/printk.c
 @@ -351,6 +351,65 @@ __packed __aligned(4)
@@ -16552,7 +16707,7 @@ index 154fd689fe02..a6aa5801b21e 100644
  	return (nested == preempt_offset);
  }
 diff --git a/kernel/sched/deadline.c b/kernel/sched/deadline.c
-index 37e2449186c4..26dcaabde8b3 100644
+index 37e2449186c4..e00accf92a4b 100644
 --- a/kernel/sched/deadline.c
 +++ b/kernel/sched/deadline.c
 @@ -687,6 +687,7 @@ void init_dl_task_timer(struct sched_dl_entity *dl_se)
@@ -16563,6 +16718,20 @@ index 37e2449186c4..26dcaabde8b3 100644
  }
  
  static
+@@ -1729,12 +1730,11 @@ static void switched_to_dl(struct rq *rq, struct task_struct *p)
+ #ifdef CONFIG_SMP
+ 		if (tsk_nr_cpus_allowed(p) > 1 && rq->dl.overloaded)
+ 			queue_push_tasks(rq);
+-#else
++#endif
+ 		if (dl_task(rq->curr))
+ 			check_preempt_curr_dl(rq, p, 0);
+ 		else
+ 			resched_curr(rq);
+-#endif
+ 	}
+ }
+ 
 diff --git a/kernel/sched/debug.c b/kernel/sched/debug.c
 index fa178b62ea79..935224123441 100644
 --- a/kernel/sched/debug.c
@@ -16689,7 +16858,7 @@ index 69631fa46c2f..6d28fcd08872 100644
  #ifdef HAVE_RT_PUSH_IPI
  /*
 diff --git a/kernel/sched/rt.c b/kernel/sched/rt.c
-index 2516b8df6dbb..2556baa0a97e 100644
+index 2516b8df6dbb..b0691f4e7d49 100644
 --- a/kernel/sched/rt.c
 +++ b/kernel/sched/rt.c
 @@ -47,6 +47,7 @@ void init_rt_bandwidth(struct rt_bandwidth *rt_b, u64 period, u64 runtime)
@@ -16708,6 +16877,18 @@ index 2516b8df6dbb..2556baa0a97e 100644
  #endif
  #endif /* CONFIG_SMP */
  	/* We start is dequeued state, because no RT tasks are queued */
+@@ -2198,10 +2200,9 @@ static void switched_to_rt(struct rq *rq, struct task_struct *p)
+ #ifdef CONFIG_SMP
+ 		if (tsk_nr_cpus_allowed(p) > 1 && rq->rt.overloaded)
+ 			queue_push_tasks(rq);
+-#else
++#endif /* CONFIG_SMP */
+ 		if (p->prio < rq->curr->prio)
+ 			resched_curr(rq);
+-#endif /* CONFIG_SMP */
+ 	}
+ }
+ 
 diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
 index 055f935d4421..19324ac27026 100644
 --- a/kernel/sched/sched.h
@@ -23200,6 +23381,69 @@ index f4a02e240fb6..2e73f8cfde74 100644
  }
  
  #ifdef CONFIG_MEMORY_HOTREMOVE
+diff --git a/mm/percpu.c b/mm/percpu.c
+index 255714302394..59b529b944a9 100644
+--- a/mm/percpu.c
++++ b/mm/percpu.c
+@@ -1280,18 +1280,7 @@ void free_percpu(void __percpu *ptr)
+ }
+ EXPORT_SYMBOL_GPL(free_percpu);
+ 
+-/**
+- * is_kernel_percpu_address - test whether address is from static percpu area
+- * @addr: address to test
+- *
+- * Test whether @addr belongs to in-kernel static percpu area.  Module
+- * static percpu areas are not considered.  For those, use
+- * is_module_percpu_address().
+- *
+- * RETURNS:
+- * %true if @addr is from in-kernel static percpu area, %false otherwise.
+- */
+-bool is_kernel_percpu_address(unsigned long addr)
++bool __is_kernel_percpu_address(unsigned long addr, unsigned long *can_addr)
+ {
+ #ifdef CONFIG_SMP
+ 	const size_t static_size = __per_cpu_end - __per_cpu_start;
+@@ -1300,16 +1289,36 @@ bool is_kernel_percpu_address(unsigned long addr)
+ 
+ 	for_each_possible_cpu(cpu) {
+ 		void *start = per_cpu_ptr(base, cpu);
++		void *va = (void *)addr;
+ 
+-		if ((void *)addr >= start && (void *)addr < start + static_size)
++		if (va >= start && va < start + static_size) {
++			if (can_addr)
++				*can_addr = (unsigned long) (va - start);
+ 			return true;
+-        }
++		}
++	}
+ #endif
+ 	/* on UP, can't distinguish from other static vars, always false */
+ 	return false;
+ }
+ 
+ /**
++ * is_kernel_percpu_address - test whether address is from static percpu area
++ * @addr: address to test
++ *
++ * Test whether @addr belongs to in-kernel static percpu area.  Module
++ * static percpu areas are not considered.  For those, use
++ * is_module_percpu_address().
++ *
++ * RETURNS:
++ * %true if @addr is from in-kernel static percpu area, %false otherwise.
++ */
++bool is_kernel_percpu_address(unsigned long addr)
++{
++	return __is_kernel_percpu_address(addr, NULL);
++}
++
++/**
+  * per_cpu_ptr_to_phys - convert translated percpu address to physical address
+  * @addr: the address to be converted to physical address
+  *
 diff --git a/mm/slab.h b/mm/slab.h
 index bc05fdc3edce..610cf61634f0 100644
 --- a/mm/slab.h
