@@ -1,28 +1,28 @@
-From ca3a79dea863fd4dbcd139dfb151001cad1707df Mon Sep 17 00:00:00 2001
+From 57dfc1118fc09a2c659e1ea56f9853a4347aa815 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 19 Feb 2017 17:48:11 -0600
+Date: Sun, 26 Feb 2017 22:52:30 -0600
 Subject: [PATCH] scripts/dtc: Update to upstream version overlays
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- scripts/dtc/checks.c                 |  398 +++---
+ scripts/dtc/checks.c                 |  469 ++++---
  scripts/dtc/dtc-lexer.l              |   16 +-
  scripts/dtc/dtc-lexer.lex.c_shipped  |  232 ++--
  scripts/dtc/dtc-parser.tab.c_shipped | 2315 ++++++++++++++++------------------
  scripts/dtc/dtc-parser.tab.h_shipped |  101 +-
  scripts/dtc/dtc-parser.y             |   64 +-
- scripts/dtc/dtc.c                    |   78 +-
- scripts/dtc/dtc.h                    |   61 +-
+ scripts/dtc/dtc.c                    |   80 +-
+ scripts/dtc/dtc.h                    |   62 +-
  scripts/dtc/flattree.c               |   48 +-
  scripts/dtc/fstree.c                 |    5 +-
  scripts/dtc/libfdt/Makefile.libfdt   |    2 +-
  scripts/dtc/libfdt/fdt.c             |    2 +-
  scripts/dtc/libfdt/fdt.h             |    3 +-
  scripts/dtc/libfdt/fdt_ro.c          |   30 +-
- scripts/dtc/libfdt/fdt_rw.c          |    6 +-
+ scripts/dtc/libfdt/fdt_rw.c          |    9 +-
  scripts/dtc/libfdt/fdt_strerror.c    |    6 +
  scripts/dtc/libfdt/fdt_wip.c         |   29 +-
- scripts/dtc/libfdt/libfdt.h          |  150 ++-
+ scripts/dtc/libfdt/libfdt.h          |  180 ++-
  scripts/dtc/libfdt/libfdt_env.h      |    1 +
  scripts/dtc/libfdt/libfdt_internal.h |    1 -
  scripts/dtc/livetree.c               |  342 ++---
@@ -32,10 +32,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  scripts/dtc/util.c                   |   30 +
  scripts/dtc/util.h                   |    1 +
  scripts/dtc/version_gen.h            |    2 +-
- 27 files changed, 2061 insertions(+), 1914 deletions(-)
+ 27 files changed, 2133 insertions(+), 1949 deletions(-)
 
 diff --git a/scripts/dtc/checks.c b/scripts/dtc/checks.c
-index 3d4c3c6c8952..cce0cca13058 100644
+index 3d4c3c6c8952..0e8b978c360c 100644
 --- a/scripts/dtc/checks.c
 +++ b/scripts/dtc/checks.c
 @@ -40,16 +40,11 @@ enum checkstatus {
@@ -57,7 +57,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	void *data;
  	bool warn, error;
  	enum checkstatus status;
-@@ -58,45 +53,24 @@ struct check {
+@@ -58,57 +53,39 @@ struct check {
  	struct check **prereq;
  };
  
@@ -118,9 +118,39 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +	CHECK_ENTRY(_nm, _fn, _d, false, false, __VA_ARGS__)
  
  #ifdef __GNUC__
- static inline void check_msg(struct check *c, const char *fmt, ...) __attribute__((format (printf, 2, 3)));
-@@ -123,27 +97,21 @@ static inline void check_msg(struct check *c, const char *fmt, ...)
- 		check_msg((c), __VA_ARGS__); \
+-static inline void check_msg(struct check *c, const char *fmt, ...) __attribute__((format (printf, 2, 3)));
++static inline void check_msg(struct check *c, struct dt_info *dti,
++			     const char *fmt, ...) __attribute__((format (printf, 3, 4)));
+ #endif
+-static inline void check_msg(struct check *c, const char *fmt, ...)
++static inline void check_msg(struct check *c, struct dt_info *dti,
++			     const char *fmt, ...)
+ {
+ 	va_list ap;
+ 	va_start(ap, fmt);
+ 
+ 	if ((c->warn && (quiet < 1))
+ 	    || (c->error && (quiet < 2))) {
+-		fprintf(stderr, "%s (%s): ",
++		fprintf(stderr, "%s: %s (%s): ",
++			strcmp(dti->outname, "-") ? dti->outname : "<stdout>",
+ 			(c->error) ? "ERROR" : "Warning", c->name);
+ 		vfprintf(stderr, fmt, ap);
+ 		fprintf(stderr, "\n");
+@@ -116,34 +93,28 @@ static inline void check_msg(struct check *c, const char *fmt, ...)
+ 	va_end(ap);
+ }
+ 
+-#define FAIL(c, ...) \
+-	do { \
+-		TRACE((c), "\t\tFAILED at %s:%d", __FILE__, __LINE__); \
+-		(c)->status = FAILED; \
+-		check_msg((c), __VA_ARGS__); \
++#define FAIL(c, dti, ...)						\
++	do {								\
++		TRACE((c), "\t\tFAILED at %s:%d", __FILE__, __LINE__);	\
++		(c)->status = FAILED;					\
++		check_msg((c), dti, __VA_ARGS__);			\
  	} while (0)
  
 -static void check_nodes_props(struct check *c, struct node *dt, struct node *node)
@@ -153,7 +183,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	bool error = false;
  	int i;
  
-@@ -156,7 +124,7 @@ static bool run_check(struct check *c, struct node *dt)
+@@ -156,10 +127,10 @@ static bool run_check(struct check *c, struct node *dt)
  
  	for (i = 0; i < c->num_prereqs; i++) {
  		struct check *prq = c->prereq[i];
@@ -161,8 +191,12 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +		error = error || run_check(prq, dti);
  		if (prq->status != PASSED) {
  			c->status = PREREQ;
- 			check_msg(c, "Failed prerequisite '%s'",
-@@ -167,11 +135,8 @@ static bool run_check(struct check *c, struct node *dt)
+-			check_msg(c, "Failed prerequisite '%s'",
++			check_msg(c, dti, "Failed prerequisite '%s'",
+ 				  c->prereq[i]->name);
+ 		}
+ 	}
+@@ -167,11 +138,8 @@ static bool run_check(struct check *c, struct node *dt)
  	if (c->status != UNCHECKED)
  		goto out;
  
@@ -175,7 +209,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	if (c->status == UNCHECKED)
  		c->status = PASSED;
  
-@@ -189,13 +154,14 @@ static bool run_check(struct check *c, struct node *dt)
+@@ -189,13 +157,14 @@ static bool run_check(struct check *c, struct node *dt)
   */
  
  /* A check which always fails, for testing purposes only */
@@ -183,7 +217,8 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +static inline void check_always_fail(struct check *c, struct dt_info *dti,
 +				     struct node *node)
  {
- 	FAIL(c, "always_fail check");
+-	FAIL(c, "always_fail check");
++	FAIL(c, dti, "always_fail check");
  }
 -TREE_CHECK(always_fail, NULL);
 +CHECK(always_fail, check_always_fail, NULL);
@@ -193,7 +228,12 @@ index 3d4c3c6c8952..cce0cca13058 100644
  			    struct node *node)
  {
  	struct property *prop;
-@@ -210,11 +176,11 @@ static void check_is_string(struct check *c, struct node *root,
+@@ -206,15 +175,15 @@ static void check_is_string(struct check *c, struct node *root,
+ 		return; /* Not present, assumed ok */
+ 
+ 	if (!data_is_one_string(prop->val))
+-		FAIL(c, "\"%s\" property in %s is not a string",
++		FAIL(c, dti, "\"%s\" property in %s is not a string",
  		     propname, node->fullpath);
  }
  #define WARNING_IF_NOT_STRING(nm, propname) \
@@ -208,7 +248,12 @@ index 3d4c3c6c8952..cce0cca13058 100644
  			  struct node *node)
  {
  	struct property *prop;
-@@ -229,15 +195,15 @@ static void check_is_cell(struct check *c, struct node *root,
+@@ -225,19 +194,19 @@ static void check_is_cell(struct check *c, struct node *root,
+ 		return; /* Not present, assumed ok */
+ 
+ 	if (prop->val.len != sizeof(cell_t))
+-		FAIL(c, "\"%s\" property in %s is not a single cell",
++		FAIL(c, dti, "\"%s\" property in %s is not a single cell",
  		     propname, node->fullpath);
  }
  #define WARNING_IF_NOT_CELL(nm, propname) \
@@ -227,8 +272,12 @@ index 3d4c3c6c8952..cce0cca13058 100644
  				       struct node *node)
  {
  	struct node *child, *child2;
-@@ -250,9 +216,9 @@ static void check_duplicate_node_names(struct check *c, struct node *dt,
- 				FAIL(c, "Duplicate node name %s",
+@@ -247,12 +216,12 @@ static void check_duplicate_node_names(struct check *c, struct node *dt,
+ 		     child2;
+ 		     child2 = child2->next_sibling)
+ 			if (streq(child->name, child2->name))
+-				FAIL(c, "Duplicate node name %s",
++				FAIL(c, dti, "Duplicate node name %s",
  				     child->fullpath);
  }
 -NODE_ERROR(duplicate_node_names, NULL);
@@ -239,7 +288,13 @@ index 3d4c3c6c8952..cce0cca13058 100644
  					   struct node *node)
  {
  	struct property *prop, *prop2;
-@@ -267,14 +233,15 @@ static void check_duplicate_property_names(struct check *c, struct node *dt,
+@@ -262,40 +231,52 @@ static void check_duplicate_property_names(struct check *c, struct node *dt,
+ 			if (prop2->deleted)
+ 				continue;
+ 			if (streq(prop->name, prop2->name))
+-				FAIL(c, "Duplicate property name %s in %s",
++				FAIL(c, dti, "Duplicate property name %s in %s",
+ 				     prop->name, node->fullpath);
  		}
  	}
  }
@@ -257,11 +312,12 @@ index 3d4c3c6c8952..cce0cca13058 100644
  				  struct node *node)
  {
  	int n = strspn(node->name, c->data);
-@@ -283,19 +250,30 @@ static void check_node_name_chars(struct check *c, struct node *dt,
- 		FAIL(c, "Bad character '%c' in node %s",
- 		     node->name[n], node->fullpath);
- }
--NODE_ERROR(node_name_chars, PROPNODECHARS "@");
+ 
+ 	if (n < strlen(node->name))
+-		FAIL(c, "Bad character '%c' in node %s",
++		FAIL(c, dti, "Bad character '%c' in node %s",
++		     node->name[n], node->fullpath);
++}
 +ERROR(node_name_chars, check_node_name_chars, PROPNODECHARS "@");
 +
 +static void check_node_name_chars_strict(struct check *c, struct dt_info *dti,
@@ -270,9 +326,10 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +	int n = strspn(node->name, c->data);
 +
 +	if (n < node->basenamelen)
-+		FAIL(c, "Character '%c' not recommended in node %s",
-+		     node->name[n], node->fullpath);
-+}
++		FAIL(c, dti, "Character '%c' not recommended in node %s",
+ 		     node->name[n], node->fullpath);
+ }
+-NODE_ERROR(node_name_chars, PROPNODECHARS "@");
 +CHECK(node_name_chars_strict, check_node_name_chars_strict, PROPNODECHARSSTRICT);
  
 -static void check_node_name_format(struct check *c, struct node *dt,
@@ -280,7 +337,8 @@ index 3d4c3c6c8952..cce0cca13058 100644
  				   struct node *node)
  {
  	if (strchr(get_unitname(node), '@'))
- 		FAIL(c, "Node %s has multiple '@' characters in name",
+-		FAIL(c, "Node %s has multiple '@' characters in name",
++		FAIL(c, dti, "Node %s has multiple '@' characters in name",
  		     node->fullpath);
  }
 -NODE_ERROR(node_name_format, NULL, &node_name_chars);
@@ -293,39 +351,45 @@ index 3d4c3c6c8952..cce0cca13058 100644
  {
  	const char *unitname = get_unitname(node);
  	struct property *prop = get_property(node, "reg");
-@@ -316,18 +294,54 @@ static void check_unit_address_vs_reg(struct check *c, struct node *dt,
+@@ -308,26 +289,62 @@ static void check_unit_address_vs_reg(struct check *c, struct node *dt,
+ 
+ 	if (prop) {
+ 		if (!unitname[0])
+-			FAIL(c, "Node %s has a reg or ranges property, but no unit name",
++			FAIL(c, dti, "Node %s has a reg or ranges property, but no unit name",
+ 			    node->fullpath);
+ 	} else {
+ 		if (unitname[0])
+-			FAIL(c, "Node %s has a unit name, but no reg property",
++			FAIL(c, dti, "Node %s has a unit name, but no reg property",
  			    node->fullpath);
  	}
  }
 -NODE_WARNING(unit_address_vs_reg, NULL);
 +WARNING(unit_address_vs_reg, check_unit_address_vs_reg, NULL);
- 
--static void check_property_name_chars(struct check *c, struct node *dt,
--				      struct node *node, struct property *prop)
++
 +static void check_property_name_chars(struct check *c, struct dt_info *dti,
 +				      struct node *node)
- {
--	int n = strspn(prop->name, c->data);
++{
 +	struct property *prop;
 +
 +	for_each_property(node, prop) {
 +		int n = strspn(prop->name, c->data);
- 
--	if (n < strlen(prop->name))
--		FAIL(c, "Bad character '%c' in property name \"%s\", node %s",
--		     prop->name[n], prop->name, node->fullpath);
++
 +		if (n < strlen(prop->name))
-+			FAIL(c, "Bad character '%c' in property name \"%s\", node %s",
++			FAIL(c, dti, "Bad character '%c' in property name \"%s\", node %s",
 +			     prop->name[n], prop->name, node->fullpath);
 +	}
- }
--PROP_ERROR(property_name_chars, PROPNODECHARS);
++}
 +ERROR(property_name_chars, check_property_name_chars, PROPNODECHARS);
-+
+ 
+-static void check_property_name_chars(struct check *c, struct node *dt,
+-				      struct node *node, struct property *prop)
 +static void check_property_name_chars_strict(struct check *c,
 +					     struct dt_info *dti,
 +					     struct node *node)
-+{
+ {
+-	int n = strspn(prop->name, c->data);
 +	struct property *prop;
 +
 +	for_each_property(node, prop) {
@@ -334,7 +398,10 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +
 +		if (n == strlen(prop->name))
 +			continue;
-+
+ 
+-	if (n < strlen(prop->name))
+-		FAIL(c, "Bad character '%c' in property name \"%s\", node %s",
+-		     prop->name[n], prop->name, node->fullpath);
 +		/* Certain names are whitelisted */
 +		if (streq(name, "device_type"))
 +			continue;
@@ -348,15 +415,16 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +			n = strspn(name, c->data);
 +		}
 +		if (n < strlen(name))
-+			FAIL(c, "Character '%c' not recommended in property name \"%s\", node %s",
++			FAIL(c, dti, "Character '%c' not recommended in property name \"%s\", node %s",
 +			     name[n], prop->name, node->fullpath);
 +	}
-+}
+ }
+-PROP_ERROR(property_name_chars, PROPNODECHARS);
 +CHECK(property_name_chars_strict, check_property_name_chars_strict, PROPNODECHARSSTRICT);
  
  #define DESCLABEL_FMT	"%s%s%s%s%s"
  #define DESCLABEL_ARGS(node,prop,mark)		\
-@@ -336,10 +350,11 @@ PROP_ERROR(property_name_chars, PROPNODECHARS);
+@@ -336,10 +353,11 @@ PROP_ERROR(property_name_chars, PROPNODECHARS);
  	((prop) ? (prop)->name : ""), \
  	((prop) ? "' in " : ""), (node)->fullpath
  
@@ -369,7 +437,14 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	struct node *othernode = NULL;
  	struct property *otherprop = NULL;
  	struct marker *othermark = NULL;
-@@ -362,44 +377,43 @@ static void check_duplicate_label(struct check *c, struct node *dt,
+@@ -356,50 +374,49 @@ static void check_duplicate_label(struct check *c, struct node *dt,
+ 		return;
+ 
+ 	if ((othernode != node) || (otherprop != prop) || (othermark != mark))
+-		FAIL(c, "Duplicate label '%s' on " DESCLABEL_FMT
++		FAIL(c, dti, "Duplicate label '%s' on " DESCLABEL_FMT
+ 		     " and " DESCLABEL_FMT,
+ 		     label, DESCLABEL_ARGS(node, prop, mark),
  		     DESCLABEL_ARGS(othernode, otherprop, othermark));
  }
  
@@ -427,16 +502,20 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +		return 0;
  
  	if (prop->val.len != sizeof(cell_t)) {
- 		FAIL(c, "%s has bad length (%d) %s property",
+-		FAIL(c, "%s has bad length (%d) %s property",
++		FAIL(c, dti, "%s has bad length (%d) %s property",
  		     node->fullpath, prop->val.len, prop->name);
 -		return;
 +		return 0;
  	}
  
  	m = prop->val.markers;
-@@ -411,14 +425,13 @@ static void check_explicit_phandles(struct check *c, struct node *root,
+@@ -409,42 +426,65 @@ static void check_explicit_phandles(struct check *c, struct node *root,
+ 			/* "Set this node's phandle equal to some
+ 			 * other node's phandle".  That's nonsensical
  			 * by construction. */ {
- 			FAIL(c, "%s in %s is a reference to another node",
+-			FAIL(c, "%s in %s is a reference to another node",
++			FAIL(c, dti, "%s in %s is a reference to another node",
  			     prop->name, node->fullpath);
 -			return;
  		}
@@ -451,9 +530,10 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	}
  
  	phandle = propval_cell(prop);
-@@ -426,12 +439,36 @@ static void check_explicit_phandles(struct check *c, struct node *root,
+ 
  	if ((phandle == 0) || (phandle == -1)) {
- 		FAIL(c, "%s has bad value (0x%x) in %s property",
+-		FAIL(c, "%s has bad value (0x%x) in %s property",
++		FAIL(c, dti, "%s has bad value (0x%x) in %s property",
  		     node->fullpath, phandle, prop->name);
 -		return;
 +		return 0;
@@ -484,7 +564,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +		return;
 +
 +	if (linux_phandle && phandle && (phandle != linux_phandle))
-+		FAIL(c, "%s has mismatching 'phandle' and 'linux,phandle'"
++		FAIL(c, dti, "%s has mismatching 'phandle' and 'linux,phandle'"
 +		     " properties", node->fullpath);
 +
 +	if (linux_phandle && !phandle)
@@ -492,7 +572,11 @@ index 3d4c3c6c8952..cce0cca13058 100644
  
  	other = get_node_by_phandle(root, phandle);
  	if (other && (other != node)) {
-@@ -442,9 +479,9 @@ static void check_explicit_phandles(struct check *c, struct node *root,
+-		FAIL(c, "%s has duplicated phandle 0x%x (seen before at %s)",
++		FAIL(c, dti, "%s has duplicated phandle 0x%x (seen before at %s)",
+ 		     node->fullpath, phandle, other->fullpath);
+ 		return;
+ 	}
  
  	node->phandle = phandle;
  }
@@ -504,7 +588,16 @@ index 3d4c3c6c8952..cce0cca13058 100644
  				  struct node *node)
  {
  	struct property **pp, *prop = NULL;
-@@ -472,64 +509,73 @@ static void check_name_properties(struct check *c, struct node *root,
+@@ -460,7 +500,7 @@ static void check_name_properties(struct check *c, struct node *root,
+ 
+ 	if ((prop->val.len != node->basenamelen+1)
+ 	    || (memcmp(prop->val.val, node->name, node->basenamelen) != 0)) {
+-		FAIL(c, "\"name\" property in %s is incorrect (\"%s\" instead"
++		FAIL(c, dti, "\"name\" property in %s is incorrect (\"%s\" instead"
+ 		     " of base node name)", node->fullpath, prop->val.val);
+ 	} else {
+ 		/* The name property is correct, and therefore redundant.
+@@ -472,64 +512,73 @@ static void check_name_properties(struct check *c, struct node *root,
  	}
  }
  ERROR_IF_NOT_STRING(name_is_string, "name");
@@ -550,7 +643,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
 +			refnode = get_node_by_ref(dt, m->ref);
 +			if (! refnode) {
 +				if (!(dti->dtsflags & DTSF_PLUGIN))
-+					FAIL(c, "Reference to non-existent node or "
++					FAIL(c, dti, "Reference to non-existent node or "
 +							"label \"%s\"\n", m->ref);
 +				else /* mark the entry as unresolved */
 +					*((cell_t *)(prop->val.val + m->offset)) =
@@ -598,7 +691,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
 -		}
 +			refnode = get_node_by_ref(dt, m->ref);
 +			if (!refnode) {
-+				FAIL(c, "Reference to non-existent node or label \"%s\"\n",
++				FAIL(c, dti, "Reference to non-existent node or label \"%s\"\n",
 +				     m->ref);
 +				continue;
 +			}
@@ -618,7 +711,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  
  /*
   * Semantic checks
-@@ -542,7 +588,7 @@ WARNING_IF_NOT_STRING(device_type_is_string, "device_type");
+@@ -542,7 +591,7 @@ WARNING_IF_NOT_STRING(device_type_is_string, "device_type");
  WARNING_IF_NOT_STRING(model_is_string, "model");
  WARNING_IF_NOT_STRING(status_is_string, "status");
  
@@ -627,7 +720,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  				  struct node *node)
  {
  	struct property *prop;
-@@ -558,7 +604,7 @@ static void fixup_addr_size_cells(struct check *c, struct node *dt,
+@@ -558,7 +607,7 @@ static void fixup_addr_size_cells(struct check *c, struct node *dt,
  	if (prop)
  		node->size_cells = propval_cell(prop);
  }
@@ -636,7 +729,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	&address_cells_is_cell, &size_cells_is_cell);
  
  #define node_addr_cells(n) \
-@@ -566,7 +612,7 @@ WARNING(addr_size_cells, NULL, fixup_addr_size_cells, NULL, NULL,
+@@ -566,7 +615,7 @@ WARNING(addr_size_cells, NULL, fixup_addr_size_cells, NULL, NULL,
  #define node_size_cells(n) \
  	(((n)->size_cells == -1) ? 1 : (n)->size_cells)
  
@@ -645,7 +738,26 @@ index 3d4c3c6c8952..cce0cca13058 100644
  			     struct node *node)
  {
  	struct property *prop;
-@@ -593,9 +639,9 @@ static void check_reg_format(struct check *c, struct node *dt,
+@@ -577,25 +626,25 @@ static void check_reg_format(struct check *c, struct node *dt,
+ 		return; /* No "reg", that's fine */
+ 
+ 	if (!node->parent) {
+-		FAIL(c, "Root node has a \"reg\" property");
++		FAIL(c, dti, "Root node has a \"reg\" property");
+ 		return;
+ 	}
+ 
+ 	if (prop->val.len == 0)
+-		FAIL(c, "\"reg\" property in %s is empty", node->fullpath);
++		FAIL(c, dti, "\"reg\" property in %s is empty", node->fullpath);
+ 
+ 	addr_cells = node_addr_cells(node->parent);
+ 	size_cells = node_size_cells(node->parent);
+ 	entrylen = (addr_cells + size_cells) * sizeof(cell_t);
+ 
+ 	if (!entrylen || (prop->val.len % entrylen) != 0)
+-		FAIL(c, "\"reg\" property in %s has invalid length (%d bytes) "
++		FAIL(c, dti, "\"reg\" property in %s has invalid length (%d bytes) "
  		     "(#address-cells == %d, #size-cells == %d)",
  		     node->fullpath, prop->val.len, addr_cells, size_cells);
  }
@@ -657,7 +769,35 @@ index 3d4c3c6c8952..cce0cca13058 100644
  				struct node *node)
  {
  	struct property *prop;
-@@ -634,12 +680,12 @@ static void check_ranges_format(struct check *c, struct node *dt,
+@@ -606,7 +655,7 @@ static void check_ranges_format(struct check *c, struct node *dt,
+ 		return;
+ 
+ 	if (!node->parent) {
+-		FAIL(c, "Root node has a \"ranges\" property");
++		FAIL(c, dti, "Root node has a \"ranges\" property");
+ 		return;
+ 	}
+ 
+@@ -618,28 +667,28 @@ static void check_ranges_format(struct check *c, struct node *dt,
+ 
+ 	if (prop->val.len == 0) {
+ 		if (p_addr_cells != c_addr_cells)
+-			FAIL(c, "%s has empty \"ranges\" property but its "
++			FAIL(c, dti, "%s has empty \"ranges\" property but its "
+ 			     "#address-cells (%d) differs from %s (%d)",
+ 			     node->fullpath, c_addr_cells, node->parent->fullpath,
+ 			     p_addr_cells);
+ 		if (p_size_cells != c_size_cells)
+-			FAIL(c, "%s has empty \"ranges\" property but its "
++			FAIL(c, dti, "%s has empty \"ranges\" property but its "
+ 			     "#size-cells (%d) differs from %s (%d)",
+ 			     node->fullpath, c_size_cells, node->parent->fullpath,
+ 			     p_size_cells);
+ 	} else if ((prop->val.len % entrylen) != 0) {
+-		FAIL(c, "\"ranges\" property in %s has invalid length (%d bytes) "
++		FAIL(c, dti, "\"ranges\" property in %s has invalid length (%d bytes) "
+ 		     "(parent #address-cells == %d, child #address-cells == %d, "
+ 		     "#size-cells == %d)", node->fullpath, prop->val.len,
  		     p_addr_cells, c_addr_cells, c_size_cells);
  	}
  }
@@ -672,8 +812,17 @@ index 3d4c3c6c8952..cce0cca13058 100644
  					  struct node *node)
  {
  	struct property *reg, *ranges;
-@@ -661,14 +707,21 @@ static void check_avoid_default_addr_size(struct check *c, struct node *dt,
- 		FAIL(c, "Relying on default #size-cells value for %s",
+@@ -654,31 +703,39 @@ static void check_avoid_default_addr_size(struct check *c, struct node *dt,
+ 		return;
+ 
+ 	if (node->parent->addr_cells == -1)
+-		FAIL(c, "Relying on default #address-cells value for %s",
++		FAIL(c, dti, "Relying on default #address-cells value for %s",
+ 		     node->fullpath);
+ 
+ 	if (node->parent->size_cells == -1)
+-		FAIL(c, "Relying on default #size-cells value for %s",
++		FAIL(c, dti, "Relying on default #size-cells value for %s",
  		     node->fullpath);
  }
 -NODE_WARNING(avoid_default_addr_size, NULL, &addr_size_cells);
@@ -696,8 +845,11 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	chosen = get_node_by_path(dt, "/chosen");
  	if (!chosen)
  		return;
-@@ -678,7 +731,8 @@ static void check_obsolete_chosen_interrupt_controller(struct check *c,
- 		FAIL(c, "/chosen has obsolete \"interrupt-controller\" "
+ 
+ 	prop = get_property(chosen, "interrupt-controller");
+ 	if (prop)
+-		FAIL(c, "/chosen has obsolete \"interrupt-controller\" "
++		FAIL(c, dti, "/chosen has obsolete \"interrupt-controller\" "
  		     "property");
  }
 -TREE_WARNING(obsolete_chosen_interrupt_controller, NULL);
@@ -706,7 +858,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  
  static struct check *check_table[] = {
  	&duplicate_node_names, &duplicate_property_names,
-@@ -693,6 +747,9 @@ static struct check *check_table[] = {
+@@ -693,6 +750,9 @@ static struct check *check_table[] = {
  	&address_cells_is_cell, &size_cells_is_cell, &interrupt_cells_is_cell,
  	&device_type_is_string, &model_is_string, &status_is_string,
  
@@ -716,7 +868,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	&addr_size_cells, &reg_format, &ranges_format,
  
  	&unit_address_vs_reg,
-@@ -764,9 +821,8 @@ void parse_checks_option(bool warn, bool error, const char *arg)
+@@ -764,9 +824,8 @@ void parse_checks_option(bool warn, bool error, const char *arg)
  	die("Unrecognized check name \"%s\"\n", name);
  }
  
@@ -727,7 +879,7 @@ index 3d4c3c6c8952..cce0cca13058 100644
  	int i;
  	int error = 0;
  
-@@ -774,7 +830,7 @@ void process_checks(bool force, struct boot_info *bi)
+@@ -774,7 +833,7 @@ void process_checks(bool force, struct boot_info *bi)
  		struct check *c = check_table[i];
  
  		if (c->warn || c->error)
@@ -4947,7 +5099,7 @@ index 3f006b475ace..ca3f5003427c 100644
  
  nodedef:
 diff --git a/scripts/dtc/dtc.c b/scripts/dtc/dtc.c
-index 1330e155306b..a4edf4c7aebf 100644
+index 1330e155306b..9c30c339f603 100644
 --- a/scripts/dtc/dtc.c
 +++ b/scripts/dtc/dtc.c
 @@ -30,9 +30,16 @@ int quiet;		/* Level of quietness */
@@ -5066,7 +5218,7 @@ index 1330e155306b..a4edf4c7aebf 100644
  		case 'h':
  			usage(NULL);
  		default:
-@@ -287,11 +301,11 @@ int main(int argc, char *argv[])
+@@ -287,36 +301,46 @@ int main(int argc, char *argv[])
  		}
  	}
  	if (streq(inform, "dts"))
@@ -5082,7 +5234,11 @@ index 1330e155306b..a4edf4c7aebf 100644
  	else
  		die("Unknown input format \"%s\"\n", inform);
  
-@@ -301,22 +315,30 @@ int main(int argc, char *argv[])
++	dti->outname = outname;
++
+ 	if (depfile) {
+ 		fputc('\n', depfile);
+ 		fclose(depfile);
  	}
  
  	if (cmdline_boot_cpuid != -1)
@@ -5122,7 +5278,7 @@ index 1330e155306b..a4edf4c7aebf 100644
  	if (streq(outname, "-")) {
  		outf = stdout;
  	} else {
-@@ -327,15 +349,11 @@ int main(int argc, char *argv[])
+@@ -327,15 +351,11 @@ int main(int argc, char *argv[])
  	}
  
  	if (streq(outform, "dts")) {
@@ -5142,7 +5298,7 @@ index 1330e155306b..a4edf4c7aebf 100644
  		/* do nothing */
  	} else {
 diff --git a/scripts/dtc/dtc.h b/scripts/dtc/dtc.h
-index aea6509bff79..c6f125c68ba8 100644
+index aea6509bff79..1ac2a1e3a4a5 100644
 --- a/scripts/dtc/dtc.h
 +++ b/scripts/dtc/dtc.h
 @@ -20,6 +20,7 @@
@@ -5198,7 +5354,7 @@ index aea6509bff79..c6f125c68ba8 100644
  
  const char *get_unitname(struct node *node);
  struct property *get_property(struct node *node, const char *propname);
-@@ -244,50 +241,44 @@ struct reserve_info *add_reserve_entry(struct reserve_info *list,
+@@ -244,50 +241,45 @@ struct reserve_info *add_reserve_entry(struct reserve_info *list,
  				       struct reserve_info *new);
  
  
@@ -5210,6 +5366,7 @@ index aea6509bff79..c6f125c68ba8 100644
 -	struct node *dt;		/* the device tree */
  	uint32_t boot_cpuid_phys;
 +	struct node *dt;		/* the device tree */
++	const char *outname;		/* filename being written to, "-" for stdout */
  };
  
 -/* version flags definitions */
@@ -5543,7 +5700,7 @@ index 50cce864283c..3d00d2eee0e3 100644
  	len = strlen(string) + 1;
  	end = list + length;
 diff --git a/scripts/dtc/libfdt/fdt_rw.c b/scripts/dtc/libfdt/fdt_rw.c
-index 8be02b1f68f3..2eed4f58387c 100644
+index 8be02b1f68f3..3fd5847377c9 100644
 --- a/scripts/dtc/libfdt/fdt_rw.c
 +++ b/scripts/dtc/libfdt/fdt_rw.c
 @@ -191,17 +191,13 @@ int fdt_add_mem_rsv(void *fdt, uint64_t address, uint64_t size)
@@ -5565,6 +5722,16 @@ index 8be02b1f68f3..2eed4f58387c 100644
  }
  
  static int _fdt_resize_property(void *fdt, int nodeoffset, const char *name,
+@@ -287,7 +283,8 @@ int fdt_setprop(void *fdt, int nodeoffset, const char *name,
+ 	if (err)
+ 		return err;
+ 
+-	memcpy(prop->data, val, len);
++	if (len)
++		memcpy(prop->data, val, len);
+ 	return 0;
+ }
+ 
 diff --git a/scripts/dtc/libfdt/fdt_strerror.c b/scripts/dtc/libfdt/fdt_strerror.c
 index e6c3ceee8c58..9677a1887e57 100644
 --- a/scripts/dtc/libfdt/fdt_strerror.c
@@ -5641,7 +5808,7 @@ index c5bbb68d3273..6aaab399929c 100644
  
  static void _fdt_nop_region(void *start, int len)
 diff --git a/scripts/dtc/libfdt/libfdt.h b/scripts/dtc/libfdt/libfdt.h
-index f7e39898aa94..b842b156fa17 100644
+index f7e39898aa94..9e71bb9e03a7 100644
 --- a/scripts/dtc/libfdt/libfdt.h
 +++ b/scripts/dtc/libfdt/libfdt.h
 @@ -61,7 +61,7 @@
@@ -5826,7 +5993,44 @@ index f7e39898aa94..b842b156fa17 100644
   * fdt_setprop_inplace - change a property's value, but not its size
   * @fdt: pointer to the device tree blob
   * @nodeoffset: offset of the node whose property to change
-@@ -1654,6 +1763,37 @@ int fdt_add_subnode(void *fdt, int parentoffset, const char *name);
+@@ -1418,6 +1527,36 @@ static inline int fdt_setprop_cell(void *fdt, int nodeoffset, const char *name,
+ #define fdt_setprop_string(fdt, nodeoffset, name, str) \
+ 	fdt_setprop((fdt), (nodeoffset), (name), (str), strlen(str)+1)
+ 
++
++/**
++ * fdt_setprop_empty - set a property to an empty value
++ * @fdt: pointer to the device tree blob
++ * @nodeoffset: offset of the node whose property to change
++ * @name: name of the property to change
++ *
++ * fdt_setprop_empty() sets the value of the named property in the
++ * given node to an empty (zero length) value, or creates a new empty
++ * property if it does not already exist.
++ *
++ * This function may insert or delete data from the blob, and will
++ * therefore change the offsets of some existing nodes.
++ *
++ * returns:
++ *	0, on success
++ *	-FDT_ERR_NOSPACE, there is insufficient free space in the blob to
++ *		contain the new property value
++ *	-FDT_ERR_BADOFFSET, nodeoffset did not point to FDT_BEGIN_NODE tag
++ *	-FDT_ERR_BADLAYOUT,
++ *	-FDT_ERR_BADMAGIC,
++ *	-FDT_ERR_BADVERSION,
++ *	-FDT_ERR_BADSTATE,
++ *	-FDT_ERR_BADSTRUCTURE,
++ *	-FDT_ERR_BADLAYOUT,
++ *	-FDT_ERR_TRUNCATED, standard meanings
++ */
++#define fdt_setprop_empty(fdt, nodeoffset, name) \
++	fdt_setprop((fdt), (nodeoffset), (name), NULL, 0)
++
+ /**
+  * fdt_appendprop - append to or create a property
+  * @fdt: pointer to the device tree blob
+@@ -1654,6 +1793,37 @@ int fdt_add_subnode(void *fdt, int parentoffset, const char *name);
   */
  int fdt_del_node(void *fdt, int nodeoffset);
  
@@ -6572,12 +6776,12 @@ index f800b6011fb1..f5c4f1b50d30 100644
  
  /**
 diff --git a/scripts/dtc/version_gen.h b/scripts/dtc/version_gen.h
-index f934c71981a0..ddb3030cf8c4 100644
+index f934c71981a0..c9a9b5ad858b 100644
 --- a/scripts/dtc/version_gen.h
 +++ b/scripts/dtc/version_gen.h
 @@ -1 +1 @@
 -#define DTC_VERSION "DTC 1.4.1-g6f4db2fc"
-+#define DTC_VERSION "DTC 1.4.2-g120775eb"
++#define DTC_VERSION "DTC 1.4.2-g397d5ef0"
 -- 
 2.11.0
 

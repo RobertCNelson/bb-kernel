@@ -103,29 +103,6 @@ external_git () {
 	${git_bin} describe
 }
 
-sync_cherrypicks () {
-	echo "dir: ti_4.9.x/pm_opp"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0001-Documentation-dt-add-bindings-for-ti-cpufreq.patch"
-	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0002-cpufreq-ti-Add-cpufreq-driver-to-determine-available.patch"
-	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0003-cpufreq-dt-Don-t-use-generic-platdev-driver-for-ti-c.patch"
-	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0004-ARM-dts-am33xx-Add-updated-operating-points-v2-table.patch"
-	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0005-ARM-dts-am335x-boneblack-Enable-1GHz-OPP-for-cpu.patch"
-	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0006-ARM-dts-am4372-Update-operating-points-v2-table-for-.patch"
-	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0007-ARM-dts-dra7-Add-updated-operating-points-v2-table-f.patch"
-	${git} "${DIR}/patches/ti_4.9.x/pm_opp/0008-PM-OPP-Expose-_of_get_opp_desc_node-as-dev_pm_opp-AP.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="ti_4.9.x/pm_opp"
-		number=8
-		cleanup
-	fi
-}
-
 aufs_fail () {
 	echo "aufs4 failed"
 	exit 2
@@ -228,69 +205,14 @@ rt () {
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
 }
 
-tinydrm () {
-	echo "dir: tinydrm"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ ! -d ./tinydrm ] ; then
-			${git_bin} clone https://github.com/notro/tinydrm
-			cd ./tinydrm
-			${git_bin} checkout origin/master -b tmp
-			cd ../
-		else
-			rm -rf ./tinydrm || true
-			${git_bin} clone https://github.com/notro/tinydrm
-			cd ./tinydrm
-			${git_bin} checkout origin/master -b tmp
-			cd ../
-		fi
-		cd ./KERNEL/
-
-		mkdir -p ./drivers/gpu/drm/tinydrm/core/
-		cp -v ../tinydrm/Kconfig ./drivers/gpu/drm/tinydrm/
-		cp -v ../tinydrm/Makefile ./drivers/gpu/drm/tinydrm/
-		cp -rv ../tinydrm/core/* ./drivers/gpu/drm/tinydrm/core/
-		cp -rv ../tinydrm/*.c ./drivers/gpu/drm/tinydrm/
-		mkdir -p ./include/drm/tinydrm
-		cp -v ../tinydrm/include/drm/tinydrm/*.h ./include/drm/tinydrm
-
-		echo "obj-\$(CONFIG_DRM_TINYDRM)+= tinydrm/" >> ./drivers/gpu/drm/Makefile
-		echo "source \"drivers/gpu/drm/tinydrm/Kconfig\"" >> ./drivers/gpu/drm/Kconfig
-
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: tinydrm' -s
-		${git_bin} format-patch -1 -o ../patches/drivers/tinydrm/
-
-		rm -rf ../tinydrm/ || true
-
-		exit 2
-	fi
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/drivers/tinydrm/0001-merge-tinydrm.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="drivers/tinydrm"
-		number=1
-		cleanup
-	fi
-}
-
 local_patch () {
 	echo "dir: dir"
 	${git} "${DIR}/patches/dir/0001-patch.patch"
 }
 
 #external_git
-#sync_cherrypicks
 #aufs4
 #rt
-#tinydrm
 #local_patch
 
 pre_backports () {
