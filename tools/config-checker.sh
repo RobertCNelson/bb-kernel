@@ -18,6 +18,18 @@ config_disable () {
 	fi
 }
 
+config_enable_special () {
+	test_module=$(cat .config | grep ${config} || true)
+	if [ "x${test_module}" = "x# ${config} is not set" ] ; then
+		echo "Setting: ${config}=y"
+		sed -i -e 's:# '$config' is not set:'$config'=y:g' .config
+	fi
+	if [ "x${test_module}" = "x${config}=m" ] ; then
+		echo "Setting: ${config}=y"
+		sed -i -e 's:'$config'=m:'$config'=y:g' .config
+	fi
+}
+
 config_module_special () {
 	test_module=$(cat .config | grep ${config} || true)
 	if [ "x${test_module}" = "x# ${config} is not set" ] ; then
@@ -68,6 +80,7 @@ config="CONFIG_EMBEDDED" ; config_enable
 # GCOV-based kernel profiling
 #
 config="CONFIG_MODULE_SIG" ; config_disable
+config="CONFIG_SYSTEM_TRUSTED_KEYRING" ; config_disable
 
 #
 # CPU Core family selection
@@ -130,25 +143,14 @@ config="CONFIG_PCI" ; config_disable
 config="CONFIG_PARAVIRT" ; config_disable
 config="CONFIG_XEN" ; config_disable
 
-#
-# Boot options
-#
-config="CONFIG_EFI" ; config_disable
-
 #first check..
 #exit
-
-#
-# CPU Frequency scaling
-#
-config="CONFIG_CPU_FREQ_STAT_DETAILS" ; config_enable
-config="CONFIG_CPU_FREQ_GOV_SCHEDUTIL" ; config_enable
 
 #
 # CPU frequency scaling drivers
 #
 config="CONFIG_ARM_OMAP2PLUS_CPUFREQ" ; config_disable
-#config="CONFIG_ARM_TI_CPUFREQ" ; config_enable
+config="CONFIG_ARM_TI_CPUFREQ" ; config_enable
 
 #
 # CPU Idle
@@ -293,7 +295,8 @@ config="CONFIG_EEPROM_93XX46" ; config_module
 #
 # Texas Instruments shared transport line discipline
 #
-config="CONFIG_SENSORS_LIS3_SPI" ; config_module
+#better one in iio
+config="CONFIG_SENSORS_LIS3_I2C" ; config_disable
 
 #
 # Argus cape driver for beaglebone black
@@ -311,9 +314,6 @@ config="CONFIG_SCSI_PROC_FS" ; config_enable
 # SCSI support type (disk, tape, CD-ROM)
 #
 config="CONFIG_BLK_DEV_SD" ; config_enable
-
-#breaks wheezy:
-config="CONFIG_SCSI_SNIC" ; config_disable
 
 #
 # SCSI Transports
@@ -485,7 +485,6 @@ config="CONFIG_INPUT_AD714X_SPI" ; config_module
 config="CONFIG_INPUT_BMA150" ; config_module
 config="CONFIG_INPUT_E3X0_BUTTON" ; config_module
 config="CONFIG_INPUT_MC13783_PWRBUTTON" ; config_module
-config="CONFIG_INPUT_MPU3050" ; config_module
 config="CONFIG_INPUT_GP2A" ; config_module
 config="CONFIG_INPUT_GPIO_BEEPER" ; config_module
 config="CONFIG_INPUT_GPIO_TILT_POLLED" ; config_module
@@ -875,6 +874,7 @@ config="CONFIG_SOC_CAMERA_TW9910" ; config_module
 #
 # Graphics support
 #
+config="CONFIG_TEGRA_HOST1X" ; config_enable
 config="CONFIG_IMX_IPUV3_CORE" ; config_enable
 config="CONFIG_DRM" ; config_enable
 config="CONFIG_DRM_KMS_HELPER" ; config_enable
@@ -898,13 +898,20 @@ config="CONFIG_DRM_OMAP_CONNECTOR_HDMI" ; config_enable
 config="CONFIG_DRM_OMAP_PANEL_DPI" ; config_enable
 
 config="CONFIG_DRM_TILCDC" ; config_enable
+config="CONFIG_DRM_TEGRA" ; config_enable
 
 #
 # Display Interface Bridges
 #
+config="CONFIG_DRM_DUMB_VGA_DAC" ; config_enable
 config="CONFIG_DRM_DW_HDMI" ; config_enable
 config="CONFIG_DRM_DW_HDMI_AHB_AUDIO" ; config_module
-config="CONFIG_DRM_I2C_ADV7511" ; config_module
+config="CONFIG_DRM_DW_HDMI_I2S_AUDIO" ; config_module
+
+config="CONFIG_DRM_SII902X" ; config_enable
+config="CONFIG_DRM_TI_TFP410" ; config_enable
+config="CONFIG_DRM_I2C_ADV7511" ; config_enable
+config="CONFIG_DRM_I2C_ADV7511_AUDIO" ; config_enable
 
 config="CONFIG_DRM_IMX" ; config_enable
 config="CONFIG_DRM_IMX_PARALLEL_DISPLAY" ; config_enable
@@ -913,6 +920,11 @@ config="CONFIG_DRM_IMX_LDB" ; config_enable
 config="CONFIG_DRM_IMX_IPUV3" ; config_enable
 config="CONFIG_DRM_IMX_HDMI" ; config_enable
 config="CONFIG_DRM_ETNAVIV" ; config_enable
+config="CONFIG_DRM_MXSFB" ; config_enable
+config="CONFIG_DRM_TINYDRM" ; config_module
+config="CONFIG_TINYDRM_MIPI_DBI" ; config_module
+config="CONFIG_TINYDRM_MI0283QT" ; config_module
+config="CONFIG_DRM_LEGACY" ; config_disable
 
 #exit
 
@@ -1016,9 +1028,6 @@ config="CONFIG_USB_MUSB_AM335X_CHILD" ; config_enable
 #
 config="CONFIG_MUSB_PIO_ONLY" ; config_enable
 config="CONFIG_USB_DWC3" ; config_enable
-config="CONFIG_USB_DWC3_HOST" ; config_disable
-config="CONFIG_USB_DWC3_GADGET" ; config_disable
-config="CONFIG_USB_DWC3_DUAL_ROLE" ; config_enable
 
 #
 # Platform Glue Driver Support
@@ -1094,6 +1103,8 @@ config="CONFIG_LEDS_IS31FL32XX" ; config_module
 #
 config="CONFIG_LEDS_TRIGGER_TIMER" ; config_enable
 config="CONFIG_LEDS_TRIGGER_ONESHOT" ; config_enable
+config="CONFIG_LEDS_TRIGGER_DISK" ; config_enable
+config="CONFIG_LEDS_TRIGGER_MTD" ; config_enable
 config="CONFIG_LEDS_TRIGGER_HEARTBEAT" ; config_enable
 config="CONFIG_LEDS_TRIGGER_BACKLIGHT" ; config_enable
 config="CONFIG_LEDS_TRIGGER_GPIO" ; config_enable
@@ -1439,6 +1450,11 @@ config="CONFIG_EXTCON_PALMAS" ; config_enable
 config="CONFIG_EXTCON_USB_GPIO" ; config_enable
 config="CONFIG_TI_EMIF" ; config_enable
 
+config="CONFIG_IIO_BUFFER_CB" ; config_module
+config="CONFIG_IIO_CONFIGFS" ; config_module
+config="CONFIG_IIO_SW_DEVICE" ; config_module
+config="CONFIG_IIO_SW_TRIGGER" ; config_module
+
 #exit
 
 #
@@ -1484,11 +1500,14 @@ config="CONFIG_AD7923" ; config_module
 config="CONFIG_AD799X" ; config_module
 config="CONFIG_AXP288_ADC" ; config_module
 config="CONFIG_CC10001_ADC" ; config_module
+config="CONFIG_ENVELOPE_DETECTOR" ; config_module
 config="CONFIG_HI8435" ; config_module
+config="CONFIG_HX711" ; config_module
 config="CONFIG_INA2XX_ADC" ; config_module
 config="CONFIG_IMX7D_ADC" ; config_module
 config="CONFIG_LTC2485" ; config_module
 config="CONFIG_MAX1027" ; config_module
+config="CONFIG_MAX11100" ; config_module
 config="CONFIG_MAX1363" ; config_module
 config="CONFIG_MCP320X" ; config_module
 config="CONFIG_MCP3422" ; config_module
@@ -1500,7 +1519,9 @@ config="CONFIG_TI_ADC12138" ; config_module
 config="CONFIG_TI_ADC128S052" ; config_module
 config="CONFIG_TI_ADC161S626" ; config_module
 config="CONFIG_TI_ADS1015" ; config_module
+config="CONFIG_TI_ADS7950" ; config_module
 config="CONFIG_TI_ADS8688" ; config_module
+config="CONFIG_TI_TLC4541" ; config_module
 config="CONFIG_TWL6030_GPADC" ; config_module
 config="CONFIG_VF610_ADC" ; config_module
 config="CONFIG_XILINX_XADC" ; config_module
@@ -1569,6 +1590,7 @@ config="CONFIG_ADIS16136" ; config_module
 config="CONFIG_ADIS16260" ; config_module
 config="CONFIG_ADXRS450" ; config_module
 config="CONFIG_BMG160" ; config_module
+config="CONFIG_MPU3050_I2C" ; config_module
 config="CONFIG_IIO_ST_GYRO_3AXIS" ; config_module
 config="CONFIG_IIO_ST_GYRO_I2C_3AXIS" ; config_module
 config="CONFIG_IIO_ST_GYRO_SPI_3AXIS" ; config_module
@@ -1607,6 +1629,7 @@ config="CONFIG_KMX61" ; config_module
 config="CONFIG_INV_MPU6050_I2C" ; config_module
 config="CONFIG_INV_MPU6050_SPI" ; config_module
 config="CONFIG_INV_MPU6050_IIO" ; config_module
+config="CONFIG_IIO_ST_LSM6DSX" ; config_module
 
 #
 # Light sensors
@@ -1620,6 +1643,7 @@ config="CONFIG_BH1780" ; config_module
 config="CONFIG_CM32181" ; config_module
 config="CONFIG_CM3232" ; config_module
 config="CONFIG_CM3323" ; config_module
+config="CONFIG_CM3605" ; config_module
 config="CONFIG_CM36651" ; config_module
 config="CONFIG_GP2AP020A00F" ; config_module
 config="CONFIG_ISL29125" ; config_module
@@ -1663,6 +1687,7 @@ config="CONFIG_IIO_SYSFS_TRIGGER" ; config_module
 # Digital potentiometers
 #
 config="CONFIG_DS1803" ; config_module
+config="CONFIG_MAX5481" ; config_module
 config="CONFIG_MAX5487" ; config_module
 config="CONFIG_MCP4131" ; config_module
 config="CONFIG_MCP4531" ; config_module
@@ -1704,6 +1729,7 @@ config="CONFIG_AS3935" ; config_module
 #
 config="CONFIG_LIDAR_LITE_V2" ; config_module
 config="CONFIG_SX9500" ; config_module
+config="CONFIG_SRF08" ; config_module
 
 #
 # Temperature sensors
@@ -1711,6 +1737,7 @@ config="CONFIG_SX9500" ; config_module
 config="CONFIG_MAXIM_THERMOCOUPLE" ; config_module
 config="CONFIG_MLX90614" ; config_module
 config="CONFIG_TMP006" ; config_module
+config="CONFIG_TMP007" ; config_module
 config="CONFIG_TSYS01" ; config_module
 config="CONFIG_TSYS02D" ; config_module
 config="CONFIG_PWM_OMAP_DMTIMER" ; config_module
@@ -1752,6 +1779,7 @@ config="CONFIG_NVMEM_VF610_OCOTP" ; config_enable
 config="CONFIG_FPGA" ; config_module
 config="CONFIG_FPGA_MGR_SOCFPGA" ; config_module
 config="CONFIG_FPGA_MGR_ZYNQ_FPGA" ; config_module
+config="CONFIG_FPGA_BRIDGE" ; config_module
 
 #exit
 
@@ -1759,7 +1787,6 @@ config="CONFIG_FPGA_MGR_ZYNQ_FPGA" ; config_module
 # File systems
 #
 config="CONFIG_EXT4_FS" ; config_enable
-config="CONFIG_EXT4_ENCRYPTION" ; config_enable
 config="CONFIG_JBD2" ; config_enable
 config="CONFIG_FS_MBCACHE" ; config_enable
 config="CONFIG_XFS_FS" ; config_enable
@@ -1782,7 +1809,6 @@ config="CONFIG_VFAT_FS" ; config_enable
 #
 config="CONFIG_ORANGEFS_FS" ; config_enable
 config="CONFIG_UBIFS_FS" ; config_enable
-config="CONFIG_LOGFS" ; config_disable
 config="CONFIG_SQUASHFS_LZ4" ; config_enable
 config="CONFIG_NFS_FS" ; config_enable
 config="CONFIG_NFS_V2" ; config_enable
