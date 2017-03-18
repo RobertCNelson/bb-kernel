@@ -411,7 +411,7 @@ drivers () {
 	dir 'drivers/ti/mmc'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
-	dir 'drivers/ti/spi'
+#	dir 'drivers/ti/spi'
 	dir 'drivers/ti/uio'
 
 	dir 'drivers/ti/gpio'
