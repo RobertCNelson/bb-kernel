@@ -350,6 +350,8 @@ lts44_backports () {
 	fi
 	${git} "${DIR}/patches/backports/iio/0002-kernel-time-timekeeping.c-get_monotonic_coarse64.patch"
 	${git} "${DIR}/patches/backports/iio/0003-staging-iio-ad7606-fix-improper-setting-of-oversampl.patch"
+	${git} "${DIR}/patches/backports/iio/0004-iio-pressure-mpl115-do-not-rely-on-structure-field-o.patch"
+	${git} "${DIR}/patches/backports/iio/0005-iio-pressure-mpl3115-do-not-rely-on-structure-field-.patch"
 
 	backport_tag="v4.8.17"
 
