@@ -192,6 +192,10 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
+
+	${git_bin} revert --no-edit d80e46d90742d13de42780648ea25a4f1c913a2a
+	${git_bin} revert --no-edit 575caefc01f347c0f0814166256dad60723eee51
+
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -533,10 +537,18 @@ sync_mainline_dtc () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
 		if [ ! -d ./dtc ] ; then
-			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=1
+			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=10
+			#dtc: Bump version to v1.4.4
+			cd ./dtc
+			${git_bin} checkout 558cd81bdd432769b59bff01240c44f82cfb1a9d -b tmp
+			cd ../
 		else
 			rm -rf ./dtc || true
-			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=1
+			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=10
+			#dtc: Bump version to v1.4.4
+			cd ./dtc
+			${git_bin} checkout 558cd81bdd432769b59bff01240c44f82cfb1a9d -b tmp
+			cd ../
 		fi
 		cd ./KERNEL/
 
