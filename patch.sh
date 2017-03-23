@@ -194,6 +194,10 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
+
+	git revert --no-edit 99d403faba47e5adeb11dbf1094972fc78c29a75
+	git revert --no-edit 44854c191e2cb62d369eb9927e6b6683c11d6b04
+
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -1137,17 +1141,23 @@ quieter
 gcc6
 sgx
 
+git_clone_dtc () {
+	${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=10
+	#dtc: Bump version to v1.4.4
+	cd ./dtc
+	${git_bin} checkout 558cd81bdd432769b59bff01240c44f82cfb1a9d -b tmp
+	cd ../
+}
+
 sync_mainline_dtc () {
 	echo "dir: dtc"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ ! -d ./dtc ] ; then
-			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=1
-		else
+		if [ -d ./dtc ] ; then
 			rm -rf ./dtc || true
-			${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=1
 		fi
+		git_clone_dtc
 		cd ./KERNEL/
 
 		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh
