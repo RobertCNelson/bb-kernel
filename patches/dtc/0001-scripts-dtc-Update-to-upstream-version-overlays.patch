@@ -1,11 +1,11 @@
-From 233a0fb4991b98c89d699003b8ccfe5fc8fc69d2 Mon Sep 17 00:00:00 2001
+From b6a5bed9c51c50b3617134e2ec04d4e855febe57 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sat, 18 Mar 2017 11:14:05 -0500
+Date: Thu, 23 Mar 2017 16:14:47 -0500
 Subject: [PATCH] scripts/dtc: Update to upstream version overlays
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- scripts/dtc/checks.c                 |  471 ++++---
+ scripts/dtc/checks.c                 |  702 ++++++++---
  scripts/dtc/data.c                   |   16 +-
  scripts/dtc/dtc-lexer.l              |   19 +-
  scripts/dtc/dtc-lexer.lex.c_shipped  |  301 ++---
@@ -13,7 +13,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  scripts/dtc/dtc-parser.tab.h_shipped |  101 +-
  scripts/dtc/dtc-parser.y             |   64 +-
  scripts/dtc/dtc.c                    |   85 +-
- scripts/dtc/dtc.h                    |   67 +-
+ scripts/dtc/dtc.h                    |   72 +-
  scripts/dtc/flattree.c               |  106 +-
  scripts/dtc/fstree.c                 |    5 +-
  scripts/dtc/libfdt/Makefile.libfdt   |    2 +-
@@ -23,7 +23,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  scripts/dtc/libfdt/fdt_rw.c          |    9 +-
  scripts/dtc/libfdt/fdt_strerror.c    |    6 +
  scripts/dtc/libfdt/fdt_wip.c         |   29 +-
- scripts/dtc/libfdt/libfdt.h          |  180 ++-
+ scripts/dtc/libfdt/libfdt.h          |  201 ++-
  scripts/dtc/libfdt/libfdt_env.h      |   27 +-
  scripts/dtc/libfdt/libfdt_internal.h |    1 -
  scripts/dtc/livetree.c               |  356 +++---
@@ -33,10 +33,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  scripts/dtc/util.c                   |   41 +-
  scripts/dtc/util.h                   |   23 +-
  scripts/dtc/version_gen.h            |    2 +-
- 28 files changed, 2258 insertions(+), 2074 deletions(-)
+ 28 files changed, 2514 insertions(+), 2075 deletions(-)
 
 diff --git a/scripts/dtc/checks.c b/scripts/dtc/checks.c
-index 3d4c3c6c8952..38f548e582c8 100644
+index 3d4c3c6c8952..5adfc8f52b4f 100644
 --- a/scripts/dtc/checks.c
 +++ b/scripts/dtc/checks.c
 @@ -40,16 +40,11 @@ enum checkstatus {
@@ -316,12 +316,10 @@ index 3d4c3c6c8952..38f548e582c8 100644
  	if (n < strlen(node->name))
 -		FAIL(c, "Bad character '%c' in node %s",
 +		FAIL(c, dti, "Bad character '%c' in node %s",
- 		     node->name[n], node->fullpath);
- }
--NODE_ERROR(node_name_chars, PROPNODECHARS "@");
++		     node->name[n], node->fullpath);
++}
 +ERROR(node_name_chars, check_node_name_chars, PROPNODECHARS "@");
- 
--static void check_node_name_format(struct check *c, struct node *dt,
++
 +static void check_node_name_chars_strict(struct check *c, struct dt_info *dti,
 +					 struct node *node)
 +{
@@ -329,10 +327,12 @@ index 3d4c3c6c8952..38f548e582c8 100644
 +
 +	if (n < node->basenamelen)
 +		FAIL(c, dti, "Character '%c' not recommended in node %s",
-+		     node->name[n], node->fullpath);
-+}
+ 		     node->name[n], node->fullpath);
+ }
+-NODE_ERROR(node_name_chars, PROPNODECHARS "@");
 +CHECK(node_name_chars_strict, check_node_name_chars_strict, PROPNODECHARSSTRICT);
-+
+ 
+-static void check_node_name_format(struct check *c, struct node *dt,
 +static void check_node_name_format(struct check *c, struct dt_info *dti,
  				   struct node *node)
  {
@@ -367,29 +367,33 @@ index 3d4c3c6c8952..38f548e582c8 100644
  }
 -NODE_WARNING(unit_address_vs_reg, NULL);
 +WARNING(unit_address_vs_reg, check_unit_address_vs_reg, NULL);
-+
+ 
+-static void check_property_name_chars(struct check *c, struct node *dt,
+-				      struct node *node, struct property *prop)
 +static void check_property_name_chars(struct check *c, struct dt_info *dti,
 +				      struct node *node)
-+{
+ {
+-	int n = strspn(prop->name, c->data);
 +	struct property *prop;
 +
 +	for_each_property(node, prop) {
 +		int n = strspn(prop->name, c->data);
-+
+ 
+-	if (n < strlen(prop->name))
+-		FAIL(c, "Bad character '%c' in property name \"%s\", node %s",
+-		     prop->name[n], prop->name, node->fullpath);
 +		if (n < strlen(prop->name))
 +			FAIL(c, dti, "Bad character '%c' in property name \"%s\", node %s",
 +			     prop->name[n], prop->name, node->fullpath);
 +	}
-+}
+ }
+-PROP_ERROR(property_name_chars, PROPNODECHARS);
 +ERROR(property_name_chars, check_property_name_chars, PROPNODECHARS);
- 
--static void check_property_name_chars(struct check *c, struct node *dt,
--				      struct node *node, struct property *prop)
++
 +static void check_property_name_chars_strict(struct check *c,
 +					     struct dt_info *dti,
 +					     struct node *node)
- {
--	int n = strspn(prop->name, c->data);
++{
 +	struct property *prop;
 +
 +	for_each_property(node, prop) {
@@ -402,10 +406,7 @@ index 3d4c3c6c8952..38f548e582c8 100644
 +		/* Certain names are whitelisted */
 +		if (streq(name, "device_type"))
 +			continue;
- 
--	if (n < strlen(prop->name))
--		FAIL(c, "Bad character '%c' in property name \"%s\", node %s",
--		     prop->name[n], prop->name, node->fullpath);
++
 +		/*
 +		 * # is only allowed at the beginning of property names not counting
 +		 * the vendor prefix.
@@ -418,8 +419,7 @@ index 3d4c3c6c8952..38f548e582c8 100644
 +			FAIL(c, dti, "Character '%c' not recommended in property name \"%s\", node %s",
 +			     name[n], prop->name, node->fullpath);
 +	}
- }
--PROP_ERROR(property_name_chars, PROPNODECHARS);
++}
 +CHECK(property_name_chars_strict, check_property_name_chars_strict, PROPNODECHARSSTRICT);
  
  #define DESCLABEL_FMT	"%s%s%s%s%s"
@@ -469,12 +469,12 @@ index 3d4c3c6c8952..38f548e582c8 100644
 -		check_duplicate_label(c, dt, l->label, node, prop, NULL);
 +	for_each_property(node, prop) {
 +		struct marker *m = prop->val.markers;
++
++		for_each_label(prop->labels, l)
++			check_duplicate_label(c, dti, l->label, node, prop, NULL);
  
 -	for_each_marker_of_type(m, LABEL)
 -		check_duplicate_label(c, dt, m->ref, node, prop, m);
-+		for_each_label(prop->labels, l)
-+			check_duplicate_label(c, dti, l->label, node, prop, NULL);
-+
 +		for_each_marker_of_type(m, LABEL)
 +			check_duplicate_label(c, dti, m->ref, node, prop, m);
 +	}
@@ -688,17 +688,17 @@ index 3d4c3c6c8952..38f548e582c8 100644
 -		}
 +		for_each_marker_of_type(m, REF_PATH) {
 +			assert(m->offset <= prop->val.len);
- 
--		path = refnode->fullpath;
--		prop->val = data_insert_at_marker(prop->val, m, path,
--						  strlen(path) + 1);
++
 +			refnode = get_node_by_ref(dt, m->ref);
 +			if (!refnode) {
 +				FAIL(c, dti, "Reference to non-existent node or label \"%s\"\n",
 +				     m->ref);
 +				continue;
 +			}
-+
+ 
+-		path = refnode->fullpath;
+-		prop->val = data_insert_at_marker(prop->val, m, path,
+-						  strlen(path) + 1);
 +			path = refnode->fullpath;
 +			prop->val = data_insert_at_marker(prop->val, m, path,
 +							  strlen(path) + 1);
@@ -778,7 +778,7 @@ index 3d4c3c6c8952..38f548e582c8 100644
  		return;
  	}
  
-@@ -618,28 +663,28 @@ static void check_ranges_format(struct check *c, struct node *dt,
+@@ -618,28 +663,251 @@ static void check_ranges_format(struct check *c, struct node *dt,
  
  	if (prop->val.len == 0) {
  		if (p_addr_cells != c_addr_cells)
@@ -803,6 +803,229 @@ index 3d4c3c6c8952..38f548e582c8 100644
  }
 -NODE_WARNING(ranges_format, NULL, &addr_size_cells);
 +WARNING(ranges_format, check_ranges_format, NULL, &addr_size_cells);
++
++static const struct bus_type pci_bus = {
++	.name = "PCI",
++};
++
++static void check_pci_bridge(struct check *c, struct dt_info *dti, struct node *node)
++{
++	struct property *prop;
++	cell_t *cells;
++
++	prop = get_property(node, "device_type");
++	if (!prop || !streq(prop->val.val, "pci"))
++		return;
++
++	node->bus = &pci_bus;
++
++	if (!strneq(node->name, "pci", node->basenamelen) &&
++	    !strneq(node->name, "pcie", node->basenamelen))
++		FAIL(c, dti, "Node %s node name is not \"pci\" or \"pcie\"",
++			     node->fullpath);
++
++	prop = get_property(node, "ranges");
++	if (!prop)
++		FAIL(c, dti, "Node %s missing ranges for PCI bridge (or not a bridge)",
++			     node->fullpath);
++
++	if (node_addr_cells(node) != 3)
++		FAIL(c, dti, "Node %s incorrect #address-cells for PCI bridge",
++			     node->fullpath);
++	if (node_size_cells(node) != 2)
++		FAIL(c, dti, "Node %s incorrect #size-cells for PCI bridge",
++			     node->fullpath);
++
++	prop = get_property(node, "bus-range");
++	if (!prop) {
++		FAIL(c, dti, "Node %s missing bus-range for PCI bridge",
++			     node->fullpath);
++		return;
++	}
++	if (prop->val.len != (sizeof(cell_t) * 2)) {
++		FAIL(c, dti, "Node %s bus-range must be 2 cells",
++			     node->fullpath);
++		return;
++	}
++	cells = (cell_t *)prop->val.val;
++	if (fdt32_to_cpu(cells[0]) > fdt32_to_cpu(cells[1]))
++		FAIL(c, dti, "Node %s bus-range 1st cell must be less than or equal to 2nd cell",
++			     node->fullpath);
++	if (fdt32_to_cpu(cells[1]) > 0xff)
++		FAIL(c, dti, "Node %s bus-range maximum bus number must be less than 256",
++			     node->fullpath);
++}
++WARNING(pci_bridge, check_pci_bridge, NULL,
++	&device_type_is_string, &addr_size_cells);
++
++static void check_pci_device_bus_num(struct check *c, struct dt_info *dti, struct node *node)
++{
++	struct property *prop;
++	unsigned int bus_num, min_bus, max_bus;
++	cell_t *cells;
++
++	if (!node->parent || (node->parent->bus != &pci_bus))
++		return;
++
++	prop = get_property(node, "reg");
++	if (!prop)
++		return;
++
++	cells = (cell_t *)prop->val.val;
++	bus_num = (fdt32_to_cpu(cells[0]) & 0x00ff0000) >> 16;
++
++	prop = get_property(node->parent, "bus-range");
++	if (!prop) {
++		min_bus = max_bus = 0;
++	} else {
++		cells = (cell_t *)prop->val.val;
++		min_bus = fdt32_to_cpu(cells[0]);
++		max_bus = fdt32_to_cpu(cells[0]);
++	}
++	if ((bus_num < min_bus) || (bus_num > max_bus))
++		FAIL(c, dti, "Node %s PCI bus number %d out of range, expected (%d - %d)",
++		     node->fullpath, bus_num, min_bus, max_bus);
++}
++WARNING(pci_device_bus_num, check_pci_device_bus_num, NULL, &reg_format, &pci_bridge);
++
++static void check_pci_device_reg(struct check *c, struct dt_info *dti, struct node *node)
++{
++	struct property *prop;
++	const char *unitname = get_unitname(node);
++	char unit_addr[5];
++	unsigned int dev, func, reg;
++	cell_t *cells;
++
++	if (!node->parent || (node->parent->bus != &pci_bus))
++		return;
++
++	prop = get_property(node, "reg");
++	if (!prop) {
++		FAIL(c, dti, "Node %s missing PCI reg property", node->fullpath);
++		return;
++	}
++
++	cells = (cell_t *)prop->val.val;
++	if (cells[1] || cells[2])
++		FAIL(c, dti, "Node %s PCI reg config space address cells 2 and 3 must be 0",
++			     node->fullpath);
++
++	reg = fdt32_to_cpu(cells[0]);
++	dev = (reg & 0xf800) >> 11;
++	func = (reg & 0x700) >> 8;
++
++	if (reg & 0xff000000)
++		FAIL(c, dti, "Node %s PCI reg address is not configuration space",
++			     node->fullpath);
++	if (reg & 0x000000ff)
++		FAIL(c, dti, "Node %s PCI reg config space address register number must be 0",
++			     node->fullpath);
++
++	if (func == 0) {
++		snprintf(unit_addr, sizeof(unit_addr), "%x", dev);
++		if (streq(unitname, unit_addr))
++			return;
++	}
++
++	snprintf(unit_addr, sizeof(unit_addr), "%x,%x", dev, func);
++	if (streq(unitname, unit_addr))
++		return;
++
++	FAIL(c, dti, "Node %s PCI unit address format error, expected \"%s\"",
++	     node->fullpath, unit_addr);
++}
++WARNING(pci_device_reg, check_pci_device_reg, NULL, &reg_format, &pci_bridge);
++
++static const struct bus_type simple_bus = {
++	.name = "simple-bus",
++};
++
++static bool node_is_compatible(struct node *node, const char *compat)
++{
++	struct property *prop;
++	const char *str, *end;
++
++	prop = get_property(node, "compatible");
++	if (!prop)
++		return false;
++
++	for (str = prop->val.val, end = str + prop->val.len; str < end;
++	     str += strnlen(str, end - str) + 1) {
++		if (strneq(str, compat, end - str))
++			return true;
++	}
++	return false;
++}
++
++static void check_simple_bus_bridge(struct check *c, struct dt_info *dti, struct node *node)
++{
++	if (node_is_compatible(node, "simple-bus"))
++		node->bus = &simple_bus;
++}
++WARNING(simple_bus_bridge, check_simple_bus_bridge, NULL, &addr_size_cells);
++
++static void check_simple_bus_reg(struct check *c, struct dt_info *dti, struct node *node)
++{
++	struct property *prop;
++	const char *unitname = get_unitname(node);
++	char unit_addr[17];
++	unsigned int size;
++	uint64_t reg = 0;
++	cell_t *cells = NULL;
++
++	if (!node->parent || (node->parent->bus != &simple_bus))
++		return;
++
++	prop = get_property(node, "reg");
++	if (prop)
++		cells = (cell_t *)prop->val.val;
++	else {
++		prop = get_property(node, "ranges");
++		if (prop && prop->val.len)
++			/* skip of child address */
++			cells = ((cell_t *)prop->val.val) + node_addr_cells(node);
++	}
++
++	if (!cells) {
++		if (node->parent->parent && !(node->bus == &simple_bus))
++			FAIL(c, dti, "Node %s missing or empty reg/ranges property", node->fullpath);
++		return;
++	}
++
++	size = node_addr_cells(node->parent);
++	while (size--)
++		reg = (reg << 32) | fdt32_to_cpu(*(cells++));
++
++	snprintf(unit_addr, sizeof(unit_addr), "%lx", reg);
++	if (!streq(unitname, unit_addr))
++		FAIL(c, dti, "Node %s simple-bus unit address format error, expected \"%s\"",
++		     node->fullpath, unit_addr);
++}
++WARNING(simple_bus_reg, check_simple_bus_reg, NULL, &reg_format, &simple_bus_bridge);
++
++static void check_unit_address_format(struct check *c, struct dt_info *dti,
++				      struct node *node)
++{
++	const char *unitname = get_unitname(node);
++
++	if (node->parent && node->parent->bus)
++		return;
++
++	if (!unitname[0])
++		return;
++
++	if (!strncmp(unitname, "0x", 2)) {
++		FAIL(c, dti, "Node %s unit name should not have leading \"0x\"",
++		    node->fullpath);
++		/* skip over 0x for next test */
++		unitname += 2;
++	}
++	if (unitname[0] == '0' && isxdigit(unitname[1]))
++		FAIL(c, dti, "Node %s unit name should not have leading 0s",
++		    node->fullpath);
++}
++WARNING(unit_address_format, check_unit_address_format, NULL,
++	&node_name_format, &pci_bridge, &simple_bus_bridge);
  
  /*
   * Style checks
@@ -812,7 +1035,7 @@ index 3d4c3c6c8952..38f548e582c8 100644
  					  struct node *node)
  {
  	struct property *reg, *ranges;
-@@ -654,31 +699,39 @@ static void check_avoid_default_addr_size(struct check *c, struct node *dt,
+@@ -654,31 +922,39 @@ static void check_avoid_default_addr_size(struct check *c, struct node *dt,
  		return;
  
  	if (node->parent->addr_cells == -1)
@@ -858,7 +1081,7 @@ index 3d4c3c6c8952..38f548e582c8 100644
  
  static struct check *check_table[] = {
  	&duplicate_node_names, &duplicate_property_names,
-@@ -693,6 +746,9 @@ static struct check *check_table[] = {
+@@ -693,9 +969,20 @@ static struct check *check_table[] = {
  	&address_cells_is_cell, &size_cells_is_cell, &interrupt_cells_is_cell,
  	&device_type_is_string, &model_is_string, &status_is_string,
  
@@ -868,7 +1091,18 @@ index 3d4c3c6c8952..38f548e582c8 100644
  	&addr_size_cells, &reg_format, &ranges_format,
  
  	&unit_address_vs_reg,
-@@ -764,9 +820,8 @@ void parse_checks_option(bool warn, bool error, const char *arg)
++	&unit_address_format,
++
++	&pci_bridge,
++	&pci_device_reg,
++	&pci_device_bus_num,
++
++	&simple_bus_bridge,
++	&simple_bus_reg,
+ 
+ 	&avoid_default_addr_size,
+ 	&obsolete_chosen_interrupt_controller,
+@@ -764,9 +1051,8 @@ void parse_checks_option(bool warn, bool error, const char *arg)
  	die("Unrecognized check name \"%s\"\n", name);
  }
  
@@ -879,7 +1113,7 @@ index 3d4c3c6c8952..38f548e582c8 100644
  	int i;
  	int error = 0;
  
-@@ -774,7 +829,7 @@ void process_checks(bool force, struct boot_info *bi)
+@@ -774,7 +1060,7 @@ void process_checks(bool force, struct boot_info *bi)
  		struct check *c = check_table[i];
  
  		if (c->warn || c->error)
@@ -5616,7 +5850,7 @@ index 1330e155306b..f5eed9d72c02 100644
  		/* do nothing */
  	} else {
 diff --git a/scripts/dtc/dtc.h b/scripts/dtc/dtc.h
-index aea6509bff79..403b79deab88 100644
+index aea6509bff79..fc24e17510fd 100644
 --- a/scripts/dtc/dtc.h
 +++ b/scripts/dtc/dtc.h
 @@ -20,6 +20,7 @@
@@ -5662,17 +5896,29 @@ index aea6509bff79..403b79deab88 100644
  struct data data_append_addr(struct data d, uint64_t addr);
  struct data data_append_byte(struct data d, uint8_t byte);
  struct data data_append_zeroes(struct data d, int len);
-@@ -163,9 +161,6 @@ struct node {
+@@ -137,6 +135,10 @@ struct label {
+ 	struct label *next;
+ };
+ 
++struct bus_type {
++	const char *name;
++};
++
+ struct property {
+ 	bool deleted;
+ 	char *name;
+@@ -163,9 +165,7 @@ struct node {
  	int addr_cells, size_cells;
  
  	struct label *labels;
 -
 -	/* only for the root (parent == NULL) */
 -	struct boot_info *bi;
++	const struct bus_type *bus;
  };
  
  #define for_each_label_withdel(l0, l) \
-@@ -202,7 +197,6 @@ struct node *build_node_delete(void);
+@@ -202,7 +202,6 @@ struct node *build_node_delete(void);
  struct node *name_node(struct node *node, char *name);
  struct node *chain_node(struct node *first, struct node *list);
  struct node *merge_nodes(struct node *old_node, struct node *new_node);
@@ -5680,7 +5926,7 @@ index aea6509bff79..403b79deab88 100644
  
  void add_property(struct node *node, struct property *prop);
  void delete_property_by_name(struct node *node, char *name);
-@@ -210,6 +204,8 @@ void delete_property(struct property *prop);
+@@ -210,6 +209,8 @@ void delete_property(struct property *prop);
  void add_child(struct node *parent, struct node *child);
  void delete_node_by_name(struct node *parent, char *name);
  void delete_node(struct node *node);
@@ -5689,7 +5935,7 @@ index aea6509bff79..403b79deab88 100644
  
  const char *get_unitname(struct node *node);
  struct property *get_property(struct node *node, const char *propname);
-@@ -230,7 +226,7 @@ uint32_t guess_boot_cpuid(struct node *tree);
+@@ -230,7 +231,7 @@ uint32_t guess_boot_cpuid(struct node *tree);
  /* Boot info (tree plus memreserve information */
  
  struct reserve_info {
@@ -5698,7 +5944,7 @@ index aea6509bff79..403b79deab88 100644
  
  	struct reserve_info *next;
  
-@@ -244,50 +240,45 @@ struct reserve_info *add_reserve_entry(struct reserve_info *list,
+@@ -244,50 +245,45 @@ struct reserve_info *add_reserve_entry(struct reserve_info *list,
  				       struct reserve_info *new);
  
  
@@ -6297,7 +6543,7 @@ index c5bbb68d3273..6aaab399929c 100644
  
  static void _fdt_nop_region(void *start, int len)
 diff --git a/scripts/dtc/libfdt/libfdt.h b/scripts/dtc/libfdt/libfdt.h
-index f7e39898aa94..9e71bb9e03a7 100644
+index f7e39898aa94..ba86caa73d01 100644
 --- a/scripts/dtc/libfdt/libfdt.h
 +++ b/scripts/dtc/libfdt/libfdt.h
 @@ -61,7 +61,7 @@
@@ -6322,7 +6568,7 @@ index f7e39898aa94..9e71bb9e03a7 100644
  #define FDT_ERR_BADSTATE	7
  	/* FDT_ERR_BADSTATE: Function was passed an incomplete device
  	 * tree created by the sequential-write functions, which is
-@@ -126,7 +128,16 @@
+@@ -126,13 +128,24 @@
  	 * value. For example: a property expected to contain a string list
  	 * is not NUL-terminated within the length of its value. */
  
@@ -6340,7 +6586,15 @@ index f7e39898aa94..9e71bb9e03a7 100644
  
  /**********************************************************************/
  /* Low-level functions (you probably don't need these)                */
-@@ -168,6 +179,34 @@ int fdt_first_subnode(const void *fdt, int offset);
+ /**********************************************************************/
+ 
++#ifndef SWIG /* This function is not useful in Python */
+ const void *fdt_offset_ptr(const void *fdt, int offset, unsigned int checklen);
++#endif
+ static inline void *fdt_offset_ptr_w(void *fdt, int offset, int checklen)
+ {
+ 	return (void *)(uintptr_t)fdt_offset_ptr(fdt, offset, checklen);
+@@ -168,10 +181,37 @@ int fdt_first_subnode(const void *fdt, int offset);
   */
  int fdt_next_subnode(const void *fdt, int offset);
  
@@ -6375,7 +6629,11 @@ index f7e39898aa94..9e71bb9e03a7 100644
  /**********************************************************************/
  /* General functions                                                  */
  /**********************************************************************/
-@@ -259,6 +298,21 @@ int fdt_move(const void *fdt, void *buf, int bufsize);
+-
+ #define fdt_get_header(fdt, field) \
+ 	(fdt32_to_cpu(((const struct fdt_header *)(fdt))->field))
+ #define fdt_magic(fdt)			(fdt_get_header(fdt, magic))
+@@ -259,6 +299,21 @@ int fdt_move(const void *fdt, void *buf, int bufsize);
  const char *fdt_string(const void *fdt, int stroffset);
  
  /**
@@ -6397,7 +6655,28 @@ index f7e39898aa94..9e71bb9e03a7 100644
   * fdt_num_mem_rsv - retrieve the number of memory reserve map entries
   * @fdt: pointer to the device tree blob
   *
-@@ -431,6 +485,33 @@ int fdt_first_property_offset(const void *fdt, int nodeoffset);
+@@ -300,8 +355,10 @@ int fdt_get_mem_rsv(const void *fdt, int n, uint64_t *address, uint64_t *size);
+  * useful for finding subnodes based on a portion of a larger string,
+  * such as a full path.
+  */
++#ifndef SWIG /* Not available in Python */
+ int fdt_subnode_offset_namelen(const void *fdt, int parentoffset,
+ 			       const char *name, int namelen);
++#endif
+ /**
+  * fdt_subnode_offset - find a subnode of a given node
+  * @fdt: pointer to the device tree blob
+@@ -337,7 +394,9 @@ int fdt_subnode_offset(const void *fdt, int parentoffset, const char *name);
+  * Identical to fdt_path_offset(), but only consider the first namelen
+  * characters of path as the path name.
+  */
++#ifndef SWIG /* Not available in Python */
+ int fdt_path_offset_namelen(const void *fdt, const char *path, int namelen);
++#endif
+ 
+ /**
+  * fdt_path_offset - find a tree node by its full path
+@@ -431,6 +490,33 @@ int fdt_first_property_offset(const void *fdt, int nodeoffset);
  int fdt_next_property_offset(const void *fdt, int offset);
  
  /**
@@ -6431,8 +6710,35 @@ index f7e39898aa94..9e71bb9e03a7 100644
   * fdt_get_property_by_offset - retrieve the property at a given offset
   * @fdt: pointer to the device tree blob
   * @offset: offset of the property to retrieve
-@@ -559,6 +640,13 @@ const void *fdt_getprop_by_offset(const void *fdt, int offset,
+@@ -469,10 +555,12 @@ const struct fdt_property *fdt_get_property_by_offset(const void *fdt,
+  * Identical to fdt_get_property(), but only examine the first namelen
+  * characters of name for matching the property name.
   */
++#ifndef SWIG /* Not available in Python */
+ const struct fdt_property *fdt_get_property_namelen(const void *fdt,
+ 						    int nodeoffset,
+ 						    const char *name,
+ 						    int namelen, int *lenp);
++#endif
+ 
+ /**
+  * fdt_get_property - find a given property in a given node
+@@ -543,8 +631,10 @@ static inline struct fdt_property *fdt_get_property_w(void *fdt, int nodeoffset,
+  *		-FDT_ERR_BADSTRUCTURE,
+  *		-FDT_ERR_TRUNCATED, standard meanings
+  */
++#ifndef SWIG /* This function is not useful in Python */
+ const void *fdt_getprop_by_offset(const void *fdt, int offset,
+ 				  const char **namep, int *lenp);
++#endif
+ 
+ /**
+  * fdt_getprop_namelen - get property value based on substring
+@@ -557,8 +647,17 @@ const void *fdt_getprop_by_offset(const void *fdt, int offset,
+  * Identical to fdt_getprop(), but only examine the first namelen
+  * characters of name for matching the property name.
+  */
++#ifndef SWIG /* Not available in Python */
  const void *fdt_getprop_namelen(const void *fdt, int nodeoffset,
  				const char *name, int namelen, int *lenp);
 +static inline void *fdt_getprop_namelen_w(void *fdt, int nodeoffset,
@@ -6442,11 +6748,18 @@ index f7e39898aa94..9e71bb9e03a7 100644
 +	return (void *)(uintptr_t)fdt_getprop_namelen(fdt, nodeoffset, name,
 +						      namelen, lenp);
 +}
++#endif
  
  /**
   * fdt_getprop - retrieve the value of a given property
-@@ -623,7 +711,7 @@ const char *fdt_get_alias_namelen(const void *fdt,
+@@ -619,11 +718,13 @@ uint32_t fdt_get_phandle(const void *fdt, int nodeoffset);
+  * Identical to fdt_get_alias(), but only examine the first namelen
+  * characters of name for matching the alias name.
+  */
++#ifndef SWIG /* Not available in Python */
+ const char *fdt_get_alias_namelen(const void *fdt,
  				  const char *name, int namelen);
++#endif
  
  /**
 - * fdt_get_alias - retreive the path referenced by a given alias
@@ -6454,7 +6767,7 @@ index f7e39898aa94..9e71bb9e03a7 100644
   * @fdt: pointer to the device tree blob
   * @name: name of the alias th look up
   *
-@@ -1003,6 +1091,27 @@ int fdt_size_cells(const void *fdt, int nodeoffset);
+@@ -1003,6 +1104,29 @@ int fdt_size_cells(const void *fdt, int nodeoffset);
  /**********************************************************************/
  
  /**
@@ -6473,16 +6786,29 @@ index f7e39898aa94..9e71bb9e03a7 100644
 + * of the name. It is useful when you want to manipulate only one value of
 + * an array and you have a string that doesn't end with \0.
 + */
++#ifndef SWIG /* Not available in Python */
 +int fdt_setprop_inplace_namelen_partial(void *fdt, int nodeoffset,
 +					const char *name, int namelen,
 +					uint32_t idx, const void *val,
 +					int len);
++#endif
 +
 +/**
   * fdt_setprop_inplace - change a property's value, but not its size
   * @fdt: pointer to the device tree blob
   * @nodeoffset: offset of the node whose property to change
-@@ -1418,6 +1527,36 @@ static inline int fdt_setprop_cell(void *fdt, int nodeoffset, const char *name,
+@@ -1030,8 +1154,10 @@ int fdt_size_cells(const void *fdt, int nodeoffset);
+  *	-FDT_ERR_BADSTRUCTURE,
+  *	-FDT_ERR_TRUNCATED, standard meanings
+  */
++#ifndef SWIG /* Not available in Python */
+ int fdt_setprop_inplace(void *fdt, int nodeoffset, const char *name,
+ 			const void *val, int len);
++#endif
+ 
+ /**
+  * fdt_setprop_inplace_u32 - change the value of a 32-bit integer property
+@@ -1418,6 +1544,36 @@ static inline int fdt_setprop_cell(void *fdt, int nodeoffset, const char *name,
  #define fdt_setprop_string(fdt, nodeoffset, name, str) \
  	fdt_setprop((fdt), (nodeoffset), (name), (str), strlen(str)+1)
  
@@ -6519,7 +6845,18 @@ index f7e39898aa94..9e71bb9e03a7 100644
  /**
   * fdt_appendprop - append to or create a property
   * @fdt: pointer to the device tree blob
-@@ -1654,6 +1793,37 @@ int fdt_add_subnode(void *fdt, int parentoffset, const char *name);
+@@ -1595,8 +1751,10 @@ int fdt_delprop(void *fdt, int nodeoffset, const char *name);
+  * creating subnodes based on a portion of a larger string, such as a
+  * full path.
+  */
++#ifndef SWIG /* Not available in Python */
+ int fdt_add_subnode_namelen(void *fdt, int parentoffset,
+ 			    const char *name, int namelen);
++#endif
+ 
+ /**
+  * fdt_add_subnode - creates a new node
+@@ -1654,6 +1812,37 @@ int fdt_add_subnode(void *fdt, int parentoffset, const char *name);
   */
  int fdt_del_node(void *fdt, int nodeoffset);
  
@@ -7469,12 +7806,12 @@ index f800b6011fb1..ad5f41199edb 100644
  /**
   * Show usage and exit
 diff --git a/scripts/dtc/version_gen.h b/scripts/dtc/version_gen.h
-index f934c71981a0..859564e8b466 100644
+index f934c71981a0..31ef1ae1bfc9 100644
 --- a/scripts/dtc/version_gen.h
 +++ b/scripts/dtc/version_gen.h
 @@ -1 +1 @@
 -#define DTC_VERSION "DTC 1.4.1-g6f4db2fc"
-+#define DTC_VERSION "DTC 1.4.4"
++#define DTC_VERSION "DTC 1.4.4-g6afd7d96"
 -- 
 2.11.0
 
