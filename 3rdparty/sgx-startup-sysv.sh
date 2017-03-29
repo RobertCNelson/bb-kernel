@@ -16,6 +16,12 @@ start)
 
 		modprobe -q pvrsrvkm
 
+		while [ ! -d  /sys/class/pvr/pvrsrvkm/ ]
+		do
+			echo "wait pvrsrvkm"
+			sleep 1
+		done
+
 		# Delete the device for PVR services device and recreate with the
 		# correct major number.
 		#
@@ -30,6 +36,12 @@ start)
 
 		if [ -f /usr/local/bin/pvrsrvctl ] ; then
 			/usr/local/bin/pvrsrvctl --start --no-module
+
+			while [ ! -e /dev/fb0 ]
+			do
+				echo "wait fb0"
+				sleep 5
+			done
 
 			modprobe -q omaplfb
 		fi
