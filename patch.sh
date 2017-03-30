@@ -356,6 +356,8 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0003-staging-iio-ad7606-fix-improper-setting-of-oversampl.patch"
 	${git} "${DIR}/patches/backports/iio/0004-iio-pressure-mpl115-do-not-rely-on-structure-field-o.patch"
 	${git} "${DIR}/patches/backports/iio/0005-iio-pressure-mpl3115-do-not-rely-on-structure-field-.patch"
+	${git} "${DIR}/patches/backports/iio/0006-iio-adc-ti_am335x_adc-fix-fifo-overrun-recovery.patch"
+	${git} "${DIR}/patches/backports/iio/0007-iio-hid-sensor-trigger-Change-get-poll-value-functio.patch"
 
 	backport_tag="v4.8.17"
 
@@ -1141,14 +1143,6 @@ quieter
 gcc6
 sgx
 
-git_clone_dtc () {
-	${git_bin} clone -b master https://git.kernel.org/pub/scm/utils/dtc/dtc.git --depth=10
-	#dtc: Bump version to v1.4.4
-	cd ./dtc
-	${git_bin} checkout 558cd81bdd432769b59bff01240c44f82cfb1a9d -b tmp
-	cd ../
-}
-
 sync_mainline_dtc () {
 	echo "dir: dtc"
 	#regenerate="enable"
@@ -1157,7 +1151,9 @@ sync_mainline_dtc () {
 		if [ -d ./dtc ] ; then
 			rm -rf ./dtc || true
 		fi
-		git_clone_dtc
+
+		${git_bin} clone -b dtc-v1.4.4 https://github.com/RobertCNelson/dtc --depth=1
+
 		cd ./KERNEL/
 
 		sed -i -e 's:git commit:#git commit:g' ./scripts/dtc/update-dtc-source.sh

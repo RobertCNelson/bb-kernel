@@ -1,0 +1,71 @@
+From 2b563d1317b4d6c6cef76d57a4123caee4e3e657 Mon Sep 17 00:00:00 2001
+From: Michael Engl <michael.engl@wjw-solutions.com>
+Date: Tue, 3 Oct 2017 13:57:00 +0100
+Subject: [PATCH 6/7] iio: adc: ti_am335x_adc: fix fifo overrun recovery
+
+commit e83bb3e6f3efa21f4a9d883a25d0ecd9dfb431e1 upstream.
+
+The tiadc_irq_h(int irq, void *private) function is handling FIFO
+overruns by clearing flags, disabling and enabling the ADC to
+recover.
+
+If the ADC is running in continuous mode a FIFO overrun happens
+regularly. If the disabling of the ADC happens concurrently with
+a new conversion. It might happen that the enabling of the ADC
+is ignored by the hardware. This stops the ADC permanently. No
+more interrupts are triggered.
+
+According to the AM335x Reference Manual (SPRUH73H October 2011 -
+Revised April 2013 - Chapter 12.4 and 12.5) it is necessary to
+check the ADC FSM bits in REG_ADCFSM before enabling the ADC
+again. Because the disabling of the ADC is done right after the
+current conversion has been finished.
+
+To trigger this bug it is necessary to run the ADC in continuous
+mode. The ADC values of all channels need to be read in an endless
+loop. The bug appears within the first 6 hours (~5.4 million
+handled FIFO overruns). The user space application will hang on
+reading new values from the character device.
+
+Fixes: ca9a563805f7a ("iio: ti_am335x_adc: Add continuous sampling support")
+Signed-off-by: Michael Engl <michael.engl@wjw-solutions.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/iio/adc/ti_am335x_adc.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iio/adc/ti_am335x_adc.c b/drivers/iio/adc/ti_am335x_adc.c
+index 0470fc843d4e..9b6854607d73 100644
+--- a/drivers/iio/adc/ti_am335x_adc.c
++++ b/drivers/iio/adc/ti_am335x_adc.c
+@@ -151,7 +151,9 @@ static irqreturn_t tiadc_irq_h(int irq, void *private)
+ {
+ 	struct iio_dev *indio_dev = private;
+ 	struct tiadc_device *adc_dev = iio_priv(indio_dev);
+-	unsigned int status, config;
++	unsigned int status, config, adc_fsm;
++	unsigned short count = 0;
++
+ 	status = tiadc_readl(adc_dev, REG_IRQSTATUS);
+ 
+ 	/*
+@@ -165,6 +167,15 @@ static irqreturn_t tiadc_irq_h(int irq, void *private)
+ 		tiadc_writel(adc_dev, REG_CTRL, config);
+ 		tiadc_writel(adc_dev, REG_IRQSTATUS, IRQENB_FIFO1OVRRUN
+ 				| IRQENB_FIFO1UNDRFLW | IRQENB_FIFO1THRES);
++
++		/* wait for idle state.
++		 * ADC needs to finish the current conversion
++		 * before disabling the module
++		 */
++		do {
++			adc_fsm = tiadc_readl(adc_dev, REG_ADCFSM);
++		} while (adc_fsm != 0x10 && count++ < 100);
++
+ 		tiadc_writel(adc_dev, REG_CTRL, (config | CNTRLREG_TSCSSENB));
+ 		return IRQ_HANDLED;
+ 	} else if (status & IRQENB_FIFO1THRES) {
+-- 
+2.11.0
+
