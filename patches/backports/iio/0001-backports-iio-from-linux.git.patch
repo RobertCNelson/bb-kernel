@@ -1,6 +1,6 @@
-From 19ae3f99fa22e74b74009fabd13faff31921128d Mon Sep 17 00:00:00 2001
+From d4ebe13e35bb8a2e5d84b79f3b0703e862687ab2 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 26 Mar 2017 21:21:23 -0500
+Date: Thu, 30 Mar 2017 10:56:56 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -53,6 +53,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/adc/ti-adc128s052.c                    |   13 +-
  drivers/iio/adc/ti-ads1015.c                       |  613 +++++++
  drivers/iio/adc/ti-ads8688.c                       |  486 ++++++
+ drivers/iio/adc/ti_am335x_adc.c                    |   13 +-
  drivers/iio/adc/vf610_adc.c                        |   24 +-
  drivers/iio/adc/xilinx-xadc-core.c                 |    2 +-
  drivers/iio/buffer/Kconfig                         |   20 +
@@ -65,7 +66,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/chemical/atlas-ph-sensor.c             |  509 ++++++
  drivers/iio/chemical/vz89x.c                       |   66 +-
  .../iio/common/hid-sensors/hid-sensor-attributes.c |   56 +-
- .../iio/common/hid-sensors/hid-sensor-trigger.c    |    2 +-
+ .../iio/common/hid-sensors/hid-sensor-trigger.c    |    8 +-
  drivers/iio/common/ms_sensors/ms_sensors_i2c.c     |    2 +-
  drivers/iio/common/st_sensors/st_sensors_buffer.c  |   88 +-
  drivers/iio/common/st_sensors/st_sensors_core.c    |   35 +-
@@ -273,7 +274,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/platform_data/ad5761.h               |   44 +
  include/linux/platform_data/st_sensors_pdata.h     |    2 +
  include/uapi/linux/iio/types.h                     |    3 +
- 268 files changed, 27415 insertions(+), 2404 deletions(-)
+ 269 files changed, 27419 insertions(+), 2419 deletions(-)
  create mode 100644 drivers/iio/accel/mma7455.h
  create mode 100644 drivers/iio/accel/mma7455_core.c
  create mode 100644 drivers/iio/accel/mma7455_i2c.c
@@ -10969,6 +10970,37 @@ index 000000000000..03e907028cb6
 +MODULE_AUTHOR("Sean Nyekjaer <sean.nyekjaer@prevas.dk>");
 +MODULE_DESCRIPTION("Texas Instruments ADS8688 driver");
 +MODULE_LICENSE("GPL v2");
+diff --git a/drivers/iio/adc/ti_am335x_adc.c b/drivers/iio/adc/ti_am335x_adc.c
+index 9b6854607d73..0470fc843d4e 100644
+--- a/drivers/iio/adc/ti_am335x_adc.c
++++ b/drivers/iio/adc/ti_am335x_adc.c
+@@ -151,9 +151,7 @@ static irqreturn_t tiadc_irq_h(int irq, void *private)
+ {
+ 	struct iio_dev *indio_dev = private;
+ 	struct tiadc_device *adc_dev = iio_priv(indio_dev);
+-	unsigned int status, config, adc_fsm;
+-	unsigned short count = 0;
+-
++	unsigned int status, config;
+ 	status = tiadc_readl(adc_dev, REG_IRQSTATUS);
+ 
+ 	/*
+@@ -167,15 +165,6 @@ static irqreturn_t tiadc_irq_h(int irq, void *private)
+ 		tiadc_writel(adc_dev, REG_CTRL, config);
+ 		tiadc_writel(adc_dev, REG_IRQSTATUS, IRQENB_FIFO1OVRRUN
+ 				| IRQENB_FIFO1UNDRFLW | IRQENB_FIFO1THRES);
+-
+-		/* wait for idle state.
+-		 * ADC needs to finish the current conversion
+-		 * before disabling the module
+-		 */
+-		do {
+-			adc_fsm = tiadc_readl(adc_dev, REG_ADCFSM);
+-		} while (adc_fsm != 0x10 && count++ < 100);
+-
+ 		tiadc_writel(adc_dev, REG_CTRL, (config | CNTRLREG_TSCSSENB));
+ 		return IRQ_HANDLED;
+ 	} else if (status & IRQENB_FIFO1THRES) {
 diff --git a/drivers/iio/adc/vf610_adc.c b/drivers/iio/adc/vf610_adc.c
 index b10f629cc44b..653bf1379d2e 100644
 --- a/drivers/iio/adc/vf610_adc.c
@@ -12970,9 +13002,29 @@ index b5beea53d6f6..dc33c1dd5191 100644
  EXPORT_SYMBOL(hid_sensor_format_scale);
  
 diff --git a/drivers/iio/common/hid-sensors/hid-sensor-trigger.c b/drivers/iio/common/hid-sensors/hid-sensor-trigger.c
-index 595511022795..5b41f9d0d4f3 100644
+index 0a86ef43e781..5b41f9d0d4f3 100644
 --- a/drivers/iio/common/hid-sensors/hid-sensor-trigger.c
 +++ b/drivers/iio/common/hid-sensors/hid-sensor-trigger.c
+@@ -51,6 +51,8 @@ static int _hid_sensor_power_state(struct hid_sensor_common *st, bool state)
+ 			st->report_state.report_id,
+ 			st->report_state.index,
+ 			HID_USAGE_SENSOR_PROP_REPORTING_STATE_ALL_EVENTS_ENUM);
++
++		poll_value = hid_sensor_read_poll_value(st);
+ 	} else {
+ 		int val;
+ 
+@@ -87,9 +89,7 @@ static int _hid_sensor_power_state(struct hid_sensor_common *st, bool state)
+ 	sensor_hub_get_feature(st->hsdev, st->power_state.report_id,
+ 			       st->power_state.index,
+ 			       sizeof(state_val), &state_val);
+-	if (state)
+-		poll_value = hid_sensor_read_poll_value(st);
+-	if (poll_value > 0)
++	if (state && poll_value)
+ 		msleep_interruptible(poll_value * 2);
+ 
+ 	return 0;
 @@ -115,7 +115,7 @@ int hid_sensor_power_state(struct hid_sensor_common *st, bool state)
  		return ret;
  	}
