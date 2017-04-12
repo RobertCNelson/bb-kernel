@@ -1,6 +1,6 @@
-From f34f4e322c3a690869d94191d2cdecd018617b7c Mon Sep 17 00:00:00 2001
+From fecfc90b28877f1999c63520e70db660cf7762b4 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sat, 8 Apr 2017 19:28:46 -0500
+Date: Wed, 12 Apr 2017 09:21:34 -0500
 Subject: [PATCH 5/5] merge: aufs4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -23,8 +23,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/Kconfig                                    |  185 ++
  fs/aufs/Makefile                                   |   44 +
  fs/aufs/aufs.h                                     |   59 +
- fs/aufs/branch.c                                   | 1412 +++++++++++++++
- fs/aufs/branch.h                                   |  309 ++++
+ fs/aufs/branch.c                                   | 1423 +++++++++++++++
+ fs/aufs/branch.h                                   |  321 ++++
  fs/aufs/conf.mk                                    |   38 +
  fs/aufs/cpup.c                                     | 1413 +++++++++++++++
  fs/aufs/cpup.h                                     |   94 +
@@ -56,7 +56,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/i_op_del.c                                 |  511 ++++++
  fs/aufs/i_op_ren.c                                 | 1165 ++++++++++++
  fs/aufs/iinfo.c                                    |  285 +++
- fs/aufs/inode.c                                    |  519 ++++++
+ fs/aufs/inode.c                                    |  527 ++++++
  fs/aufs/inode.h                                    |  692 ++++++++
  fs/aufs/ioctl.c                                    |  219 +++
  fs/aufs/loop.c                                     |  147 ++
@@ -90,9 +90,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/wkq.c                                      |  213 +++
  fs/aufs/wkq.h                                      |   93 +
  fs/aufs/xattr.c                                    |  357 ++++
- fs/aufs/xino.c                                     | 1318 ++++++++++++++
+ fs/aufs/xino.c                                     | 1415 +++++++++++++++
  include/uapi/linux/aufs_type.h                     |  419 +++++
- 87 files changed, 34951 insertions(+)
+ 87 files changed, 35079 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -2262,10 +2262,10 @@ index 000000000000..7f5eb7890bc0
 +#endif /* __AUFS_H__ */
 diff --git a/fs/aufs/branch.c b/fs/aufs/branch.c
 new file mode 100644
-index 000000000000..57fd10ec445c
+index 000000000000..d621731d9ac0
 --- /dev/null
 +++ b/fs/aufs/branch.c
-@@ -0,0 +1,1412 @@
+@@ -0,0 +1,1423 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -2304,7 +2304,9 @@ index 000000000000..57fd10ec445c
 +
 +	if (br->br_xino.xi_file)
 +		fput(br->br_xino.xi_file);
-+	mutex_destroy(&br->br_xino.xi_nondir_mtx);
++	for (i = br->br_xino.xi_nondir.total - 1; i >= 0; i--)
++		AuDebugOn(br->br_xino.xi_nondir.array[i]);
++	au_delayed_kfree(br->br_xino.xi_nondir.array);
 +
 +	AuDebugOn(au_br_count(br));
 +	au_br_count_fin(br);
@@ -2399,14 +2401,19 @@ index 000000000000..57fd10ec445c
 +	int err;
 +
 +	err = -ENOMEM;
-+	root = sb->s_root;
 +	add_branch = kzalloc(sizeof(*add_branch), GFP_NOFS);
 +	if (unlikely(!add_branch))
 +		goto out;
++	add_branch->br_xino.xi_nondir.total = 8; /* initial size */
++	add_branch->br_xino.xi_nondir.array
++		= kzalloc(sizeof(ino_t) * add_branch->br_xino.xi_nondir.total,
++			  GFP_NOFS);
++	if (unlikely(!add_branch->br_xino.xi_nondir.array))
++		goto out_br;
 +
 +	err = au_hnotify_init_br(add_branch, perm);
 +	if (unlikely(err))
-+		goto out_br;
++		goto out_xinondir;
 +
 +	if (au_br_writable(perm)) {
 +		/* may be freed separately at changing the branch permission */
@@ -2422,6 +2429,7 @@ index 000000000000..57fd10ec445c
 +			goto out_wbr;
 +	}
 +
++	root = sb->s_root;
 +	err = au_sbr_realloc(au_sbi(sb), new_nbranch, /*may_shrink*/0);
 +	if (!err)
 +		err = au_di_realloc(au_di(root), new_nbranch, /*may_shrink*/0);
@@ -2437,6 +2445,8 @@ index 000000000000..57fd10ec445c
 +		au_delayed_kfree(add_branch->br_wbr);
 +out_hnotify:
 +	au_hnotify_fin_br(add_branch);
++out_xinondir:
++	au_delayed_kfree(add_branch->br_xino.xi_nondir.array);
 +out_br:
 +	au_delayed_kfree(add_branch);
 +out:
@@ -2650,7 +2660,8 @@ index 000000000000..57fd10ec445c
 +	struct inode *h_inode;
 +
 +	err = 0;
-+	mutex_init(&br->br_xino.xi_nondir_mtx);
++	spin_lock_init(&br->br_xino.xi_nondir.spin);
++	init_waitqueue_head(&br->br_xino.xi_nondir.wqh);
 +	br->br_perm = add->perm;
 +	br->br_path = add->path; /* set first, path_get() later */
 +	spin_lock_init(&br->br_dykey_lock);
@@ -3680,10 +3691,10 @@ index 000000000000..57fd10ec445c
 +}
 diff --git a/fs/aufs/branch.h b/fs/aufs/branch.h
 new file mode 100644
-index 000000000000..13aa12e4165f
+index 000000000000..e9591cfa2568
 --- /dev/null
 +++ b/fs/aufs/branch.h
-@@ -0,0 +1,309 @@
+@@ -0,0 +1,321 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -3720,7 +3731,14 @@ index 000000000000..13aa12e4165f
 +/* a xino file */
 +struct au_xino_file {
 +	struct file		*xi_file;
-+	struct mutex		xi_nondir_mtx;
++	struct {
++		spinlock_t		spin;
++		ino_t			*array;
++		int			total;
++		/* reserved for future use */
++		/* unsigned long	*bitmap; */
++		wait_queue_head_t	wqh;
++	} xi_nondir;
 +
 +	/* todo: make xino files an array to support huge inode number */
 +
@@ -3918,6 +3936,11 @@ index 000000000000..13aa12e4165f
 +void au_xino_clr(struct super_block *sb);
 +struct file *au_xino_def(struct super_block *sb);
 +int au_xino_path(struct seq_file *seq, struct file *file);
++
++void au_xinondir_leave(struct super_block *sb, aufs_bindex_t bindex,
++		       ino_t h_ino, int idx);
++int au_xinondir_enter(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
++		      int *idx);
 +
 +/* ---------------------------------------------------------------------- */
 +
@@ -19750,10 +19773,10 @@ index 000000000000..ce9f15762e29
 +}
 diff --git a/fs/aufs/inode.c b/fs/aufs/inode.c
 new file mode 100644
-index 000000000000..2cce490f1189
+index 000000000000..d361e25280dc
 --- /dev/null
 +++ b/fs/aufs/inode.c
-@@ -0,0 +1,519 @@
+@@ -0,0 +1,527 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -20091,32 +20114,34 @@ index 000000000000..2cce490f1189
 +int au_ino(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 +	   unsigned int d_type, ino_t *ino)
 +{
-+	int err;
-+	struct mutex *mtx;
++	int err, idx;
++	const int isnondir = d_type != DT_DIR;
 +
 +	/* prevent hardlinked inode number from race condition */
-+	mtx = NULL;
-+	if (d_type != DT_DIR) {
-+		mtx = &au_sbr(sb, bindex)->br_xino.xi_nondir_mtx;
-+		mutex_lock(mtx);
++	if (isnondir) {
++		err = au_xinondir_enter(sb, bindex, h_ino, &idx);
++		if (unlikely(err))
++			goto out;
 +	}
++
 +	err = au_xino_read(sb, bindex, h_ino, ino);
 +	if (unlikely(err))
-+		goto out;
++		goto out_xinondir;
 +
 +	if (!*ino) {
 +		err = -EIO;
 +		*ino = au_xino_new_ino(sb);
 +		if (unlikely(!*ino))
-+			goto out;
++			goto out_xinondir;
 +		err = au_xino_write(sb, bindex, h_ino, *ino);
 +		if (unlikely(err))
-+			goto out;
++			goto out_xinondir;
 +	}
 +
++out_xinondir:
++	if (isnondir && idx >= 0)
++		au_xinondir_leave(sb, bindex, h_ino, idx);
 +out:
-+	if (mtx)
-+		mutex_unlock(mtx);
 +	return err;
 +}
 +
@@ -20127,9 +20152,8 @@ index 000000000000..2cce490f1189
 +	struct inode *inode, *h_inode;
 +	struct dentry *h_dentry;
 +	struct super_block *sb;
-+	struct mutex *mtx;
 +	ino_t h_ino, ino;
-+	int err;
++	int err, idx, hlinked;
 +	aufs_bindex_t btop;
 +
 +	sb = dentry->d_sb;
@@ -20137,28 +20161,30 @@ index 000000000000..2cce490f1189
 +	h_dentry = au_h_dptr(dentry, btop);
 +	h_inode = d_inode(h_dentry);
 +	h_ino = h_inode->i_ino;
++	hlinked = !d_is_dir(h_dentry) && h_inode->i_nlink > 1;
 +
++new_ino:
 +	/*
 +	 * stop 'race'-ing between hardlinks under different
 +	 * parents.
 +	 */
-+	mtx = NULL;
-+	if (!d_is_dir(h_dentry))
-+		mtx = &au_sbr(sb, btop)->br_xino.xi_nondir_mtx;
++	if (hlinked) {
++		err = au_xinondir_enter(sb, btop, h_ino, &idx);
++		inode = ERR_PTR(err);
++		if (unlikely(err))
++			goto out;
++	}
 +
-+new_ino:
-+	if (mtx)
-+		mutex_lock(mtx);
 +	err = au_xino_read(sb, btop, h_ino, &ino);
 +	inode = ERR_PTR(err);
 +	if (unlikely(err))
-+		goto out;
++		goto out_xinondir;
 +
 +	if (!ino) {
 +		ino = au_xino_new_ino(sb);
 +		if (unlikely(!ino)) {
 +			inode = ERR_PTR(-EIO);
-+			goto out;
++			goto out_xinondir;
 +		}
 +	}
 +
@@ -20166,7 +20192,7 @@ index 000000000000..2cce490f1189
 +	inode = au_iget_locked(sb, ino);
 +	err = PTR_ERR(inode);
 +	if (IS_ERR(inode))
-+		goto out;
++		goto out_xinondir;
 +
 +	AuDbg("%lx, new %d\n", inode->i_state, !!(inode->i_state & I_NEW));
 +	if (inode->i_state & I_NEW) {
@@ -20174,7 +20200,7 @@ index 000000000000..2cce490f1189
 +		err = set_inode(inode, dentry);
 +		if (!err) {
 +			unlock_new_inode(inode);
-+			goto out; /* success */
++			goto out_xinondir; /* success */
 +		}
 +
 +		/*
@@ -20193,19 +20219,23 @@ index 000000000000..2cce490f1189
 +		 * horrible race condition between lookup, readdir and copyup
 +		 * (or something).
 +		 */
-+		if (mtx)
-+			mutex_unlock(mtx);
++		if (hlinked && idx >= 0)
++			au_xinondir_leave(sb, btop, h_ino, idx);
 +		err = reval_inode(inode, dentry);
 +		if (unlikely(err < 0)) {
-+			mtx = NULL;
++			hlinked = 0;
 +			goto out_iput;
 +		}
-+
-+		if (!err) {
-+			mtx = NULL;
++		if (!err)
 +			goto out; /* success */
-+		} else if (mtx)
-+			mutex_lock(mtx);
++		else if (hlinked && idx >= 0) {
++			err = au_xinondir_enter(sb, btop, h_ino, &idx);
++			if (unlikely(err)) {
++				iput(inode);
++				inode = ERR_PTR(err);
++				goto out;
++			}
++		}
 +	}
 +
 +	if (unlikely(au_test_fs_unique_ino(h_inode)))
@@ -20217,17 +20247,18 @@ index 000000000000..2cce490f1189
 +	err = au_xino_write(sb, btop, h_ino, /*ino*/0);
 +	if (!err) {
 +		iput(inode);
-+		if (mtx)
-+			mutex_unlock(mtx);
++		if (hlinked && idx >= 0)
++			au_xinondir_leave(sb, btop, h_ino, idx);
 +		goto new_ino;
 +	}
 +
 +out_iput:
 +	iput(inode);
 +	inode = ERR_PTR(err);
++out_xinondir:
++	if (hlinked && idx >= 0)
++		au_xinondir_leave(sb, btop, h_ino, idx);
 +out:
-+	if (mtx)
-+		mutex_unlock(mtx);
 +	return inode;
 +}
 +
@@ -33907,10 +33938,10 @@ index 000000000000..25961f2b3df8
 +}
 diff --git a/fs/aufs/xino.c b/fs/aufs/xino.c
 new file mode 100644
-index 000000000000..64dc09779610
+index 000000000000..3675f3225b14
 --- /dev/null
 +++ b/fs/aufs/xino.c
-@@ -0,0 +1,1318 @@
+@@ -0,0 +1,1415 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -35229,9 +35260,106 @@ index 000000000000..64dc09779610
 +out:
 +	return err;
 +}
++
++/* ---------------------------------------------------------------------- */
++
++void au_xinondir_leave(struct super_block *sb, aufs_bindex_t bindex,
++		       ino_t h_ino, int idx)
++{
++	struct au_xino_file *xino;
++
++	AuDebugOn(!au_opt_test(au_mntflags(sb), XINO));
++	xino = &au_sbr(sb, bindex)->br_xino;
++	AuDebugOn(idx < 0 || xino->xi_nondir.total <= idx);
++
++	spin_lock(&xino->xi_nondir.spin);
++	AuDebugOn(xino->xi_nondir.array[idx] != h_ino);
++	xino->xi_nondir.array[idx] = 0;
++	spin_unlock(&xino->xi_nondir.spin);
++	wake_up_all(&xino->xi_nondir.wqh);
++}
++
++static int au_xinondir_find(struct au_xino_file *xino, ino_t h_ino)
++{
++	int found, total, i;
++
++	found = -1;
++	total = xino->xi_nondir.total;
++	for (i = 0; i < total; i++) {
++		if (xino->xi_nondir.array[i] != h_ino)
++			continue;
++		found = i;
++		break;
++	}
++
++	return found;
++}
++
++static int au_xinondir_expand(struct au_xino_file *xino)
++{
++	int err, sz;
++	ino_t *p;
++
++	BUILD_BUG_ON(KMALLOC_MAX_SIZE > INT_MAX);
++
++	err = -ENOMEM;
++	sz = xino->xi_nondir.total * sizeof(ino_t);
++	if (unlikely(sz > KMALLOC_MAX_SIZE / 2))
++		goto out;
++	p = au_kzrealloc(xino->xi_nondir.array, sz, sz << 1, GFP_ATOMIC,
++			 /*may_shrink*/0);
++	if (p) {
++		xino->xi_nondir.array = p;
++		xino->xi_nondir.total <<= 1;
++		AuDbg("xi_nondir.total %d\n", xino->xi_nondir.total);
++		err = 0;
++	}
++
++out:
++	return err;
++}
++
++int au_xinondir_enter(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
++		      int *idx)
++{
++	int err, found, empty;
++	struct au_xino_file *xino;
++
++	err = 0;
++	*idx = -1;
++	if (!au_opt_test(au_mntflags(sb), XINO))
++		goto out; /* no xino */
++
++	xino = &au_sbr(sb, bindex)->br_xino;
++
++again:
++	spin_lock(&xino->xi_nondir.spin);
++	found = au_xinondir_find(xino, h_ino);
++	if (found == -1) {
++		empty = au_xinondir_find(xino, /*h_ino*/0);
++		if (empty == -1) {
++			empty = xino->xi_nondir.total;
++			err = au_xinondir_expand(xino);
++			if (unlikely(err))
++				goto out_unlock;
++		}
++		xino->xi_nondir.array[empty] = h_ino;
++		*idx = empty;
++	} else {
++		spin_unlock(&xino->xi_nondir.spin);
++		wait_event(xino->xi_nondir.wqh,
++			   xino->xi_nondir.array[found] != h_ino);
++		goto again;
++	}
++
++out_unlock:
++	spin_unlock(&xino->xi_nondir.spin);
++out:
++	return err;
++}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..e8027418bd8a
+index 000000000000..94a129cdd9bf
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,419 @@
@@ -35276,7 +35404,7 @@ index 000000000000..e8027418bd8a
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.9-20170327"
++#define AUFS_VERSION	"4.9-20170410"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
