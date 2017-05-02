@@ -1,0 +1,95 @@
+From e63a854b458b4dbca146f4d772f2013375dc3a74 Mon Sep 17 00:00:00 2001
+From: Darren Etheridge <detheridge@ti.com>
+Date: Fri, 11 Jul 2014 09:15:25 -0500
+Subject: [PATCH 2/6] HACK: drm/tilcdc: add vsync callback for use in omaplfb
+ for gpu
+
+Add a vsync callback registration API that is identical to what was done
+for da8xx-fb.c.
+
+Need to find if there is a better way using the DRM infrastructure from
+kernel space.  Either that or change the userspace window manager stuff in
+the gpu libraries to make use of the DRM provided syncronization
+mechanisms.
+
+Signed-off-by: Darren Etheridge <detheridge@ti.com>
+---
+ drivers/gpu/drm/tilcdc/tilcdc_crtc.c | 33 +++++++++++++++++++++++++++++++++
+ drivers/gpu/drm/tilcdc/tilcdc_drv.h  |  5 +++++
+ 2 files changed, 38 insertions(+)
+
+diff --git a/drivers/gpu/drm/tilcdc/tilcdc_crtc.c b/drivers/gpu/drm/tilcdc/tilcdc_crtc.c
+index d745e8b50fb8..50ad4a960c7d 100644
+--- a/drivers/gpu/drm/tilcdc/tilcdc_crtc.c
++++ b/drivers/gpu/drm/tilcdc/tilcdc_crtc.c
+@@ -65,6 +65,10 @@ struct tilcdc_crtc {
+ 	u16 *palette_base;
+ 	struct completion palette_loaded;
+ };
++
++static vsync_callback_t vsync_cb_handler;
++static void *vsync_cb_arg;
++
+ #define to_tilcdc_crtc(x) container_of(x, struct tilcdc_crtc, base)
+ 
+ static void unref_worker(struct drm_flip_work *work, void *val)
+@@ -862,6 +866,32 @@ void tilcdc_crtc_update_clk(struct drm_crtc *crtc)
+ 
+ #define SYNC_LOST_COUNT_LIMIT 50
+ 
++int register_vsync_cb(vsync_callback_t handler, void *arg, int idx)
++{
++	if ((vsync_cb_handler == NULL) && (vsync_cb_arg == NULL)) {
++		vsync_cb_arg = arg;
++		vsync_cb_handler = handler;
++	} else {
++		return -EEXIST;
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL(register_vsync_cb);
++
++int unregister_vsync_cb(vsync_callback_t handler, void *arg, int idx)
++{
++	if ((vsync_cb_handler == handler) && (vsync_cb_arg == arg)) {
++		vsync_cb_handler = NULL;
++		vsync_cb_arg = NULL;
++	} else {
++		return -ENXIO;
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL(unregister_vsync_cb);
++
+ irqreturn_t tilcdc_crtc_irq(struct drm_crtc *crtc)
+ {
+ 	struct tilcdc_crtc *tilcdc_crtc = to_tilcdc_crtc(crtc);
+@@ -905,6 +935,9 @@ irqreturn_t tilcdc_crtc_irq(struct drm_crtc *crtc)
+ 			if (event)
+ 				drm_crtc_send_vblank_event(crtc, event);
+ 
++			if (vsync_cb_handler)
++				vsync_cb_handler(vsync_cb_arg);
++
+ 			spin_unlock_irqrestore(&dev->event_lock, flags);
+ 		}
+ 
+diff --git a/drivers/gpu/drm/tilcdc/tilcdc_drv.h b/drivers/gpu/drm/tilcdc/tilcdc_drv.h
+index 8caa11bc7aec..6205400c58c8 100644
+--- a/drivers/gpu/drm/tilcdc/tilcdc_drv.h
++++ b/drivers/gpu/drm/tilcdc/tilcdc_drv.h
+@@ -182,4 +182,9 @@ int tilcdc_crtc_update_fb(struct drm_crtc *crtc,
+ 
+ int tilcdc_plane_init(struct drm_device *dev, struct drm_plane *plane);
+ 
++/* used by SGX OMAPLFB drvier */
++typedef void (*vsync_callback_t)(void *arg);
++int register_vsync_cb(vsync_callback_t handler, void *arg, int idx);
++int unregister_vsync_cb(vsync_callback_t handler, void *arg, int idx);
++
+ #endif /* __TILCDC_DRV_H__ */
+-- 
+2.11.0
+
