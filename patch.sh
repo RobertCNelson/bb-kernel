@@ -355,6 +355,8 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0006-iio-adc-ti_am335x_adc-fix-fifo-overrun-recovery.patch"
 	${git} "${DIR}/patches/backports/iio/0007-iio-hid-sensor-trigger-Change-get-poll-value-functio.patch"
 	${git} "${DIR}/patches/backports/iio/0008-iio-bmg160-reset-chip-when-probing.patch"
+	${git} "${DIR}/patches/backports/iio/0009-iio-dac-ad7303-fix-channel-description.patch"
+	${git} "${DIR}/patches/backports/iio/0010-iio-proximity-as3935-fix-as3935_write.patch"
 
 	backport_tag="v4.8.17"
 
