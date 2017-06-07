@@ -1,0 +1,106 @@
+From 771fa81575cad518dbe8650c6c4e9707f327821f Mon Sep 17 00:00:00 2001
+From: Sebastian Reichel <sebastian.reichel@collabora.co.uk>
+Date: Fri, 5 May 2017 11:06:50 +0200
+Subject: [PATCH 2/2] i2c: i2c-tiny-usb: fix buffer not being DMA capable
+
+commit 5165da5923d6c7df6f2927b0113b2e4d9288661e upstream.
+
+Since v4.9 i2c-tiny-usb generates the below call trace
+and longer works, since it can't communicate with the
+USB device. The reason is, that since v4.9 the USB
+stack checks, that the buffer it should transfer is DMA
+capable. This was a requirement since v2.2 days, but it
+usually worked nevertheless.
+
+[   17.504959] ------------[ cut here ]------------
+[   17.505488] WARNING: CPU: 0 PID: 93 at drivers/usb/core/hcd.c:1587 usb_hcd_map_urb_for_dma+0x37c/0x570
+[   17.506545] transfer buffer not dma capable
+[   17.507022] Modules linked in:
+[   17.507370] CPU: 0 PID: 93 Comm: i2cdetect Not tainted 4.11.0-rc8+ #10
+[   17.508103] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.10.2-1 04/01/2014
+[   17.509039] Call Trace:
+[   17.509320]  ? dump_stack+0x5c/0x78
+[   17.509714]  ? __warn+0xbe/0xe0
+[   17.510073]  ? warn_slowpath_fmt+0x5a/0x80
+[   17.510532]  ? nommu_map_sg+0xb0/0xb0
+[   17.510949]  ? usb_hcd_map_urb_for_dma+0x37c/0x570
+[   17.511482]  ? usb_hcd_submit_urb+0x336/0xab0
+[   17.511976]  ? wait_for_completion_timeout+0x12f/0x1a0
+[   17.512549]  ? wait_for_completion_timeout+0x65/0x1a0
+[   17.513125]  ? usb_start_wait_urb+0x65/0x160
+[   17.513604]  ? usb_control_msg+0xdc/0x130
+[   17.514061]  ? usb_xfer+0xa4/0x2a0
+[   17.514445]  ? __i2c_transfer+0x108/0x3c0
+[   17.514899]  ? i2c_transfer+0x57/0xb0
+[   17.515310]  ? i2c_smbus_xfer_emulated+0x12f/0x590
+[   17.515851]  ? _raw_spin_unlock_irqrestore+0x11/0x20
+[   17.516408]  ? i2c_smbus_xfer+0x125/0x330
+[   17.516876]  ? i2c_smbus_xfer+0x125/0x330
+[   17.517329]  ? i2cdev_ioctl_smbus+0x1c1/0x2b0
+[   17.517824]  ? i2cdev_ioctl+0x75/0x1c0
+[   17.518248]  ? do_vfs_ioctl+0x9f/0x600
+[   17.518671]  ? vfs_write+0x144/0x190
+[   17.519078]  ? SyS_ioctl+0x74/0x80
+[   17.519463]  ? entry_SYSCALL_64_fastpath+0x1e/0xad
+[   17.519959] ---[ end trace d047c04982f5ac50 ]---
+
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.co.uk>
+Reviewed-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Acked-by: Till Harbaum <till@harbaum.org>
+Signed-off-by: Wolfram Sang <wsa@the-dreams.de>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/i2c/busses/i2c-tiny-usb.c | 25 +++++++++++++++++++++----
+ 1 file changed, 21 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/i2c/busses/i2c-tiny-usb.c b/drivers/i2c/busses/i2c-tiny-usb.c
+index 0ed77eeff31e..a2e3dd715380 100644
+--- a/drivers/i2c/busses/i2c-tiny-usb.c
++++ b/drivers/i2c/busses/i2c-tiny-usb.c
+@@ -178,22 +178,39 @@ static int usb_read(struct i2c_adapter *adapter, int cmd,
+ 		    int value, int index, void *data, int len)
+ {
+ 	struct i2c_tiny_usb *dev = (struct i2c_tiny_usb *)adapter->algo_data;
++	void *dmadata = kmalloc(len, GFP_KERNEL);
++	int ret;
++
++	if (!dmadata)
++		return -ENOMEM;
+ 
+ 	/* do control transfer */
+-	return usb_control_msg(dev->usb_dev, usb_rcvctrlpipe(dev->usb_dev, 0),
++	ret = usb_control_msg(dev->usb_dev, usb_rcvctrlpipe(dev->usb_dev, 0),
+ 			       cmd, USB_TYPE_VENDOR | USB_RECIP_INTERFACE |
+-			       USB_DIR_IN, value, index, data, len, 2000);
++			       USB_DIR_IN, value, index, dmadata, len, 2000);
++
++	memcpy(data, dmadata, len);
++	kfree(dmadata);
++	return ret;
+ }
+ 
+ static int usb_write(struct i2c_adapter *adapter, int cmd,
+ 		     int value, int index, void *data, int len)
+ {
+ 	struct i2c_tiny_usb *dev = (struct i2c_tiny_usb *)adapter->algo_data;
++	void *dmadata = kmemdup(data, len, GFP_KERNEL);
++	int ret;
++
++	if (!dmadata)
++		return -ENOMEM;
+ 
+ 	/* do control transfer */
+-	return usb_control_msg(dev->usb_dev, usb_sndctrlpipe(dev->usb_dev, 0),
++	ret = usb_control_msg(dev->usb_dev, usb_sndctrlpipe(dev->usb_dev, 0),
+ 			       cmd, USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
+-			       value, index, data, len, 2000);
++			       value, index, dmadata, len, 2000);
++
++	kfree(dmadata);
++	return ret;
+ }
+ 
+ static void i2c_tiny_usb_free(struct i2c_tiny_usb *dev)
+-- 
+2.11.0
+

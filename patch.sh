@@ -330,6 +330,7 @@ lts44_backports () {
 	fi
 	${git} "${DIR}/patches/backports/i2c/0001-i2c-print-correct-device-invalid-address.patch"
 	${git} "${DIR}/patches/backports/i2c/0002-i2c-fix-kernel-memory-disclosure-in-dev-interface.patch"
+	${git} "${DIR}/patches/backports/i2c/0003-i2c-i2c-tiny-usb-fix-buffer-not-being-DMA-capable.patch"
 
 	subsystem="iio"
 	if [ "x${regenerate}" = "xenable" ] ; then
