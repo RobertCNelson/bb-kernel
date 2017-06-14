@@ -1,0 +1,105 @@
+From ab1eac05c88d330008682463488764b3f0eb09b7 Mon Sep 17 00:00:00 2001
+From: Ulf Hansson <ulf.hansson@linaro.org>
+Date: Wed, 6 Apr 2016 16:12:08 +0200
+Subject: [PATCH 4/4] mmc: block: Use the mmc host device index as the mmcblk
+ device index
+
+Commit 520bd7a8b415 ("mmc: core: Optimize boot time by detecting cards
+simultaneously") causes regressions for some platforms.
+
+These platforms relies on fixed mmcblk device indexes, instead of
+deploying the defacto standard with UUID/PARTUUID. In other words their
+rootfs needs to be available at hardcoded paths, like /dev/mmcblk0p2.
+
+Such guarantees have never been made by the kernel, but clearly the above
+commit changes the behaviour. More precisely, because of that the order
+changes of how cards becomes detected, so do their corresponding mmcblk
+device indexes.
+
+As the above commit significantly improves boot time for some platforms
+(magnitude of seconds), let's avoid reverting this change but instead
+restore the behaviour of how mmcblk device indexes becomes picked.
+
+By using the same index for the mmcblk device as for the corresponding mmc
+host device, the probe order of mmc host devices decides the index we get
+for the mmcblk device.
+
+For those platforms that suffers from a regression, one could expect that
+this updated behaviour should be sufficient to meet their expectations of
+"fixed" mmcblk device indexes.
+
+Another side effect from this change, is that the same index is used for
+the mmc host device, the mmcblk device and the mmc block queue. That
+should clarify their relationship.
+
+Reported-by: Peter Hurley <peter@hurleysoftware.com>
+Reported-by: Laszlo Fiat <laszlo.fiat@gmail.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Fixes: 520bd7a8b415 ("mmc: core: Optimize boot time by detecting cards
+simultaneously")
+Cc: <stable@vger.kernel.org>
+Signed-off-by: Ulf Hansson <ulf.hansson@linaro.org>
+---
+ drivers/mmc/card/block.c | 18 +-----------------
+ 1 file changed, 1 insertion(+), 17 deletions(-)
+
+diff --git a/drivers/mmc/card/block.c b/drivers/mmc/card/block.c
+index 6495003..63f6003 100644
+--- a/drivers/mmc/card/block.c
++++ b/drivers/mmc/card/block.c
+@@ -89,7 +89,6 @@ static int max_devices;
+ 
+ /* TODO: Replace these with struct ida */
+ static DECLARE_BITMAP(dev_use, MAX_DEVICES);
+-static DECLARE_BITMAP(name_use, MAX_DEVICES);
+ 
+ /*
+  * There is one mmc_blk_data per slot.
+@@ -108,7 +107,6 @@ struct mmc_blk_data {
+ 	unsigned int	usage;
+ 	unsigned int	read_only;
+ 	unsigned int	part_type;
+-	unsigned int	name_idx;
+ 	unsigned int	reset_done;
+ #define MMC_BLK_READ		BIT(0)
+ #define MMC_BLK_WRITE		BIT(1)
+@@ -2207,19 +2205,6 @@ static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
+ 		goto out;
+ 	}
+ 
+-	/*
+-	 * !subname implies we are creating main mmc_blk_data that will be
+-	 * associated with mmc_card with dev_set_drvdata. Due to device
+-	 * partitions, devidx will not coincide with a per-physical card
+-	 * index anymore so we keep track of a name index.
+-	 */
+-	if (!subname) {
+-		md->name_idx = find_first_zero_bit(name_use, max_devices);
+-		__set_bit(md->name_idx, name_use);
+-	} else
+-		md->name_idx = ((struct mmc_blk_data *)
+-				dev_to_disk(parent)->private_data)->name_idx;
+-
+ 	md->area_type = area_type;
+ 
+ 	/*
+@@ -2268,7 +2253,7 @@ static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
+ 	 */
+ 
+ 	snprintf(md->disk->disk_name, sizeof(md->disk->disk_name),
+-		 "mmcblk%u%s", md->name_idx, subname ? subname : "");
++		 "mmcblk%u%s", card->host->index, subname ? subname : "");
+ 
+ 	if (mmc_card_mmc(card))
+ 		blk_queue_logical_block_size(md->queue.queue,
+@@ -2422,7 +2407,6 @@ static void mmc_blk_remove_parts(struct mmc_card *card,
+ 	struct list_head *pos, *q;
+ 	struct mmc_blk_data *part_md;
+ 
+-	__clear_bit(md->name_idx, name_use);
+ 	list_for_each_safe(pos, q, &md->part) {
+ 		part_md = list_entry(pos, struct mmc_blk_data, part);
+ 		list_del(pos);
+-- 
+2.9.3
+

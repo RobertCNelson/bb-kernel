@@ -494,9 +494,10 @@ pru_uio () {
 	fi
 
 	${git} "${DIR}/patches/pru_uio/0001-Making-the-uio-pruss-driver-work.patch"
+	${git} "${DIR}/patches/pru_uio/0002-fix-some-uio_pruss-braindamage.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
+		number=2
 		cleanup
 	fi
 }
@@ -1142,6 +1143,7 @@ pru_uio
 pru_rpmsg
 bbb_overlays
 beaglebone
+dir 'drivers/ti/mmc'
 quieter
 gcc6
 sgx
