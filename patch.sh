@@ -360,6 +360,7 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0010-iio-proximity-as3935-fix-as3935_write.patch"
 	${git} "${DIR}/patches/backports/iio/0011-iio-light-ltr501-Fix-interchanged-als-ps-register-fi.patch"
 	${git} "${DIR}/patches/backports/iio/0012-iio-proximity-as3935-fix-AS3935_INT-mask.patch"
+	${git} "${DIR}/patches/backports/iio/0013-iio-proximity-as3935-recalibrate-RCO-after-resume.patch"
 
 	backport_tag="v4.8.17"
 
@@ -1143,9 +1144,9 @@ pru_uio
 pru_rpmsg
 bbb_overlays
 beaglebone
-dir 'drivers/ti/mmc'
 quieter
 gcc6
+dir 'drivers/ti/mmc'
 sgx
 
 sync_mainline_dtc () {
