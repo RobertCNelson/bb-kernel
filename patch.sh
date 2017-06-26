@@ -192,11 +192,6 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-	${git_bin} revert --no-edit b13b3b706a9dc03dd1a1c31f8268cd5193c1858c
-	${git_bin} revert --no-edit 0ce66ee6aec12f38ab6992233e92b9960b55e0c6
-	${git_bin} revert --no-edit b969a240448bfd8e6b0fb180a405e5cc881bf503
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -296,9 +291,16 @@ reverts () {
 	#conflicts with: 0005-PM-OPP-Add-infrastructure-to-manage-multiple-regulat.patch
 	${git} "${DIR}/patches/reverts/0002-Revert-PM-OPP-Pass-opp_table-to-dev_pm_opp_put_regul.patch"
 
+	${git} "${DIR}/patches/reverts/0003-Revert-wlcore-sdio-drop-kfree-for-memory-allocated-w.patch"
+	${git} "${DIR}/patches/reverts/0004-Revert-wlcore-wl18xx-Use-chip-specific-configuration.patch"
+	${git} "${DIR}/patches/reverts/0005-Revert-wlcore-Fix-config-firmware-loading-issues.patch"
+	${git} "${DIR}/patches/reverts/0006-Revert-wlcore-spi-Populate-config-firmware-data.patch"
+	${git} "${DIR}/patches/reverts/0007-Revert-wlcore-sdio-Populate-config-firmware-data.patch"
+	${git} "${DIR}/patches/reverts/0008-Revert-wlcore-Prepare-family-to-fix-nvs-file-handlin.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=2
+		number=8
 		cleanup
 	fi
 }
