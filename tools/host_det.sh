@@ -177,7 +177,7 @@ debian_regs () {
 			#Release:        testing/unstable
 			#Codename:       n/a
 			if [ "x${deb_lsb_rs}" = "xtesting_unstable" ] ; then
-				deb_distro="stretch"
+				deb_distro="buster"
 			fi
 		fi
 
@@ -345,14 +345,15 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="xenial"
 			;;
+		sonya)
+			#18.2
+			#http://packages.linuxmint.com/index.php
+			deb_distro="xenial"
+			;;
 		esac
 
 		#Future Debian Code names:
 		case "${deb_distro}" in
-		buster)
-			#Debian 10
-			deb_distro="sid"
-			;;
 		bullseye)
 			#Debian 11
 			deb_distro="sid"
@@ -362,10 +363,11 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		wheezy|jessie|stretch|sid)
+		wheezy|jessie|stretch|buster|sid)
 			#7 wheezy: https://wiki.debian.org/DebianWheezy
 			#8 jessie: https://wiki.debian.org/DebianJessie
 			#9 stretch: https://wiki.debian.org/DebianStretch
+			#10 buster: https://wiki.debian.org/DebianBuster
 			unset warn_eol_distro
 			;;
 		squeeze)
