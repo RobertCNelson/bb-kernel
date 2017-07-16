@@ -76,11 +76,11 @@ config="CONFIG_SYSCTL_SYSCALL" ; config_enable
 config="CONFIG_KALLSYMS_ALL" ; config_enable
 config="CONFIG_EMBEDDED" ; config_enable
 
-#
-# GCOV-based kernel profiling
-#
-config="CONFIG_MODULE_SIG" ; config_disable
-config="CONFIG_SYSTEM_TRUSTED_KEYRING" ; config_disable
+##
+## GCOV-based kernel profiling
+##
+#config="CONFIG_MODULE_SIG" ; config_disable
+#config="CONFIG_SYSTEM_TRUSTED_KEYRING" ; config_disable
 
 #
 # CPU Core family selection
@@ -117,12 +117,16 @@ config="CONFIG_SOC_AM43XX" ; config_enable
 config="CONFIG_MACH_OMAP3517EVM" ; config_disable
 config="CONFIG_MACH_OMAP3_PANDORA" ; config_disable
 config="CONFIG_OMAP5_ERRATA_801819" ; config_enable
+config="CONFIG_ARCH_SOCFPGA" ; config_disable
 config="CONFIG_ARCH_EXYNOS3" ; config_enable
 config="CONFIG_ARCH_EXYNOS4" ; config_disable
-config="CONFIG_ARCH_EXYNOS5" ; config_enable
+
+#
+# Power management
+#
 config="CONFIG_ARCH_VEXPRESS" ; config_disable
 config="CONFIG_ARCH_WM8850" ; config_disable
-config="CONFIG_ARCH_ZYNQ" ; config_enable
+config="CONFIG_ARCH_ZYNQ" ; config_disable
 
 #
 # Processor Features
@@ -140,6 +144,7 @@ config="CONFIG_PCI" ; config_disable
 #
 # Kernel Features
 #
+config="CONFIG_ARM_MODULE_PLTS" ; config_enable
 config="CONFIG_PARAVIRT" ; config_disable
 config="CONFIG_XEN" ; config_disable
 
@@ -163,7 +168,6 @@ config="CONFIG_CPU_IDLE" ; config_enable
 config="CONFIG_ARM_CPUIDLE" ; config_enable
 config="CONFIG_ARM_BIG_LITTLE_CPUIDLE" ; config_enable
 config="CONFIG_ARM_EXYNOS_CPUIDLE" ; config_enable
-config="CONFIG_ARM_ZYNQ_CPUIDLE" ; config_enable
 
 #
 # At least one emulation must be selected
@@ -211,29 +215,34 @@ config="CONFIG_YAM" ; config_module
 #
 # CAN Device Drivers
 #
-config="CONFIG_CAN_XILINXCAN" ; config_module
 config="CONFIG_CAN_C_CAN" ; config_module
 config="CONFIG_CAN_C_CAN_PLATFORM" ; config_module
 
 #
 # CAN SPI interfaces
 #
+config="CONFIG_CAN_HI311X" ; config_module
 config="CONFIG_CAN_MCP251X" ; config_module
+config="CONFIG_CAN_SJA1000" ; config_disable
+config="CONFIG_CAN_SOFTING" ; config_disable
 
 #
 # Bluetooth device drivers
 #
 config="CONFIG_BT_HCIUART" ; config_module
+config="CONFIG_BT_HCIBCM203X" ; config_module
+config="CONFIG_BT_HCIBFUSB" ; config_module
+
 config="CONFIG_BT_HCIUART_H4" ; config_enable
 config="CONFIG_BT_HCIUART_BCSP" ; config_enable
 config="CONFIG_BT_HCIUART_ATH3K" ; config_enable
-config="CONFIG_BT_HCIUART_LL" ; config_enable
 config="CONFIG_BT_HCIUART_3WIRE" ; config_enable
+
 config="CONFIG_BT_HCIUART_BCM" ; config_enable
 config="CONFIG_BT_HCIUART_QCA" ; config_enable
-config="CONFIG_BT_HCIBCM203X" ; config_module
+
 config="CONFIG_BT_HCIBPA10X" ; config_module
-config="CONFIG_BT_HCIBFUSB" ; config_module
+
 config="CONFIG_NFC_NCI" ; config_module
 config="CONFIG_NFC_NCI_SPI" ; config_module
 config="CONFIG_NFC_HCI" ; config_module
@@ -242,10 +251,8 @@ config="CONFIG_NFC_SHDLC" ; config_enable
 #
 # Near Field Communication (NFC) devices
 #
-config="CONFIG_NFC_WILINK" ; config_module
 config="CONFIG_NFC_PN544" ; config_module
 config="CONFIG_NFC_PN544_I2C" ; config_module
-config="CONFIG_NFC_PN533_USB" ; config_module
 config="CONFIG_NFC_PN533_I2C" ; config_module
 config="CONFIG_NFC_MICROREAD" ; config_module
 config="CONFIG_NFC_MICROREAD_I2C" ; config_module
@@ -271,6 +278,7 @@ config="CONFIG_CMA_SIZE_MBYTES" ; option=48 ; config_value
 #
 config="CONFIG_OMAP_OCP2SCP" ; config_enable
 config="CONFIG_SIMPLE_PM_BUS" ; config_enable
+config="CONFIG_VEXPRESS_CONFIG" ; config_disable
 
 #
 # LPDDR & LPDDR2 PCM memory drivers
@@ -278,12 +286,15 @@ config="CONFIG_SIMPLE_PM_BUS" ; config_enable
 config="CONFIG_MTD_UBI" ; config_enable
 config="CONFIG_OF_CONFIGFS" ; config_enable
 config="CONFIG_PARPORT" ; config_disable
+config="CONFIG_NVME_TARGET" ; config_disable
 
 #
 # Misc devices
 #
+config="CONFIG_SENSORS_LIS3LV02D" ; config_disable
 config="CONFIG_BONE_CAPEMGR" ; config_enable
 config="CONFIG_TIEQEP" ; config_module
+config="CONFIG_C2PORT" ; config_disable
 
 #
 # EEPROM support
@@ -299,9 +310,9 @@ config="CONFIG_EEPROM_93XX46" ; config_module
 config="CONFIG_SENSORS_LIS3_I2C" ; config_disable
 
 #
-# Argus cape driver for beaglebone black
+# Altera FPGA firmware download module
 #
-config="CONFIG_CAPE_BONE_ARGUS" ; config_enable
+config="CONFIG_ALTERA_STAPL" ; config_disable
 
 #
 # SCSI device support
@@ -357,8 +368,8 @@ config="CONFIG_STMMAC_ETH" ; config_enable
 config="CONFIG_STMMAC_PLATFORM" ; config_enable
 config="CONFIG_DWMAC_GENERIC" ; config_enable
 config="CONFIG_DWMAC_ROCKCHIP" ; config_enable
-config="CONFIG_DWMAC_SOCFPGA" ; config_enable
 config="CONFIG_DWMAC_SUNXI" ; config_enable
+config="CONFIG_DWMAC_SUN8I" ; config_enable
 config="CONFIG_TI_DAVINCI_EMAC" ; config_enable
 config="CONFIG_TI_DAVINCI_MDIO" ; config_enable
 config="CONFIG_TI_DAVINCI_CPDMA" ; config_enable
@@ -535,14 +546,10 @@ config="CONFIG_SERIAL_8250_OMAP_TTYO_FIXUP" ; config_enable
 # Non-8250 serial port support
 #
 config="CONFIG_SERIAL_OMAP" ; config_disable
-config="CONFIG_SERIAL_XILINX_PS_UART" ; config_enable
-config="CONFIG_SERIAL_XILINX_PS_UART_CONSOLE" ; config_enable
-
 config="CONFIG_SERIAL_ARC" ; config_disable
 config="CONFIG_SERIAL_FSL_LPUART" ; config_enable
 config="CONFIG_SERIAL_FSL_LPUART_CONSOLE" ; config_enable
-config="CONFIG_TCG_TPM" ; config_module
-config="CONFIG_TCG_TIS_I2C_ATMEL" ; config_module
+config="CONFIG_TCG_TIS_I2C_ATMEL" ; config_enable
 
 #
 # I2C support
@@ -552,18 +559,19 @@ config="CONFIG_I2C_CHARDEV" ; config_enable
 #
 # Multiplexer I2C Chip support
 #
+config="CONFIG_I2C_MUX_GPIO" ; config_enable
 config="CONFIG_I2C_MUX_PINCTRL" ; config_enable
 
 #
 # I2C system bus drivers (mostly embedded / system-on-chip)
 #
-config="CONFIG_I2C_CADENCE" ; config_enable
 config="CONFIG_I2C_EXYNOS5" ; config_enable
 config="CONFIG_I2C_IMX" ; config_enable
 config="CONFIG_I2C_MV64XXX" ; config_enable
+config="CONFIG_I2C_OCORES" ; config_disable
 config="CONFIG_I2C_RK3X" ; config_enable
+config="CONFIG_I2C_SIMTEC" ; config_disable
 config="CONFIG_I2C_SUN6I_P2WI" ; config_enable
-config="CONFIG_I2C_XILINX" ; config_enable
 
 #
 # External I2C/SMBus adapter drivers
@@ -578,8 +586,6 @@ config="CONFIG_SPI_DLN2" ; config_module
 config="CONFIG_SPI_GPIO" ; config_module
 config="CONFIG_SPI_S3C64XX" ; config_module
 config="CONFIG_SPI_TEGRA20_SLINK" ; config_module
-config="CONFIG_SPI_XILINX" ; config_module
-config="CONFIG_SPI_ZYNQMP_GQSPI" ; config_module
 
 #
 # SPI Protocol Masters
@@ -602,9 +608,8 @@ config="CONFIG_GPIO_MAX730X" ; config_module
 # Memory mapped GPIO drivers
 #
 config="CONFIG_GPIO_AXP209" ; config_enable
+config="CONFIG_GPIO_PL061" ; config_disable
 config="CONFIG_GPIO_SYSCON" ; config_enable
-config="CONFIG_GPIO_XILINX" ; config_enable
-config="CONFIG_GPIO_ZYNQ" ; config_enable
 
 #
 # I2C GPIO expanders:
@@ -637,26 +642,22 @@ config="CONFIG_GPIO_MC33880" ; config_module
 config="CONFIG_GPIO_PISOSR" ; config_module
 
 #
-# SPI or I2C GPIO expanders
-#
-config="CONFIG_GPIO_MCP23S08" ; config_module
-
-#
 # 1-wire Bus Masters
 #
 config="CONFIG_W1_MASTER_MXC" ; config_module
 config="CONFIG_W1_MASTER_DS1WM" ; config_module
-config="CONFIG_W1_MASTER_GPIO" ; config_module
 
 #
 # 1-wire Slaves
 #
+config="CONFIG_W1_SLAVE_DS2405" ; config_module
 config="CONFIG_W1_SLAVE_DS2408" ; config_module
 config="CONFIG_W1_SLAVE_DS2408_READBACK" ; config_enable
 config="CONFIG_W1_SLAVE_DS2413" ; config_module
 config="CONFIG_W1_SLAVE_DS2406" ; config_module
 config="CONFIG_W1_SLAVE_DS2423" ; config_module
 config="CONFIG_W1_SLAVE_DS2433_CRC" ; config_enable
+config="CONFIG_W1_SLAVE_DS2438" ; config_module
 config="CONFIG_W1_SLAVE_DS2760" ; config_module
 config="CONFIG_W1_SLAVE_DS2780" ; config_module
 config="CONFIG_W1_SLAVE_DS2781" ; config_module
@@ -757,7 +758,6 @@ config="CONFIG_SENSORS_INA3221" ; config_module
 config="CONFIG_SENSORS_TC74" ; config_module
 config="CONFIG_SENSORS_TMP103" ; config_module
 config="CONFIG_SENSORS_TMP108" ; config_module
-config="CONFIG_SENSORS_TWL4030_MADC" ; config_module
 config="CONFIG_SENSORS_W83781D" ; config_module
 config="CONFIG_SENSORS_W83L785TS" ; config_module
 config="CONFIG_SENSORS_W83627HF" ; config_module
@@ -779,20 +779,18 @@ config="CONFIG_OMAP3_THERMAL" ; config_enable
 config="CONFIG_GENERIC_ADC_THERMAL" ; config_module
 config="CONFIG_WATCHDOG_NOWAYOUT" ; config_enable
 
-#
-# Watchdog Device Drivers
-#
-config="CONFIG_XILINX_WATCHDOG" ; config_module
-config="CONFIG_CADENCE_WATCHDOG" ; config_module
+#exit
 
 #
 # Multifunction device drivers
 #
 config="CONFIG_MFD_DA9055" ; config_enable
 config="CONFIG_MFD_DA9063" ; config_enable
+config="CONFIG_MFD_AC100" ; config_enable
+config="CONFIG_MFD_AXP20X_RSB" ; config_enable
+config="CONFIG_MFD_CROS_EC" ; config_disable
 config="CONFIG_MFD_DLN2" ; config_enable
-
-#exit
+config="CONFIG_MFD_VIPERBOARD" ; config_disable
 
 #
 # STMicroelectronics STMPE Interface Drivers
@@ -860,7 +858,6 @@ config="CONFIG_SOC_CAMERA_MT9M111" ; config_module
 config="CONFIG_SOC_CAMERA_MT9T031" ; config_module
 config="CONFIG_SOC_CAMERA_MT9T112" ; config_module
 config="CONFIG_SOC_CAMERA_MT9V022" ; config_module
-config="CONFIG_SOC_CAMERA_OV2640" ; config_module
 config="CONFIG_SOC_CAMERA_OV5642" ; config_module
 config="CONFIG_SOC_CAMERA_OV6650" ; config_module
 config="CONFIG_SOC_CAMERA_OV772X" ; config_module
@@ -899,27 +896,29 @@ config="CONFIG_DRM_OMAP_PANEL_DPI" ; config_enable
 
 config="CONFIG_DRM_TILCDC" ; config_enable
 config="CONFIG_DRM_TEGRA" ; config_enable
+config="CONFIG_DRM_STM" ; config_disable
 
 #
 # Display Interface Bridges
 #
 config="CONFIG_DRM_DUMB_VGA_DAC" ; config_enable
-config="CONFIG_DRM_DW_HDMI" ; config_enable
-config="CONFIG_DRM_DW_HDMI_AHB_AUDIO" ; config_module
-config="CONFIG_DRM_DW_HDMI_I2S_AUDIO" ; config_module
 
 config="CONFIG_DRM_SII902X" ; config_enable
 config="CONFIG_DRM_TI_TFP410" ; config_enable
 config="CONFIG_DRM_I2C_ADV7511" ; config_enable
 config="CONFIG_DRM_I2C_ADV7511_AUDIO" ; config_enable
 
+config="CONFIG_DRM_DW_HDMI" ; config_enable
+config="CONFIG_DRM_DW_HDMI_AHB_AUDIO" ; config_module
+config="CONFIG_DRM_DW_HDMI_I2S_AUDIO" ; config_module
+
 config="CONFIG_DRM_IMX" ; config_enable
 config="CONFIG_DRM_IMX_PARALLEL_DISPLAY" ; config_enable
 config="CONFIG_DRM_IMX_TVE" ; config_enable
 config="CONFIG_DRM_IMX_LDB" ; config_enable
-config="CONFIG_DRM_IMX_IPUV3" ; config_enable
 config="CONFIG_DRM_IMX_HDMI" ; config_enable
 config="CONFIG_DRM_ETNAVIV" ; config_enable
+
 config="CONFIG_DRM_MXSFB" ; config_enable
 config="CONFIG_DRM_TINYDRM" ; config_module
 config="CONFIG_TINYDRM_MIPI_DBI" ; config_module
@@ -961,14 +960,15 @@ config="CONFIG_HID_GENERIC" ; config_enable
 # Special HID drivers
 #
 config="CONFIG_HID_APPLEIR" ; config_module
+config="CONFIG_HID_ASUS" ; config_module
 config="CONFIG_HID_GFRM" ; config_module
 config="CONFIG_HID_GT683R" ; config_module
 config="CONFIG_HID_LOGITECH" ; config_enable
 config="CONFIG_HID_LOGITECH_DJ" ; config_enable
 config="CONFIG_HID_LOGITECH_HIDPP" ; config_enable
 config="CONFIG_HID_MAYFLASH" ; config_module
+config="CONFIG_HID_NTI" ; config_module
 config="CONFIG_HID_UDRAW_PS3" ; config_module
-config="CONFIG_HID_SENSOR_CUSTOM_SENSOR" ; config_module
 
 #
 # USB HID support
@@ -1074,6 +1074,7 @@ config="CONFIG_MMC_SDHCI_S3C" ; config_enable
 config="CONFIG_MMC_SDHCI_S3C_DMA" ; config_enable
 config="CONFIG_MMC_OMAP_HS" ; config_enable
 config="CONFIG_MMC_DW" ; config_enable
+config="CONFIG_MMC_DW_PLTFM" ; config_enable
 config="CONFIG_MMC_DW_ROCKCHIP" ; config_enable
 config="CONFIG_MMC_SUNXI" ; config_enable
 
@@ -1184,7 +1185,6 @@ config="CONFIG_RTC_DRV_BQ4802" ; config_module
 config="CONFIG_RTC_DRV_RP5C01" ; config_module
 config="CONFIG_RTC_DRV_V3020" ; config_module
 config="CONFIG_RTC_DRV_DS2404" ; config_module
-config="CONFIG_RTC_DRV_ZYNQMP" ; config_module
 
 #
 # on-CPU RTC drivers
@@ -1203,12 +1203,9 @@ config="CONFIG_RTC_DRV_HID_SENSOR_TIME" ; config_module
 #
 # DMA Devices
 #
-config="CONFIG_AXI_DMAC" ; config_enable
 config="CONFIG_DMA_SUN6I" ; config_enable
 config="CONFIG_FSL_EDMA" ; config_enable
 config="CONFIG_TI_CPPI41" ; config_enable
-config="CONFIG_XILINX_DMA" ; config_enable
-config="CONFIG_XILINX_ZYNQMP_DMA" ; config_enable
 config="CONFIG_DW_DMAC_CORE" ; config_enable
 config="CONFIG_DW_DMAC" ; config_enable
 
@@ -1227,6 +1224,7 @@ config="CONFIG_RTLLIB" ; config_module
 config="CONFIG_RTLLIB_CRYPTO_CCMP" ; config_module
 config="CONFIG_RTLLIB_CRYPTO_TKIP" ; config_module
 config="CONFIG_RTLLIB_CRYPTO_WEP" ; config_module
+config="CONFIG_RTL8723BS" ; config_module
 
 #
 # Accelerometers
@@ -1315,10 +1313,6 @@ config="CONFIG_AD2S1210" ; config_module
 #
 # Android
 #
-config="CONFIG_ASHMEM" ; config_enable
-config="CONFIG_ION" ; config_enable
-config="CONFIG_ION_OF" ; config_enable
-
 config="CONFIG_FB_TFT" ; config_module
 config="CONFIG_FB_TFT_AGM1264K_FL" ; config_module
 config="CONFIG_FB_TFT_BD663474" ; config_module
@@ -1337,6 +1331,7 @@ config="CONFIG_FB_TFT_PCD8544" ; config_module
 config="CONFIG_FB_TFT_RA8875" ; config_module
 config="CONFIG_FB_TFT_S6D02A1" ; config_module
 config="CONFIG_FB_TFT_S6D1121" ; config_module
+config="CONFIG_FB_TFT_SH1106" ; config_module
 config="CONFIG_FB_TFT_SSD1289" ; config_module
 config="CONFIG_FB_TFT_SSD1305" ; config_module
 config="CONFIG_FB_TFT_SSD1306" ; config_module
@@ -1357,32 +1352,17 @@ config="CONFIG_FB_TFT_FBTFT_DEVICE" ; config_module
 config="CONFIG_WILC1000_SDIO" ; config_module
 config="CONFIG_WILC1000_SPI" ; config_module
 
-config="CONFIG_GREYBUS" ; config_module
-config="CONFIG_GREYBUS_AUDIO" ; config_module
-config="CONFIG_GREYBUS_BOOTROM" ; config_module
-config="CONFIG_GREYBUS_FIRMWARE" ; config_module
-config="CONFIG_GREYBUS_HID" ; config_module
-config="CONFIG_GREYBUS_LIGHT" ; config_module
-config="CONFIG_GREYBUS_LOG" ; config_module
-config="CONFIG_GREYBUS_LOOPBACK" ; config_module
-config="CONFIG_GREYBUS_POWER" ; config_module
-config="CONFIG_GREYBUS_RAW" ; config_module
-config="CONFIG_GREYBUS_VIBRATOR" ; config_module
-config="CONFIG_GREYBUS_BRIDGED_PHY" ; config_module
-config="CONFIG_GREYBUS_GPIO" ; config_module
-config="CONFIG_GREYBUS_I2C" ; config_module
-config="CONFIG_GREYBUS_PWM" ; config_module
-config="CONFIG_GREYBUS_SDIO" ; config_module
-config="CONFIG_GREYBUS_SPI" ; config_module
-config="CONFIG_GREYBUS_UART" ; config_module
-config="CONFIG_GREYBUS_USB" ; config_module
+#
+# USB Power Delivery and Type-C drivers
+#
+config="CONFIG_CHROME_PLATFORMS" ; config_disable
 
 #
 # Common Clock Framework
 #
 config="CONFIG_CLK_TWL6040" ; config_enable
-config="CONFIG_COMMON_CLK_AXI_CLKGEN" ; config_enable
 config="CONFIG_COMMON_CLK_PALMAS" ; config_enable
+config="CONFIG_SUN8I_DE2_CCU" ; config_enable
 config="CONFIG_HWSPINLOCK" ; config_enable
 
 #
@@ -1394,7 +1374,6 @@ config="CONFIG_HWSPINLOCK_OMAP" ; config_enable
 # Clock Source drivers
 #
 config="CONFIG_ROCKCHIP_MBOX" ; config_enable
-config="CONFIG_ALTERA_MBOX" ; config_enable
 
 #
 # Generic IOMMU Pagetable Support
@@ -1450,6 +1429,8 @@ config="CONFIG_EXTCON_PALMAS" ; config_enable
 config="CONFIG_EXTCON_USB_GPIO" ; config_enable
 config="CONFIG_TI_EMIF" ; config_enable
 
+config="CONFIG_IIO" ; config_enable
+
 config="CONFIG_IIO_BUFFER_CB" ; config_module
 config="CONFIG_IIO_CONFIGFS" ; config_module
 config="CONFIG_IIO_SW_DEVICE" ; config_module
@@ -1498,6 +1479,7 @@ config="CONFIG_AD7793" ; config_module
 config="CONFIG_AD7887" ; config_module
 config="CONFIG_AD7923" ; config_module
 config="CONFIG_AD799X" ; config_module
+config="CONFIG_AXP20X_ADC" ; config_module
 config="CONFIG_AXP288_ADC" ; config_module
 config="CONFIG_CC10001_ADC" ; config_module
 config="CONFIG_ENVELOPE_DETECTOR" ; config_module
@@ -1506,16 +1488,22 @@ config="CONFIG_HX711" ; config_module
 config="CONFIG_INA2XX_ADC" ; config_module
 config="CONFIG_IMX7D_ADC" ; config_module
 config="CONFIG_LTC2485" ; config_module
+config="CONFIG_LTC2497" ; config_module
 config="CONFIG_MAX1027" ; config_module
 config="CONFIG_MAX11100" ; config_module
+config="CONFIG_MAX1118" ; config_module
 config="CONFIG_MAX1363" ; config_module
+config="CONFIG_MAX9611" ; config_module
 config="CONFIG_MCP320X" ; config_module
 config="CONFIG_MCP3422" ; config_module
 config="CONFIG_NAU7802" ; config_module
 config="CONFIG_PALMAS_GPADC" ; config_module
+config="CONFIG_SUN4I_GPADC" ; config_module
 config="CONFIG_TI_ADC081C" ; config_module
 config="CONFIG_TI_ADC0832" ; config_module
+config="CONFIG_TI_ADC084S021" ; config_module
 config="CONFIG_TI_ADC12138" ; config_module
+config="CONFIG_TI_ADC108S102" ; config_module
 config="CONFIG_TI_ADC128S052" ; config_module
 config="CONFIG_TI_ADC161S626" ; config_module
 config="CONFIG_TI_ADS1015" ; config_module
@@ -1524,7 +1512,6 @@ config="CONFIG_TI_ADS8688" ; config_module
 config="CONFIG_TI_TLC4541" ; config_module
 config="CONFIG_TWL6030_GPADC" ; config_module
 config="CONFIG_VF610_ADC" ; config_module
-config="CONFIG_XILINX_XADC" ; config_module
 
 #
 # Amplifiers
@@ -1556,6 +1543,7 @@ config="CONFIG_AD5592R" ; config_module
 config="CONFIG_AD5593R" ; config_module
 config="CONFIG_AD5504" ; config_module
 config="CONFIG_AD5624R_SPI" ; config_module
+config="CONFIG_LTC2632" ; config_module
 config="CONFIG_AD5686" ; config_module
 config="CONFIG_AD5755" ; config_module
 config="CONFIG_AD5761" ; config_module
@@ -1606,6 +1594,7 @@ config="CONFIG_ITG3200" ; config_module
 config="CONFIG_AFE4403" ; config_module
 config="CONFIG_AFE4404" ; config_module
 config="CONFIG_MAX30100" ; config_module
+config="CONFIG_MAX30102" ; config_module
 
 #
 # Humidity sensors
@@ -1661,6 +1650,7 @@ config="CONFIG_TSL4531" ; config_module
 config="CONFIG_US5182D" ; config_module
 config="CONFIG_VCNL4000" ; config_module
 config="CONFIG_VEML6070" ; config_module
+config="CONFIG_VL6180" ; config_module
 
 #
 # Magnetometer sensors
@@ -1728,6 +1718,7 @@ config="CONFIG_AS3935" ; config_module
 # Proximity sensors
 #
 config="CONFIG_LIDAR_LITE_V2" ; config_module
+config="CONFIG_SRF04" ; config_module
 config="CONFIG_SX9500" ; config_module
 config="CONFIG_SRF08" ; config_module
 
@@ -1742,7 +1733,7 @@ config="CONFIG_TSYS01" ; config_module
 config="CONFIG_TSYS02D" ; config_module
 config="CONFIG_PWM_OMAP_DMTIMER" ; config_module
 config="CONFIG_PWM_PCA9685" ; config_module
-config="CONFIG_TI_SYSCON_RESET" ; config_enable
+config="CONFIG_RESET_TI_SYSCON" ; config_enable
 
 #
 # PHY Subsystem
@@ -1764,22 +1755,12 @@ config="CONFIG_PHY_TEGRA_XUSB" ; config_enable
 #
 # Android
 #
-config="CONFIG_ANDROID" ; config_enable
-config="CONFIG_ANDROID_BINDER_IPC" ; config_enable
-config="CONFIG_ANDROID_BINDER_IPC_32BIT" ; config_enable
 config="CONFIG_NVMEM" ; config_enable
+config="CONFIG_NVMEM_IMX_IIM" ; config_enable
 config="CONFIG_NVMEM_IMX_OCOTP" ; config_enable
 config="CONFIG_ROCKCHIP_EFUSE" ; config_enable
 config="CONFIG_NVMEM_SUNXI_SID" ; config_enable
 config="CONFIG_NVMEM_VF610_OCOTP" ; config_enable
-
-#
-# FPGA Configuration Support
-#
-config="CONFIG_FPGA" ; config_module
-config="CONFIG_FPGA_MGR_SOCFPGA" ; config_module
-config="CONFIG_FPGA_MGR_ZYNQ_FPGA" ; config_module
-config="CONFIG_FPGA_BRIDGE" ; config_module
 
 #exit
 
@@ -1839,24 +1820,22 @@ config="CONFIG_SECURITY_DMESG_RESTRICT" ; config_disable
 config="CONFIG_HARDENED_USERCOPY" ; config_disable
 
 #
-# Digest
-#
-config="CONFIG_CRYPTO_SHA3" ; config_module
-
-#
 # Crypto core or helper
 #
 config="CONFIG_CRYPTO_MANAGER_DISABLE_TESTS" ; config_enable
 
 #
-# Compression
+# Digest
 #
-config="CONFIG_CRYPTO_DEFLATE" ; config_enable
+config="CONFIG_CRYPTO_SHA3" ; config_module
 
 #
 # Random Number Generation
 #
 config="CONFIG_CRYPTO_DEV_FSL_CAAM" ; config_module
+config="CONFIG_CRYPTO_DEV_OMAP" ; config_module
+config="CONFIG_CRYPTO_DEV_OMAP_SHAM" ; config_module
+config="CONFIG_CRYPTO_DEV_OMAP_AES" ; config_module
 config="CONFIG_CRYPTO_DEV_OMAP_DES" ; config_module
 config="CONFIG_CRYPTO_DEV_SAHARA" ; config_module
 config="CONFIG_CRYPTO_DEV_S5P" ; config_module
@@ -1866,7 +1845,6 @@ config="CONFIG_CRYPTO_DEV_ROCKCHIP" ; config_module
 #
 # Certificates for signature checking
 #
-config="CONFIG_SYSTEM_TRUSTED_KEYRING" ; config_disable
 config="CONFIG_ARM_CRYPTO" ; config_enable
 config="CONFIG_CRYPTO_SHA1_ARM" ; config_module
 config="CONFIG_CRYPTO_SHA1_ARM_NEON" ; config_module
