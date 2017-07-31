@@ -1,0 +1,93 @@
+From 7e9fc76b53d5584382c7c95fa36680264e892cef Mon Sep 17 00:00:00 2001
+From: Fred Wright <fw@fwright.net>
+Date: Sat, 15 Oct 2016 19:10:39 -0700
+Subject: [PATCH] Adds 16b breakpoint instructions for thumb2 kernel.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This repairs the following error:
+
+  SysRq : DEBUG
+  Internal error: Oops - undefined instruction: 0 [#1] SMP THUMB2
+
+...and allows to enter kdb properly under thumb2 kernel for example.
+
+This patch has been updated by Fred Wright <fw@fwright.net>
+
+Signed-off-by: Vincent Stehlé <v-stehle@...>
+Cc: Jason Wessel <jason.wessel@...>
+Cc: kgdb-bugreport@...
+---
+ arch/arm/include/asm/kgdb.h |  9 +++++++++
+ arch/arm/kernel/kgdb.c      | 14 ++++++++++++--
+ 2 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/include/asm/kgdb.h b/arch/arm/include/asm/kgdb.h
+index 48066ce9ea34..a8caa6b9b9cb 100644
+--- a/arch/arm/include/asm/kgdb.h
++++ b/arch/arm/include/asm/kgdb.h
+@@ -31,10 +31,19 @@
+  * Note to ARM HW designers: Add real trap support like SH && PPC to
+  * make our lives much much simpler. :)
+  */
++
++#ifdef CONFIG_THUMB2_KERNEL
++#define BREAK_INSTR_SIZE	2
++#define GDB_BREAKINST		0x0001
++#define KGDB_BREAKINST		0xdefe
++#define KGDB_COMPILED_BREAK	0xdeff
++#else
+ #define BREAK_INSTR_SIZE	4
+ #define GDB_BREAKINST		0xef9f0001
+ #define KGDB_BREAKINST		0xe7ffdefe
+ #define KGDB_COMPILED_BREAK	0xe7ffdeff
++#endif
++
+ #define CACHE_FLUSH_IS_SAFE	1
+ 
+ #ifndef	__ASSEMBLY__
+diff --git a/arch/arm/kernel/kgdb.c b/arch/arm/kernel/kgdb.c
+index 778c2f7024ff..5b4a2130c749 100644
+--- a/arch/arm/kernel/kgdb.c
++++ b/arch/arm/kernel/kgdb.c
+@@ -157,14 +157,16 @@ static int kgdb_compiled_brk_fn(struct pt_regs *regs, unsigned int instr)
+ 	return 0;
+ }
+ 
++#define INSTR_MASK	((1ULL<<(BREAK_INSTR_SIZE * 8))-1)
++
+ static struct undef_hook kgdb_brkpt_hook = {
+-	.instr_mask		= 0xffffffff,
++	.instr_mask		= INSTR_MASK,
+ 	.instr_val		= KGDB_BREAKINST,
+ 	.fn			= kgdb_brk_fn
+ };
+ 
+ static struct undef_hook kgdb_compiled_brkpt_hook = {
+-	.instr_mask		= 0xffffffff,
++	.instr_mask		= INSTR_MASK,
+ 	.instr_val		= KGDB_COMPILED_BREAK,
+ 	.fn			= kgdb_compiled_brk_fn
+ };
+@@ -247,9 +249,17 @@ void kgdb_arch_exit(void)
+  * handler.
+  */
+ struct kgdb_arch arch_kgdb_ops = {
++#if BREAK_INSTR_SIZE == 4
+ #ifndef __ARMEB__
+ 	.gdb_bpt_instr		= {0xfe, 0xde, 0xff, 0xe7}
+ #else /* ! __ARMEB__ */
+ 	.gdb_bpt_instr		= {0xe7, 0xff, 0xde, 0xfe}
+ #endif
++#elif BREAK_INSTR_SIZE == 2
++#ifndef __ARMEB__
++	.gdb_bpt_instr		= {0xfe, 0xde}
++#else /* ! __ARMEB__ */
++	.gdb_bpt_instr		= {0xde, 0xfe}
++#endif
++#endif /* BREAK_INSTR_SIZE */
+ };
+-- 
+2.13.2
+

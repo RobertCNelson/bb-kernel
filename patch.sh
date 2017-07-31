@@ -1218,6 +1218,22 @@ touchscreens () {
         fi
 }
 
+kdb_thumb_fixes () {
+	echo "dir: kdb_thumb_fixes"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/kdb_thumb_fixes/0001-Adds-16b-breakpoint-instructions-for-thumb2-kernel.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="kdb_thumb_fixes"
+		number=1
+		cleanup
+	fi
+}
+
 add_board_to_kernel_makefile () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$board' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -1295,6 +1311,7 @@ gcc5
 emmc
 cape_universal
 gcc6
+kdb_thumb_fixes
 touchscreens
 more_boards
 sirius
