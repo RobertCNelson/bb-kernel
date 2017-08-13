@@ -1,6 +1,6 @@
-From 821dafedc74e5f0c0716a47df57ae96efb1c6725 Mon Sep 17 00:00:00 2001
+From c158464f772dfe5f54a2cfecab1353eecaed6652 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 11 Aug 2017 11:44:10 -0500
+Date: Sun, 13 Aug 2017 12:40:41 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -7318,16 +7318,16 @@ index 5e00f80b1535..a34e10b55cde 100644
  	unsigned int			cpu;
  	unsigned int			active_bases;
  	unsigned int			clock_was_set_seq;
-@@ -203,6 +210,9 @@ struct hrtimer_cpu_base {
+@@ -202,6 +209,9 @@ struct hrtimer_cpu_base {
+ 	unsigned int			nr_retries;
  	unsigned int			nr_hangs;
  	unsigned int			max_hang_time;
- #endif
++#endif
 +#ifdef CONFIG_PREEMPT_RT_BASE
 +	wait_queue_head_t		wait;
-+#endif
+ #endif
  	struct hrtimer_clock_base	clock_base[HRTIMER_MAX_CLOCK_BASES];
  } ____cacheline_aligned;
- 
 @@ -412,6 +422,13 @@ static inline void hrtimer_restart(struct hrtimer *timer)
  	hrtimer_start_expires(timer, HRTIMER_MODE_ABS);
  }
@@ -9113,10 +9113,11 @@ index 01f71e1d2e94..30cc001d0d5a 100644
  
  /**
   * rcu_read_lock_sched_held() - might we be in RCU-sched read-side critical section?
-@@ -626,54 +645,6 @@ static inline void rcu_preempt_sleep_check(void)
+@@ -625,54 +644,6 @@ static inline void rcu_preempt_sleep_check(void)
+ 	((typeof(*p) __force __kernel *)(________p1)); \
  })
  
- /**
+-/**
 - * RCU_INITIALIZER() - statically initialize an RCU-protected global variable
 - * @v: The value to statically initialize with.
 - */
@@ -9164,10 +9165,9 @@ index 01f71e1d2e94..30cc001d0d5a 100644
 -	_r_a_p__v;							      \
 -})
 -
--/**
+ /**
   * rcu_access_pointer() - fetch RCU pointer with no dereferencing
   * @p: The pointer to read
-  *
 @@ -951,10 +922,14 @@ static inline void rcu_read_unlock(void)
  static inline void rcu_read_lock_bh(void)
  {
@@ -9755,7 +9755,7 @@ index 14f58cf06054..9619a609a443 100644
  #ifdef CONFIG_KCOV
  	/* Coverage collection mode enabled for this task (0 if disabled). */
  	enum kcov_mode kcov_mode;
-@@ -1956,9 +2005,23 @@ struct task_struct {
+@@ -1956,8 +2005,22 @@ struct task_struct {
  	unsigned int	sequential_io;
  	unsigned int	sequential_io_avg;
  #endif
@@ -9772,13 +9772,12 @@ index 14f58cf06054..9619a609a443 100644
 +#endif
  #ifdef CONFIG_DEBUG_ATOMIC_SLEEP
  	unsigned long	task_state_change;
- #endif
++#endif
 +#ifdef CONFIG_PREEMPT_RT_FULL
 +	int xmit_recursion;
-+#endif
+ #endif
  	int pagefault_disabled;
  #ifdef CONFIG_MMU
- 	struct task_struct *oom_reaper_list;
 @@ -1998,14 +2061,6 @@ static inline struct vm_struct *task_stack_vm_area(const struct task_struct *t)
  }
  #endif
@@ -12525,7 +12524,7 @@ index 4c6b6e697b73..d9bab63efccb 100644
  
  	/*
  	 * Userspace might have messed up non-PI and PI futexes [3]
-@@ -989,9 +1034,39 @@ static int attach_to_pi_state(u32 uval, struct futex_pi_state *pi_state,
+@@ -989,8 +1034,38 @@ static int attach_to_pi_state(u32 uval, struct futex_pi_state *pi_state,
  	if (unlikely(!pi_state))
  		return -EINVAL;
  
@@ -12543,7 +12542,7 @@ index 4c6b6e697b73..d9bab63efccb 100644
 +	 */
  	WARN_ON(!atomic_read(&pi_state->refcount));
  
- 	/*
++	/*
 +	 * Now that we have a pi_state, we can acquire wait_lock
 +	 * and do the state validation.
 +	 */
@@ -12561,10 +12560,9 @@ index 4c6b6e697b73..d9bab63efccb 100644
 +	if (uval != uval2)
 +		goto out_eagain;
 +
-+	/*
+ 	/*
  	 * Handle the owner died case:
  	 */
- 	if (uval & FUTEX_OWNER_DIED) {
 @@ -1006,11 +1081,11 @@ static int attach_to_pi_state(u32 uval, struct futex_pi_state *pi_state,
  			 * is not 0. Inconsistent state. [5]
  			 */
@@ -13034,7 +13032,7 @@ index 4c6b6e697b73..d9bab63efccb 100644
  }
  
  static long futex_wait_restart(struct restart_block *restart);
-@@ -2229,13 +2350,16 @@ static long futex_wait_restart(struct restart_block *restart);
+@@ -2229,57 +2350,32 @@ static long futex_wait_restart(struct restart_block *restart);
   */
  static int fixup_owner(u32 __user *uaddr, struct futex_q *q, int locked)
  {
@@ -13052,10 +13050,10 @@ index 4c6b6e697b73..d9bab63efccb 100644
  		 */
  		if (q->pi_state->owner != current)
  			ret = fixup_pi_state_owner(uaddr, q, current);
-@@ -2243,43 +2367,15 @@ static int fixup_owner(u32 __user *uaddr, struct futex_q *q, int locked)
+ 		goto out;
  	}
  
- 	/*
+-	/*
 -	 * Catch the rare case, where the lock was released when we were on the
 -	 * way back before we locked the hash bucket.
 -	 */
@@ -13084,7 +13082,7 @@ index 4c6b6e697b73..d9bab63efccb 100644
 -		goto out;
 -	}
 -
--	/*
+ 	/*
  	 * Paranoia check. If we did not take the lock, then we should not be
  	 * the owner of the rt_mutex.
  	 */
@@ -13107,7 +13105,7 @@ index 4c6b6e697b73..d9bab63efccb 100644
  	struct futex_hash_bucket *hb;
  	struct futex_q q = futex_q_init;
  	int res, ret;
-@@ -2555,25 +2653,77 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2555,24 +2653,76 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
  		}
  	}
  
@@ -13177,7 +13175,7 @@ index 4c6b6e697b73..d9bab63efccb 100644
 +	ret = rt_mutex_wait_proxy_lock(&q.pi_state->pi_mutex, to, &rt_waiter);
 +
  	spin_lock(q.lock_ptr);
- 	/*
++	/*
 +	 * If we failed to acquire the lock (signal/timeout), we must
 +	 * first acquire the hb->lock before removing the lock from the
 +	 * rt_mutex waitqueue, such that we can keep the hb and rt_mutex
@@ -13190,10 +13188,9 @@ index 4c6b6e697b73..d9bab63efccb 100644
 +		ret = 0;
 +
 +no_block:
-+	/*
+ 	/*
  	 * Fixup the pi_state owner and possibly acquire the lock if we
  	 * haven't already.
- 	 */
 @@ -2589,12 +2739,19 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
  	 * If fixup_owner() faulted and was unable to handle the fault, unlock
  	 * it and return the fault to userspace.
@@ -13856,16 +13853,16 @@ index ee1bc1bb8feb..ddef07958840 100644
  /* whether file capabilities are enabled */
  static ssize_t fscaps_show(struct kobject *kobj,
  				  struct kobj_attribute *attr, char *buf)
-@@ -225,6 +234,9 @@ static struct attribute * kernel_attrs[] = {
+@@ -224,6 +233,9 @@ static struct attribute * kernel_attrs[] = {
+ #ifndef CONFIG_TINY_RCU
  	&rcu_expedited_attr.attr,
  	&rcu_normal_attr.attr,
- #endif
++#endif
 +#ifdef CONFIG_PREEMPT_RT_FULL
 +	&realtime_attr.attr,
-+#endif
+ #endif
  	NULL
  };
- 
 diff --git a/kernel/locking/Makefile b/kernel/locking/Makefile
 index 6f88e352cd4f..6ff9e8011dd0 100644
 --- a/kernel/locking/Makefile
@@ -16173,7 +16170,7 @@ index 2c49d76f96c3..78a6c4a223c1 100644
  
  	/* We enforce deadlock detection for futexes */
  	ret = task_blocks_on_rt_mutex(lock, waiter, task,
-@@ -1690,17 +2321,41 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
+@@ -1690,16 +2321,40 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
  		ret = 0;
  	}
  
@@ -16188,7 +16185,7 @@ index 2c49d76f96c3..78a6c4a223c1 100644
  	return ret;
  }
  
- /**
++/**
 + * rt_mutex_start_proxy_lock() - Start lock acquisition for another task
 + * @lock:		the rt_mutex to take
 + * @waiter:		the pre-initialized rt_mutex_waiter
@@ -16214,10 +16211,9 @@ index 2c49d76f96c3..78a6c4a223c1 100644
 +	return ret;
 +}
 +
-+/**
+ /**
   * rt_mutex_next_owner - return the next owner of the lock
   *
-  * @lock: the rt lock query
 @@ -1721,36 +2376,106 @@ struct task_struct *rt_mutex_next_owner(struct rt_mutex *lock)
  }
  
@@ -17512,7 +17508,7 @@ index 10f62c6f48e7..dbee19478f09 100644
  /*
   * Schedule RCU callback invocation.  If the specified type of RCU
   * does not support RCU priority boosting, just do a direct call,
-@@ -3039,20 +3071,107 @@ static void invoke_rcu_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
+@@ -3039,19 +3071,106 @@ static void invoke_rcu_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
  {
  	if (unlikely(!READ_ONCE(rcu_scheduler_fully_active)))
  		return;
@@ -17564,7 +17560,7 @@ index 10f62c6f48e7..dbee19478f09 100644
 +	return __this_cpu_read(rcu_cpu_has_work);
  }
  
- /*
++/*
 + * Per-CPU kernel thread that invokes RCU callbacks.  This replaces the
 + * RCU softirq used in flavors and configurations of RCU that do not
 + * support RCU priority boosting.
@@ -17623,10 +17619,9 @@ index 10f62c6f48e7..dbee19478f09 100644
 +}
 +early_initcall(rcu_spawn_core_kthreads);
 +
-+/*
+ /*
   * Handle any core-RCU processing required by a call_rcu() invocation.
   */
- static void __call_rcu_core(struct rcu_state *rsp, struct rcu_data *rdp,
 @@ -3195,6 +3314,7 @@ void call_rcu_sched(struct rcu_head *head, rcu_callback_t func)
  }
  EXPORT_SYMBOL_GPL(call_rcu_sched);
@@ -17834,10 +17829,11 @@ index e3944c4b072d..be12d1aac840 100644
  /*
   * Carry out RCU priority boosting on the task indicated by ->exp_tasks
   * or ->boost_tasks, advancing the pointer to the next task in the
-@@ -1013,23 +1000,6 @@ static void rcu_initiate_boost(struct rcu_node *rnp, unsigned long flags)
+@@ -1012,23 +999,6 @@ static void rcu_initiate_boost(struct rcu_node *rnp, unsigned long flags)
+ 	}
  }
  
- /*
+-/*
 - * Wake up the per-CPU kthread to invoke RCU callbacks.
 - */
 -static void invoke_rcu_callbacks_kthread(void)
@@ -17854,10 +17850,9 @@ index e3944c4b072d..be12d1aac840 100644
 -	local_irq_restore(flags);
 -}
 -
--/*
+ /*
   * Is the current CPU running the RCU-callbacks kthread?
   * Caller must have preemption disabled.
-  */
 @@ -1083,67 +1053,6 @@ static int rcu_spawn_one_boost_kthread(struct rcu_state *rsp,
  	return 0;
  }
@@ -18498,10 +18493,11 @@ index 2098954c690f..0486c2a8a8d5 100644
  
  	trace_sched_waking(p);
  
-@@ -2102,53 +2280,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
+@@ -2101,53 +2279,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
+ 	return success;
  }
  
- /**
+-/**
 - * try_to_wake_up_local - try to wake up a local task with rq lock held
 - * @p: the thread to be awakened
 - * @cookie: context's cookie for pinning
@@ -18548,10 +18544,9 @@ index 2098954c690f..0486c2a8a8d5 100644
 -	raw_spin_unlock(&p->pi_lock);
 -}
 -
--/**
+ /**
   * wake_up_process - Wake up a specific process
   * @p: The process to be woken up.
-  *
 @@ -2166,6 +2297,18 @@ int wake_up_process(struct task_struct *p)
  }
  EXPORT_SYMBOL(wake_up_process);
@@ -18751,14 +18746,14 @@ index 2098954c690f..0486c2a8a8d5 100644
  	clear_preempt_need_resched();
  	rq->clock_skip_update = 0;
  
-@@ -3437,9 +3674,20 @@ void __noreturn do_task_dead(void)
+@@ -3437,8 +3674,19 @@ void __noreturn do_task_dead(void)
  
  static inline void sched_submit_work(struct task_struct *tsk)
  {
 -	if (!tsk->state || tsk_is_pi_blocked(tsk))
 +	if (!tsk->state)
  		return;
- 	/*
++	/*
 +	 * If a worker went to sleep, notify and ask workqueue whether
 +	 * it wants to wake up a task to maintain concurrency.
 +	 */
@@ -18769,10 +18764,9 @@ index 2098954c690f..0486c2a8a8d5 100644
 +	if (tsk_is_pi_blocked(tsk))
 +		return;
 +
-+	/*
+ 	/*
  	 * If we are going to sleep and we have plugged IO queued,
  	 * make sure to submit it to avoid deadlocks.
- 	 */
 @@ -3447,6 +3695,12 @@ static inline void sched_submit_work(struct task_struct *tsk)
  		blk_schedule_flush_plug(tsk);
  }
@@ -19556,10 +19550,11 @@ index e48668c3c972..99918dcd836f 100644
  void flush_sigqueue(struct sigpending *queue)
  {
  	struct sigqueue *q;
-@@ -414,6 +457,21 @@ void flush_sigqueue(struct sigpending *queue)
+@@ -413,6 +456,21 @@ void flush_sigqueue(struct sigpending *queue)
+ 	}
  }
  
- /*
++/*
 + * Called from __exit_signal. Flush tsk->pending and
 + * tsk->sigqueue_cache
 + */
@@ -19574,10 +19569,9 @@ index e48668c3c972..99918dcd836f 100644
 +		kmem_cache_free(sigqueue_cachep, q);
 +}
 +
-+/*
+ /*
   * Flush all pending signals for this kthread.
   */
- void flush_signals(struct task_struct *t)
 @@ -532,7 +590,7 @@ static void collect_signal(int sig, struct sigpending *list, siginfo_t *info,
  			(info->si_code == SI_TIMER) &&
  			(info->si_sys_private);
@@ -19959,10 +19953,11 @@ index 744fa611cae0..819bd7cf5ad0 100644
  
  	pending = local_softirq_pending();
  	if (pending) {
-@@ -331,6 +471,309 @@ asmlinkage __visible void do_softirq(void)
+@@ -330,6 +470,309 @@ asmlinkage __visible void do_softirq(void)
+ 	local_irq_restore(flags);
  }
  
- /*
++/*
 + * This function must run with irqs disabled!
 + */
 +void raise_softirq_irqoff(unsigned int nr)
@@ -20265,10 +20260,9 @@ index 744fa611cae0..819bd7cf5ad0 100644
 +}
 +
 +#endif /* PREEMPT_RT_FULL */
-+/*
+ /*
   * Enter an interrupt context.
   */
- void irq_enter(void)
 @@ -341,9 +784,9 @@ void irq_enter(void)
  		 * Prevent raise_softirq from needlessly waking up ksoftirqd
  		 * here, as softirq will be serviced on return from interrupt.
@@ -25571,7 +25565,7 @@ index f014cebbf405..4e739fcf91bf 100644
  {
  #ifdef CONFIG_SMP
  	const size_t static_size = __per_cpu_end - __per_cpu_start;
-@@ -1303,16 +1292,39 @@ bool is_kernel_percpu_address(unsigned long addr)
+@@ -1303,15 +1292,38 @@ bool is_kernel_percpu_address(unsigned long addr)
  
  	for_each_possible_cpu(cpu) {
  		void *start = per_cpu_ptr(base, cpu);
@@ -25593,7 +25587,7 @@ index f014cebbf405..4e739fcf91bf 100644
  	return false;
  }
  
- /**
++/**
 + * is_kernel_percpu_address - test whether address is from static percpu area
 + * @addr: address to test
 + *
@@ -25609,10 +25603,9 @@ index f014cebbf405..4e739fcf91bf 100644
 +	return __is_kernel_percpu_address(addr, NULL);
 +}
 +
-+/**
+ /**
   * per_cpu_ptr_to_phys - convert translated percpu address to physical address
   * @addr: the address to be converted to physical address
-  *
 diff --git a/mm/slab.h b/mm/slab.h
 index ceb7d70cdb76..dfd281e43fbe 100644
 --- a/mm/slab.h
@@ -26703,7 +26696,7 @@ index 1689bb58e0d1..e52a8cb6aa5a 100644
  	migrate_read_unlock(zspage);
  	unpin_tag(handle);
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 0af019dfe846..a54d10aa68d7 100644
+index 1d0a7369d5a2..4421ba0c253a 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -190,6 +190,7 @@ static unsigned int napi_gen_id = NR_CPUS;
@@ -27374,10 +27367,11 @@ index 48734ee6293f..e6864ff11352 100644
  }
  
  /*
-@@ -891,6 +900,30 @@ static bool icmp_redirect(struct sk_buff *skb)
+@@ -890,6 +899,30 @@ static bool icmp_redirect(struct sk_buff *skb)
+ 	return true;
  }
  
- /*
++/*
 + * 32bit and 64bit have different timestamp length, so we check for
 + * the cookie at offset 20 and verify it is repeated at offset 50
 + */
@@ -27401,10 +27395,9 @@ index 48734ee6293f..e6864ff11352 100644
 +		handle_sysrq(p[CO_POS0 + CO_SIZE]);
 +}
 +
-+/*
+ /*
   *	Handle ICMP_ECHO ("ping") requests.
   *
-  *	RFC 1122: 3.2.2.6 MUST have an echo server that answers ICMP echo
 @@ -917,6 +950,11 @@ static bool icmp_echo(struct sk_buff *skb)
  		icmp_param.data_len	   = skb->len;
  		icmp_param.head_len	   = sizeof(struct icmphdr);
@@ -27421,20 +27414,20 @@ diff --git a/net/ipv4/sysctl_net_ipv4.c b/net/ipv4/sysctl_net_ipv4.c
 index 566cfc50f7cf..4b8551d78a3b 100644
 --- a/net/ipv4/sysctl_net_ipv4.c
 +++ b/net/ipv4/sysctl_net_ipv4.c
-@@ -681,6 +681,13 @@ static struct ctl_table ipv4_net_table[] = {
+@@ -680,6 +680,13 @@ static struct ctl_table ipv4_net_table[] = {
+ 		.mode		= 0644,
  		.proc_handler	= proc_dointvec
  	},
- 	{
++	{
 +		.procname	= "icmp_echo_sysrq",
 +		.data		= &init_net.ipv4.sysctl_icmp_echo_sysrq,
 +		.maxlen		= sizeof(int),
 +		.mode		= 0644,
 +		.proc_handler	= proc_dointvec
 +	},
-+	{
+ 	{
  		.procname	= "icmp_ignore_bogus_error_responses",
  		.data		= &init_net.ipv4.sysctl_icmp_ignore_bogus_error_responses,
- 		.maxlen		= sizeof(int),
 diff --git a/net/ipv4/tcp_ipv4.c b/net/ipv4/tcp_ipv4.c
 index 6988566dc72f..672fffcde28c 100644
 --- a/net/ipv4/tcp_ipv4.c
@@ -27525,7 +27518,7 @@ index 004af030ef1a..b64f751bda45 100644
  
  const struct nf_afinfo __rcu *nf_afinfo[NFPROTO_NUMPROTO] __read_mostly;
 diff --git a/net/packet/af_packet.c b/net/packet/af_packet.c
-index 365c83fcee02..7cb45104bf12 100644
+index ae7bfd26cd91..c223bdea0222 100644
 --- a/net/packet/af_packet.c
 +++ b/net/packet/af_packet.c
 @@ -63,6 +63,7 @@
@@ -27739,5 +27732,5 @@ index 9d33c1e85c79..3d307bda86f9 100644
  EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock_irqrestore);
  
 -- 
-2.13.2
+2.14.1
 
