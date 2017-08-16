@@ -362,6 +362,8 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0011-iio-light-ltr501-Fix-interchanged-als-ps-register-fi.patch"
 	${git} "${DIR}/patches/backports/iio/0012-iio-proximity-as3935-fix-AS3935_INT-mask.patch"
 	${git} "${DIR}/patches/backports/iio/0013-iio-proximity-as3935-recalibrate-RCO-after-resume.patch"
+	${git} "${DIR}/patches/backports/iio/0014-iio-accel-bmc150-Always-restore-device-to-normal-mod.patch"
+	${git} "${DIR}/patches/backports/iio/0015-iio-light-tsl2563-use-correct-event-code.patch"
 
 	backport_tag="v4.8.17"
 
