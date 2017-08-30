@@ -1,6 +1,6 @@
-From 74e0f04cba4abffe3223666988a068c68c7bbd29 Mon Sep 17 00:00:00 2001
+From 9a8b508777a4543015c7e1fae2d8c37208ddcb2d Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 24 Aug 2017 20:40:24 -0500
+Date: Wed, 30 Aug 2017 09:28:04 -0500
 Subject: [PATCH] backports: i2c: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -19,7 +19,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/i2c/busses/i2c-designware-core.c     |   48 +-
  drivers/i2c/busses/i2c-designware-core.h     |    2 -
  drivers/i2c/busses/i2c-designware-pcidrv.c   |    4 +-
- drivers/i2c/busses/i2c-designware-platdrv.c  |   84 +-
+ drivers/i2c/busses/i2c-designware-platdrv.c  |   98 +--
  drivers/i2c/busses/i2c-dln2.c                |    2 +
  drivers/i2c/busses/i2c-eg20t.c               |    1 +
  drivers/i2c/busses/i2c-emev2.c               |  112 ++-
@@ -72,7 +72,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/i2c/muxes/i2c-mux-reg.c              |   70 +-
  include/linux/i2c-mux.h                      |   55 +-
  include/linux/i2c.h                          |   97 +-
- 67 files changed, 4910 insertions(+), 1623 deletions(-)
+ 67 files changed, 4912 insertions(+), 1635 deletions(-)
  create mode 100644 drivers/i2c/muxes/i2c-demux-pinctrl.c
 
 diff --git a/drivers/i2c/Kconfig b/drivers/i2c/Kconfig
@@ -1413,7 +1413,7 @@ index 1543d35d228d..7368be000c96 100644
  	return i2c_dw_init(pci_get_drvdata(pdev));
  }
 diff --git a/drivers/i2c/busses/i2c-designware-platdrv.c b/drivers/i2c/busses/i2c-designware-platdrv.c
-index 6b00061c3746..d656657b805c 100644
+index a2ae2213ef3e..d656657b805c 100644
 --- a/drivers/i2c/busses/i2c-designware-platdrv.c
 +++ b/drivers/i2c/busses/i2c-designware-platdrv.c
 @@ -36,6 +36,7 @@
@@ -1523,12 +1523,12 @@ index 6b00061c3746..d656657b805c 100644
 -	if (IS_ERR(dev->clk))
 -		return PTR_ERR(dev->clk);
 -	clk_prepare_enable(dev->clk);
+-
+-	if (!dev->sda_hold_time && ht) {
+-		u32 ic_clk = dev->get_clk_rate_khz(dev);
 +	if (!i2c_dw_plat_prepare_clk(dev, true)) {
 +		dev->get_clk_rate_khz = i2c_dw_get_clk_rate_khz;
  
--	if (!dev->sda_hold_time && ht) {
--		u32 ic_clk = dev->get_clk_rate_khz(dev);
--
 -		dev->sda_hold_time = div_u64((u64)ic_clk * ht + 500000,
 -					     1000000);
 +		if (!dev->sda_hold_time && ht)
@@ -1538,7 +1538,14 @@ index 6b00061c3746..d656657b805c 100644
  	}
  
  	if (!dev->tx_fifo_depth) {
-@@ -300,7 +308,7 @@ static int dw_i2c_plat_suspend(struct device *dev)
+@@ -294,13 +302,13 @@ static void dw_i2c_plat_complete(struct device *dev)
+ #endif
+ 
+ #ifdef CONFIG_PM
+-static int dw_i2c_plat_runtime_suspend(struct device *dev)
++static int dw_i2c_plat_suspend(struct device *dev)
+ {
+ 	struct platform_device *pdev = to_platform_device(dev);
  	struct dw_i2c_dev *i_dev = platform_get_drvdata(pdev);
  
  	i2c_dw_disable(i_dev);
@@ -1556,6 +1563,29 @@ index 6b00061c3746..d656657b805c 100644
  
  	if (!i_dev->pm_runtime_disabled)
  		i2c_dw_init(i_dev);
+@@ -318,21 +326,11 @@ static int dw_i2c_plat_resume(struct device *dev)
+ 	return 0;
+ }
+ 
+-#ifdef CONFIG_PM_SLEEP
+-static int dw_i2c_plat_suspend(struct device *dev)
+-{
+-	pm_runtime_resume(dev);
+-	return dw_i2c_plat_runtime_suspend(dev);
+-}
+-#endif
+-
+ static const struct dev_pm_ops dw_i2c_dev_pm_ops = {
+ 	.prepare = dw_i2c_plat_prepare,
+ 	.complete = dw_i2c_plat_complete,
+ 	SET_SYSTEM_SLEEP_PM_OPS(dw_i2c_plat_suspend, dw_i2c_plat_resume)
+-	SET_RUNTIME_PM_OPS(dw_i2c_plat_runtime_suspend,
+-			   dw_i2c_plat_resume,
+-			   NULL)
++	SET_RUNTIME_PM_OPS(dw_i2c_plat_suspend, dw_i2c_plat_resume, NULL)
+ };
+ 
+ #define DW_I2C_DEV_PMOPS (&dw_i2c_dev_pm_ops)
 diff --git a/drivers/i2c/busses/i2c-dln2.c b/drivers/i2c/busses/i2c-dln2.c
 index 1600edd57ce9..f2eb4f76591f 100644
 --- a/drivers/i2c/busses/i2c-dln2.c
