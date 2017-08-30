@@ -1,6 +1,6 @@
-From d230f61f762648a4f53b281681fc0b47e522e448 Mon Sep 17 00:00:00 2001
+From 6f9ce5ed72178d6199948db8bbaccb5ade989610 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 24 Aug 2017 20:40:36 -0500
+Date: Wed, 30 Aug 2017 09:28:16 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -66,7 +66,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/chemical/atlas-ph-sensor.c             |  509 ++++++
  drivers/iio/chemical/vz89x.c                       |   66 +-
  .../iio/common/hid-sensors/hid-sensor-attributes.c |   56 +-
- .../iio/common/hid-sensors/hid-sensor-trigger.c    |    8 +-
+ .../iio/common/hid-sensors/hid-sensor-trigger.c    |   16 +-
  drivers/iio/common/ms_sensors/ms_sensors_i2c.c     |    2 +-
  drivers/iio/common/st_sensors/st_sensors_buffer.c  |   88 +-
  drivers/iio/common/st_sensors/st_sensors_core.c    |   35 +-
@@ -120,7 +120,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/imu/Makefile                           |    1 +
  drivers/iio/imu/adis.c                             |    7 +-
  drivers/iio/imu/adis16400_core.c                   |    6 +-
- drivers/iio/imu/adis16480.c                        |    4 +-
+ drivers/iio/imu/adis16480.c                        |    6 +-
  drivers/iio/imu/bmi160/Kconfig                     |   32 +
  drivers/iio/imu/bmi160/Makefile                    |    6 +
  drivers/iio/imu/bmi160/bmi160.h                    |   10 +
@@ -277,7 +277,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/platform_data/ad5761.h               |   44 +
  include/linux/platform_data/st_sensors_pdata.h     |    2 +
  include/uapi/linux/iio/types.h                     |    3 +
- 272 files changed, 27443 insertions(+), 2445 deletions(-)
+ 272 files changed, 27448 insertions(+), 2450 deletions(-)
  create mode 100644 drivers/iio/accel/mma7455.h
  create mode 100644 drivers/iio/accel/mma7455_core.c
  create mode 100644 drivers/iio/accel/mma7455_i2c.c
@@ -13035,10 +13035,19 @@ index b5beea53d6f6..dc33c1dd5191 100644
  EXPORT_SYMBOL(hid_sensor_format_scale);
  
 diff --git a/drivers/iio/common/hid-sensors/hid-sensor-trigger.c b/drivers/iio/common/hid-sensors/hid-sensor-trigger.c
-index 0a86ef43e781..5b41f9d0d4f3 100644
+index a8db38db622e..5b41f9d0d4f3 100644
 --- a/drivers/iio/common/hid-sensors/hid-sensor-trigger.c
 +++ b/drivers/iio/common/hid-sensors/hid-sensor-trigger.c
-@@ -51,6 +51,8 @@ static int _hid_sensor_power_state(struct hid_sensor_common *st, bool state)
+@@ -36,6 +36,8 @@ static int _hid_sensor_power_state(struct hid_sensor_common *st, bool state)
+ 	s32 poll_value = 0;
+ 
+ 	if (state) {
++		if (!atomic_read(&st->user_requested_state))
++			return 0;
+ 		if (sensor_hub_device_open(st->hsdev))
+ 			return -EIO;
+ 
+@@ -49,6 +51,8 @@ static int _hid_sensor_power_state(struct hid_sensor_common *st, bool state)
  			st->report_state.report_id,
  			st->report_state.index,
  			HID_USAGE_SENSOR_PROP_REPORTING_STATE_ALL_EVENTS_ENUM);
@@ -13047,7 +13056,13 @@ index 0a86ef43e781..5b41f9d0d4f3 100644
  	} else {
  		int val;
  
-@@ -87,9 +89,7 @@ static int _hid_sensor_power_state(struct hid_sensor_common *st, bool state)
+@@ -82,15 +86,10 @@ static int _hid_sensor_power_state(struct hid_sensor_common *st, bool state)
+ 				       &report_val);
+ 	}
+ 
+-	pr_debug("HID_SENSOR %s set power_state %d report_state %d\n",
+-		 st->pdev->name, state_val, report_val);
+-
  	sensor_hub_get_feature(st->hsdev, st->power_state.report_id,
  			       st->power_state.index,
  			       sizeof(state_val), &state_val);
@@ -13058,7 +13073,15 @@ index 0a86ef43e781..5b41f9d0d4f3 100644
  		msleep_interruptible(poll_value * 2);
  
  	return 0;
-@@ -115,7 +115,7 @@ int hid_sensor_power_state(struct hid_sensor_common *st, bool state)
+@@ -108,7 +107,6 @@ int hid_sensor_power_state(struct hid_sensor_common *st, bool state)
+ 		ret = pm_runtime_get_sync(&st->pdev->dev);
+ 	else {
+ 		pm_runtime_mark_last_busy(&st->pdev->dev);
+-		pm_runtime_use_autosuspend(&st->pdev->dev);
+ 		ret = pm_runtime_put_autosuspend(&st->pdev->dev);
+ 	}
+ 	if (ret < 0) {
+@@ -117,7 +115,7 @@ int hid_sensor_power_state(struct hid_sensor_common *st, bool state)
  		return ret;
  	}
  
@@ -13067,6 +13090,15 @@ index 0a86ef43e781..5b41f9d0d4f3 100644
  #else
  	atomic_set(&st->user_requested_state, state);
  	return _hid_sensor_power_state(st, state);
+@@ -177,6 +175,8 @@ int hid_sensor_setup_trigger(struct iio_dev *indio_dev, const char *name,
+ 	/* Default to 3 seconds, but can be changed from sysfs */
+ 	pm_runtime_set_autosuspend_delay(&attrb->pdev->dev,
+ 					 3000);
++	pm_runtime_use_autosuspend(&attrb->pdev->dev);
++
+ 	return ret;
+ error_unreg_trigger:
+ 	iio_trigger_unregister(trig);
 diff --git a/drivers/iio/common/ms_sensors/ms_sensors_i2c.c b/drivers/iio/common/ms_sensors/ms_sensors_i2c.c
 index 669dc7c270f5..ecf7721ecaf4 100644
 --- a/drivers/iio/common/ms_sensors/ms_sensors_i2c.c
@@ -22029,9 +22061,18 @@ index 0618f831ecd4..fb7c0dbed51c 100644
  		if (prod_id != device_id)
  			dev_warn(&indio_dev->dev, "Device ID(%u) and product ID(%u) do not match.",
 diff --git a/drivers/iio/imu/adis16480.c b/drivers/iio/imu/adis16480.c
-index 2485b88ee1b6..8cf84d3488b2 100644
+index 1880105cc8c4..8cf84d3488b2 100644
 --- a/drivers/iio/imu/adis16480.c
 +++ b/drivers/iio/imu/adis16480.c
+@@ -696,7 +696,7 @@ static const struct adis16480_chip_info adis16480_chip_info[] = {
+ 		.gyro_max_val = IIO_RAD_TO_DEGREE(22500),
+ 		.gyro_max_scale = 450,
+ 		.accel_max_val = IIO_M_S_2_TO_G(12500),
+-		.accel_max_scale = 10,
++		.accel_max_scale = 5,
+ 	},
+ 	[ADIS16485] = {
+ 		.channels = adis16485_channels,
 @@ -765,7 +765,9 @@ static int adis16480_initial_setup(struct iio_dev *indio_dev)
  	if (ret)
  		return ret;
