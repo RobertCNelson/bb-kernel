@@ -284,12 +284,12 @@ reverts () {
 	${git} "${DIR}/patches/reverts/0001-Revert-eeprom-at24-check-if-the-chip-is-functional-i.patch"
 
 	#https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/log/drivers/net/wireless/ti
-	${git} "${DIR}/patches/reverts/0002-Revert-wlcore-sdio-drop-kfree-for-memory-allocated-w.patch"
-	${git} "${DIR}/patches/reverts/0003-Revert-wlcore-wl18xx-Use-chip-specific-configuration.patch"
-	${git} "${DIR}/patches/reverts/0004-Revert-wlcore-Fix-config-firmware-loading-issues.patch"
-	${git} "${DIR}/patches/reverts/0005-Revert-wlcore-spi-Populate-config-firmware-data.patch"
-	${git} "${DIR}/patches/reverts/0006-Revert-wlcore-sdio-Populate-config-firmware-data.patch"
-	${git} "${DIR}/patches/reverts/0007-Revert-wlcore-Prepare-family-to-fix-nvs-file-handlin.patch"
+#	${git} "${DIR}/patches/reverts/0002-Revert-wlcore-sdio-drop-kfree-for-memory-allocated-w.patch"
+#	${git} "${DIR}/patches/reverts/0003-Revert-wlcore-wl18xx-Use-chip-specific-configuration.patch"
+#	${git} "${DIR}/patches/reverts/0004-Revert-wlcore-Fix-config-firmware-loading-issues.patch"
+#	${git} "${DIR}/patches/reverts/0005-Revert-wlcore-spi-Populate-config-firmware-data.patch"
+#	${git} "${DIR}/patches/reverts/0006-Revert-wlcore-sdio-Populate-config-firmware-data.patch"
+#	${git} "${DIR}/patches/reverts/0007-Revert-wlcore-Prepare-family-to-fix-nvs-file-handlin.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
@@ -413,7 +413,6 @@ drivers () {
 	dir 'drivers/ti/etnaviv'
 	dir 'drivers/ti/eqep'
 	dir 'drivers/ti/mcasp'
-	dir 'drivers/ti/mmc'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/uio'
@@ -435,7 +434,6 @@ soc () {
 	dir 'soc/ti/abbbi'
 	dir 'soc/ti/am335x_olimex_som'
 	dir 'soc/ti/beaglebone_capes'
-	dir 'soc/ti/x15'
 }
 
 dtb_makefile_append () {
@@ -520,13 +518,12 @@ sgx () {
 
 ###
 #backports
-dir 'fixes'
 reverts
 drivers
 soc
 beaglebone
 dir 'build/gcc'
-sgx
+#sgx
 
 packaging () {
 	echo "dir: packaging"
