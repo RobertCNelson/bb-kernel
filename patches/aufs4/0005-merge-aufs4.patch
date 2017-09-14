@@ -1,6 +1,6 @@
-From faf07425835cc5bcb57814e64208b325899d1705 Mon Sep 17 00:00:00 2001
+From 59b475fb0a88ffed94ca4b4c936ba6eea59cbf90 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 8 Sep 2017 15:12:46 -0500
+Date: Wed, 13 Sep 2017 23:23:31 -0500
 Subject: [PATCH 5/6] merge: aufs4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -23,7 +23,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/Kconfig                                    |  185 ++
  fs/aufs/Makefile                                   |   44 +
  fs/aufs/aufs.h                                     |   59 +
- fs/aufs/branch.c                                   | 1421 +++++++++++++++
+ fs/aufs/branch.c                                   | 1420 +++++++++++++++
  fs/aufs/branch.h                                   |  321 ++++
  fs/aufs/conf.mk                                    |   38 +
  fs/aufs/cpup.c                                     | 1383 +++++++++++++++
@@ -44,14 +44,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/export.c                                   |  838 +++++++++
  fs/aufs/f_op.c                                     |  772 ++++++++
  fs/aufs/fhsm.c                                     |  426 +++++
- fs/aufs/file.c                                     |  850 +++++++++
+ fs/aufs/file.c                                     |  837 +++++++++
  fs/aufs/file.h                                     |  291 +++
  fs/aufs/finfo.c                                    |  148 ++
  fs/aufs/fstype.h                                   |  400 +++++
  fs/aufs/hfsnotify.c                                |  287 +++
  fs/aufs/hfsplus.c                                  |   56 +
  fs/aufs/hnotify.c                                  |  711 ++++++++
- fs/aufs/i_op.c                                     | 1523 ++++++++++++++++
+ fs/aufs/i_op.c                                     | 1531 ++++++++++++++++
  fs/aufs/i_op_add.c                                 |  924 ++++++++++
  fs/aufs/i_op_del.c                                 |  511 ++++++
  fs/aufs/i_op_ren.c                                 | 1015 +++++++++++
@@ -89,10 +89,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/whout.h                                    |   85 +
  fs/aufs/wkq.c                                      |  213 +++
  fs/aufs/wkq.h                                      |   91 +
- fs/aufs/xattr.c                                    |  365 ++++
+ fs/aufs/xattr.c                                    |  363 ++++
  fs/aufs/xino.c                                     | 1415 +++++++++++++++
  include/uapi/linux/aufs_type.h                     |  419 +++++
- 87 files changed, 34678 insertions(+)
+ 87 files changed, 34670 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -2263,10 +2263,10 @@ index 000000000000..7f5eb7890bc0
 +#endif /* __AUFS_H__ */
 diff --git a/fs/aufs/branch.c b/fs/aufs/branch.c
 new file mode 100644
-index 000000000000..7024a54593a2
+index 000000000000..8108470af5cf
 --- /dev/null
 +++ b/fs/aufs/branch.c
-@@ -0,0 +1,1421 @@
+@@ -0,0 +1,1420 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -2406,7 +2406,7 @@ index 000000000000..7024a54593a2
 +		goto out;
 +	add_branch->br_xino.xi_nondir.total = 8; /* initial size */
 +	add_branch->br_xino.xi_nondir.array
-+		= kzalloc(sizeof(ino_t) * add_branch->br_xino.xi_nondir.total,
++		= kcalloc(sizeof(ino_t), add_branch->br_xino.xi_nondir.total,
 +			  GFP_NOFS);
 +	if (unlikely(!add_branch->br_xino.xi_nondir.array))
 +		goto out_br;
@@ -3664,8 +3664,7 @@ index 000000000000..7024a54593a2
 +	goto out; /* success */
 +
 +out_bf:
-+	if (bf)
-+		kfree(bf);
++	kfree(bf);
 +out:
 +	AuTraceErr(err);
 +	return err;
@@ -12464,10 +12463,10 @@ index 000000000000..ef6f99e985c8
 +}
 diff --git a/fs/aufs/file.c b/fs/aufs/file.c
 new file mode 100644
-index 000000000000..82d6905b6e8a
+index 000000000000..000cf0678bb7
 --- /dev/null
 +++ b/fs/aufs/file.c
-@@ -0,0 +1,850 @@
+@@ -0,0 +1,837 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -12692,11 +12691,11 @@ index 000000000000..82d6905b6e8a
 +
 +int au_do_open(struct file *file, struct au_do_open_args *args)
 +{
-+	int err, no_lock = args->no_lock;
++	int err, aopen = args->aopen;
 +	struct dentry *dentry;
 +	struct au_finfo *finfo;
 +
-+	if (!no_lock)
++	if (!aopen)
 +		err = au_finfo_init(file, args->fidir);
 +	else {
 +		lockdep_off();
@@ -12708,25 +12707,12 @@ index 000000000000..82d6905b6e8a
 +
 +	dentry = file->f_path.dentry;
 +	AuDebugOn(IS_ERR_OR_NULL(dentry));
-+	if (!no_lock) {
-+		di_write_lock_child(dentry);
-+		err = au_cmoo(dentry);
-+		di_downgrade_lock(dentry, AuLock_IR);
-+		if (!err)
-+			err = args->open(file, vfsub_file_flags(file), NULL);
-+		di_read_unlock(dentry, AuLock_IR);
-+	} else {
-+		err = au_cmoo(dentry);
-+		if (!err)
-+			err = args->open(file, vfsub_file_flags(file),
-+					 args->h_file);
-+		if (!err && au_fbtop(file) != au_dbtop(dentry))
-+			/*
-+			 * cmoo happens after h_file was opened.
-+			 * need to refresh file later.
-+			 */
-+			atomic_dec(&au_fi(file)->fi_generation);
-+	}
++	di_write_lock_child(dentry);
++	err = au_cmoo(dentry);
++	di_downgrade_lock(dentry, AuLock_IR);
++	if (!err)
++		err = args->open(file, vfsub_file_flags(file), NULL);
++	di_read_unlock(dentry, AuLock_IR);
 +
 +	finfo = au_fi(file);
 +	if (!err) {
@@ -12734,7 +12720,7 @@ index 000000000000..82d6905b6e8a
 +		au_sphl_add(&finfo->fi_hlist,
 +			    &au_sbi(file->f_path.dentry->d_sb)->si_files);
 +	}
-+	if (!no_lock)
++	if (!aopen)
 +		fi_write_unlock(file);
 +	else {
 +		lockdep_off();
@@ -13320,7 +13306,7 @@ index 000000000000..82d6905b6e8a
 +};
 diff --git a/fs/aufs/file.h b/fs/aufs/file.h
 new file mode 100644
-index 000000000000..26a56be75182
+index 000000000000..71f58f0bc2b0
 --- /dev/null
 +++ b/fs/aufs/file.h
 @@ -0,0 +1,291 @@
@@ -13400,7 +13386,7 @@ index 000000000000..26a56be75182
 +struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 +		       struct file *file, int force_wr);
 +struct au_do_open_args {
-+	int		no_lock;
++	int		aopen;
 +	int		(*open)(struct file *file, int flags,
 +				struct file *h_file);
 +	struct au_fidir	*fidir;
@@ -14177,7 +14163,7 @@ index 000000000000..4624f1ef222f
 +#endif /* __AUFS_FSTYPE_H__ */
 diff --git a/fs/aufs/hfsnotify.c b/fs/aufs/hfsnotify.c
 new file mode 100644
-index 000000000000..a4eb68906a3c
+index 000000000000..49ba77da041d
 --- /dev/null
 +++ b/fs/aufs/hfsnotify.c
 @@ -0,0 +1,287 @@
@@ -14216,7 +14202,7 @@ index 000000000000..a4eb68906a3c
 +					     hn_mark);
 +	/* AuDbg("here\n"); */
 +	au_cache_free_hnotify(hn);
-+	smp_mb__before_atomic();
++	smp_mb__before_atomic(); /* for atomic64_dec */
 +	if (atomic64_dec_and_test(&au_hfsn_ifree))
 +		wake_up(&au_hfsn_wq);
 +}
@@ -15249,10 +15235,10 @@ index 000000000000..63e9ddcdacdd
 +}
 diff --git a/fs/aufs/i_op.c b/fs/aufs/i_op.c
 new file mode 100644
-index 000000000000..ba9d8c85a67b
+index 000000000000..e317098bd67e
 --- /dev/null
 +++ b/fs/aufs/i_op.c
-@@ -0,0 +1,1523 @@
+@@ -0,0 +1,1531 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -15513,8 +15499,8 @@ index 000000000000..ba9d8c85a67b
 +	struct au_sphlhead *aopen;
 +	struct aopen_node *node;
 +	struct au_do_open_args args = {
-+		.no_lock	= 1,
-+		.open		= au_do_open_nondir
++		.aopen	= 1,
++		.open	= au_do_open_nondir
 +	};
 +
 +	aopen = &au_sbi(inode->i_sb)->si_aopen;
@@ -15534,7 +15520,7 @@ index 000000000000..ba9d8c85a67b
 +			    struct file *file, unsigned int open_flag,
 +			    umode_t create_mode, int *opened)
 +{
-+	int err, h_opened = *opened;
++	int err, unlocked, h_opened = *opened;
 +	unsigned int lkup_flags;
 +	struct dentry *parent, *d;
 +	struct au_sphlhead *aopen;
@@ -15579,6 +15565,7 @@ index 000000000000..ba9d8c85a67b
 +	    || !(open_flag & O_CREAT))
 +		goto out_no_open;
 +
++	unlocked = 0;
 +	err = aufs_read_lock(dentry, AuLock_DW | AuLock_FLUSH | AuLock_GEN);
 +	if (unlikely(err))
 +		goto out;
@@ -15609,6 +15596,9 @@ index 000000000000..ba9d8c85a67b
 +			put_filp(args.file);
 +		goto out_unlock;
 +	}
++	di_write_unlock(parent);
++	di_write_unlock(dentry);
++	unlocked = 1;
 +
 +	/* some filesystems don't set FILE_CREATED while succeeded? */
 +	*opened |= FILE_CREATED;
@@ -15628,8 +15618,12 @@ index 000000000000..ba9d8c85a67b
 +		fput(aopen_node.h_file);
 +
 +out_unlock:
-+	di_write_unlock(parent);
-+	aufs_read_unlock(dentry, AuLock_DW);
++	if (unlocked)
++		si_read_unlock(dentry->d_sb);
++	else {
++		di_write_unlock(parent);
++		aufs_read_unlock(dentry, AuLock_DW);
++	}
 +	AuDbgDentry(dentry);
 +	if (unlikely(err < 0))
 +		goto out;
@@ -33166,10 +33160,10 @@ index 000000000000..a0a253bc2b8f
 +#endif /* __AUFS_WKQ_H__ */
 diff --git a/fs/aufs/xattr.c b/fs/aufs/xattr.c
 new file mode 100644
-index 000000000000..bc8ff81619a1
+index 000000000000..bee1da22cf64
 --- /dev/null
 +++ b/fs/aufs/xattr.c
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,363 @@
 +/*
 + * Copyright (C) 2014-2017 Junjiro R. Okajima
 + *
@@ -33348,12 +33342,10 @@ index 000000000000..bc8ff81619a1
 +		AuTraceErr(err);
 +	}
 +
-+	if (value)
-+		kfree(value);
++	kfree(value);
 +
 +out_free:
-+	if (o)
-+		kfree(o);
++	kfree(o);
 +out:
 +	if (!unlocked)
 +		mutex_unlock(&h_isrc->i_mutex);
@@ -34958,7 +34950,7 @@ index 000000000000..586f042332ab
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..d2249a1c4aa1
+index 000000000000..aa5877d493d6
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,419 @@
@@ -35003,7 +34995,7 @@ index 000000000000..d2249a1c4aa1
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.4-20170904"
++#define AUFS_VERSION	"4.4-20170911"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
