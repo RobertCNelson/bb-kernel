@@ -524,7 +524,7 @@ drivers
 soc
 beaglebone
 dir 'build/gcc'
-#sgx
+sgx
 
 packaging () {
 	echo "dir: packaging"
