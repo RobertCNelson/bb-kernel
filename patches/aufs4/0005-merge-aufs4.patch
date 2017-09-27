@@ -1,6 +1,6 @@
-From b9965888364fb48577c0224d080074304ac34ba3 Mon Sep 17 00:00:00 2001
+From c994e33bad41edaed04e744eebed669433bd0edc Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 20 Sep 2017 08:48:44 -0500
+Date: Wed, 27 Sep 2017 11:07:14 -0500
 Subject: [PATCH 5/5] merge: aufs4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -48,7 +48,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/export.c                                   |  836 +++++++++
  fs/aufs/f_op.c                                     |  817 +++++++++
  fs/aufs/fhsm.c                                     |  426 +++++
- fs/aufs/file.c                                     |  845 +++++++++
+ fs/aufs/file.c                                     |  848 +++++++++
  fs/aufs/file.h                                     |  331 ++++
  fs/aufs/finfo.c                                    |  148 ++
  fs/aufs/fstype.h                                   |  400 +++++
@@ -86,7 +86,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/sysfs.c                                    |  376 ++++
  fs/aufs/sysrq.c                                    |  159 ++
  fs/aufs/vdir.c                                     |  892 +++++++++
- fs/aufs/vfsub.c                                    |  900 ++++++++++
+ fs/aufs/vfsub.c                                    |  894 +++++++++
  fs/aufs/vfsub.h                                    |  360 ++++
  fs/aufs/wbr_policy.c                               |  830 +++++++++
  fs/aufs/whout.c                                    | 1061 +++++++++++
@@ -96,7 +96,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/xattr.c                                    |  355 ++++
  fs/aufs/xino.c                                     | 1415 +++++++++++++++
  include/uapi/linux/aufs_type.h                     |  447 +++++
- 91 files changed, 36703 insertions(+)
+ 91 files changed, 36700 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -14246,10 +14246,10 @@ index 000000000000..ef6f99e985c8
 +}
 diff --git a/fs/aufs/file.c b/fs/aufs/file.c
 new file mode 100644
-index 000000000000..1477b1cdec1c
+index 000000000000..c15b0e89f639
 --- /dev/null
 +++ b/fs/aufs/file.c
-@@ -0,0 +1,845 @@
+@@ -0,0 +1,848 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -14360,7 +14360,7 @@ index 000000000000..1477b1cdec1c
 +
 +static int au_cmoo(struct dentry *dentry)
 +{
-+	int err, cmoo;
++	int err, cmoo, matched;
 +	unsigned int udba;
 +	struct path h_path;
 +	struct au_pin pin;
@@ -14395,9 +14395,12 @@ index 000000000000..1477b1cdec1c
 +	sbinfo = au_sbi(sb);
 +	fhsm = &sbinfo->si_fhsm;
 +	pid = au_fhsm_pid(fhsm);
-+	if (pid
-+	    && (current->pid == pid
-+		|| current->real_parent->pid == pid))
++	rcu_read_lock();
++	matched = (pid
++		   && (current->pid == pid
++		       || rcu_dereference(current->real_parent)->pid == pid));
++	rcu_read_unlock();
++	if (matched)
 +		goto out;
 +
 +	br = au_sbr(sb, cpg.bsrc);
@@ -31621,10 +31624,10 @@ index 000000000000..b7583e9f0d36
 +}
 diff --git a/fs/aufs/vfsub.c b/fs/aufs/vfsub.c
 new file mode 100644
-index 000000000000..da07be8099fa
+index 000000000000..00f189d54686
 --- /dev/null
 +++ b/fs/aufs/vfsub.c
-@@ -0,0 +1,900 @@
+@@ -0,0 +1,894 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -31646,26 +31649,20 @@ index 000000000000..da07be8099fa
 + * sub-routines for VFS
 + */
 +
++#include <linux/mnt_namespace.h>
 +#include <linux/namei.h>
 +#include <linux/nsproxy.h>
 +#include <linux/security.h>
 +#include <linux/splice.h>
-+#ifdef CONFIG_AUFS_BR_FUSE
-+#include "../fs/mount.h"
-+#endif
 +#include "aufs.h"
 +
 +#ifdef CONFIG_AUFS_BR_FUSE
 +int vfsub_test_mntns(struct vfsmount *mnt, struct super_block *h_sb)
 +{
-+	struct nsproxy *ns;
-+
 +	if (!au_test_fuse(h_sb) || !au_userns)
 +		return 0;
 +
-+	ns = current->nsproxy;
-+	/* no {get,put}_nsproxy(ns) */
-+	return real_mount(mnt)->mnt_ns == ns->mnt_ns ? 0 : -EACCES;
++	return is_current_mnt_ns(mnt) ? 0 : -EACCES;
 +}
 +#endif
 +
@@ -36987,7 +36984,7 @@ index 000000000000..1d41d5752048
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..c4ba9f859a3d
+index 000000000000..84fbaa20fc49
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,447 @@
@@ -37032,7 +37029,7 @@ index 000000000000..c4ba9f859a3d
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.13-20170918"
++#define AUFS_VERSION	"4.13-20170925"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
