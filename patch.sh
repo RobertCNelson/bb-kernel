@@ -296,6 +296,7 @@ drivers () {
 	dir 'drivers/tsl2550'
 	dir 'drivers/tps65217'
 	dir 'drivers/opp'
+	dir 'drivers/wiznet'
 
 	#https://github.com/pantoniou/linux-beagle-track-mainline/tree/bbb-overlays
 	echo "dir: drivers/ti/bbb_overlays"
@@ -411,7 +412,6 @@ drivers () {
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/uio'
-
 	dir 'drivers/ti/gpio'
 }
 
@@ -429,6 +429,7 @@ soc () {
 	dir 'soc/ti/abbbi'
 	dir 'soc/ti/am335x_olimex_som'
 	dir 'soc/ti/beaglebone_capes'
+	dir 'soc/ti/pocketbeagle'
 }
 
 dtb_makefile_append () {
@@ -481,6 +482,8 @@ beaglebone () {
 		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
+
+		device="am335x-pocketbeagle.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
