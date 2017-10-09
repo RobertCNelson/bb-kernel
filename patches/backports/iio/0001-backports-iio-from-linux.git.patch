@@ -1,6 +1,6 @@
-From e77474d5a0971831da9cfce6a9117f38af1565b2 Mon Sep 17 00:00:00 2001
+From 39fe4a363bfecbbb45cf5b5f1c21d821c9f17de1 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 5 Oct 2017 10:08:12 -0500
+Date: Sun, 8 Oct 2017 21:10:52 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -36,7 +36,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/adc/ad799x.c                           |    2 +-
  drivers/iio/adc/at91-sama5d2_adc.c                 |  556 ++++++
  drivers/iio/adc/at91_adc.c                         |   10 +-
- drivers/iio/adc/axp288_adc.c                       |    2 +-
+ drivers/iio/adc/axp288_adc.c                       |   34 +-
  drivers/iio/adc/exynos_adc.c                       |  224 ++-
  drivers/iio/adc/fsl-imx25-gcq.c                    |  417 +++++
  drivers/iio/adc/imx7d_adc.c                        |  609 +++++++
@@ -277,7 +277,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/platform_data/ad5761.h               |   44 +
  include/linux/platform_data/st_sensors_pdata.h     |    2 +
  include/uapi/linux/iio/types.h                     |    3 +
- 272 files changed, 27448 insertions(+), 2450 deletions(-)
+ 272 files changed, 27479 insertions(+), 2451 deletions(-)
  create mode 100644 drivers/iio/accel/mma7455.h
  create mode 100644 drivers/iio/accel/mma7455_core.c
  create mode 100644 drivers/iio/accel/mma7455_i2c.c
@@ -3988,10 +3988,19 @@ index 93986f0590ef..0438c68015e8 100644
  		i++;
  	}
 diff --git a/drivers/iio/adc/axp288_adc.c b/drivers/iio/adc/axp288_adc.c
-index 0c904edd6c00..7fd24949c0c1 100644
+index f684fe31f832..7fd24949c0c1 100644
 --- a/drivers/iio/adc/axp288_adc.c
 +++ b/drivers/iio/adc/axp288_adc.c
-@@ -46,7 +46,7 @@ struct axp288_adc_info {
+@@ -28,6 +28,8 @@
+ #include <linux/iio/driver.h>
+ 
+ #define AXP288_ADC_EN_MASK		0xF1
++#define AXP288_ADC_TS_PIN_GPADC		0xF2
++#define AXP288_ADC_TS_PIN_ON		0xF3
+ 
+ enum axp288_adc_id {
+ 	AXP288_ADC_TS,
+@@ -44,7 +46,7 @@ struct axp288_adc_info {
  	struct regmap *regmap;
  };
  
@@ -4000,6 +4009,65 @@ index 0c904edd6c00..7fd24949c0c1 100644
  	{
  		.indexed = 1,
  		.type = IIO_TEMP,
+@@ -121,6 +123,16 @@ static int axp288_adc_read_channel(int *val, unsigned long address,
+ 	return IIO_VAL_INT;
+ }
+ 
++static int axp288_adc_set_ts(struct regmap *regmap, unsigned int mode,
++				unsigned long address)
++{
++	/* channels other than GPADC do not need to switch TS pin */
++	if (address != AXP288_GP_ADC_H)
++		return 0;
++
++	return regmap_write(regmap, AXP288_ADC_TS_PIN_CTRL, mode);
++}
++
+ static int axp288_adc_read_raw(struct iio_dev *indio_dev,
+ 			struct iio_chan_spec const *chan,
+ 			int *val, int *val2, long mask)
+@@ -131,7 +143,16 @@ static int axp288_adc_read_raw(struct iio_dev *indio_dev,
+ 	mutex_lock(&indio_dev->mlock);
+ 	switch (mask) {
+ 	case IIO_CHAN_INFO_RAW:
++		if (axp288_adc_set_ts(info->regmap, AXP288_ADC_TS_PIN_GPADC,
++					chan->address)) {
++			dev_err(&indio_dev->dev, "GPADC mode\n");
++			ret = -EINVAL;
++			break;
++		}
+ 		ret = axp288_adc_read_channel(val, chan->address, info->regmap);
++		if (axp288_adc_set_ts(info->regmap, AXP288_ADC_TS_PIN_ON,
++						chan->address))
++			dev_err(&indio_dev->dev, "TS pin restore\n");
+ 		break;
+ 	default:
+ 		ret = -EINVAL;
+@@ -141,6 +162,15 @@ static int axp288_adc_read_raw(struct iio_dev *indio_dev,
+ 	return ret;
+ }
+ 
++static int axp288_adc_set_state(struct regmap *regmap)
++{
++	/* ADC should be always enabled for internal FG to function */
++	if (regmap_write(regmap, AXP288_ADC_TS_PIN_CTRL, AXP288_ADC_TS_PIN_ON))
++		return -EIO;
++
++	return regmap_write(regmap, AXP20X_ADC_EN1, AXP288_ADC_EN_MASK);
++}
++
+ static const struct iio_info axp288_adc_iio_info = {
+ 	.read_raw = &axp288_adc_read_raw,
+ 	.driver_module = THIS_MODULE,
+@@ -169,7 +199,7 @@ static int axp288_adc_probe(struct platform_device *pdev)
+ 	 * Set ADC to enabled state at all time, including system suspend.
+ 	 * otherwise internal fuel gauge functionality may be affected.
+ 	 */
+-	ret = regmap_write(info->regmap, AXP20X_ADC_EN1, AXP288_ADC_EN_MASK);
++	ret = axp288_adc_set_state(axp20x->regmap);
+ 	if (ret) {
+ 		dev_err(&pdev->dev, "unable to enable ADC device\n");
+ 		return ret;
 diff --git a/drivers/iio/adc/exynos_adc.c b/drivers/iio/adc/exynos_adc.c
 index 3a2dbb3b4926..c15756d7bf7f 100644
 --- a/drivers/iio/adc/exynos_adc.c
