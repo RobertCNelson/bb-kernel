@@ -367,6 +367,14 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0013-iio-proximity-as3935-recalibrate-RCO-after-resume.patch"
 	${git} "${DIR}/patches/backports/iio/0014-iio-accel-bmc150-Always-restore-device-to-normal-mod.patch"
 	${git} "${DIR}/patches/backports/iio/0015-iio-light-tsl2563-use-correct-event-code.patch"
+	${git} "${DIR}/patches/backports/iio/0016-iio-adc-twl4030-Fix-an-error-handling-path-in-twl403.patch"
+	${git} "${DIR}/patches/backports/iio/0017-iio-adc-twl4030-Disable-the-vusb3v1-rugulator-in-the.patch"
+	${git} "${DIR}/patches/backports/iio/0018-iio-ad_sigma_delta-Implement-a-dedicated-reset-funct.patch"
+	${git} "${DIR}/patches/backports/iio/0019-staging-iio-ad7192-Fix-use-the-dedicated-reset-funct.patch"
+	${git} "${DIR}/patches/backports/iio/0020-iio-core-Return-error-for-failed-read_reg.patch"
+	${git} "${DIR}/patches/backports/iio/0021-iio-ad7793-Fix-the-serial-interface-reset.patch"
+	${git} "${DIR}/patches/backports/iio/0022-iio-adc-mcp320x-Fix-readout-of-negative-voltages.patch"
+	${git} "${DIR}/patches/backports/iio/0023-iio-adc-mcp320x-Fix-oops-on-module-unload.patch"
 
 	backport_tag="v4.8.17"
 
