@@ -30,7 +30,7 @@ toolchain="gcc_linaro_gnueabihf_6"
 
 #Kernel
 KERNEL_REL=4.9
-KERNEL_TAG=${KERNEL_REL}.55
+KERNEL_TAG=${KERNEL_REL}.56
 kernel_rt=".47-rt37"
 #Kernel Build
 BUILD=${build_prefix}7
