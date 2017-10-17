@@ -1,0 +1,2360 @@
+From 9810b1625d304f19feda5d62dce7e3999a86db52 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Tue, 17 Oct 2017 16:18:58 -0500
+Subject: [PATCH] backports: cpufreq: from: linux.git
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/cpufreq/Kconfig.arm            |  21 +-
+ drivers/cpufreq/Makefile               |   4 +-
+ drivers/cpufreq/arm_big_little.c       |  10 +-
+ drivers/cpufreq/cppc_cpufreq.c         |   1 -
+ drivers/cpufreq/cpufreq-dt-platdev.c   |  81 ++++-
+ drivers/cpufreq/cpufreq-dt.c           |   1 +
+ drivers/cpufreq/cpufreq-nforce2.c      |   2 +-
+ drivers/cpufreq/cpufreq.c              |  41 ++-
+ drivers/cpufreq/cpufreq_conservative.c |   6 -
+ drivers/cpufreq/cpufreq_governor.c     |  20 +-
+ drivers/cpufreq/cpufreq_governor.h     |   3 +-
+ drivers/cpufreq/cpufreq_ondemand.c     |  12 -
+ drivers/cpufreq/elanfreq.c             |   4 +-
+ drivers/cpufreq/gx-suspmod.c           |   2 +-
+ drivers/cpufreq/imx6q-cpufreq.c        |   9 +
+ drivers/cpufreq/intel_pstate.c         | 386 +++-----------------
+ drivers/cpufreq/longrun.c              |   1 -
+ drivers/cpufreq/loongson2_cpufreq.c    |   2 +-
+ drivers/cpufreq/mediatek-cpufreq.c     | 622 +++++++++++++++++++++++++++++++++
+ drivers/cpufreq/pmac32-cpufreq.c       |   7 +-
+ drivers/cpufreq/pmac64-cpufreq.c       |   2 +-
+ drivers/cpufreq/powernow-k7.c          |   2 +-
+ drivers/cpufreq/s5pv210-cpufreq.c      |   3 +
+ drivers/cpufreq/sa1100-cpufreq.c       |   5 +-
+ drivers/cpufreq/sa1110-cpufreq.c       |   5 +-
+ drivers/cpufreq/sh-cpufreq.c           |   3 +-
+ drivers/cpufreq/speedstep-ich.c        |   2 +-
+ drivers/cpufreq/speedstep-lib.c        |   4 +-
+ drivers/cpufreq/speedstep-smi.c        |   2 +-
+ drivers/cpufreq/sti-cpufreq.c          |   8 +-
+ drivers/cpufreq/tango-cpufreq.c        |  38 ++
+ drivers/cpufreq/ti-cpufreq.c           |   6 +-
+ drivers/cpufreq/unicore2-cpufreq.c     |   3 +-
+ include/linux/cpufreq.h                |  38 +-
+ 34 files changed, 899 insertions(+), 457 deletions(-)
+ create mode 100644 drivers/cpufreq/mediatek-cpufreq.c
+ create mode 100644 drivers/cpufreq/tango-cpufreq.c
+
+diff --git a/drivers/cpufreq/Kconfig.arm b/drivers/cpufreq/Kconfig.arm
+index 2011fec2d6ad..bdce4488ded1 100644
+--- a/drivers/cpufreq/Kconfig.arm
++++ b/drivers/cpufreq/Kconfig.arm
+@@ -71,15 +71,6 @@ config ARM_HIGHBANK_CPUFREQ
+ 
+ 	  If in doubt, say N.
+ 
+-config ARM_DB8500_CPUFREQ
+-	tristate "ST-Ericsson DB8500 cpufreq" if COMPILE_TEST && !ARCH_U8500
+-	default ARCH_U8500
+-	depends on HAS_IOMEM
+-	depends on !CPU_THERMAL || THERMAL
+-	help
+-	  This adds the CPUFreq driver for ST-Ericsson Ux500 (DB8500) SoC
+-	  series.
+-
+ config ARM_IMX6Q_CPUFREQ
+ 	tristate "Freescale i.MX6 cpufreq support"
+ 	depends on ARCH_MXC
+@@ -96,14 +87,13 @@ config ARM_KIRKWOOD_CPUFREQ
+ 	  This adds the CPUFreq driver for Marvell Kirkwood
+ 	  SoCs.
+ 
+-config ARM_MT8173_CPUFREQ
+-	tristate "Mediatek MT8173 CPUFreq support"
++config ARM_MEDIATEK_CPUFREQ
++	tristate "CPU Frequency scaling support for MediaTek SoCs"
+ 	depends on ARCH_MEDIATEK && REGULATOR
+-	depends on ARM64 || (ARM_CPU_TOPOLOGY && COMPILE_TEST)
+ 	depends on !CPU_THERMAL || THERMAL
+ 	select PM_OPP
+ 	help
+-	  This adds the CPUFreq driver support for Mediatek MT8173 SoC.
++	  This adds the CPUFreq driver support for MediaTek SoCs.
+ 
+ config ARM_OMAP2PLUS_CPUFREQ
+ 	bool "TI OMAP2+"
+@@ -242,6 +232,11 @@ config ARM_STI_CPUFREQ
+ 	  this config option if you wish to add CPUFreq support for STi based
+ 	  SoCs.
+ 
++config ARM_TANGO_CPUFREQ
++	bool
++	depends on CPUFREQ_DT && ARCH_TANGO
++	default y
++
+ config ARM_TEGRA20_CPUFREQ
+ 	bool "Tegra20 CPUFreq support"
+ 	depends on ARCH_TEGRA
+diff --git a/drivers/cpufreq/Makefile b/drivers/cpufreq/Makefile
+index ab3a42cd29ef..c7af9b2a255e 100644
+--- a/drivers/cpufreq/Makefile
++++ b/drivers/cpufreq/Makefile
+@@ -53,12 +53,11 @@ obj-$(CONFIG_ARM_DT_BL_CPUFREQ)		+= arm_big_little_dt.o
+ 
+ obj-$(CONFIG_ARM_BRCMSTB_AVS_CPUFREQ)	+= brcmstb-avs-cpufreq.o
+ obj-$(CONFIG_ARCH_DAVINCI)		+= davinci-cpufreq.o
+-obj-$(CONFIG_ARM_DB8500_CPUFREQ)	+= dbx500-cpufreq.o
+ obj-$(CONFIG_ARM_EXYNOS5440_CPUFREQ)	+= exynos5440-cpufreq.o
+ obj-$(CONFIG_ARM_HIGHBANK_CPUFREQ)	+= highbank-cpufreq.o
+ obj-$(CONFIG_ARM_IMX6Q_CPUFREQ)		+= imx6q-cpufreq.o
+ obj-$(CONFIG_ARM_KIRKWOOD_CPUFREQ)	+= kirkwood-cpufreq.o
+-obj-$(CONFIG_ARM_MT8173_CPUFREQ)	+= mt8173-cpufreq.o
++obj-$(CONFIG_ARM_MEDIATEK_CPUFREQ)	+= mediatek-cpufreq.o
+ obj-$(CONFIG_ARM_OMAP2PLUS_CPUFREQ)	+= omap-cpufreq.o
+ obj-$(CONFIG_ARM_PXA2xx_CPUFREQ)	+= pxa2xx-cpufreq.o
+ obj-$(CONFIG_PXA3xx)			+= pxa3xx-cpufreq.o
+@@ -75,6 +74,7 @@ obj-$(CONFIG_ARM_SA1110_CPUFREQ)	+= sa1110-cpufreq.o
+ obj-$(CONFIG_ARM_SCPI_CPUFREQ)		+= scpi-cpufreq.o
+ obj-$(CONFIG_ARM_SPEAR_CPUFREQ)		+= spear-cpufreq.o
+ obj-$(CONFIG_ARM_STI_CPUFREQ)		+= sti-cpufreq.o
++obj-$(CONFIG_ARM_TANGO_CPUFREQ)		+= tango-cpufreq.o
+ obj-$(CONFIG_ARM_TEGRA20_CPUFREQ)	+= tegra20-cpufreq.o
+ obj-$(CONFIG_ARM_TEGRA124_CPUFREQ)	+= tegra124-cpufreq.o
+ obj-$(CONFIG_ARM_TEGRA186_CPUFREQ)	+= tegra186-cpufreq.o
+diff --git a/drivers/cpufreq/arm_big_little.c b/drivers/cpufreq/arm_big_little.c
+index ea6d62547b10..17504129fd77 100644
+--- a/drivers/cpufreq/arm_big_little.c
++++ b/drivers/cpufreq/arm_big_little.c
+@@ -483,11 +483,8 @@ static int bL_cpufreq_init(struct cpufreq_policy *policy)
+ 		return ret;
+ 	}
+ 
+-	if (arm_bL_ops->get_transition_latency)
+-		policy->cpuinfo.transition_latency =
+-			arm_bL_ops->get_transition_latency(cpu_dev);
+-	else
+-		policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
++	policy->cpuinfo.transition_latency =
++				arm_bL_ops->get_transition_latency(cpu_dev);
+ 
+ 	if (is_bL_switching_enabled())
+ 		per_cpu(cpu_last_req_freq, policy->cpu) = clk_get_cpu_rate(policy->cpu);
+@@ -622,7 +619,8 @@ int bL_cpufreq_register(struct cpufreq_arm_bL_ops *ops)
+ 		return -EBUSY;
+ 	}
+ 
+-	if (!ops || !strlen(ops->name) || !ops->init_opp_table) {
++	if (!ops || !strlen(ops->name) || !ops->init_opp_table ||
++	    !ops->get_transition_latency) {
+ 		pr_err("%s: Invalid arm_bL_ops, exiting\n", __func__);
+ 		return -ENODEV;
+ 	}
+diff --git a/drivers/cpufreq/cppc_cpufreq.c b/drivers/cpufreq/cppc_cpufreq.c
+index 10be285c9055..a1c3025f9df7 100644
+--- a/drivers/cpufreq/cppc_cpufreq.c
++++ b/drivers/cpufreq/cppc_cpufreq.c
+@@ -172,7 +172,6 @@ static int cppc_cpufreq_cpu_init(struct cpufreq_policy *policy)
+ 		return -EFAULT;
+ 	}
+ 
+-	cpumask_set_cpu(policy->cpu, policy->cpus);
+ 	cpu->cur_policy = policy;
+ 
+ 	/* Set policy->cur to max now. The governors will adjust later. */
+diff --git a/drivers/cpufreq/cpufreq-dt-platdev.c b/drivers/cpufreq/cpufreq-dt-platdev.c
+index 1c262923fe58..a753c50e9e41 100644
+--- a/drivers/cpufreq/cpufreq-dt-platdev.c
++++ b/drivers/cpufreq/cpufreq-dt-platdev.c
+@@ -9,11 +9,16 @@
+ 
+ #include <linux/err.h>
+ #include <linux/of.h>
++#include <linux/of_device.h>
+ #include <linux/platform_device.h>
+ 
+ #include "cpufreq-dt.h"
+ 
+-static const struct of_device_id machines[] __initconst = {
++/*
++ * Machines for which the cpufreq device is *always* created, mostly used for
++ * platforms using "operating-points" (V1) property.
++ */
++static const struct of_device_id whitelist[] __initconst = {
+ 	{ .compatible = "allwinner,sun4i-a10", },
+ 	{ .compatible = "allwinner,sun5i-a10s", },
+ 	{ .compatible = "allwinner,sun5i-a13", },
+@@ -22,7 +27,6 @@ static const struct of_device_id machines[] __initconst = {
+ 	{ .compatible = "allwinner,sun6i-a31s", },
+ 	{ .compatible = "allwinner,sun7i-a20", },
+ 	{ .compatible = "allwinner,sun8i-a23", },
+-	{ .compatible = "allwinner,sun8i-a33", },
+ 	{ .compatible = "allwinner,sun8i-a83t", },
+ 	{ .compatible = "allwinner,sun8i-h3", },
+ 
+@@ -32,7 +36,6 @@ static const struct of_device_id machines[] __initconst = {
+ 	{ .compatible = "arm,integrator-cp", },
+ 
+ 	{ .compatible = "hisilicon,hi3660", },
+-	{ .compatible = "hisilicon,hi6220", },
+ 
+ 	{ .compatible = "fsl,imx27", },
+ 	{ .compatible = "fsl,imx51", },
+@@ -46,11 +49,8 @@ static const struct of_device_id machines[] __initconst = {
+ 	{ .compatible = "samsung,exynos3250", },
+ 	{ .compatible = "samsung,exynos4210", },
+ 	{ .compatible = "samsung,exynos4212", },
+-	{ .compatible = "samsung,exynos4412", },
+ 	{ .compatible = "samsung,exynos5250", },
+ #ifndef CONFIG_BL_SWITCHER
+-	{ .compatible = "samsung,exynos5420", },
+-	{ .compatible = "samsung,exynos5433", },
+ 	{ .compatible = "samsung,exynos5800", },
+ #endif
+ 
+@@ -67,6 +67,8 @@ static const struct of_device_id machines[] __initconst = {
+ 	{ .compatible = "renesas,r8a7792", },
+ 	{ .compatible = "renesas,r8a7793", },
+ 	{ .compatible = "renesas,r8a7794", },
++	{ .compatible = "renesas,r8a7795", },
++	{ .compatible = "renesas,r8a7796", },
+ 	{ .compatible = "renesas,sh73a0", },
+ 
+ 	{ .compatible = "rockchip,rk2928", },
+@@ -76,17 +78,17 @@ static const struct of_device_id machines[] __initconst = {
+ 	{ .compatible = "rockchip,rk3188", },
+ 	{ .compatible = "rockchip,rk3228", },
+ 	{ .compatible = "rockchip,rk3288", },
++	{ .compatible = "rockchip,rk3328", },
+ 	{ .compatible = "rockchip,rk3366", },
+ 	{ .compatible = "rockchip,rk3368", },
+ 	{ .compatible = "rockchip,rk3399", },
+ 
+-	{ .compatible = "sigma,tango4" },
+-
+-	{ .compatible = "socionext,uniphier-pro5", },
+-	{ .compatible = "socionext,uniphier-pxs2", },
+ 	{ .compatible = "socionext,uniphier-ld6b", },
+-	{ .compatible = "socionext,uniphier-ld11", },
+-	{ .compatible = "socionext,uniphier-ld20", },
++
++	{ .compatible = "st-ericsson,u8500", },
++	{ .compatible = "st-ericsson,u8540", },
++	{ .compatible = "st-ericsson,u9500", },
++	{ .compatible = "st-ericsson,u9540", },
+ 
+ 	{ .compatible = "ti,omap2", },
+ 	{ .compatible = "ti,omap3", },
+@@ -94,27 +96,72 @@ static const struct of_device_id machines[] __initconst = {
+ 	{ .compatible = "ti,omap5", },
+ 
+ 	{ .compatible = "xlnx,zynq-7000", },
++	{ .compatible = "xlnx,zynqmp", },
++
++	{ }
++};
++
++/*
++ * Machines for which the cpufreq device is *not* created, mostly used for
++ * platforms using "operating-points-v2" property.
++ */
++static const struct of_device_id blacklist[] __initconst = {
++	{ .compatible = "calxeda,highbank", },
++	{ .compatible = "calxeda,ecx-2000", },
++
++	{ .compatible = "marvell,armadaxp", },
++
++	{ .compatible = "nvidia,tegra124", },
+ 
+-	{ .compatible = "zte,zx296718", },
++	{ .compatible = "st,stih407", },
++	{ .compatible = "st,stih410", },
++
++	{ .compatible = "sigma,tango4", },
++
++	{ .compatible = "ti,am33xx", },
++	{ .compatible = "ti,am43", },
++	{ .compatible = "ti,dra7", },
+ 
+ 	{ }
+ };
+ 
++static bool __init cpu0_node_has_opp_v2_prop(void)
++{
++	struct device_node *np = of_cpu_device_node_get(0);
++	bool ret = false;
++
++	if (of_get_property(np, "operating-points-v2", NULL))
++		ret = true;
++
++	of_node_put(np);
++	return ret;
++}
++
+ static int __init cpufreq_dt_platdev_init(void)
+ {
+ 	struct device_node *np = of_find_node_by_path("/");
+ 	const struct of_device_id *match;
++	const void *data = NULL;
+ 
+ 	if (!np)
+ 		return -ENODEV;
+ 
+-	match = of_match_node(machines, np);
++	match = of_match_node(whitelist, np);
++	if (match) {
++		data = match->data;
++		goto create_pdev;
++	}
++
++	if (cpu0_node_has_opp_v2_prop() && !of_match_node(blacklist, np))
++		goto create_pdev;
++
+ 	of_node_put(np);
+-	if (!match)
+-		return -ENODEV;
++	return -ENODEV;
+ 
++create_pdev:
++	of_node_put(np);
+ 	return PTR_ERR_OR_ZERO(platform_device_register_data(NULL, "cpufreq-dt",
+-			       -1, match->data,
++			       -1, data,
+ 			       sizeof(struct cpufreq_dt_platform_data)));
+ }
+ device_initcall(cpufreq_dt_platdev_init);
+diff --git a/drivers/cpufreq/cpufreq-dt.c b/drivers/cpufreq/cpufreq-dt.c
+index fef3c2160691..d83ab94d041a 100644
+--- a/drivers/cpufreq/cpufreq-dt.c
++++ b/drivers/cpufreq/cpufreq-dt.c
+@@ -274,6 +274,7 @@ static int cpufreq_init(struct cpufreq_policy *policy)
+ 		transition_latency = CPUFREQ_ETERNAL;
+ 
+ 	policy->cpuinfo.transition_latency = transition_latency;
++	policy->dvfs_possible_from_any_cpu = true;
+ 
+ 	return 0;
+ 
+diff --git a/drivers/cpufreq/cpufreq-nforce2.c b/drivers/cpufreq/cpufreq-nforce2.c
+index 5503d491b016..dbf82f36d270 100644
+--- a/drivers/cpufreq/cpufreq-nforce2.c
++++ b/drivers/cpufreq/cpufreq-nforce2.c
+@@ -357,7 +357,6 @@ static int nforce2_cpu_init(struct cpufreq_policy *policy)
+ 	/* cpuinfo and default policy values */
+ 	policy->min = policy->cpuinfo.min_freq = min_fsb * fid * 100;
+ 	policy->max = policy->cpuinfo.max_freq = max_fsb * fid * 100;
+-	policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
+ 
+ 	return 0;
+ }
+@@ -369,6 +368,7 @@ static int nforce2_cpu_exit(struct cpufreq_policy *policy)
+ 
+ static struct cpufreq_driver nforce2_driver = {
+ 	.name = "nforce2",
++	.flags = CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.verify = nforce2_verify,
+ 	.target = nforce2_target,
+ 	.get = nforce2_get,
+diff --git a/drivers/cpufreq/cpufreq.c b/drivers/cpufreq/cpufreq.c
+index 9bf97a366029..ea43b147a7fe 100644
+--- a/drivers/cpufreq/cpufreq.c
++++ b/drivers/cpufreq/cpufreq.c
+@@ -524,6 +524,32 @@ unsigned int cpufreq_driver_resolve_freq(struct cpufreq_policy *policy,
+ }
+ EXPORT_SYMBOL_GPL(cpufreq_driver_resolve_freq);
+ 
++unsigned int cpufreq_policy_transition_delay_us(struct cpufreq_policy *policy)
++{
++	unsigned int latency;
++
++	if (policy->transition_delay_us)
++		return policy->transition_delay_us;
++
++	latency = policy->cpuinfo.transition_latency / NSEC_PER_USEC;
++	if (latency) {
++		/*
++		 * For platforms that can change the frequency very fast (< 10
++		 * us), the above formula gives a decent transition delay. But
++		 * for platforms where transition_latency is in milliseconds, it
++		 * ends up giving unrealistic values.
++		 *
++		 * Cap the default transition delay to 10 ms, which seems to be
++		 * a reasonable amount of time after which we should reevaluate
++		 * the frequency.
++		 */
++		return min(latency * LATENCY_MULTIPLIER, (unsigned int)10000);
++	}
++
++	return LATENCY_MULTIPLIER;
++}
++EXPORT_SYMBOL_GPL(cpufreq_policy_transition_delay_us);
++
+ /*********************************************************************
+  *                          SYSFS INTERFACE                          *
+  *********************************************************************/
+@@ -1817,9 +1843,10 @@ EXPORT_SYMBOL(cpufreq_unregister_notifier);
+  * twice in parallel for the same policy and that it will never be called in
+  * parallel with either ->target() or ->target_index() for the same policy.
+  *
+- * If CPUFREQ_ENTRY_INVALID is returned by the driver's ->fast_switch()
+- * callback to indicate an error condition, the hardware configuration must be
+- * preserved.
++ * Returns the actual frequency set for the CPU.
++ *
++ * If 0 is returned by the driver's ->fast_switch() callback to indicate an
++ * error condition, the hardware configuration must be preserved.
+  */
+ unsigned int cpufreq_driver_fast_switch(struct cpufreq_policy *policy,
+ 					unsigned int target_freq)
+@@ -1988,13 +2015,13 @@ static int cpufreq_init_governor(struct cpufreq_policy *policy)
+ 	if (!policy->governor)
+ 		return -EINVAL;
+ 
+-	if (policy->governor->max_transition_latency &&
+-	    policy->cpuinfo.transition_latency >
+-	    policy->governor->max_transition_latency) {
++	/* Platform doesn't want dynamic frequency switching ? */
++	if (policy->governor->dynamic_switching &&
++	    cpufreq_driver->flags & CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING) {
+ 		struct cpufreq_governor *gov = cpufreq_fallback_governor();
+ 
+ 		if (gov) {
+-			pr_warn("%s governor failed, too long transition latency of HW, fallback to %s governor\n",
++			pr_warn("Can't use %s governor as dynamic switching is disallowed. Fallback to %s governor\n",
+ 				policy->governor->name, gov->name);
+ 			policy->governor = gov;
+ 		} else {
+diff --git a/drivers/cpufreq/cpufreq_conservative.c b/drivers/cpufreq/cpufreq_conservative.c
+index 88220ff3e1c2..f20f20a77d4d 100644
+--- a/drivers/cpufreq/cpufreq_conservative.c
++++ b/drivers/cpufreq/cpufreq_conservative.c
+@@ -246,7 +246,6 @@ gov_show_one_common(sampling_rate);
+ gov_show_one_common(sampling_down_factor);
+ gov_show_one_common(up_threshold);
+ gov_show_one_common(ignore_nice_load);
+-gov_show_one_common(min_sampling_rate);
+ gov_show_one(cs, down_threshold);
+ gov_show_one(cs, freq_step);
+ 
+@@ -254,12 +253,10 @@ gov_attr_rw(sampling_rate);
+ gov_attr_rw(sampling_down_factor);
+ gov_attr_rw(up_threshold);
+ gov_attr_rw(ignore_nice_load);
+-gov_attr_ro(min_sampling_rate);
+ gov_attr_rw(down_threshold);
+ gov_attr_rw(freq_step);
+ 
+ static struct attribute *cs_attributes[] = {
+-	&min_sampling_rate.attr,
+ 	&sampling_rate.attr,
+ 	&sampling_down_factor.attr,
+ 	&up_threshold.attr,
+@@ -297,10 +294,7 @@ static int cs_init(struct dbs_data *dbs_data)
+ 	dbs_data->up_threshold = DEF_FREQUENCY_UP_THRESHOLD;
+ 	dbs_data->sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR;
+ 	dbs_data->ignore_nice_load = 0;
+-
+ 	dbs_data->tuners = tuners;
+-	dbs_data->min_sampling_rate = MIN_SAMPLING_RATE_RATIO *
+-		jiffies_to_usecs(10);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/cpufreq/cpufreq_governor.c b/drivers/cpufreq/cpufreq_governor.c
+index 47e24b5384b3..58d4f4e1ad6a 100644
+--- a/drivers/cpufreq/cpufreq_governor.c
++++ b/drivers/cpufreq/cpufreq_governor.c
+@@ -47,14 +47,11 @@ ssize_t store_sampling_rate(struct gov_attr_set *attr_set, const char *buf,
+ {
+ 	struct dbs_data *dbs_data = to_dbs_data(attr_set);
+ 	struct policy_dbs_info *policy_dbs;
+-	unsigned int rate;
+ 	int ret;
+-	ret = sscanf(buf, "%u", &rate);
++	ret = sscanf(buf, "%u", &dbs_data->sampling_rate);
+ 	if (ret != 1)
+ 		return -EINVAL;
+ 
+-	dbs_data->sampling_rate = max(rate, dbs_data->min_sampling_rate);
+-
+ 	/*
+ 	 * We are operating under dbs_data->mutex and so the list and its
+ 	 * entries can't be freed concurrently.
+@@ -275,6 +272,9 @@ static void dbs_update_util_handler(struct update_util_data *data, u64 time,
+ 	struct policy_dbs_info *policy_dbs = cdbs->policy_dbs;
+ 	u64 delta_ns, lst;
+ 
++	if (!cpufreq_can_do_remote_dvfs(policy_dbs->policy))
++		return;
++
+ 	/*
+ 	 * The work may not be allowed to be queued up right now.
+ 	 * Possible reasons:
+@@ -392,7 +392,6 @@ int cpufreq_dbs_governor_init(struct cpufreq_policy *policy)
+ 	struct dbs_governor *gov = dbs_governor_of(policy);
+ 	struct dbs_data *dbs_data;
+ 	struct policy_dbs_info *policy_dbs;
+-	unsigned int latency;
+ 	int ret = 0;
+ 
+ 	/* State should be equivalent to EXIT */
+@@ -431,16 +430,7 @@ int cpufreq_dbs_governor_init(struct cpufreq_policy *policy)
+ 	if (ret)
+ 		goto free_policy_dbs_info;
+ 
+-	/* policy latency is in ns. Convert it to us first */
+-	latency = policy->cpuinfo.transition_latency / 1000;
+-	if (latency == 0)
+-		latency = 1;
+-
+-	/* Bring kernel and HW constraints together */
+-	dbs_data->min_sampling_rate = max(dbs_data->min_sampling_rate,
+-					  MIN_LATENCY_MULTIPLIER * latency);
+-	dbs_data->sampling_rate = max(dbs_data->min_sampling_rate,
+-				      LATENCY_MULTIPLIER * latency);
++	dbs_data->sampling_rate = cpufreq_policy_transition_delay_us(policy);
+ 
+ 	if (!have_governor_per_policy())
+ 		gov->gdbs_data = dbs_data;
+diff --git a/drivers/cpufreq/cpufreq_governor.h b/drivers/cpufreq/cpufreq_governor.h
+index 0236ec2cd654..8463f5def0f5 100644
+--- a/drivers/cpufreq/cpufreq_governor.h
++++ b/drivers/cpufreq/cpufreq_governor.h
+@@ -41,7 +41,6 @@ enum {OD_NORMAL_SAMPLE, OD_SUB_SAMPLE};
+ struct dbs_data {
+ 	struct gov_attr_set attr_set;
+ 	void *tuners;
+-	unsigned int min_sampling_rate;
+ 	unsigned int ignore_nice_load;
+ 	unsigned int sampling_rate;
+ 	unsigned int sampling_down_factor;
+@@ -160,7 +159,7 @@ void cpufreq_dbs_governor_limits(struct cpufreq_policy *policy);
+ #define CPUFREQ_DBS_GOVERNOR_INITIALIZER(_name_)			\
+ 	{								\
+ 		.name = _name_,						\
+-		.max_transition_latency	= TRANSITION_LATENCY_LIMIT,	\
++		.dynamic_switching = true,				\
+ 		.owner = THIS_MODULE,					\
+ 		.init = cpufreq_dbs_governor_init,			\
+ 		.exit = cpufreq_dbs_governor_exit,			\
+diff --git a/drivers/cpufreq/cpufreq_ondemand.c b/drivers/cpufreq/cpufreq_ondemand.c
+index 3937acf7e026..6b423eebfd5d 100644
+--- a/drivers/cpufreq/cpufreq_ondemand.c
++++ b/drivers/cpufreq/cpufreq_ondemand.c
+@@ -319,7 +319,6 @@ gov_show_one_common(sampling_rate);
+ gov_show_one_common(up_threshold);
+ gov_show_one_common(sampling_down_factor);
+ gov_show_one_common(ignore_nice_load);
+-gov_show_one_common(min_sampling_rate);
+ gov_show_one_common(io_is_busy);
+ gov_show_one(od, powersave_bias);
+ 
+@@ -329,10 +328,8 @@ gov_attr_rw(up_threshold);
+ gov_attr_rw(sampling_down_factor);
+ gov_attr_rw(ignore_nice_load);
+ gov_attr_rw(powersave_bias);
+-gov_attr_ro(min_sampling_rate);
+ 
+ static struct attribute *od_attributes[] = {
+-	&min_sampling_rate.attr,
+ 	&sampling_rate.attr,
+ 	&up_threshold.attr,
+ 	&sampling_down_factor.attr,
+@@ -373,17 +370,8 @@ static int od_init(struct dbs_data *dbs_data)
+ 	if (idle_time != -1ULL) {
+ 		/* Idle micro accounting is supported. Use finer thresholds */
+ 		dbs_data->up_threshold = MICRO_FREQUENCY_UP_THRESHOLD;
+-		/*
+-		 * In nohz/micro accounting case we set the minimum frequency
+-		 * not depending on HZ, but fixed (very low).
+-		*/
+-		dbs_data->min_sampling_rate = MICRO_FREQUENCY_MIN_SAMPLE_RATE;
+ 	} else {
+ 		dbs_data->up_threshold = DEF_FREQUENCY_UP_THRESHOLD;
+-
+-		/* For correct statistics, we need 10 ticks for each measure */
+-		dbs_data->min_sampling_rate = MIN_SAMPLING_RATE_RATIO *
+-			jiffies_to_usecs(10);
+ 	}
+ 
+ 	dbs_data->sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR;
+diff --git a/drivers/cpufreq/elanfreq.c b/drivers/cpufreq/elanfreq.c
+index bfce11cba1df..45e2ca62515e 100644
+--- a/drivers/cpufreq/elanfreq.c
++++ b/drivers/cpufreq/elanfreq.c
+@@ -165,9 +165,6 @@ static int elanfreq_cpu_init(struct cpufreq_policy *policy)
+ 		if (pos->frequency > max_freq)
+ 			pos->frequency = CPUFREQ_ENTRY_INVALID;
+ 
+-	/* cpuinfo and default policy values */
+-	policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
+-
+ 	return cpufreq_table_validate_and_show(policy, elanfreq_table);
+ }
+ 
+@@ -196,6 +193,7 @@ __setup("elanfreq=", elanfreq_setup);
+ 
+ static struct cpufreq_driver elanfreq_driver = {
+ 	.get		= elanfreq_get_cpu_frequency,
++	.flags		= CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.verify		= cpufreq_generic_frequency_table_verify,
+ 	.target_index	= elanfreq_target,
+ 	.init		= elanfreq_cpu_init,
+diff --git a/drivers/cpufreq/gx-suspmod.c b/drivers/cpufreq/gx-suspmod.c
+index 3488c9c175eb..8f52a06664e3 100644
+--- a/drivers/cpufreq/gx-suspmod.c
++++ b/drivers/cpufreq/gx-suspmod.c
+@@ -428,7 +428,6 @@ static int cpufreq_gx_cpu_init(struct cpufreq_policy *policy)
+ 	policy->max = maxfreq;
+ 	policy->cpuinfo.min_freq = maxfreq / max_duration;
+ 	policy->cpuinfo.max_freq = maxfreq;
+-	policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
+ 
+ 	return 0;
+ }
+@@ -438,6 +437,7 @@ static int cpufreq_gx_cpu_init(struct cpufreq_policy *policy)
+  *   MediaGX/Geode GX initialize cpufreq driver
+  */
+ static struct cpufreq_driver gx_suspmod_driver = {
++	.flags		= CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.get		= gx_get_cpuspeed,
+ 	.verify		= cpufreq_gx_verify,
+ 	.target		= cpufreq_gx_target,
+diff --git a/drivers/cpufreq/imx6q-cpufreq.c b/drivers/cpufreq/imx6q-cpufreq.c
+index b6edd3ccaa55..14466a9b01c0 100644
+--- a/drivers/cpufreq/imx6q-cpufreq.c
++++ b/drivers/cpufreq/imx6q-cpufreq.c
+@@ -47,6 +47,7 @@ static int imx6q_set_target(struct cpufreq_policy *policy, unsigned int index)
+ 	struct dev_pm_opp *opp;
+ 	unsigned long freq_hz, volt, volt_old;
+ 	unsigned int old_freq, new_freq;
++	bool pll1_sys_temp_enabled = false;
+ 	int ret;
+ 
+ 	new_freq = freq_table[index].frequency;
+@@ -124,6 +125,10 @@ static int imx6q_set_target(struct cpufreq_policy *policy, unsigned int index)
+ 		if (freq_hz > clk_get_rate(pll2_pfd2_396m_clk)) {
+ 			clk_set_rate(pll1_sys_clk, new_freq * 1000);
+ 			clk_set_parent(pll1_sw_clk, pll1_sys_clk);
++		} else {
++			/* pll1_sys needs to be enabled for divider rate change to work. */
++			pll1_sys_temp_enabled = true;
++			clk_prepare_enable(pll1_sys_clk);
+ 		}
+ 	}
+ 
+@@ -135,6 +140,10 @@ static int imx6q_set_target(struct cpufreq_policy *policy, unsigned int index)
+ 		return ret;
+ 	}
+ 
++	/* PLL1 is only needed until after ARM-PODF is set. */
++	if (pll1_sys_temp_enabled)
++		clk_disable_unprepare(pll1_sys_clk);
++
+ 	/* scaling down?  scale voltage after frequency */
+ 	if (new_freq < old_freq) {
+ 		ret = regulator_set_voltage_tol(arm_reg, volt, 0);
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 65ee4fcace1f..93a0e88bef76 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -37,8 +37,7 @@
+ #include <asm/cpufeature.h>
+ #include <asm/intel-family.h>
+ 
+-#define INTEL_PSTATE_DEFAULT_SAMPLING_INTERVAL	(10 * NSEC_PER_MSEC)
+-#define INTEL_PSTATE_HWP_SAMPLING_INTERVAL	(50 * NSEC_PER_MSEC)
++#define INTEL_PSTATE_SAMPLING_INTERVAL	(10 * NSEC_PER_MSEC)
+ 
+ #define INTEL_CPUFREQ_TRANSITION_LATENCY	20000
+ #define INTEL_CPUFREQ_TRANSITION_DELAY		500
+@@ -172,28 +171,6 @@ struct vid_data {
+ 	int32_t ratio;
+ };
+ 
+-/**
+- * struct _pid -	Stores PID data
+- * @setpoint:		Target set point for busyness or performance
+- * @integral:		Storage for accumulated error values
+- * @p_gain:		PID proportional gain
+- * @i_gain:		PID integral gain
+- * @d_gain:		PID derivative gain
+- * @deadband:		PID deadband
+- * @last_err:		Last error storage for integral part of PID calculation
+- *
+- * Stores PID coefficients and last error for PID controller.
+- */
+-struct _pid {
+-	int setpoint;
+-	int32_t integral;
+-	int32_t p_gain;
+-	int32_t i_gain;
+-	int32_t d_gain;
+-	int deadband;
+-	int32_t last_err;
+-};
+-
+ /**
+  * struct global_params - Global parameters, mostly tunable via sysfs.
+  * @no_turbo:		Whether or not to use turbo P-states.
+@@ -223,7 +200,6 @@ struct global_params {
+  * @last_update:	Time of the last update.
+  * @pstate:		Stores P state limits for this CPU
+  * @vid:		Stores VID limits for this CPU
+- * @pid:		Stores PID parameters for this CPU
+  * @last_sample_time:	Last Sample time
+  * @aperf_mperf_shift:	Number of clock cycles after aperf, merf is incremented
+  *			This shift is a multiplier to mperf delta to
+@@ -258,7 +234,6 @@ struct cpudata {
+ 
+ 	struct pstate_data pstate;
+ 	struct vid_data vid;
+-	struct _pid pid;
+ 
+ 	u64	last_update;
+ 	u64	last_sample_time;
+@@ -283,28 +258,6 @@ struct cpudata {
+ 
+ static struct cpudata **all_cpu_data;
+ 
+-/**
+- * struct pstate_adjust_policy - Stores static PID configuration data
+- * @sample_rate_ms:	PID calculation sample rate in ms
+- * @sample_rate_ns:	Sample rate calculation in ns
+- * @deadband:		PID deadband
+- * @setpoint:		PID Setpoint
+- * @p_gain_pct:		PID proportional gain
+- * @i_gain_pct:		PID integral gain
+- * @d_gain_pct:		PID derivative gain
+- *
+- * Stores per CPU model static PID configuration data.
+- */
+-struct pstate_adjust_policy {
+-	int sample_rate_ms;
+-	s64 sample_rate_ns;
+-	int deadband;
+-	int setpoint;
+-	int p_gain_pct;
+-	int d_gain_pct;
+-	int i_gain_pct;
+-};
+-
+ /**
+  * struct pstate_funcs - Per CPU model specific callbacks
+  * @get_max:		Callback to get maximum non turbo effective P state
+@@ -314,7 +267,6 @@ struct pstate_adjust_policy {
+  * @get_scaling:	Callback to get frequency scaling factor
+  * @get_val:		Callback to convert P state to actual MSR write value
+  * @get_vid:		Callback to get VID data for Atom platforms
+- * @update_util:	Active mode utilization update callback.
+  *
+  * Core and Atom CPU models have different way to get P State limits. This
+  * structure is used to store those callbacks.
+@@ -328,20 +280,9 @@ struct pstate_funcs {
+ 	int (*get_aperf_mperf_shift)(void);
+ 	u64 (*get_val)(struct cpudata*, int pstate);
+ 	void (*get_vid)(struct cpudata *);
+-	void (*update_util)(struct update_util_data *data, u64 time,
+-			    unsigned int flags);
+ };
+ 
+ static struct pstate_funcs pstate_funcs __read_mostly;
+-static struct pstate_adjust_policy pid_params __read_mostly = {
+-	.sample_rate_ms = 10,
+-	.sample_rate_ns = 10 * NSEC_PER_MSEC,
+-	.deadband = 0,
+-	.setpoint = 97,
+-	.p_gain_pct = 20,
+-	.d_gain_pct = 0,
+-	.i_gain_pct = 0,
+-};
+ 
+ static int hwp_active __read_mostly;
+ static bool per_cpu_limits __read_mostly;
+@@ -509,56 +450,6 @@ static inline void intel_pstate_exit_perf_limits(struct cpufreq_policy *policy)
+ }
+ #endif
+ 
+-static signed int pid_calc(struct _pid *pid, int32_t busy)
+-{
+-	signed int result;
+-	int32_t pterm, dterm, fp_error;
+-	int32_t integral_limit;
+-
+-	fp_error = pid->setpoint - busy;
+-
+-	if (abs(fp_error) <= pid->deadband)
+-		return 0;
+-
+-	pterm = mul_fp(pid->p_gain, fp_error);
+-
+-	pid->integral += fp_error;
+-
+-	/*
+-	 * We limit the integral here so that it will never
+-	 * get higher than 30.  This prevents it from becoming
+-	 * too large an input over long periods of time and allows
+-	 * it to get factored out sooner.
+-	 *
+-	 * The value of 30 was chosen through experimentation.
+-	 */
+-	integral_limit = int_tofp(30);
+-	if (pid->integral > integral_limit)
+-		pid->integral = integral_limit;
+-	if (pid->integral < -integral_limit)
+-		pid->integral = -integral_limit;
+-
+-	dterm = mul_fp(pid->d_gain, fp_error - pid->last_err);
+-	pid->last_err = fp_error;
+-
+-	result = pterm + mul_fp(pid->integral, pid->i_gain) + dterm;
+-	result = result + (1 << (FRAC_BITS-1));
+-	return (signed int)fp_toint(result);
+-}
+-
+-static inline void intel_pstate_pid_reset(struct cpudata *cpu)
+-{
+-	struct _pid *pid = &cpu->pid;
+-
+-	pid->p_gain = percent_fp(pid_params.p_gain_pct);
+-	pid->d_gain = percent_fp(pid_params.d_gain_pct);
+-	pid->i_gain = percent_fp(pid_params.i_gain_pct);
+-	pid->setpoint = int_tofp(pid_params.setpoint);
+-	pid->last_err  = pid->setpoint - int_tofp(100);
+-	pid->deadband  = int_tofp(pid_params.deadband);
+-	pid->integral  = 0;
+-}
+-
+ static inline void update_turbo_state(void)
+ {
+ 	u64 misc_en;
+@@ -911,82 +802,6 @@ static void intel_pstate_update_policies(void)
+ 		cpufreq_update_policy(cpu);
+ }
+ 
+-/************************** debugfs begin ************************/
+-static int pid_param_set(void *data, u64 val)
+-{
+-	unsigned int cpu;
+-
+-	*(u32 *)data = val;
+-	pid_params.sample_rate_ns = pid_params.sample_rate_ms * NSEC_PER_MSEC;
+-	for_each_possible_cpu(cpu)
+-		if (all_cpu_data[cpu])
+-			intel_pstate_pid_reset(all_cpu_data[cpu]);
+-
+-	return 0;
+-}
+-
+-static int pid_param_get(void *data, u64 *val)
+-{
+-	*val = *(u32 *)data;
+-	return 0;
+-}
+-DEFINE_SIMPLE_ATTRIBUTE(fops_pid_param, pid_param_get, pid_param_set, "%llu\n");
+-
+-static struct dentry *debugfs_parent;
+-
+-struct pid_param {
+-	char *name;
+-	void *value;
+-	struct dentry *dentry;
+-};
+-
+-static struct pid_param pid_files[] = {
+-	{"sample_rate_ms", &pid_params.sample_rate_ms, },
+-	{"d_gain_pct", &pid_params.d_gain_pct, },
+-	{"i_gain_pct", &pid_params.i_gain_pct, },
+-	{"deadband", &pid_params.deadband, },
+-	{"setpoint", &pid_params.setpoint, },
+-	{"p_gain_pct", &pid_params.p_gain_pct, },
+-	{NULL, NULL, }
+-};
+-
+-static void intel_pstate_debug_expose_params(void)
+-{
+-	int i;
+-
+-	debugfs_parent = debugfs_create_dir("pstate_snb", NULL);
+-	if (IS_ERR_OR_NULL(debugfs_parent))
+-		return;
+-
+-	for (i = 0; pid_files[i].name; i++) {
+-		struct dentry *dentry;
+-
+-		dentry = debugfs_create_file(pid_files[i].name, 0660,
+-					     debugfs_parent, pid_files[i].value,
+-					     &fops_pid_param);
+-		if (!IS_ERR(dentry))
+-			pid_files[i].dentry = dentry;
+-	}
+-}
+-
+-static void intel_pstate_debug_hide_params(void)
+-{
+-	int i;
+-
+-	if (IS_ERR_OR_NULL(debugfs_parent))
+-		return;
+-
+-	for (i = 0; pid_files[i].name; i++) {
+-		debugfs_remove(pid_files[i].dentry);
+-		pid_files[i].dentry = NULL;
+-	}
+-
+-	debugfs_remove(debugfs_parent);
+-	debugfs_parent = NULL;
+-}
+-
+-/************************** debugfs end ************************/
+-
+ /************************** sysfs begin ************************/
+ #define show_one(file_name, object)					\
+ 	static ssize_t show_##file_name					\
+@@ -1622,7 +1437,7 @@ static inline int32_t get_avg_pstate(struct cpudata *cpu)
+ 			  cpu->sample.core_avg_perf);
+ }
+ 
+-static inline int32_t get_target_pstate_use_cpu_load(struct cpudata *cpu)
++static inline int32_t get_target_pstate(struct cpudata *cpu)
+ {
+ 	struct sample *sample = &cpu->sample;
+ 	int32_t busy_frac, boost;
+@@ -1660,44 +1475,6 @@ static inline int32_t get_target_pstate_use_cpu_load(struct cpudata *cpu)
+ 	return target;
+ }
+ 
+-static inline int32_t get_target_pstate_use_performance(struct cpudata *cpu)
+-{
+-	int32_t perf_scaled, max_pstate, current_pstate, sample_ratio;
+-	u64 duration_ns;
+-
+-	/*
+-	 * perf_scaled is the ratio of the average P-state during the last
+-	 * sampling period to the P-state requested last time (in percent).
+-	 *
+-	 * That measures the system's response to the previous P-state
+-	 * selection.
+-	 */
+-	max_pstate = cpu->pstate.max_pstate_physical;
+-	current_pstate = cpu->pstate.current_pstate;
+-	perf_scaled = mul_ext_fp(cpu->sample.core_avg_perf,
+-			       div_fp(100 * max_pstate, current_pstate));
+-
+-	/*
+-	 * Since our utilization update callback will not run unless we are
+-	 * in C0, check if the actual elapsed time is significantly greater (3x)
+-	 * than our sample interval.  If it is, then we were idle for a long
+-	 * enough period of time to adjust our performance metric.
+-	 */
+-	duration_ns = cpu->sample.time - cpu->last_sample_time;
+-	if ((s64)duration_ns > pid_params.sample_rate_ns * 3) {
+-		sample_ratio = div_fp(pid_params.sample_rate_ns, duration_ns);
+-		perf_scaled = mul_fp(perf_scaled, sample_ratio);
+-	} else {
+-		sample_ratio = div_fp(100 * (cpu->sample.mperf << cpu->aperf_mperf_shift),
+-				      cpu->sample.tsc);
+-		if (sample_ratio < int_tofp(1))
+-			perf_scaled = 0;
+-	}
+-
+-	cpu->sample.busy_scaled = perf_scaled;
+-	return cpu->pstate.current_pstate - pid_calc(&cpu->pid, perf_scaled);
+-}
+-
+ static int intel_pstate_prepare_request(struct cpudata *cpu, int pstate)
+ {
+ 	int max_pstate = intel_pstate_get_base_pstate(cpu);
+@@ -1717,13 +1494,15 @@ static void intel_pstate_update_pstate(struct cpudata *cpu, int pstate)
+ 	wrmsrl(MSR_IA32_PERF_CTL, pstate_funcs.get_val(cpu, pstate));
+ }
+ 
+-static void intel_pstate_adjust_pstate(struct cpudata *cpu, int target_pstate)
++static void intel_pstate_adjust_pstate(struct cpudata *cpu)
+ {
+ 	int from = cpu->pstate.current_pstate;
+ 	struct sample *sample;
++	int target_pstate;
+ 
+ 	update_turbo_state();
+ 
++	target_pstate = get_target_pstate(cpu);
+ 	target_pstate = intel_pstate_prepare_request(cpu, target_pstate);
+ 	trace_cpu_frequency(target_pstate * cpu->pstate.scaling, cpu->cpu);
+ 	intel_pstate_update_pstate(cpu, target_pstate);
+@@ -1740,31 +1519,27 @@ static void intel_pstate_adjust_pstate(struct cpudata *cpu, int target_pstate)
+ 		fp_toint(cpu->iowait_boost * 100));
+ }
+ 
+-static void intel_pstate_update_util_pid(struct update_util_data *data,
+-					 u64 time, unsigned int flags)
+-{
+-	struct cpudata *cpu = container_of(data, struct cpudata, update_util);
+-	u64 delta_ns = time - cpu->sample.time;
+-
+-	if ((s64)delta_ns < pid_params.sample_rate_ns)
+-		return;
+-
+-	if (intel_pstate_sample(cpu, time)) {
+-		int target_pstate;
+-
+-		target_pstate = get_target_pstate_use_performance(cpu);
+-		intel_pstate_adjust_pstate(cpu, target_pstate);
+-	}
+-}
+-
+ static void intel_pstate_update_util(struct update_util_data *data, u64 time,
+ 				     unsigned int flags)
+ {
+ 	struct cpudata *cpu = container_of(data, struct cpudata, update_util);
+ 	u64 delta_ns;
+ 
++	/* Don't allow remote callbacks */
++	if (smp_processor_id() != cpu->cpu)
++		return;
++
+ 	if (flags & SCHED_CPUFREQ_IOWAIT) {
+ 		cpu->iowait_boost = int_tofp(1);
++		cpu->last_update = time;
++		/*
++		 * The last time the busy was 100% so P-state was max anyway
++		 * so avoid overhead of computation.
++		 */
++		if (fp_toint(cpu->sample.busy_scaled) == 100)
++			return;
++
++		goto set_pstate;
+ 	} else if (cpu->iowait_boost) {
+ 		/* Clear iowait_boost if the CPU may have been idle. */
+ 		delta_ns = time - cpu->last_update;
+@@ -1773,15 +1548,12 @@ static void intel_pstate_update_util(struct update_util_data *data, u64 time,
+ 	}
+ 	cpu->last_update = time;
+ 	delta_ns = time - cpu->sample.time;
+-	if ((s64)delta_ns < INTEL_PSTATE_DEFAULT_SAMPLING_INTERVAL)
++	if ((s64)delta_ns < INTEL_PSTATE_SAMPLING_INTERVAL)
+ 		return;
+ 
+-	if (intel_pstate_sample(cpu, time)) {
+-		int target_pstate;
+-
+-		target_pstate = get_target_pstate_use_cpu_load(cpu);
+-		intel_pstate_adjust_pstate(cpu, target_pstate);
+-	}
++set_pstate:
++	if (intel_pstate_sample(cpu, time))
++		intel_pstate_adjust_pstate(cpu);
+ }
+ 
+ static struct pstate_funcs core_funcs = {
+@@ -1791,7 +1563,6 @@ static struct pstate_funcs core_funcs = {
+ 	.get_turbo = core_get_turbo_pstate,
+ 	.get_scaling = core_get_scaling,
+ 	.get_val = core_get_val,
+-	.update_util = intel_pstate_update_util_pid,
+ };
+ 
+ static const struct pstate_funcs silvermont_funcs = {
+@@ -1802,7 +1573,6 @@ static const struct pstate_funcs silvermont_funcs = {
+ 	.get_val = atom_get_val,
+ 	.get_scaling = silvermont_get_scaling,
+ 	.get_vid = atom_get_vid,
+-	.update_util = intel_pstate_update_util,
+ };
+ 
+ static const struct pstate_funcs airmont_funcs = {
+@@ -1813,7 +1583,6 @@ static const struct pstate_funcs airmont_funcs = {
+ 	.get_val = atom_get_val,
+ 	.get_scaling = airmont_get_scaling,
+ 	.get_vid = atom_get_vid,
+-	.update_util = intel_pstate_update_util,
+ };
+ 
+ static const struct pstate_funcs knl_funcs = {
+@@ -1824,7 +1593,6 @@ static const struct pstate_funcs knl_funcs = {
+ 	.get_aperf_mperf_shift = knl_get_aperf_mperf_shift,
+ 	.get_scaling = core_get_scaling,
+ 	.get_val = core_get_val,
+-	.update_util = intel_pstate_update_util_pid,
+ };
+ 
+ static const struct pstate_funcs bxt_funcs = {
+@@ -1834,7 +1602,6 @@ static const struct pstate_funcs bxt_funcs = {
+ 	.get_turbo = core_get_turbo_pstate,
+ 	.get_scaling = core_get_scaling,
+ 	.get_val = core_get_val,
+-	.update_util = intel_pstate_update_util,
+ };
+ 
+ #define ICPU(model, policy) \
+@@ -1878,8 +1645,6 @@ static const struct x86_cpu_id intel_pstate_cpu_ee_disable_ids[] = {
+ 	{}
+ };
+ 
+-static bool pid_in_use(void);
+-
+ static int intel_pstate_init_cpu(unsigned int cpunum)
+ {
+ 	struct cpudata *cpu;
+@@ -1910,8 +1675,6 @@ static int intel_pstate_init_cpu(unsigned int cpunum)
+ 			intel_pstate_disable_ee(cpunum);
+ 
+ 		intel_pstate_hwp_enable(cpu);
+-	} else if (pid_in_use()) {
+-		intel_pstate_pid_reset(cpu);
+ 	}
+ 
+ 	intel_pstate_get_cpu_pstates(cpu);
+@@ -1934,7 +1697,7 @@ static void intel_pstate_set_update_util_hook(unsigned int cpu_num)
+ 	/* Prevent intel_pstate_update_util() from using stale data. */
+ 	cpu->sample.time = 0;
+ 	cpufreq_add_update_util_hook(cpu_num, &cpu->update_util,
+-				     pstate_funcs.update_util);
++				     intel_pstate_update_util);
+ 	cpu->update_util_set = true;
+ }
+ 
+@@ -2132,7 +1895,6 @@ static int __intel_pstate_cpu_init(struct cpufreq_policy *policy)
+ 	policy->cpuinfo.max_freq *= cpu->pstate.scaling;
+ 
+ 	intel_pstate_init_acpi_perf_limits(policy);
+-	cpumask_set_cpu(policy->cpu, policy->cpus);
+ 
+ 	policy->fast_switch_possible = true;
+ 
+@@ -2146,7 +1908,6 @@ static int intel_pstate_cpu_init(struct cpufreq_policy *policy)
+ 	if (ret)
+ 		return ret;
+ 
+-	policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
+ 	if (IS_ENABLED(CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE))
+ 		policy->policy = CPUFREQ_POLICY_PERFORMANCE;
+ 	else
+@@ -2261,12 +2022,6 @@ static struct cpufreq_driver intel_cpufreq = {
+ 
+ static struct cpufreq_driver *default_driver = &intel_pstate;
+ 
+-static bool pid_in_use(void)
+-{
+-	return intel_pstate_driver == &intel_pstate &&
+-		pstate_funcs.update_util == intel_pstate_update_util_pid;
+-}
+-
+ static void intel_pstate_driver_cleanup(void)
+ {
+ 	unsigned int cpu;
+@@ -2301,9 +2056,6 @@ static int intel_pstate_register_driver(struct cpufreq_driver *driver)
+ 
+ 	global.min_perf_pct = min_perf_pct_min();
+ 
+-	if (pid_in_use())
+-		intel_pstate_debug_expose_params();
+-
+ 	return 0;
+ }
+ 
+@@ -2312,9 +2064,6 @@ static int intel_pstate_unregister_driver(void)
+ 	if (hwp_active)
+ 		return -EBUSY;
+ 
+-	if (pid_in_use())
+-		intel_pstate_debug_hide_params();
+-
+ 	cpufreq_unregister_driver(intel_pstate_driver);
+ 	intel_pstate_driver_cleanup();
+ 
+@@ -2382,24 +2131,6 @@ static int __init intel_pstate_msrs_not_valid(void)
+ 	return 0;
+ }
+ 
+-#ifdef CONFIG_ACPI
+-static void intel_pstate_use_acpi_profile(void)
+-{
+-	switch (acpi_gbl_FADT.preferred_profile) {
+-	case PM_MOBILE:
+-	case PM_TABLET:
+-	case PM_APPLIANCE_PC:
+-	case PM_DESKTOP:
+-	case PM_WORKSTATION:
+-		pstate_funcs.update_util = intel_pstate_update_util;
+-	}
+-}
+-#else
+-static void intel_pstate_use_acpi_profile(void)
+-{
+-}
+-#endif
+-
+ static void __init copy_cpu_funcs(struct pstate_funcs *funcs)
+ {
+ 	pstate_funcs.get_max   = funcs->get_max;
+@@ -2409,10 +2140,7 @@ static void __init copy_cpu_funcs(struct pstate_funcs *funcs)
+ 	pstate_funcs.get_scaling = funcs->get_scaling;
+ 	pstate_funcs.get_val   = funcs->get_val;
+ 	pstate_funcs.get_vid   = funcs->get_vid;
+-	pstate_funcs.update_util = funcs->update_util;
+ 	pstate_funcs.get_aperf_mperf_shift = funcs->get_aperf_mperf_shift;
+-
+-	intel_pstate_use_acpi_profile();
+ }
+ 
+ #ifdef CONFIG_ACPI
+@@ -2466,39 +2194,31 @@ enum {
+ 	PPC,
+ };
+ 
+-struct hw_vendor_info {
+-	u16  valid;
+-	char oem_id[ACPI_OEM_ID_SIZE];
+-	char oem_table_id[ACPI_OEM_TABLE_ID_SIZE];
+-	int  oem_pwr_table;
+-};
+-
+ /* Hardware vendor-specific info that has its own power management modes */
+-static struct hw_vendor_info vendor_info[] __initdata = {
+-	{1, "HP    ", "ProLiant", PSS},
+-	{1, "ORACLE", "X4-2    ", PPC},
+-	{1, "ORACLE", "X4-2L   ", PPC},
+-	{1, "ORACLE", "X4-2B   ", PPC},
+-	{1, "ORACLE", "X3-2    ", PPC},
+-	{1, "ORACLE", "X3-2L   ", PPC},
+-	{1, "ORACLE", "X3-2B   ", PPC},
+-	{1, "ORACLE", "X4470M2 ", PPC},
+-	{1, "ORACLE", "X4270M3 ", PPC},
+-	{1, "ORACLE", "X4270M2 ", PPC},
+-	{1, "ORACLE", "X4170M2 ", PPC},
+-	{1, "ORACLE", "X4170 M3", PPC},
+-	{1, "ORACLE", "X4275 M3", PPC},
+-	{1, "ORACLE", "X6-2    ", PPC},
+-	{1, "ORACLE", "Sudbury ", PPC},
+-	{0, "", ""},
++static struct acpi_platform_list plat_info[] __initdata = {
++	{"HP    ", "ProLiant", 0, ACPI_SIG_FADT, all_versions, 0, PSS},
++	{"ORACLE", "X4-2    ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X4-2L   ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X4-2B   ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X3-2    ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X3-2L   ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X3-2B   ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X4470M2 ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X4270M3 ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X4270M2 ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X4170M2 ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X4170 M3", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X4275 M3", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "X6-2    ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{"ORACLE", "Sudbury ", 0, ACPI_SIG_FADT, all_versions, 0, PPC},
++	{ } /* End */
+ };
+ 
+ static bool __init intel_pstate_platform_pwr_mgmt_exists(void)
+ {
+-	struct acpi_table_header hdr;
+-	struct hw_vendor_info *v_info;
+ 	const struct x86_cpu_id *id;
+ 	u64 misc_pwr;
++	int idx;
+ 
+ 	id = x86_match_cpu(intel_pstate_cpu_oob_ids);
+ 	if (id) {
+@@ -2507,21 +2227,15 @@ static bool __init intel_pstate_platform_pwr_mgmt_exists(void)
+ 			return true;
+ 	}
+ 
+-	if (acpi_disabled ||
+-	    ACPI_FAILURE(acpi_get_table_header(ACPI_SIG_FADT, 0, &hdr)))
++	idx = acpi_match_platform_list(plat_info);
++	if (idx < 0)
+ 		return false;
+ 
+-	for (v_info = vendor_info; v_info->valid; v_info++) {
+-		if (!strncmp(hdr.oem_id, v_info->oem_id, ACPI_OEM_ID_SIZE) &&
+-			!strncmp(hdr.oem_table_id, v_info->oem_table_id,
+-						ACPI_OEM_TABLE_ID_SIZE))
+-			switch (v_info->oem_pwr_table) {
+-			case PSS:
+-				return intel_pstate_no_acpi_pss();
+-			case PPC:
+-				return intel_pstate_has_acpi_ppc() &&
+-					(!force_load);
+-			}
++	switch (plat_info[idx].data) {
++	case PSS:
++		return intel_pstate_no_acpi_pss();
++	case PPC:
++		return intel_pstate_has_acpi_ppc() && !force_load;
+ 	}
+ 
+ 	return false;
+@@ -2556,9 +2270,7 @@ static int __init intel_pstate_init(void)
+ 
+ 	if (x86_match_cpu(hwp_support_ids)) {
+ 		copy_cpu_funcs(&core_funcs);
+-		if (no_hwp) {
+-			pstate_funcs.update_util = intel_pstate_update_util;
+-		} else {
++		if (!no_hwp) {
+ 			hwp_active++;
+ 			intel_pstate.attr = hwp_cpufreq_attrs;
+ 			goto hwp_cpu_matched;
+diff --git a/drivers/cpufreq/longrun.c b/drivers/cpufreq/longrun.c
+index 074971b12635..542aa9adba1a 100644
+--- a/drivers/cpufreq/longrun.c
++++ b/drivers/cpufreq/longrun.c
+@@ -270,7 +270,6 @@ static int longrun_cpu_init(struct cpufreq_policy *policy)
+ 	/* cpuinfo and default policy values */
+ 	policy->cpuinfo.min_freq = longrun_low_freq;
+ 	policy->cpuinfo.max_freq = longrun_high_freq;
+-	policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
+ 	longrun_get_policy(policy);
+ 
+ 	return 0;
+diff --git a/drivers/cpufreq/loongson2_cpufreq.c b/drivers/cpufreq/loongson2_cpufreq.c
+index 9ac27b22476c..da344696beed 100644
+--- a/drivers/cpufreq/loongson2_cpufreq.c
++++ b/drivers/cpufreq/loongson2_cpufreq.c
+@@ -114,7 +114,7 @@ static struct cpufreq_driver loongson2_cpufreq_driver = {
+ 	.attr = cpufreq_generic_attr,
+ };
+ 
+-static struct platform_device_id platform_device_ids[] = {
++static const struct platform_device_id platform_device_ids[] = {
+ 	{
+ 		.name = "loongson2_cpufreq",
+ 	},
+diff --git a/drivers/cpufreq/mediatek-cpufreq.c b/drivers/cpufreq/mediatek-cpufreq.c
+new file mode 100644
+index 000000000000..18c4bd9a5c65
+--- /dev/null
++++ b/drivers/cpufreq/mediatek-cpufreq.c
+@@ -0,0 +1,622 @@
++/*
++ * Copyright (c) 2015 Linaro Ltd.
++ * Author: Pi-Cheng Chen <pi-cheng.chen@linaro.org>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++#include <linux/clk.h>
++#include <linux/cpu.h>
++#include <linux/cpu_cooling.h>
++#include <linux/cpufreq.h>
++#include <linux/cpumask.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/pm_opp.h>
++#include <linux/regulator/consumer.h>
++#include <linux/slab.h>
++#include <linux/thermal.h>
++
++#define MIN_VOLT_SHIFT		(100000)
++#define MAX_VOLT_SHIFT		(200000)
++#define MAX_VOLT_LIMIT		(1150000)
++#define VOLT_TOL		(10000)
++
++/*
++ * The struct mtk_cpu_dvfs_info holds necessary information for doing CPU DVFS
++ * on each CPU power/clock domain of Mediatek SoCs. Each CPU cluster in
++ * Mediatek SoCs has two voltage inputs, Vproc and Vsram. In some cases the two
++ * voltage inputs need to be controlled under a hardware limitation:
++ * 100mV < Vsram - Vproc < 200mV
++ *
++ * When scaling the clock frequency of a CPU clock domain, the clock source
++ * needs to be switched to another stable PLL clock temporarily until
++ * the original PLL becomes stable at target frequency.
++ */
++struct mtk_cpu_dvfs_info {
++	struct cpumask cpus;
++	struct device *cpu_dev;
++	struct regulator *proc_reg;
++	struct regulator *sram_reg;
++	struct clk *cpu_clk;
++	struct clk *inter_clk;
++	struct thermal_cooling_device *cdev;
++	struct list_head list_head;
++	int intermediate_voltage;
++	bool need_voltage_tracking;
++};
++
++static LIST_HEAD(dvfs_info_list);
++
++static struct mtk_cpu_dvfs_info *mtk_cpu_dvfs_info_lookup(int cpu)
++{
++	struct mtk_cpu_dvfs_info *info;
++
++	list_for_each_entry(info, &dvfs_info_list, list_head) {
++		if (cpumask_test_cpu(cpu, &info->cpus))
++			return info;
++	}
++
++	return NULL;
++}
++
++static int mtk_cpufreq_voltage_tracking(struct mtk_cpu_dvfs_info *info,
++					int new_vproc)
++{
++	struct regulator *proc_reg = info->proc_reg;
++	struct regulator *sram_reg = info->sram_reg;
++	int old_vproc, old_vsram, new_vsram, vsram, vproc, ret;
++
++	old_vproc = regulator_get_voltage(proc_reg);
++	if (old_vproc < 0) {
++		pr_err("%s: invalid Vproc value: %d\n", __func__, old_vproc);
++		return old_vproc;
++	}
++	/* Vsram should not exceed the maximum allowed voltage of SoC. */
++	new_vsram = min(new_vproc + MIN_VOLT_SHIFT, MAX_VOLT_LIMIT);
++
++	if (old_vproc < new_vproc) {
++		/*
++		 * When scaling up voltages, Vsram and Vproc scale up step
++		 * by step. At each step, set Vsram to (Vproc + 200mV) first,
++		 * then set Vproc to (Vsram - 100mV).
++		 * Keep doing it until Vsram and Vproc hit target voltages.
++		 */
++		do {
++			old_vsram = regulator_get_voltage(sram_reg);
++			if (old_vsram < 0) {
++				pr_err("%s: invalid Vsram value: %d\n",
++				       __func__, old_vsram);
++				return old_vsram;
++			}
++			old_vproc = regulator_get_voltage(proc_reg);
++			if (old_vproc < 0) {
++				pr_err("%s: invalid Vproc value: %d\n",
++				       __func__, old_vproc);
++				return old_vproc;
++			}
++
++			vsram = min(new_vsram, old_vproc + MAX_VOLT_SHIFT);
++
++			if (vsram + VOLT_TOL >= MAX_VOLT_LIMIT) {
++				vsram = MAX_VOLT_LIMIT;
++
++				/*
++				 * If the target Vsram hits the maximum voltage,
++				 * try to set the exact voltage value first.
++				 */
++				ret = regulator_set_voltage(sram_reg, vsram,
++							    vsram);
++				if (ret)
++					ret = regulator_set_voltage(sram_reg,
++							vsram - VOLT_TOL,
++							vsram);
++
++				vproc = new_vproc;
++			} else {
++				ret = regulator_set_voltage(sram_reg, vsram,
++							    vsram + VOLT_TOL);
++
++				vproc = vsram - MIN_VOLT_SHIFT;
++			}
++			if (ret)
++				return ret;
++
++			ret = regulator_set_voltage(proc_reg, vproc,
++						    vproc + VOLT_TOL);
++			if (ret) {
++				regulator_set_voltage(sram_reg, old_vsram,
++						      old_vsram);
++				return ret;
++			}
++		} while (vproc < new_vproc || vsram < new_vsram);
++	} else if (old_vproc > new_vproc) {
++		/*
++		 * When scaling down voltages, Vsram and Vproc scale down step
++		 * by step. At each step, set Vproc to (Vsram - 200mV) first,
++		 * then set Vproc to (Vproc + 100mV).
++		 * Keep doing it until Vsram and Vproc hit target voltages.
++		 */
++		do {
++			old_vproc = regulator_get_voltage(proc_reg);
++			if (old_vproc < 0) {
++				pr_err("%s: invalid Vproc value: %d\n",
++				       __func__, old_vproc);
++				return old_vproc;
++			}
++			old_vsram = regulator_get_voltage(sram_reg);
++			if (old_vsram < 0) {
++				pr_err("%s: invalid Vsram value: %d\n",
++				       __func__, old_vsram);
++				return old_vsram;
++			}
++
++			vproc = max(new_vproc, old_vsram - MAX_VOLT_SHIFT);
++			ret = regulator_set_voltage(proc_reg, vproc,
++						    vproc + VOLT_TOL);
++			if (ret)
++				return ret;
++
++			if (vproc == new_vproc)
++				vsram = new_vsram;
++			else
++				vsram = max(new_vsram, vproc + MIN_VOLT_SHIFT);
++
++			if (vsram + VOLT_TOL >= MAX_VOLT_LIMIT) {
++				vsram = MAX_VOLT_LIMIT;
++
++				/*
++				 * If the target Vsram hits the maximum voltage,
++				 * try to set the exact voltage value first.
++				 */
++				ret = regulator_set_voltage(sram_reg, vsram,
++							    vsram);
++				if (ret)
++					ret = regulator_set_voltage(sram_reg,
++							vsram - VOLT_TOL,
++							vsram);
++			} else {
++				ret = regulator_set_voltage(sram_reg, vsram,
++							    vsram + VOLT_TOL);
++			}
++
++			if (ret) {
++				regulator_set_voltage(proc_reg, old_vproc,
++						      old_vproc);
++				return ret;
++			}
++		} while (vproc > new_vproc + VOLT_TOL ||
++			 vsram > new_vsram + VOLT_TOL);
++	}
++
++	return 0;
++}
++
++static int mtk_cpufreq_set_voltage(struct mtk_cpu_dvfs_info *info, int vproc)
++{
++	if (info->need_voltage_tracking)
++		return mtk_cpufreq_voltage_tracking(info, vproc);
++	else
++		return regulator_set_voltage(info->proc_reg, vproc,
++					     vproc + VOLT_TOL);
++}
++
++static int mtk_cpufreq_set_target(struct cpufreq_policy *policy,
++				  unsigned int index)
++{
++	struct cpufreq_frequency_table *freq_table = policy->freq_table;
++	struct clk *cpu_clk = policy->clk;
++	struct clk *armpll = clk_get_parent(cpu_clk);
++	struct mtk_cpu_dvfs_info *info = policy->driver_data;
++	struct device *cpu_dev = info->cpu_dev;
++	struct dev_pm_opp *opp;
++	long freq_hz, old_freq_hz;
++	int vproc, old_vproc, inter_vproc, target_vproc, ret;
++
++	inter_vproc = info->intermediate_voltage;
++
++	old_freq_hz = clk_get_rate(cpu_clk);
++	old_vproc = regulator_get_voltage(info->proc_reg);
++	if (old_vproc < 0) {
++		pr_err("%s: invalid Vproc value: %d\n", __func__, old_vproc);
++		return old_vproc;
++	}
++
++	freq_hz = freq_table[index].frequency * 1000;
++
++	opp = dev_pm_opp_find_freq_ceil(cpu_dev, &freq_hz);
++	if (IS_ERR(opp)) {
++		pr_err("cpu%d: failed to find OPP for %ld\n",
++		       policy->cpu, freq_hz);
++		return PTR_ERR(opp);
++	}
++	vproc = dev_pm_opp_get_voltage(opp);
++	dev_pm_opp_put(opp);
++
++	/*
++	 * If the new voltage or the intermediate voltage is higher than the
++	 * current voltage, scale up voltage first.
++	 */
++	target_vproc = (inter_vproc > vproc) ? inter_vproc : vproc;
++	if (old_vproc < target_vproc) {
++		ret = mtk_cpufreq_set_voltage(info, target_vproc);
++		if (ret) {
++			pr_err("cpu%d: failed to scale up voltage!\n",
++			       policy->cpu);
++			mtk_cpufreq_set_voltage(info, old_vproc);
++			return ret;
++		}
++	}
++
++	/* Reparent the CPU clock to intermediate clock. */
++	ret = clk_set_parent(cpu_clk, info->inter_clk);
++	if (ret) {
++		pr_err("cpu%d: failed to re-parent cpu clock!\n",
++		       policy->cpu);
++		mtk_cpufreq_set_voltage(info, old_vproc);
++		WARN_ON(1);
++		return ret;
++	}
++
++	/* Set the original PLL to target rate. */
++	ret = clk_set_rate(armpll, freq_hz);
++	if (ret) {
++		pr_err("cpu%d: failed to scale cpu clock rate!\n",
++		       policy->cpu);
++		clk_set_parent(cpu_clk, armpll);
++		mtk_cpufreq_set_voltage(info, old_vproc);
++		return ret;
++	}
++
++	/* Set parent of CPU clock back to the original PLL. */
++	ret = clk_set_parent(cpu_clk, armpll);
++	if (ret) {
++		pr_err("cpu%d: failed to re-parent cpu clock!\n",
++		       policy->cpu);
++		mtk_cpufreq_set_voltage(info, inter_vproc);
++		WARN_ON(1);
++		return ret;
++	}
++
++	/*
++	 * If the new voltage is lower than the intermediate voltage or the
++	 * original voltage, scale down to the new voltage.
++	 */
++	if (vproc < inter_vproc || vproc < old_vproc) {
++		ret = mtk_cpufreq_set_voltage(info, vproc);
++		if (ret) {
++			pr_err("cpu%d: failed to scale down voltage!\n",
++			       policy->cpu);
++			clk_set_parent(cpu_clk, info->inter_clk);
++			clk_set_rate(armpll, old_freq_hz);
++			clk_set_parent(cpu_clk, armpll);
++			return ret;
++		}
++	}
++
++	return 0;
++}
++
++#define DYNAMIC_POWER "dynamic-power-coefficient"
++
++static void mtk_cpufreq_ready(struct cpufreq_policy *policy)
++{
++	struct mtk_cpu_dvfs_info *info = policy->driver_data;
++	struct device_node *np = of_node_get(info->cpu_dev->of_node);
++	u32 capacitance = 0;
++
++	if (WARN_ON(!np))
++		return;
++
++	if (of_find_property(np, "#cooling-cells", NULL)) {
++		of_property_read_u32(np, DYNAMIC_POWER, &capacitance);
++
++		info->cdev = of_cpufreq_power_cooling_register(np,
++						policy, capacitance, NULL);
++
++		if (IS_ERR(info->cdev)) {
++			dev_err(info->cpu_dev,
++				"running cpufreq without cooling device: %ld\n",
++				PTR_ERR(info->cdev));
++
++			info->cdev = NULL;
++		}
++	}
++
++	of_node_put(np);
++}
++
++static int mtk_cpu_dvfs_info_init(struct mtk_cpu_dvfs_info *info, int cpu)
++{
++	struct device *cpu_dev;
++	struct regulator *proc_reg = ERR_PTR(-ENODEV);
++	struct regulator *sram_reg = ERR_PTR(-ENODEV);
++	struct clk *cpu_clk = ERR_PTR(-ENODEV);
++	struct clk *inter_clk = ERR_PTR(-ENODEV);
++	struct dev_pm_opp *opp;
++	unsigned long rate;
++	int ret;
++
++	cpu_dev = get_cpu_device(cpu);
++	if (!cpu_dev) {
++		pr_err("failed to get cpu%d device\n", cpu);
++		return -ENODEV;
++	}
++
++	cpu_clk = clk_get(cpu_dev, "cpu");
++	if (IS_ERR(cpu_clk)) {
++		if (PTR_ERR(cpu_clk) == -EPROBE_DEFER)
++			pr_warn("cpu clk for cpu%d not ready, retry.\n", cpu);
++		else
++			pr_err("failed to get cpu clk for cpu%d\n", cpu);
++
++		ret = PTR_ERR(cpu_clk);
++		return ret;
++	}
++
++	inter_clk = clk_get(cpu_dev, "intermediate");
++	if (IS_ERR(inter_clk)) {
++		if (PTR_ERR(inter_clk) == -EPROBE_DEFER)
++			pr_warn("intermediate clk for cpu%d not ready, retry.\n",
++				cpu);
++		else
++			pr_err("failed to get intermediate clk for cpu%d\n",
++			       cpu);
++
++		ret = PTR_ERR(inter_clk);
++		goto out_free_resources;
++	}
++
++	proc_reg = regulator_get_exclusive(cpu_dev, "proc");
++	if (IS_ERR(proc_reg)) {
++		if (PTR_ERR(proc_reg) == -EPROBE_DEFER)
++			pr_warn("proc regulator for cpu%d not ready, retry.\n",
++				cpu);
++		else
++			pr_err("failed to get proc regulator for cpu%d\n",
++			       cpu);
++
++		ret = PTR_ERR(proc_reg);
++		goto out_free_resources;
++	}
++
++	/* Both presence and absence of sram regulator are valid cases. */
++	sram_reg = regulator_get_exclusive(cpu_dev, "sram");
++
++	/* Get OPP-sharing information from "operating-points-v2" bindings */
++	ret = dev_pm_opp_of_get_sharing_cpus(cpu_dev, &info->cpus);
++	if (ret) {
++		pr_err("failed to get OPP-sharing information for cpu%d\n",
++		       cpu);
++		goto out_free_resources;
++	}
++
++	ret = dev_pm_opp_of_cpumask_add_table(&info->cpus);
++	if (ret) {
++		pr_warn("no OPP table for cpu%d\n", cpu);
++		goto out_free_resources;
++	}
++
++	/* Search a safe voltage for intermediate frequency. */
++	rate = clk_get_rate(inter_clk);
++	opp = dev_pm_opp_find_freq_ceil(cpu_dev, &rate);
++	if (IS_ERR(opp)) {
++		pr_err("failed to get intermediate opp for cpu%d\n", cpu);
++		ret = PTR_ERR(opp);
++		goto out_free_opp_table;
++	}
++	info->intermediate_voltage = dev_pm_opp_get_voltage(opp);
++	dev_pm_opp_put(opp);
++
++	info->cpu_dev = cpu_dev;
++	info->proc_reg = proc_reg;
++	info->sram_reg = IS_ERR(sram_reg) ? NULL : sram_reg;
++	info->cpu_clk = cpu_clk;
++	info->inter_clk = inter_clk;
++
++	/*
++	 * If SRAM regulator is present, software "voltage tracking" is needed
++	 * for this CPU power domain.
++	 */
++	info->need_voltage_tracking = !IS_ERR(sram_reg);
++
++	return 0;
++
++out_free_opp_table:
++	dev_pm_opp_of_cpumask_remove_table(&info->cpus);
++
++out_free_resources:
++	if (!IS_ERR(proc_reg))
++		regulator_put(proc_reg);
++	if (!IS_ERR(sram_reg))
++		regulator_put(sram_reg);
++	if (!IS_ERR(cpu_clk))
++		clk_put(cpu_clk);
++	if (!IS_ERR(inter_clk))
++		clk_put(inter_clk);
++
++	return ret;
++}
++
++static void mtk_cpu_dvfs_info_release(struct mtk_cpu_dvfs_info *info)
++{
++	if (!IS_ERR(info->proc_reg))
++		regulator_put(info->proc_reg);
++	if (!IS_ERR(info->sram_reg))
++		regulator_put(info->sram_reg);
++	if (!IS_ERR(info->cpu_clk))
++		clk_put(info->cpu_clk);
++	if (!IS_ERR(info->inter_clk))
++		clk_put(info->inter_clk);
++
++	dev_pm_opp_of_cpumask_remove_table(&info->cpus);
++}
++
++static int mtk_cpufreq_init(struct cpufreq_policy *policy)
++{
++	struct mtk_cpu_dvfs_info *info;
++	struct cpufreq_frequency_table *freq_table;
++	int ret;
++
++	info = mtk_cpu_dvfs_info_lookup(policy->cpu);
++	if (!info) {
++		pr_err("dvfs info for cpu%d is not initialized.\n",
++		       policy->cpu);
++		return -EINVAL;
++	}
++
++	ret = dev_pm_opp_init_cpufreq_table(info->cpu_dev, &freq_table);
++	if (ret) {
++		pr_err("failed to init cpufreq table for cpu%d: %d\n",
++		       policy->cpu, ret);
++		return ret;
++	}
++
++	ret = cpufreq_table_validate_and_show(policy, freq_table);
++	if (ret) {
++		pr_err("%s: invalid frequency table: %d\n", __func__, ret);
++		goto out_free_cpufreq_table;
++	}
++
++	cpumask_copy(policy->cpus, &info->cpus);
++	policy->driver_data = info;
++	policy->clk = info->cpu_clk;
++
++	return 0;
++
++out_free_cpufreq_table:
++	dev_pm_opp_free_cpufreq_table(info->cpu_dev, &freq_table);
++	return ret;
++}
++
++static int mtk_cpufreq_exit(struct cpufreq_policy *policy)
++{
++	struct mtk_cpu_dvfs_info *info = policy->driver_data;
++
++	cpufreq_cooling_unregister(info->cdev);
++	dev_pm_opp_free_cpufreq_table(info->cpu_dev, &policy->freq_table);
++
++	return 0;
++}
++
++static struct cpufreq_driver mtk_cpufreq_driver = {
++	.flags = CPUFREQ_STICKY | CPUFREQ_NEED_INITIAL_FREQ_CHECK |
++		 CPUFREQ_HAVE_GOVERNOR_PER_POLICY,
++	.verify = cpufreq_generic_frequency_table_verify,
++	.target_index = mtk_cpufreq_set_target,
++	.get = cpufreq_generic_get,
++	.init = mtk_cpufreq_init,
++	.exit = mtk_cpufreq_exit,
++	.ready = mtk_cpufreq_ready,
++	.name = "mtk-cpufreq",
++	.attr = cpufreq_generic_attr,
++};
++
++static int mtk_cpufreq_probe(struct platform_device *pdev)
++{
++	struct mtk_cpu_dvfs_info *info, *tmp;
++	int cpu, ret;
++
++	for_each_possible_cpu(cpu) {
++		info = mtk_cpu_dvfs_info_lookup(cpu);
++		if (info)
++			continue;
++
++		info = devm_kzalloc(&pdev->dev, sizeof(*info), GFP_KERNEL);
++		if (!info) {
++			ret = -ENOMEM;
++			goto release_dvfs_info_list;
++		}
++
++		ret = mtk_cpu_dvfs_info_init(info, cpu);
++		if (ret) {
++			dev_err(&pdev->dev,
++				"failed to initialize dvfs info for cpu%d\n",
++				cpu);
++			goto release_dvfs_info_list;
++		}
++
++		list_add(&info->list_head, &dvfs_info_list);
++	}
++
++	ret = cpufreq_register_driver(&mtk_cpufreq_driver);
++	if (ret) {
++		dev_err(&pdev->dev, "failed to register mtk cpufreq driver\n");
++		goto release_dvfs_info_list;
++	}
++
++	return 0;
++
++release_dvfs_info_list:
++	list_for_each_entry_safe(info, tmp, &dvfs_info_list, list_head) {
++		mtk_cpu_dvfs_info_release(info);
++		list_del(&info->list_head);
++	}
++
++	return ret;
++}
++
++static struct platform_driver mtk_cpufreq_platdrv = {
++	.driver = {
++		.name	= "mtk-cpufreq",
++	},
++	.probe		= mtk_cpufreq_probe,
++};
++
++/* List of machines supported by this driver */
++static const struct of_device_id mtk_cpufreq_machines[] __initconst = {
++	{ .compatible = "mediatek,mt2701", },
++	{ .compatible = "mediatek,mt7622", },
++	{ .compatible = "mediatek,mt7623", },
++	{ .compatible = "mediatek,mt817x", },
++	{ .compatible = "mediatek,mt8173", },
++	{ .compatible = "mediatek,mt8176", },
++
++	{ }
++};
++
++static int __init mtk_cpufreq_driver_init(void)
++{
++	struct device_node *np;
++	const struct of_device_id *match;
++	struct platform_device *pdev;
++	int err;
++
++	np = of_find_node_by_path("/");
++	if (!np)
++		return -ENODEV;
++
++	match = of_match_node(mtk_cpufreq_machines, np);
++	of_node_put(np);
++	if (!match) {
++		pr_warn("Machine is not compatible with mtk-cpufreq\n");
++		return -ENODEV;
++	}
++
++	err = platform_driver_register(&mtk_cpufreq_platdrv);
++	if (err)
++		return err;
++
++	/*
++	 * Since there's no place to hold device registration code and no
++	 * device tree based way to match cpufreq driver yet, both the driver
++	 * and the device registration codes are put here to handle defer
++	 * probing.
++	 */
++	pdev = platform_device_register_simple("mtk-cpufreq", -1, NULL, 0);
++	if (IS_ERR(pdev)) {
++		pr_err("failed to register mtk-cpufreq platform device\n");
++		return PTR_ERR(pdev);
++	}
++
++	return 0;
++}
++device_initcall(mtk_cpufreq_driver_init);
+diff --git a/drivers/cpufreq/pmac32-cpufreq.c b/drivers/cpufreq/pmac32-cpufreq.c
+index ff44016ea031..61ae06ca008e 100644
+--- a/drivers/cpufreq/pmac32-cpufreq.c
++++ b/drivers/cpufreq/pmac32-cpufreq.c
+@@ -442,7 +442,8 @@ static struct cpufreq_driver pmac_cpufreq_driver = {
+ 	.init		= pmac_cpufreq_cpu_init,
+ 	.suspend	= pmac_cpufreq_suspend,
+ 	.resume		= pmac_cpufreq_resume,
+-	.flags		= CPUFREQ_PM_NO_WARN,
++	.flags		= CPUFREQ_PM_NO_WARN |
++			  CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.attr		= cpufreq_generic_attr,
+ 	.name		= "powermac",
+ };
+@@ -626,14 +627,16 @@ static int __init pmac_cpufreq_setup(void)
+ 	if (!value)
+ 		goto out;
+ 	cur_freq = (*value) / 1000;
+-	transition_latency = CPUFREQ_ETERNAL;
+ 
+ 	/*  Check for 7447A based MacRISC3 */
+ 	if (of_machine_is_compatible("MacRISC3") &&
+ 	    of_get_property(cpunode, "dynamic-power-step", NULL) &&
+ 	    PVR_VER(mfspr(SPRN_PVR)) == 0x8003) {
+ 		pmac_cpufreq_init_7447A(cpunode);
++
++		/* Allow dynamic switching */
+ 		transition_latency = 8000000;
++		pmac_cpufreq_driver.flags &= ~CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING;
+ 	/* Check for other MacRISC3 machines */
+ 	} else if (of_machine_is_compatible("PowerBook3,4") ||
+ 		   of_machine_is_compatible("PowerBook3,5") ||
+diff --git a/drivers/cpufreq/pmac64-cpufreq.c b/drivers/cpufreq/pmac64-cpufreq.c
+index 267e0894c62d..be623dd7b9f2 100644
+--- a/drivers/cpufreq/pmac64-cpufreq.c
++++ b/drivers/cpufreq/pmac64-cpufreq.c
+@@ -516,7 +516,7 @@ static int __init g5_pm72_cpufreq_init(struct device_node *cpunode)
+ 		goto bail;
+ 	}
+ 
+-	DBG("cpufreq: i2c clock chip found: %s\n", hwclock->full_name);
++	DBG("cpufreq: i2c clock chip found: %pOF\n", hwclock);
+ 
+ 	/* Now get all the platform functions */
+ 	pfunc_cpu_getfreq =
+diff --git a/drivers/cpufreq/powernow-k7.c b/drivers/cpufreq/powernow-k7.c
+index 9f013ed42977..80ac313e6c59 100644
+--- a/drivers/cpufreq/powernow-k7.c
++++ b/drivers/cpufreq/powernow-k7.c
+@@ -578,7 +578,7 @@ static int acer_cpufreq_pst(const struct dmi_system_id *d)
+  * A BIOS update is all that can save them.
+  * Mention this, and disable cpufreq.
+  */
+-static struct dmi_system_id powernow_dmi_table[] = {
++static const struct dmi_system_id powernow_dmi_table[] = {
+ 	{
+ 		.callback = acer_cpufreq_pst,
+ 		.ident = "Acer Aspire",
+diff --git a/drivers/cpufreq/s5pv210-cpufreq.c b/drivers/cpufreq/s5pv210-cpufreq.c
+index f82074eea779..5d31c2db12a3 100644
+--- a/drivers/cpufreq/s5pv210-cpufreq.c
++++ b/drivers/cpufreq/s5pv210-cpufreq.c
+@@ -602,6 +602,7 @@ static int s5pv210_cpufreq_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	clk_base = of_iomap(np, 0);
++	of_node_put(np);
+ 	if (!clk_base) {
+ 		pr_err("%s: failed to map clock registers\n", __func__);
+ 		return -EFAULT;
+@@ -612,6 +613,7 @@ static int s5pv210_cpufreq_probe(struct platform_device *pdev)
+ 		if (id < 0 || id >= ARRAY_SIZE(dmc_base)) {
+ 			pr_err("%s: failed to get alias of dmc node '%s'\n",
+ 				__func__, np->name);
++			of_node_put(np);
+ 			return id;
+ 		}
+ 
+@@ -619,6 +621,7 @@ static int s5pv210_cpufreq_probe(struct platform_device *pdev)
+ 		if (!dmc_base[id]) {
+ 			pr_err("%s: failed to map dmc%d registers\n",
+ 				__func__, id);
++			of_node_put(np);
+ 			return -EFAULT;
+ 		}
+ 	}
+diff --git a/drivers/cpufreq/sa1100-cpufreq.c b/drivers/cpufreq/sa1100-cpufreq.c
+index 728eab77e8e0..e2d8a77c36d5 100644
+--- a/drivers/cpufreq/sa1100-cpufreq.c
++++ b/drivers/cpufreq/sa1100-cpufreq.c
+@@ -197,11 +197,12 @@ static int sa1100_target(struct cpufreq_policy *policy, unsigned int ppcr)
+ 
+ static int __init sa1100_cpu_init(struct cpufreq_policy *policy)
+ {
+-	return cpufreq_generic_init(policy, sa11x0_freq_table, CPUFREQ_ETERNAL);
++	return cpufreq_generic_init(policy, sa11x0_freq_table, 0);
+ }
+ 
+ static struct cpufreq_driver sa1100_driver __refdata = {
+-	.flags		= CPUFREQ_STICKY | CPUFREQ_NEED_INITIAL_FREQ_CHECK,
++	.flags		= CPUFREQ_STICKY | CPUFREQ_NEED_INITIAL_FREQ_CHECK |
++			  CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.verify		= cpufreq_generic_frequency_table_verify,
+ 	.target_index	= sa1100_target,
+ 	.get		= sa11x0_getspeed,
+diff --git a/drivers/cpufreq/sa1110-cpufreq.c b/drivers/cpufreq/sa1110-cpufreq.c
+index 2bac9b6cfeea..66e5fb088ecc 100644
+--- a/drivers/cpufreq/sa1110-cpufreq.c
++++ b/drivers/cpufreq/sa1110-cpufreq.c
+@@ -306,13 +306,14 @@ static int sa1110_target(struct cpufreq_policy *policy, unsigned int ppcr)
+ 
+ static int __init sa1110_cpu_init(struct cpufreq_policy *policy)
+ {
+-	return cpufreq_generic_init(policy, sa11x0_freq_table, CPUFREQ_ETERNAL);
++	return cpufreq_generic_init(policy, sa11x0_freq_table, 0);
+ }
+ 
+ /* sa1110_driver needs __refdata because it must remain after init registers
+  * it with cpufreq_register_driver() */
+ static struct cpufreq_driver sa1110_driver __refdata = {
+-	.flags		= CPUFREQ_STICKY | CPUFREQ_NEED_INITIAL_FREQ_CHECK,
++	.flags		= CPUFREQ_STICKY | CPUFREQ_NEED_INITIAL_FREQ_CHECK |
++			  CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.verify		= cpufreq_generic_frequency_table_verify,
+ 	.target_index	= sa1110_target,
+ 	.get		= sa11x0_getspeed,
+diff --git a/drivers/cpufreq/sh-cpufreq.c b/drivers/cpufreq/sh-cpufreq.c
+index 719c3d9f07fb..28893d435cf5 100644
+--- a/drivers/cpufreq/sh-cpufreq.c
++++ b/drivers/cpufreq/sh-cpufreq.c
+@@ -137,8 +137,6 @@ static int sh_cpufreq_cpu_init(struct cpufreq_policy *policy)
+ 			(clk_round_rate(cpuclk, ~0UL) + 500) / 1000;
+ 	}
+ 
+-	policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
+-
+ 	dev_info(dev, "CPU Frequencies - Minimum %u.%03u MHz, "
+ 	       "Maximum %u.%03u MHz.\n",
+ 	       policy->min / 1000, policy->min % 1000,
+@@ -159,6 +157,7 @@ static int sh_cpufreq_cpu_exit(struct cpufreq_policy *policy)
+ 
+ static struct cpufreq_driver sh_cpufreq_driver = {
+ 	.name		= "sh",
++	.flags		= CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.get		= sh_cpufreq_get,
+ 	.target		= sh_cpufreq_target,
+ 	.verify		= sh_cpufreq_verify,
+diff --git a/drivers/cpufreq/speedstep-ich.c b/drivers/cpufreq/speedstep-ich.c
+index b86953a3ddc4..0412a246a785 100644
+--- a/drivers/cpufreq/speedstep-ich.c
++++ b/drivers/cpufreq/speedstep-ich.c
+@@ -207,7 +207,7 @@ static unsigned int speedstep_detect_chipset(void)
+ 		 * 8100 which use a pretty old revision of the 82815
+ 		 * host bridge. Abort on these systems.
+ 		 */
+-		static struct pci_dev *hostbridge;
++		struct pci_dev *hostbridge;
+ 
+ 		hostbridge  = pci_get_subsys(PCI_VENDOR_ID_INTEL,
+ 			      PCI_DEVICE_ID_INTEL_82815_MC,
+diff --git a/drivers/cpufreq/speedstep-lib.c b/drivers/cpufreq/speedstep-lib.c
+index 1b8062182c81..ccab452a4ef5 100644
+--- a/drivers/cpufreq/speedstep-lib.c
++++ b/drivers/cpufreq/speedstep-lib.c
+@@ -35,7 +35,7 @@ static int relaxed_check;
+ static unsigned int pentium3_get_frequency(enum speedstep_processor processor)
+ {
+ 	/* See table 14 of p3_ds.pdf and table 22 of 29834003.pdf */
+-	struct {
++	static const struct {
+ 		unsigned int ratio;	/* Frequency Multiplier (x10) */
+ 		u8 bitmap;		/* power on configuration bits
+ 					[27, 25:22] (in MSR 0x2a) */
+@@ -58,7 +58,7 @@ static unsigned int pentium3_get_frequency(enum speedstep_processor processor)
+ 	};
+ 
+ 	/* PIII(-M) FSB settings: see table b1-b of 24547206.pdf */
+-	struct {
++	static const struct {
+ 		unsigned int value;	/* Front Side Bus speed in MHz */
+ 		u8 bitmap;		/* power on configuration bits [18: 19]
+ 					(in MSR 0x2a) */
+diff --git a/drivers/cpufreq/speedstep-smi.c b/drivers/cpufreq/speedstep-smi.c
+index 37b30071c220..d23f24ccff38 100644
+--- a/drivers/cpufreq/speedstep-smi.c
++++ b/drivers/cpufreq/speedstep-smi.c
+@@ -266,7 +266,6 @@ static int speedstep_cpu_init(struct cpufreq_policy *policy)
+ 			pr_debug("workaround worked.\n");
+ 	}
+ 
+-	policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
+ 	return cpufreq_table_validate_and_show(policy, speedstep_freqs);
+ }
+ 
+@@ -290,6 +289,7 @@ static int speedstep_resume(struct cpufreq_policy *policy)
+ 
+ static struct cpufreq_driver speedstep_driver = {
+ 	.name		= "speedstep-smi",
++	.flags		= CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.verify		= cpufreq_generic_frequency_table_verify,
+ 	.target_index	= speedstep_target,
+ 	.init		= speedstep_cpu_init,
+diff --git a/drivers/cpufreq/sti-cpufreq.c b/drivers/cpufreq/sti-cpufreq.c
+index d2d0430d09d4..47105735df12 100644
+--- a/drivers/cpufreq/sti-cpufreq.c
++++ b/drivers/cpufreq/sti-cpufreq.c
+@@ -65,8 +65,8 @@ static int sti_cpufreq_fetch_major(void) {
+ 	ret = of_property_read_u32_index(np, "st,syscfg",
+ 					 MAJOR_ID_INDEX, &major_offset);
+ 	if (ret) {
+-		dev_err(dev, "No major number offset provided in %s [%d]\n",
+-			np->full_name, ret);
++		dev_err(dev, "No major number offset provided in %pOF [%d]\n",
++			np, ret);
+ 		return ret;
+ 	}
+ 
+@@ -92,8 +92,8 @@ static int sti_cpufreq_fetch_minor(void)
+ 					 MINOR_ID_INDEX, &minor_offset);
+ 	if (ret) {
+ 		dev_err(dev,
+-			"No minor number offset provided %s [%d]\n",
+-			np->full_name, ret);
++			"No minor number offset provided %pOF [%d]\n",
++			np, ret);
+ 		return ret;
+ 	}
+ 
+diff --git a/drivers/cpufreq/tango-cpufreq.c b/drivers/cpufreq/tango-cpufreq.c
+new file mode 100644
+index 000000000000..89a7f860bfe8
+--- /dev/null
++++ b/drivers/cpufreq/tango-cpufreq.c
+@@ -0,0 +1,38 @@
++#include <linux/of.h>
++#include <linux/cpu.h>
++#include <linux/clk.h>
++#include <linux/pm_opp.h>
++#include <linux/platform_device.h>
++
++static const struct of_device_id machines[] __initconst = {
++	{ .compatible = "sigma,tango4" },
++	{ /* sentinel */ }
++};
++
++static int __init tango_cpufreq_init(void)
++{
++	struct device *cpu_dev = get_cpu_device(0);
++	unsigned long max_freq;
++	struct clk *cpu_clk;
++	void *res;
++
++	if (!of_match_node(machines, of_root))
++		return -ENODEV;
++
++	cpu_clk = clk_get(cpu_dev, NULL);
++	if (IS_ERR(cpu_clk))
++		return -ENODEV;
++
++	max_freq = clk_get_rate(cpu_clk);
++
++	dev_pm_opp_add(cpu_dev, max_freq / 1, 0);
++	dev_pm_opp_add(cpu_dev, max_freq / 2, 0);
++	dev_pm_opp_add(cpu_dev, max_freq / 3, 0);
++	dev_pm_opp_add(cpu_dev, max_freq / 5, 0);
++	dev_pm_opp_add(cpu_dev, max_freq / 9, 0);
++
++	res = platform_device_register_data(NULL, "cpufreq-dt", -1, NULL, 0);
++
++	return PTR_ERR_OR_ZERO(res);
++}
++device_initcall(tango_cpufreq_init);
+diff --git a/drivers/cpufreq/ti-cpufreq.c b/drivers/cpufreq/ti-cpufreq.c
+index a7b5658c0460..4bf47de6101f 100644
+--- a/drivers/cpufreq/ti-cpufreq.c
++++ b/drivers/cpufreq/ti-cpufreq.c
+@@ -190,7 +190,7 @@ static int ti_cpufreq_setup_syscon_register(struct ti_cpufreq_data *opp_data)
+ 
+ static const struct of_device_id ti_cpufreq_of_match[] = {
+ 	{ .compatible = "ti,am33xx", .data = &am3x_soc_data, },
+-	{ .compatible = "ti,am4372", .data = &am4x_soc_data, },
++	{ .compatible = "ti,am43", .data = &am4x_soc_data, },
+ 	{ .compatible = "ti,dra7", .data = &dra7_soc_data },
+ 	{},
+ };
+@@ -245,8 +245,6 @@ static int ti_cpufreq_init(void)
+ 	if (ret)
+ 		goto fail_put_node;
+ 
+-	of_node_put(opp_data->opp_node);
+-
+ 	ret = PTR_ERR_OR_ZERO(dev_pm_opp_set_supported_hw(opp_data->cpu_dev,
+ 							  version, VERSION_COUNT));
+ 	if (ret) {
+@@ -255,6 +253,8 @@ static int ti_cpufreq_init(void)
+ 		goto fail_put_node;
+ 	}
+ 
++	of_node_put(opp_data->opp_node);
++
+ register_cpufreq_dt:
+ 	platform_device_register_simple("cpufreq-dt", -1, NULL, 0);
+ 
+diff --git a/drivers/cpufreq/unicore2-cpufreq.c b/drivers/cpufreq/unicore2-cpufreq.c
+index 6f9dfa80563a..db62d9844751 100644
+--- a/drivers/cpufreq/unicore2-cpufreq.c
++++ b/drivers/cpufreq/unicore2-cpufreq.c
+@@ -58,13 +58,12 @@ static int __init ucv2_cpu_init(struct cpufreq_policy *policy)
+ 
+ 	policy->min = policy->cpuinfo.min_freq = 250000;
+ 	policy->max = policy->cpuinfo.max_freq = 1000000;
+-	policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
+ 	policy->clk = clk_get(NULL, "MAIN_CLK");
+ 	return PTR_ERR_OR_ZERO(policy->clk);
+ }
+ 
+ static struct cpufreq_driver ucv2_driver = {
+-	.flags		= CPUFREQ_STICKY,
++	.flags		= CPUFREQ_STICKY | CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING,
+ 	.verify		= ucv2_verify_speed,
+ 	.target		= ucv2_target,
+ 	.get		= cpufreq_generic_get,
+diff --git a/include/linux/cpufreq.h b/include/linux/cpufreq.h
+index f10a9b3761cd..537ff842ff73 100644
+--- a/include/linux/cpufreq.h
++++ b/include/linux/cpufreq.h
+@@ -127,6 +127,15 @@ struct cpufreq_policy {
+ 	 */
+ 	unsigned int		transition_delay_us;
+ 
++	/*
++	 * Remote DVFS flag (Not added to the driver structure as we don't want
++	 * to access another structure from scheduler hotpath).
++	 *
++	 * Should be set if CPUs can do DVFS on behalf of other CPUs from
++	 * different cpufreq policies.
++	 */
++	bool			dvfs_possible_from_any_cpu;
++
+ 	 /* Cached frequency lookup from cpufreq_driver_resolve_freq. */
+ 	unsigned int cached_target_freq;
+ 	int cached_resolved_idx;
+@@ -370,6 +379,12 @@ struct cpufreq_driver {
+  */
+ #define CPUFREQ_NEED_INITIAL_FREQ_CHECK	(1 << 5)
+ 
++/*
++ * Set by drivers to disallow use of governors with "dynamic_switching" flag
++ * set.
++ */
++#define CPUFREQ_NO_AUTO_DYNAMIC_SWITCHING (1 << 6)
++
+ int cpufreq_register_driver(struct cpufreq_driver *driver_data);
+ int cpufreq_unregister_driver(struct cpufreq_driver *driver_data);
+ 
+@@ -487,14 +502,8 @@ static inline unsigned long cpufreq_scale(unsigned long old, u_int div,
+  * polling frequency is 1000 times the transition latency of the processor. The
+  * ondemand governor will work on any processor with transition latency <= 10ms,
+  * using appropriate sampling rate.
+- *
+- * For CPUs with transition latency > 10ms (mostly drivers with CPUFREQ_ETERNAL)
+- * the ondemand governor will not work. All times here are in us (microseconds).
+  */
+-#define MIN_SAMPLING_RATE_RATIO		(2)
+ #define LATENCY_MULTIPLIER		(1000)
+-#define MIN_LATENCY_MULTIPLIER		(20)
+-#define TRANSITION_LATENCY_LIMIT	(10 * 1000 * 1000)
+ 
+ struct cpufreq_governor {
+ 	char	name[CPUFREQ_NAME_LEN];
+@@ -507,9 +516,8 @@ struct cpufreq_governor {
+ 					 char *buf);
+ 	int	(*store_setspeed)	(struct cpufreq_policy *policy,
+ 					 unsigned int freq);
+-	unsigned int max_transition_latency; /* HW must be able to switch to
+-			next freq faster than this value in nano secs or we
+-			will fallback to performance governor */
++	/* For governors which change frequency dynamically by themselves */
++	bool			dynamic_switching;
+ 	struct list_head	governor_list;
+ 	struct module		*owner;
+ };
+@@ -525,6 +533,7 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
+ 				   unsigned int relation);
+ unsigned int cpufreq_driver_resolve_freq(struct cpufreq_policy *policy,
+ 					 unsigned int target_freq);
++unsigned int cpufreq_policy_transition_delay_us(struct cpufreq_policy *policy);
+ int cpufreq_register_governor(struct cpufreq_governor *governor);
+ void cpufreq_unregister_governor(struct cpufreq_governor *governor);
+ 
+@@ -562,6 +571,17 @@ struct governor_attr {
+ 			 size_t count);
+ };
+ 
++static inline bool cpufreq_can_do_remote_dvfs(struct cpufreq_policy *policy)
++{
++	/*
++	 * Allow remote callbacks if:
++	 * - dvfs_possible_from_any_cpu flag is set
++	 * - the local and remote CPUs share cpufreq policy
++	 */
++	return policy->dvfs_possible_from_any_cpu ||
++		cpumask_test_cpu(smp_processor_id(), policy->cpus);
++}
++
+ /*********************************************************************
+  *                     FREQUENCY TABLE HELPERS                       *
+  *********************************************************************/
+-- 
+2.14.2
+
