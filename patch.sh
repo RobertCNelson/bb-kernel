@@ -309,6 +309,7 @@ reverts () {
 }
 
 drivers () {
+	dir 'drivers/gadget'
 	dir 'drivers/pm_bus'
 
 	#[PATCH V5 00/10] PM / OPP: Multiple regulator support
