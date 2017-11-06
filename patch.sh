@@ -1162,6 +1162,7 @@ beaglebone
 quieter
 gcc6
 dir 'drivers/ti/mmc'
+dir 'drivers/gadget'
 sgx
 
 sync_mainline_dtc () {
