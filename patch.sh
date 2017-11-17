@@ -195,6 +195,7 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 
+	${git_bin} revert --no-edit ad8c619750c499f68f99f0bccb1a12114b7f2033
 	${git_bin} revert --no-edit 30e81e7fe197dd14d5b7653c75140ea75fe5c3d4
 
 	rt_patch="${KERNEL_REL}${kernel_rt}"
