@@ -188,9 +188,6 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-	${git_bin} revert --no-edit ce0eadf4b1bdeabecb9e31dfe39d292767f9febc
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -252,7 +249,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.14-rc8"
+	backport_tag="v4.14"
 
 	subsystem="cpufreq"
 	#regenerate="enable"
