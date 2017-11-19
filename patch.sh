@@ -376,6 +376,7 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0021-iio-ad7793-Fix-the-serial-interface-reset.patch"
 	${git} "${DIR}/patches/backports/iio/0022-iio-adc-mcp320x-Fix-readout-of-negative-voltages.patch"
 	${git} "${DIR}/patches/backports/iio/0023-iio-adc-mcp320x-Fix-oops-on-module-unload.patch"
+	${git} "${DIR}/patches/backports/iio/0024-iio-trigger-free-trigger-resource-correctly.patch"
 
 	backport_tag="v4.8.17"
 
