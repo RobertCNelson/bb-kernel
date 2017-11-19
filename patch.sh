@@ -303,9 +303,11 @@ reverts () {
 	${git} "${DIR}/patches/reverts/0007-Revert-wlcore-sdio-Populate-config-firmware-data.patch"
 	${git} "${DIR}/patches/reverts/0008-Revert-wlcore-Prepare-family-to-fix-nvs-file-handlin.patch"
 
+	${git} "${DIR}/patches/reverts/0009-Revert-workqueue-Fix-NULL-pointer-dereference.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=8
+		number=9
 		cleanup
 	fi
 }
