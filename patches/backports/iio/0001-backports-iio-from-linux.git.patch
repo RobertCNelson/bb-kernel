@@ -1,6 +1,6 @@
-From 46beaf6af458d34f0363c8c66acb37421a8c93a9 Mon Sep 17 00:00:00 2001
+From 280cff9d8ecd40111cab523033fb9b528d6fcd5d Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 8 Nov 2017 09:45:00 -0600
+Date: Sat, 18 Nov 2017 22:13:43 -0600
 Subject: [PATCH] backports: iio: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -207,6 +207,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/trigger/Kconfig                        |   10 +
  drivers/iio/trigger/Makefile                       |    2 +
  drivers/iio/trigger/iio-trig-hrtimer.c             |  193 +++
+ drivers/iio/trigger/iio-trig-interrupt.c           |    8 +-
+ drivers/iio/trigger/iio-trig-sysfs.c               |    2 +-
  .../staging/iio/Documentation/sysfs-bus-iio-light  |   28 -
  drivers/staging/iio/Kconfig                        |   30 -
  drivers/staging/iio/Makefile                       |    8 -
@@ -262,7 +264,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/staging/iio/resolver/ad2s1210.h            |    8 +-
  drivers/staging/iio/trigger/Kconfig                |   10 -
  drivers/staging/iio/trigger/Makefile               |    1 -
- drivers/staging/iio/trigger/iio-trig-bfin-timer.c  |   15 +-
+ drivers/staging/iio/trigger/iio-trig-bfin-timer.c  |   19 +-
  include/dt-bindings/iio/adc/fsl-imx25-gcq.h        |   18 +
  include/dt-bindings/iio/adi,ad5592r.h              |   16 +
  include/linux/iio/adc/ad_sigma_delta.h             |    3 -
@@ -280,7 +282,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/platform_data/ad5761.h               |   44 +
  include/linux/platform_data/st_sensors_pdata.h     |    2 +
  include/uapi/linux/iio/types.h                     |    3 +
- 275 files changed, 27500 insertions(+), 2514 deletions(-)
+ 277 files changed, 27507 insertions(+), 2521 deletions(-)
  create mode 100644 drivers/iio/accel/mma7455.h
  create mode 100644 drivers/iio/accel/mma7455_core.c
  create mode 100644 drivers/iio/accel/mma7455_i2c.c
@@ -34814,6 +34816,52 @@ index 000000000000..5e6d451febeb
 +MODULE_AUTHOR("Daniel Baluta <daniel.baluta@intel.com>");
 +MODULE_DESCRIPTION("Periodic hrtimer trigger for the IIO subsystem");
 +MODULE_LICENSE("GPL v2");
+diff --git a/drivers/iio/trigger/iio-trig-interrupt.c b/drivers/iio/trigger/iio-trig-interrupt.c
+index e18f12b74610..572bc6f02ca8 100644
+--- a/drivers/iio/trigger/iio-trig-interrupt.c
++++ b/drivers/iio/trigger/iio-trig-interrupt.c
+@@ -58,7 +58,7 @@ static int iio_interrupt_trigger_probe(struct platform_device *pdev)
+ 	trig_info = kzalloc(sizeof(*trig_info), GFP_KERNEL);
+ 	if (!trig_info) {
+ 		ret = -ENOMEM;
+-		goto error_free_trigger;
++		goto error_put_trigger;
+ 	}
+ 	iio_trigger_set_drvdata(trig, trig_info);
+ 	trig_info->irq = irq;
+@@ -83,8 +83,8 @@ error_release_irq:
+ 	free_irq(irq, trig);
+ error_free_trig_info:
+ 	kfree(trig_info);
+-error_free_trigger:
+-	iio_trigger_free(trig);
++error_put_trigger:
++	iio_trigger_put(trig);
+ error_ret:
+ 	return ret;
+ }
+@@ -99,7 +99,7 @@ static int iio_interrupt_trigger_remove(struct platform_device *pdev)
+ 	iio_trigger_unregister(trig);
+ 	free_irq(trig_info->irq, trig);
+ 	kfree(trig_info);
+-	iio_trigger_free(trig);
++	iio_trigger_put(trig);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/iio/trigger/iio-trig-sysfs.c b/drivers/iio/trigger/iio-trig-sysfs.c
+index 202e8b89caf2..3dfab2bc6d69 100644
+--- a/drivers/iio/trigger/iio-trig-sysfs.c
++++ b/drivers/iio/trigger/iio-trig-sysfs.c
+@@ -174,7 +174,7 @@ static int iio_sysfs_trigger_probe(int id)
+ 	return 0;
+ 
+ out2:
+-	iio_trigger_free(t->trig);
++	iio_trigger_put(t->trig);
+ free_t:
+ 	kfree(t);
+ out1:
 diff --git a/drivers/staging/iio/Documentation/sysfs-bus-iio-light b/drivers/staging/iio/Documentation/sysfs-bus-iio-light
 index 17e5c9c515d4..7c7cd8456060 100644
 --- a/drivers/staging/iio/Documentation/sysfs-bus-iio-light
@@ -39607,7 +39655,7 @@ index 238481b78e72..1300a21363db 100644
 -obj-$(CONFIG_IIO_PERIODIC_RTC_TRIGGER) += iio-trig-periodic-rtc.o
  obj-$(CONFIG_IIO_BFIN_TMR_TRIGGER) += iio-trig-bfin-timer.o
 diff --git a/drivers/staging/iio/trigger/iio-trig-bfin-timer.c b/drivers/staging/iio/trigger/iio-trig-bfin-timer.c
-index 035dd456d7d6..38dca69a06eb 100644
+index 737747354db6..38dca69a06eb 100644
 --- a/drivers/staging/iio/trigger/iio-trig-bfin-timer.c
 +++ b/drivers/staging/iio/trigger/iio-trig-bfin-timer.c
 @@ -55,12 +55,12 @@ static struct bfin_timer iio_bfin_timer_code[MAX_BLACKFIN_GPTIMERS] = {
@@ -39646,6 +39694,24 @@ index 035dd456d7d6..38dca69a06eb 100644
  	if (pdata && pdata->output_enable) {
  		unsigned long long val;
  
+@@ -259,7 +260,7 @@ out_free_irq:
+ out1:
+ 	iio_trigger_unregister(st->trig);
+ out:
+-	iio_trigger_free(st->trig);
++	iio_trigger_put(st->trig);
+ 	return ret;
+ }
+ 
+@@ -272,7 +273,7 @@ static int iio_bfin_tmr_trigger_remove(struct platform_device *pdev)
+ 		peripheral_free(st->t->pin);
+ 	free_irq(st->irq, st);
+ 	iio_trigger_unregister(st->trig);
+-	iio_trigger_free(st->trig);
++	iio_trigger_put(st->trig);
+ 
+ 	return 0;
+ }
 diff --git a/include/dt-bindings/iio/adc/fsl-imx25-gcq.h b/include/dt-bindings/iio/adc/fsl-imx25-gcq.h
 new file mode 100644
 index 000000000000..87abdd4a7674
@@ -40543,5 +40609,5 @@ index 7c63bd67c36e..b0916fc72cce 100644
  
  enum iio_event_type {
 -- 
-2.14.2
+2.15.0
 
