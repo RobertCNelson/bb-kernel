@@ -35,8 +35,8 @@ if [ -e ${DIR}/version.sh ]; then
 	${git_bin} commit -a -m "${KERNEL_TAG}${BUILD} release" -s
 	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}" -f
 
-	${git_bin} push origin ${BRANCH}
-	${git_bin} push origin ${BRANCH} --tags
+	${git_bin} push origin ${BRANCH} -f
+	${git_bin} push origin ${BRANCH} --tags -f
 
 	cd ${DIR}/KERNEL/
 	make ARCH=${KERNEL_ARCH} distclean
@@ -47,11 +47,11 @@ if [ -e ${DIR}/version.sh ]; then
 	${git_bin} add arch/${KERNEL_ARCH}/configs/${example}_defconfig
 
 	${git_bin} commit -a -m "${KERNEL_TAG}${BUILD} ${example}_defconfig" -s
-	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}"
+	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}" -f
 
 	#push tag
 	echo "log: git push -f ${repo} \"${KERNEL_TAG}${BUILD}\""
-	${git_bin} push -f ${repo} "${KERNEL_TAG}${BUILD}"
+	${git_bin} push -f ${repo} "${KERNEL_TAG}${BUILD}" -f
 
 	cd ${DIR}/
 fi
