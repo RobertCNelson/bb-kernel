@@ -33,7 +33,7 @@ if [ -e ${DIR}/version.sh ]; then
 	. ${DIR}/version.sh
 
 	${git_bin} commit -a -m "${KERNEL_TAG}${BUILD} release" -s
-	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}"
+	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}" -f
 
 	${git_bin} push origin ${BRANCH}
 	${git_bin} push origin ${BRANCH} --tags
