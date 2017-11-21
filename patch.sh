@@ -249,7 +249,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.14"
+	backport_tag="v4.14.1"
 
 	subsystem="cpufreq"
 	#regenerate="enable"
