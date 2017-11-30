@@ -195,8 +195,8 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 
-#	v4.4.98
-	${git_bin} revert --no-edit ad8c619750c499f68f99f0bccb1a12114b7f2033
+#	v4.4.103
+	${git_bin} revert --no-edit cb1831a83e54cd3269a2420fce81c4fd8ae6f667
 
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
@@ -215,6 +215,49 @@ rt () {
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
 }
 
+wireguard_fail () {
+	echo "WireGuard failed"
+	exit 2
+}
+
+wireguard () {
+	echo "dir: WireGuard"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./WireGuard ] ; then
+			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+		else
+			rm -rf ./WireGuard || true
+			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+		fi
+		cd ./KERNEL/
+
+		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: WireGuard' -s
+		${git_bin} format-patch -1 -o ../patches/WireGuard/
+
+		rm -rf ../WireGuard/ || true
+
+		exit 2
+	fi
+
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		start_cleanup
+	fi
+
+	${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
+
+	if [ "x${regenerate}" = "xenable" ] ; then
+		wdir="WireGuard"
+		number=1
+		cleanup
+	fi
+}
+
 local_patch () {
 	echo "dir: dir"
 	${git} "${DIR}/patches/dir/0001-patch.patch"
@@ -223,6 +266,7 @@ local_patch () {
 #external_git
 aufs4
 rt
+wireguard
 #local_patch
 
 pre_backports () {
