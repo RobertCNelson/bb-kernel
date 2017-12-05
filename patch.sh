@@ -421,6 +421,8 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0022-iio-adc-mcp320x-Fix-readout-of-negative-voltages.patch"
 	${git} "${DIR}/patches/backports/iio/0023-iio-adc-mcp320x-Fix-oops-on-module-unload.patch"
 	${git} "${DIR}/patches/backports/iio/0024-iio-trigger-free-trigger-resource-correctly.patch"
+	${git} "${DIR}/patches/backports/iio/0025-iio-light-fix-improper-return-value.patch"
+	${git} "${DIR}/patches/backports/iio/0026-staging-iio-cdc-fix-improper-return-value.patch"
 
 	backport_tag="v4.8.17"
 
