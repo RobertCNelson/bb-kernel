@@ -339,6 +339,7 @@ reverts () {
 }
 
 drivers () {
+	dir 'drivers/gadget'
 	dir 'drivers/pwm'
 	dir 'drivers/spi'
 	dir 'drivers/tsl2550'
