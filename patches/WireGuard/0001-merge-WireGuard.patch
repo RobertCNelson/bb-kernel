@@ -1,6 +1,6 @@
-From 619cf360b7c877976b9de2a3b91f71b2735faefb Mon Sep 17 00:00:00 2001
+From 3be1d1de7e4fbe244ac1a30f36cc7fb6386131cb Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 10 Dec 2017 09:42:40 -0600
+Date: Thu, 14 Dec 2017 09:35:12 -0600
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -11,13 +11,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/Makefile                             |   19 +
  net/wireguard/allowedips.c                         |  326 ++
  net/wireguard/allowedips.h                         |   44 +
- net/wireguard/compat/Makefile.include              |   66 +
+ net/wireguard/compat/Makefile.include              |   70 +
  .../compat/checksum/checksum_partial_compat.h      |  208 ++
  net/wireguard/compat/compat-asm.h                  |   18 +
- net/wireguard/compat/compat.h                      |  628 ++++
+ net/wireguard/compat/compat.h                      |  631 ++++
  net/wireguard/compat/dst_cache/dst_cache.c         |  175 ++
  .../compat/dst_cache/include/net/dst_cache.h       |   97 +
  net/wireguard/compat/fpu/include/asm/fpu/api.h     |    1 +
+ .../compat/intel-family/include/asm/intel-family.h |   73 +
  net/wireguard/compat/memneq/include.h              |    5 +
  net/wireguard/compat/memneq/memneq.c               |  170 +
  .../compat/ptr_ring/include/linux/ptr_ring.h       |  640 ++++
@@ -30,16 +31,16 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/cookie.c                             |  195 ++
  net/wireguard/cookie.h                             |   52 +
  net/wireguard/crypto/blake2s-x86_64.S              |  685 ++++
- net/wireguard/crypto/blake2s.c                     |  294 ++
+ net/wireguard/crypto/blake2s.c                     |  296 ++
  net/wireguard/crypto/blake2s.h                     |   94 +
  net/wireguard/crypto/chacha20-arm.S                | 1471 +++++++++
  net/wireguard/crypto/chacha20-arm64.S              | 1940 ++++++++++++
  net/wireguard/crypto/chacha20-x86_64.S             | 2630 ++++++++++++++++
- net/wireguard/crypto/chacha20poly1305.c            |  823 +++++
+ net/wireguard/crypto/chacha20poly1305.c            |  840 +++++
  net/wireguard/crypto/chacha20poly1305.h            |   92 +
  net/wireguard/crypto/curve25519-arm.S              | 2110 +++++++++++++
  net/wireguard/crypto/curve25519-x86_64.S           | 3261 ++++++++++++++++++++
- net/wireguard/crypto/curve25519.c                  | 1689 ++++++++++
+ net/wireguard/crypto/curve25519.c                  | 1691 ++++++++++
  net/wireguard/crypto/curve25519.h                  |   25 +
  net/wireguard/crypto/poly1305-arm.S                | 1115 +++++++
  net/wireguard/crypto/poly1305-arm64.S              |  820 +++++
@@ -75,7 +76,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/timers.h                             |   21 +
  net/wireguard/uapi/wireguard.h                     |  182 ++
  net/wireguard/version.h                            |    1 +
- 70 files changed, 30455 insertions(+)
+ 71 files changed, 30556 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -87,6 +88,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  create mode 100644 net/wireguard/compat/dst_cache/dst_cache.c
  create mode 100644 net/wireguard/compat/dst_cache/include/net/dst_cache.h
  create mode 100644 net/wireguard/compat/fpu/include/asm/fpu/api.h
+ create mode 100644 net/wireguard/compat/intel-family/include/asm/intel-family.h
  create mode 100644 net/wireguard/compat/memneq/include.h
  create mode 100644 net/wireguard/compat/memneq/memneq.c
  create mode 100644 net/wireguard/compat/ptr_ring/include/linux/ptr_ring.h
@@ -614,10 +616,10 @@ index 000000000000..7b43382ed0f3
 +#endif /* _WG_ALLOWEDIPS_H */
 diff --git a/net/wireguard/compat/Makefile.include b/net/wireguard/compat/Makefile.include
 new file mode 100644
-index 000000000000..b7930b608df6
+index 000000000000..ce319d67e01c
 --- /dev/null
 +++ b/net/wireguard/compat/Makefile.include
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,70 @@
 +# SPDX-License-Identifier: GPL-2.0
 +#
 +# Copyright (C) 2015-2017 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -642,6 +644,10 @@ index 000000000000..b7930b608df6
 +ifeq ($(wildcard $(srctree)/include/net/dst_cache.h),)
 +ccflags-y += -I$(src)/compat/dst_cache/include
 +wireguard-y += compat/dst_cache/dst_cache.o
++endif
++
++ifeq ($(wildcard $(srctree)/arch/x86/include/asm/intel-family.h),)
++ccflags-y += -I$(src)/compat/intel-family/include
 +endif
 +
 +ifeq ($(wildcard $(srctree)/arch/x86/include/asm/fpu/api.h),)
@@ -924,10 +930,10 @@ index 000000000000..418c566f7cfd
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..f4716d1b11f1
+index 000000000000..859d417c65fe
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
-@@ -0,0 +1,628 @@
+@@ -0,0 +1,631 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2017 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1460,8 +1466,11 @@ index 000000000000..f4716d1b11f1
 +#ifndef XFEATURE_MASK_SSE
 +#define XFEATURE_MASK_SSE XSTATE_SSE
 +#endif
-+#ifndef XFEATURE_MASK_ZMM_Hi256
-+#define XFEATURE_MASK_ZMM_Hi256 XSTATE_ZMM_Hi256
++#ifndef XSTATE_AVX512
++#define XSTATE_AVX512 (XSTATE_OPMASK | XSTATE_ZMM_Hi256 | XSTATE_Hi16_ZMM)
++#endif
++#ifndef XFEATURE_MASK_AVX512
++#define XFEATURE_MASK_AVX512 XSTATE_AVX512
 +#endif
 +#endif
 +
@@ -1847,6 +1856,85 @@ index 000000000000..f3f9117bcb88
 +++ b/net/wireguard/compat/fpu/include/asm/fpu/api.h
 @@ -0,0 +1 @@
 +#include <asm/i387.h>
+diff --git a/net/wireguard/compat/intel-family/include/asm/intel-family.h b/net/wireguard/compat/intel-family/include/asm/intel-family.h
+new file mode 100644
+index 000000000000..35a6bc4da8ad
+--- /dev/null
++++ b/net/wireguard/compat/intel-family/include/asm/intel-family.h
+@@ -0,0 +1,73 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _ASM_X86_INTEL_FAMILY_H
++#define _ASM_X86_INTEL_FAMILY_H
++
++/*
++ * "Big Core" Processors (Branded as Core, Xeon, etc...)
++ *
++ * The "_X" parts are generally the EP and EX Xeons, or the
++ * "Extreme" ones, like Broadwell-E.
++ *
++ * Things ending in "2" are usually because we have no better
++ * name for them.  There's no processor called "SILVERMONT2".
++ */
++
++#define INTEL_FAM6_CORE_YONAH		0x0E
++
++#define INTEL_FAM6_CORE2_MEROM		0x0F
++#define INTEL_FAM6_CORE2_MEROM_L	0x16
++#define INTEL_FAM6_CORE2_PENRYN		0x17
++#define INTEL_FAM6_CORE2_DUNNINGTON	0x1D
++
++#define INTEL_FAM6_NEHALEM		0x1E
++#define INTEL_FAM6_NEHALEM_G		0x1F /* Auburndale / Havendale */
++#define INTEL_FAM6_NEHALEM_EP		0x1A
++#define INTEL_FAM6_NEHALEM_EX		0x2E
++
++#define INTEL_FAM6_WESTMERE		0x25
++#define INTEL_FAM6_WESTMERE_EP		0x2C
++#define INTEL_FAM6_WESTMERE_EX		0x2F
++
++#define INTEL_FAM6_SANDYBRIDGE		0x2A
++#define INTEL_FAM6_SANDYBRIDGE_X	0x2D
++#define INTEL_FAM6_IVYBRIDGE		0x3A
++#define INTEL_FAM6_IVYBRIDGE_X		0x3E
++
++#define INTEL_FAM6_HASWELL_CORE		0x3C
++#define INTEL_FAM6_HASWELL_X		0x3F
++#define INTEL_FAM6_HASWELL_ULT		0x45
++#define INTEL_FAM6_HASWELL_GT3E		0x46
++
++#define INTEL_FAM6_BROADWELL_CORE	0x3D
++#define INTEL_FAM6_BROADWELL_GT3E	0x47
++#define INTEL_FAM6_BROADWELL_X		0x4F
++#define INTEL_FAM6_BROADWELL_XEON_D	0x56
++
++#define INTEL_FAM6_SKYLAKE_MOBILE	0x4E
++#define INTEL_FAM6_SKYLAKE_DESKTOP	0x5E
++#define INTEL_FAM6_SKYLAKE_X		0x55
++#define INTEL_FAM6_KABYLAKE_MOBILE	0x8E
++#define INTEL_FAM6_KABYLAKE_DESKTOP	0x9E
++
++/* "Small Core" Processors (Atom) */
++
++#define INTEL_FAM6_ATOM_PINEVIEW	0x1C
++#define INTEL_FAM6_ATOM_LINCROFT	0x26
++#define INTEL_FAM6_ATOM_PENWELL		0x27
++#define INTEL_FAM6_ATOM_CLOVERVIEW	0x35
++#define INTEL_FAM6_ATOM_CEDARVIEW	0x36
++#define INTEL_FAM6_ATOM_SILVERMONT1	0x37 /* BayTrail/BYT / Valleyview */
++#define INTEL_FAM6_ATOM_SILVERMONT2	0x4D /* Avaton/Rangely */
++#define INTEL_FAM6_ATOM_AIRMONT		0x4C /* CherryTrail / Braswell */
++#define INTEL_FAM6_ATOM_MERRIFIELD	0x4A /* Tangier */
++#define INTEL_FAM6_ATOM_MOOREFIELD	0x5A /* Anniedale */
++#define INTEL_FAM6_ATOM_GOLDMONT	0x5C
++#define INTEL_FAM6_ATOM_DENVERTON	0x5F /* Goldmont Microserver */
++#define INTEL_FAM6_ATOM_GEMINI_LAKE	0x7A
++
++/* Xeon Phi */
++
++#define INTEL_FAM6_XEON_PHI_KNL		0x57 /* Knights Landing */
++#define INTEL_FAM6_XEON_PHI_KNM		0x85 /* Knights Mill */
++
++#endif /* _ASM_X86_INTEL_FAMILY_H */
 diff --git a/net/wireguard/compat/memneq/include.h b/net/wireguard/compat/memneq/include.h
 new file mode 100644
 index 000000000000..2d18acd9b6c8
@@ -5053,10 +5141,10 @@ index 000000000000..4a8ab75f43e3
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/blake2s.c b/net/wireguard/crypto/blake2s.c
 new file mode 100644
-index 000000000000..1f4052ddf53e
+index 000000000000..5c3f8f03f91a
 --- /dev/null
 +++ b/net/wireguard/crypto/blake2s.c
-@@ -0,0 +1,294 @@
+@@ -0,0 +1,296 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2017 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -5178,9 +5266,11 @@ index 000000000000..1f4052ddf53e
 +static bool blake2s_use_avx512 __read_mostly;
 +void __init blake2s_fpu_init(void)
 +{
++#ifndef CONFIG_UML
 +	blake2s_use_avx = boot_cpu_has(X86_FEATURE_AVX) && cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL);
 +#ifndef COMPAT_CANNOT_USE_AVX512
-+	blake2s_use_avx512 = boot_cpu_has(X86_FEATURE_AVX) && boot_cpu_has(X86_FEATURE_AVX2) && boot_cpu_has(X86_FEATURE_AVX512F) && boot_cpu_has(X86_FEATURE_AVX512VL) && cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM | XFEATURE_MASK_ZMM_Hi256, NULL);
++	blake2s_use_avx512 = boot_cpu_has(X86_FEATURE_AVX) && boot_cpu_has(X86_FEATURE_AVX2) && boot_cpu_has(X86_FEATURE_AVX512F) && boot_cpu_has(X86_FEATURE_AVX512VL) && cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM | XFEATURE_MASK_AVX512, NULL);
++#endif
 +#endif
 +}
 +#ifdef CONFIG_AS_AVX
@@ -11512,10 +11602,10 @@ index 000000000000..39d7080f11a6
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/chacha20poly1305.c b/net/wireguard/crypto/chacha20poly1305.c
 new file mode 100644
-index 000000000000..4c423ad43d68
+index 000000000000..6be96f619f89
 --- /dev/null
 +++ b/net/wireguard/crypto/chacha20poly1305.c
-@@ -0,0 +1,823 @@
+@@ -0,0 +1,840 @@
 +/* SPDX-License-Identifier: OpenSSL OR (BSD-3-Clause OR GPL-2.0)
 + *
 + * Copyright (C) 2015-2017 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -11534,6 +11624,7 @@ index 000000000000..4c423ad43d68
 +#if defined(CONFIG_X86_64)
 +#include <asm/cpufeature.h>
 +#include <asm/processor.h>
++#include <asm/intel-family.h>
 +asmlinkage void poly1305_init_x86_64(void *ctx, const u8 key[16]);
 +asmlinkage void poly1305_blocks_x86_64(void *ctx, const u8 *inp, size_t len, u32 padbit);
 +asmlinkage void poly1305_emit_x86_64(void *ctx, u8 mac[16], const u32 nonce[4]);
@@ -11559,14 +11650,23 @@ index 000000000000..4c423ad43d68
 +static bool chacha20poly1305_use_avx __read_mostly;
 +static bool chacha20poly1305_use_avx2 __read_mostly;
 +static bool chacha20poly1305_use_avx512 __read_mostly;
++static bool chacha20poly1305_use_avx512vl __read_mostly;
 +
 +void __init chacha20poly1305_fpu_init(void)
 +{
++#ifndef CONFIG_UML
 +	chacha20poly1305_use_ssse3 = boot_cpu_has(X86_FEATURE_SSSE3);
-+	chacha20poly1305_use_avx = boot_cpu_has(X86_FEATURE_AVX) && cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL);
-+	chacha20poly1305_use_avx2 = boot_cpu_has(X86_FEATURE_AVX) && boot_cpu_has(X86_FEATURE_AVX2) && cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL);
++	chacha20poly1305_use_avx = boot_cpu_has(X86_FEATURE_AVX) &&
++				   cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL);
++	chacha20poly1305_use_avx2 = boot_cpu_has(X86_FEATURE_AVX) && boot_cpu_has(X86_FEATURE_AVX2) &&
++				    cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL);
 +#ifndef COMPAT_CANNOT_USE_AVX512
-+	chacha20poly1305_use_avx512 = boot_cpu_has(X86_FEATURE_AVX) && boot_cpu_has(X86_FEATURE_AVX2) && boot_cpu_has(X86_FEATURE_AVX512F) && cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM | XFEATURE_MASK_ZMM_Hi256, NULL);
++	chacha20poly1305_use_avx512 = boot_cpu_has(X86_FEATURE_AVX) && boot_cpu_has(X86_FEATURE_AVX2) && boot_cpu_has(X86_FEATURE_AVX512F) &&
++				      cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM | XFEATURE_MASK_AVX512, NULL) &&
++				      boot_cpu_data.x86_model != INTEL_FAM6_SKYLAKE_X;
++	chacha20poly1305_use_avx512vl = boot_cpu_has(X86_FEATURE_AVX) && boot_cpu_has(X86_FEATURE_AVX2) && boot_cpu_has(X86_FEATURE_AVX512F) && boot_cpu_has(X86_FEATURE_AVX512VL) &&
++					cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM | XFEATURE_MASK_AVX512, NULL);
++#endif
 +#endif
 +}
 +#elif defined(CONFIG_ARM) || defined(CONFIG_ARM64)
@@ -11639,17 +11739,19 @@ index 000000000000..4c423ad43d68
 +	x[b] = rotl32((x[b] ^ x[c]), 7) \
 +)
 +
++#define C(i, j) (i * 4 + j)
++
 +#define DOUBLE_ROUND(x) ( \
 +	/* Column Round */ \
-+	QUARTER_ROUND(x, 0, 4, 8, 12), \
-+	QUARTER_ROUND(x, 1, 5, 9, 13), \
-+	QUARTER_ROUND(x, 2, 6, 10, 14), \
-+	QUARTER_ROUND(x, 3, 7, 11, 15), \
++	QUARTER_ROUND(x, C(0, 0), C(1, 0), C(2, 0), C(3, 0)), \
++	QUARTER_ROUND(x, C(0, 1), C(1, 1), C(2, 1), C(3, 1)), \
++	QUARTER_ROUND(x, C(0, 2), C(1, 2), C(2, 2), C(3, 2)), \
++	QUARTER_ROUND(x, C(0, 3), C(1, 3), C(2, 3), C(3, 3)), \
 +	/* Diagonal Round */ \
-+	QUARTER_ROUND(x, 0, 5, 10, 15), \
-+	QUARTER_ROUND(x, 1, 6, 11, 12), \
-+	QUARTER_ROUND(x, 2, 7, 8, 13), \
-+	QUARTER_ROUND(x, 3, 4, 9, 14) \
++	QUARTER_ROUND(x, C(0, 0), C(1, 1), C(2, 2), C(3, 3)), \
++	QUARTER_ROUND(x, C(0, 1), C(1, 2), C(2, 3), C(3, 0)), \
++	QUARTER_ROUND(x, C(0, 2), C(1, 3), C(2, 0), C(3, 1)), \
++	QUARTER_ROUND(x, C(0, 3), C(1, 0), C(2, 1), C(3, 2)) \
 +)
 +
 +#define TWENTY_ROUNDS(x) ( \
@@ -11741,6 +11843,11 @@ index 000000000000..4c423ad43d68
 +#ifdef CONFIG_AS_AVX512
 +	if (chacha20poly1305_use_avx512) {
 +		chacha20_avx512(dst, src, bytes, &ctx->state[4], &ctx->state[12]);
++		ctx->state[12] += (bytes + 63) / 64;
++		return;
++	}
++	if (chacha20poly1305_use_avx512vl) {
++		chacha20_avx512vl(dst, src, bytes, &ctx->state[4], &ctx->state[12]);
 +		ctx->state[12] += (bytes + 63) / 64;
 +		return;
 +	}
@@ -12341,7 +12448,7 @@ index 000000000000..4c423ad43d68
 +#include "../selftest/chacha20poly1305.h"
 diff --git a/net/wireguard/crypto/chacha20poly1305.h b/net/wireguard/crypto/chacha20poly1305.h
 new file mode 100644
-index 000000000000..1e5459477352
+index 000000000000..8e7b886ca123
 --- /dev/null
 +++ b/net/wireguard/crypto/chacha20poly1305.h
 @@ -0,0 +1,92 @@
@@ -12405,7 +12512,7 @@ index 000000000000..1e5459477352
 +static inline bool chacha20poly1305_init_simd(void)
 +{
 +	bool have_simd = false;
-+#if defined(CONFIG_X86_64)
++#if defined(CONFIG_X86_64) && !defined(CONFIG_UML)
 +	have_simd = irq_fpu_usable();
 +	if (have_simd)
 +		kernel_fpu_begin();
@@ -12423,7 +12530,7 @@ index 000000000000..1e5459477352
 +
 +static inline void chacha20poly1305_deinit_simd(bool was_on)
 +{
-+#if defined(CONFIG_X86_64)
++#if defined(CONFIG_X86_64) && !defined(CONFIG_UML)
 +	if (was_on)
 +		kernel_fpu_end();
 +#elif IS_ENABLED(CONFIG_KERNEL_MODE_NEON)
@@ -17822,10 +17929,10 @@ index 000000000000..4d269269804b
 +#endif /* CONFIG_AS_AVX */
 diff --git a/net/wireguard/crypto/curve25519.c b/net/wireguard/crypto/curve25519.c
 new file mode 100644
-index 000000000000..adf6a0b262ac
+index 000000000000..1daebfe46c63
 --- /dev/null
 +++ b/net/wireguard/crypto/curve25519.c
-@@ -0,0 +1,1689 @@
+@@ -0,0 +1,1691 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2008 Google Inc. All Rights Reserved.
@@ -17861,7 +17968,9 @@ index 000000000000..adf6a0b262ac
 +static bool curve25519_use_avx __read_mostly;
 +void __init curve25519_fpu_init(void)
 +{
++#ifndef CONFIG_UML
 +	curve25519_use_avx = boot_cpu_has(X86_FEATURE_AVX) && cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL);
++#endif
 +}
 +
 +typedef u64 fe[10];
@@ -31025,11 +31134,11 @@ index 000000000000..2c9fcb51e5ab
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..8ed54477cdfc
+index 000000000000..ec3575079e91
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20171127"
++#define WIREGUARD_VERSION "0.0.20171211"
 -- 
-2.15.0
+2.15.1
 
