@@ -1,6 +1,6 @@
-From dfe7886cf2825981c8d724565f1444f5bb3433e7 Mon Sep 17 00:00:00 2001
+From eee1c38252fbc9b5086cc43f279fe855e13dcda0 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 14 Dec 2017 09:52:37 -0600
+Date: Fri, 15 Dec 2017 12:32:43 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -8,7 +8,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  Documentation/admin-guide/sysrq.rst                |   12 +
  Documentation/trace/events.txt                     | 1548 +------
  Documentation/trace/ftrace.txt                     |   24 +
- Documentation/trace/histogram.txt                  | 1998 ++++++++
+ Documentation/trace/histogram.txt                  | 1995 ++++++++
  arch/Kconfig                                       |    1 +
  arch/alpha/include/asm/spinlock_types.h            |    4 -
  arch/arm/Kconfig                                   |    5 +-
@@ -287,7 +287,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/srcutiny.h                           |    6 +-
  include/linux/srcutree.h                           |   14 +-
  include/linux/suspend.h                            |    6 +
- include/linux/swait.h                              |    1 +
+ include/linux/swait.h                              |    2 +
  include/linux/swap.h                               |    5 +-
  include/linux/swork.h                              |   24 +
  include/linux/thread_info.h                        |   12 +-
@@ -364,7 +364,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/signal.c                                    |  120 +-
  kernel/softirq.c                                   |  832 +++-
  kernel/stop_machine.c                              |   26 +-
- kernel/time/hrtimer.c                              |  813 +++-
+ kernel/time/hrtimer.c                              |  817 +++-
  kernel/time/itimer.c                               |    1 +
  kernel/time/jiffies.c                              |    7 +-
  kernel/time/ntp.c                                  |   26 +
@@ -377,12 +377,12 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/time/timekeeping.c                          |    6 +-
  kernel/time/timekeeping.h                          |    3 +-
  kernel/time/timer.c                                |  155 +-
- kernel/trace/Kconfig                               |    3 +
+ kernel/trace/Kconfig                               |    5 +-
  kernel/trace/ring_buffer.c                         |  179 +-
  kernel/trace/trace.c                               |  225 +-
  kernel/trace/trace.h                               |   27 +-
  kernel/trace/trace_events.c                        |   33 +-
- kernel/trace/trace_events_hist.c                   | 4796 ++++++++++++++++++--
+ kernel/trace/trace_events_hist.c                   | 4805 ++++++++++++++++++--
  kernel/trace/trace_events_trigger.c                |   53 +-
  kernel/trace/trace_hwlat.c                         |    2 +-
  kernel/trace/trace_kprobe.c                        |   18 +-
@@ -415,7 +415,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/mmu_context.c                                   |    2 +
  mm/page_alloc.c                                    |  151 +-
  mm/slab.h                                          |    4 +
- mm/slub.c                                          |  137 +-
+ mm/slub.c                                          |  138 +-
  mm/swap.c                                          |   74 +-
  mm/truncate.c                                      |    4 +-
  mm/vmalloc.c                                       |   13 +-
@@ -460,7 +460,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../inter-event/trigger-onmax-action-hist.tc       |   48 +
  .../trigger-synthetic-event-createremove.tc        |   54 +
  virt/kvm/arm/arm.c                                 |    6 +-
- 455 files changed, 16929 insertions(+), 5085 deletions(-)
+ 455 files changed, 16944 insertions(+), 5084 deletions(-)
  create mode 100644 Documentation/trace/histogram.txt
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -2102,10 +2102,10 @@ index d4601df6e72e..54213e5c23f6 100644
  	Directory for the Hardware Latency Detector.
 diff --git a/Documentation/trace/histogram.txt b/Documentation/trace/histogram.txt
 new file mode 100644
-index 000000000000..aa450bbebf1f
+index 000000000000..6e05510afc28
 --- /dev/null
 +++ b/Documentation/trace/histogram.txt
-@@ -0,0 +1,1998 @@
+@@ -0,0 +1,1995 @@
 +			     Event Histograms
 +
 +		    Documentation written by Tom Zanussi
@@ -2182,7 +2182,7 @@ index 000000000000..aa450bbebf1f
 +	.syscall    display a syscall id as a system call name
 +	.execname   display a common_pid as a program name
 +	.log2       display log2 value rather than raw number
-+	.usecs      display a $common_timestamp in microseconds
++	.usecs      display a common_timestamp in microseconds
 +
 +  Note that in general the semantics of a given field aren't
 +  interpreted when applying a modifier to it, but there are some
@@ -2288,11 +2288,9 @@ index 000000000000..aa450bbebf1f
 +  they were actual event fields, but aren't really part of the event's
 +  field definition or format file.  They are however available for any
 +  event, and can be used anywhere an actual event field could be.
-+  'Special' field names are always prefixed with a '$' character to
-+  indicate that they're not normal fields (with the exception of
-+  'cpu', for compatibility with existing filter usage):
++  They are:
 +
-+    $common_timestamp      u64 - timestamp (from ring buffer) associated
++    common_timestamp       u64 - timestamp (from ring buffer) associated
 +                                 with the event, in nanoseconds.  May be
 +				 modified by .usecs to have timestamps
 +				 interpreted as microseconds.
@@ -3774,15 +3772,14 @@ index 000000000000..aa450bbebf1f
 +  - Trace events don't have a 'timestamp' associated with them, but
 +    there is an implicit timestamp saved along with an event in the
 +    underlying ftrace ring buffer.  This timestamp is now exposed as a
-+    a synthetic field named '$common_timestamp' which can be used in
-+    histograms as if it were any other event field.  Note that it has
-+    a '$' prefixed to it - this is meant to indicate that it isn't an
-+    actual field in the trace format but rather is a synthesized value
-+    that nonetheless can be used as if it were an actual field.  By
-+    default it is in units of nanoseconds; appending '.usecs' to a
++    a synthetic field named 'common_timestamp' which can be used in
++    histograms as if it were any other event field; it isn't an actual
++    field in the trace format but rather is a synthesized value that
++    nonetheless can be used as if it were an actual field.  By default
++    it is in units of nanoseconds; appending '.usecs' to a
 +    common_timestamp field changes the units to microseconds.
 +
-+A note on inter-event timestamps: If $common_timestamp is used in a
++A note on inter-event timestamps: If common_timestamp is used in a
 +histogram, the trace buffer is automatically switched over to using
 +absolute timestamps and the "global" trace clock, in order to avoid
 +bogus timestamp differences with other clocks that aren't coherent
@@ -3819,7 +3816,7 @@ index 000000000000..aa450bbebf1f
 +creates a variable named 'ts0' for a histogram entry with the key
 +'next_pid':
 +
-+  # echo 'hist:keys=next_pid:vals=$ts0:ts0=$common_timestamp ... >> \
++  # echo 'hist:keys=next_pid:vals=$ts0:ts0=common_timestamp ... >> \
 +	event/trigger
 +
 +The ts0 variable can be accessed by any subsequent event having the
@@ -3829,7 +3826,7 @@ index 000000000000..aa450bbebf1f
 +the '$' sign.  Thus for example, the ts0 variable above would be
 +referenced as '$ts0' in expressions.
 +
-+Because 'vals=' is used, the $common_timestamp variable value above
++Because 'vals=' is used, the common_timestamp variable value above
 +will also be summed as a normal histogram value would (though for a
 +timestamp it makes little sense).
 +
@@ -3841,35 +3838,35 @@ index 000000000000..aa450bbebf1f
 +associated event field will be saved in a variable but won't be summed
 +as a value:
 +
-+  # echo 'hist:keys=next_pid:ts1=$common_timestamp ... >> event/trigger
++  # echo 'hist:keys=next_pid:ts1=common_timestamp ... >> event/trigger
 +
 +Multiple variables can be assigned at the same time.  The below would
 +result in both ts0 and b being created as variables, with both
 +common_timestamp and field1 additionally being summed as values:
 +
-+  # echo 'hist:keys=pid:vals=$ts0,$b:ts0=$common_timestamp,b=field1 ... >> \
++  # echo 'hist:keys=pid:vals=$ts0,$b:ts0=common_timestamp,b=field1 ... >> \
 +	event/trigger
 +
 +Note that variable assignments can appear either preceding or
 +following their use.  The command below behaves identically to the
 +command above:
 +
-+  # echo 'hist:keys=pid:ts0=$common_timestamp,b=field1:vals=$ts0,$b ... >> \
++  # echo 'hist:keys=pid:ts0=common_timestamp,b=field1:vals=$ts0,$b ... >> \
 +	event/trigger
 +
 +Any number of variables not bound to a 'vals=' prefix can also be
 +assigned by simply separating them with colons.  Below is the same
 +thing but without the values being summed in the histogram:
 +
-+  # echo 'hist:keys=pid:ts0=$common_timestamp:b=field1 ... >> event/trigger
++  # echo 'hist:keys=pid:ts0=common_timestamp:b=field1 ... >> event/trigger
 +
 +Variables set as above can be referenced and used in expressions on
 +another event.
 +
 +For example, here's how a latency can be calculated:
 +
-+  # echo 'hist:keys=pid,prio:ts0=$common_timestamp ... >> event1/trigger
-+  # echo 'hist:keys=next_pid:wakeup_lat=$common_timestamp-$ts0 ... >> event2/trigger
++  # echo 'hist:keys=pid,prio:ts0=common_timestamp ... >> event1/trigger
++  # echo 'hist:keys=next_pid:wakeup_lat=common_timestamp-$ts0 ... >> event2/trigger
 +
 +In the first line above, the event's timetamp is saved into the
 +variable ts0.  In the next line, ts0 is subtracted from the second
@@ -4026,7 +4023,7 @@ index 000000000000..aa450bbebf1f
 +    Next, we specify that whenever we see a sched_waking event for a
 +    cyclictest thread, save the timestamp in a 'ts0' variable:
 +
-+    # echo 'hist:keys=$saved_pid:saved_pid=pid:ts0=$common_timestamp.usecs \
++    # echo 'hist:keys=$saved_pid:saved_pid=pid:ts0=common_timestamp.usecs \
 +            if comm=="cyclictest"' >> \
 +	    /sys/kernel/debug/tracing/events/sched/sched_waking/trigger
 +
@@ -4035,7 +4032,7 @@ index 000000000000..aa450bbebf1f
 +    along with another variable and an event field to generate a
 +    wakeup_latency synthetic event:
 +
-+    # echo 'hist:keys=next_pid:wakeup_lat=$common_timestamp.usecs-$ts0:\
++    # echo 'hist:keys=next_pid:wakeup_lat=common_timestamp.usecs-$ts0:\
 +            onmatch(sched.sched_waking).wakeup_latency($wakeup_lat,\
 +	            $saved_pid,next_prio) if next_comm=="cyclictest"' >> \
 +	    /sys/kernel/debug/tracing/events/sched/sched_switch/trigger
@@ -4074,12 +4071,12 @@ index 000000000000..aa450bbebf1f
 +    maximum latency, the values specified in the save() fields are
 +    recoreded:
 +
-+    # echo 'hist:keys=pid:ts0=$common_timestamp.usecs \
++    # echo 'hist:keys=pid:ts0=common_timestamp.usecs \
 +            if comm=="cyclictest"' >> \
 +            /sys/kernel/debug/tracing/events/sched/sched_waking/trigger
 +
 +    # echo 'hist:keys=next_pid:\
-+            wakeup_lat=$common_timestamp.usecs-$ts0:\
++            wakeup_lat=common_timestamp.usecs-$ts0:\
 +            onmax($wakeup_lat).save(next_comm,prev_pid,prev_prio,prev_comm) \
 +            if next_comm=="cyclictest"' >> \
 +            /sys/kernel/debug/tracing/events/sched/sched_switch/trigger
@@ -15749,10 +15746,18 @@ index d60b0f5c38d5..e20d0158cd09 100644
  extern suspend_state_t mem_sleep_current;
  extern suspend_state_t mem_sleep_default;
 diff --git a/include/linux/swait.h b/include/linux/swait.h
-index c98aaf677466..7963f3c03fb0 100644
+index c98aaf677466..853f3e61a9f4 100644
 --- a/include/linux/swait.h
 +++ b/include/linux/swait.h
-@@ -147,6 +147,7 @@ static inline bool swq_has_sleeper(struct swait_queue_head *wq)
+@@ -5,6 +5,7 @@
+ #include <linux/list.h>
+ #include <linux/stddef.h>
+ #include <linux/spinlock.h>
++#include <linux/wait.h>
+ #include <asm/current.h>
+ 
+ /*
+@@ -147,6 +148,7 @@ static inline bool swq_has_sleeper(struct swait_queue_head *wq)
  extern void swake_up(struct swait_queue_head *q);
  extern void swake_up_all(struct swait_queue_head *q);
  extern void swake_up_locked(struct swait_queue_head *q);
@@ -24715,7 +24720,7 @@ index b7591261652d..2aa4ce60811c 100644
  	}
  
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index 88f75f92ef36..2fff8790bc56 100644
+index 88f75f92ef36..c2c344fda487 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
 @@ -59,6 +59,18 @@
@@ -24836,7 +24841,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  /*
   * We switch the timer base to a power-optimized selected CPU target,
-@@ -396,8 +414,17 @@ static inline void debug_hrtimer_init(struct hrtimer *timer)
+@@ -396,8 +414,19 @@ static inline void debug_hrtimer_init(struct hrtimer *timer)
  	debug_object_init(timer, &hrtimer_debug_descr);
  }
  
@@ -24849,13 +24854,15 @@ index 88f75f92ef36..2fff8790bc56 100644
 +	 * Check whether the HRTIMER_MODE_SOFT bit and hrtimer.is_soft
 +	 * match, when a timer is started via__hrtimer_start_range_ns().
 +	 */
++#ifndef CONFIG_PREEMPT_RT_BASE
 +	if (modecheck)
-+		WARN_ON_ONCE((mode & HRTIMER_MODE_SOFT) & !timer->is_soft);
++		WARN_ON_ONCE(!(mode & HRTIMER_MODE_SOFT) ^ !timer->is_soft);
++#endif
 +
  	debug_object_activate(timer, &hrtimer_debug_descr);
  }
  
-@@ -429,8 +456,11 @@ void destroy_hrtimer_on_stack(struct hrtimer *timer)
+@@ -429,8 +458,11 @@ void destroy_hrtimer_on_stack(struct hrtimer *timer)
  EXPORT_SYMBOL_GPL(destroy_hrtimer_on_stack);
  
  #else
@@ -24868,7 +24875,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  static inline void debug_hrtimer_deactivate(struct hrtimer *timer) { }
  #endif
  
-@@ -442,10 +472,12 @@ debug_init(struct hrtimer *timer, clockid_t clockid,
+@@ -442,10 +474,12 @@ debug_init(struct hrtimer *timer, clockid_t clockid,
  	trace_hrtimer_init(timer, clockid, mode);
  }
  
@@ -24884,7 +24891,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  }
  
  static inline void debug_deactivate(struct hrtimer *timer)
-@@ -454,35 +486,43 @@ static inline void debug_deactivate(struct hrtimer *timer)
+@@ -454,35 +488,43 @@ static inline void debug_deactivate(struct hrtimer *timer)
  	trace_hrtimer_cancel(timer);
  }
  
@@ -24944,7 +24951,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  		}
  	}
  	/*
-@@ -494,7 +534,47 @@ static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base)
+@@ -494,7 +536,47 @@ static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base)
  		expires_next = 0;
  	return expires_next;
  }
@@ -24993,7 +25000,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  static inline ktime_t hrtimer_update_base(struct hrtimer_cpu_base *base)
  {
-@@ -502,36 +582,14 @@ static inline ktime_t hrtimer_update_base(struct hrtimer_cpu_base *base)
+@@ -502,36 +584,14 @@ static inline ktime_t hrtimer_update_base(struct hrtimer_cpu_base *base)
  	ktime_t *offs_boot = &base->clock_base[HRTIMER_BASE_BOOTTIME].offset;
  	ktime_t *offs_tai = &base->clock_base[HRTIMER_BASE_TAI].offset;
  
@@ -25035,7 +25042,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  }
  
  /*
-@@ -539,7 +597,8 @@ static inline int hrtimer_is_hres_enabled(void)
+@@ -539,7 +599,8 @@ static inline int hrtimer_is_hres_enabled(void)
   */
  static inline int __hrtimer_hres_active(struct hrtimer_cpu_base *cpu_base)
  {
@@ -25045,7 +25052,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  }
  
  static inline int hrtimer_hres_active(void)
-@@ -557,10 +616,23 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
+@@ -557,10 +618,23 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
  {
  	ktime_t expires_next;
  
@@ -25072,7 +25079,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  	if (skip_equal && expires_next == cpu_base->expires_next)
  		return;
-@@ -568,6 +640,9 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
+@@ -568,6 +642,9 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
  	cpu_base->expires_next = expires_next;
  
  	/*
@@ -25082,7 +25089,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	 * If a hang was detected in the last timer interrupt then we
  	 * leave the hang delay active in the hardware. We want the
  	 * system to make progress. That also prevents the following
-@@ -581,81 +656,38 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
+@@ -581,81 +658,38 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
  	 * set. So we'd effectivly block all timers until the T2 event
  	 * fires.
  	 */
@@ -25183,7 +25190,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  }
  
  /*
-@@ -667,7 +699,7 @@ static void retrigger_next_event(void *arg)
+@@ -667,7 +701,7 @@ static void retrigger_next_event(void *arg)
  {
  	struct hrtimer_cpu_base *base = this_cpu_ptr(&hrtimer_bases);
  
@@ -25192,7 +25199,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  		return;
  
  	raw_spin_lock(&base->lock);
-@@ -696,6 +728,29 @@ static void hrtimer_switch_to_hres(void)
+@@ -696,6 +730,29 @@ static void hrtimer_switch_to_hres(void)
  	retrigger_next_event(NULL);
  }
  
@@ -25222,7 +25229,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  static void clock_was_set_work(struct work_struct *work)
  {
  	clock_was_set();
-@@ -711,25 +766,96 @@ void clock_was_set_delayed(void)
+@@ -711,25 +768,98 @@ void clock_was_set_delayed(void)
  {
  	schedule_work(&hrtimer_work);
  }
@@ -25269,16 +25276,18 @@ index 88f75f92ef36..2fff8790bc56 100644
 +		expires = 0;
 +
 +	if (timer->is_soft) {
-+		if (cpu_base->softirq_activated)
++		struct hrtimer_cpu_base *timer_cpu_base = base->cpu_base;
++
++		if (timer_cpu_base->softirq_activated)
 +			return;
 +
-+		if (!ktime_before(expires, cpu_base->softirq_expires_next))
++		if (!ktime_before(expires, timer_cpu_base->softirq_expires_next))
 +			return;
 +
-+		cpu_base->softirq_next_timer = timer;
-+		cpu_base->softirq_expires_next = expires;
++		timer_cpu_base->softirq_next_timer = timer;
++		timer_cpu_base->softirq_expires_next = expires;
 +
-+		if (!ktime_before(expires, cpu_base->expires_next) ||
++		if (!ktime_before(expires, timer_cpu_base->expires_next) ||
 +		    !reprogram)
 +			return;
 +	}
@@ -25329,7 +25338,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  /*
   * Clock realtime was set
   *
-@@ -828,6 +954,33 @@ u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
+@@ -828,6 +958,33 @@ u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
  }
  EXPORT_SYMBOL_GPL(hrtimer_forward);
  
@@ -25363,7 +25372,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  /*
   * enqueue_hrtimer - internal function to (re)start a timer
   *
-@@ -837,9 +990,11 @@ EXPORT_SYMBOL_GPL(hrtimer_forward);
+@@ -837,9 +994,11 @@ EXPORT_SYMBOL_GPL(hrtimer_forward);
   * Returns 1 when the new timer is the leftmost timer in the tree.
   */
  static int enqueue_hrtimer(struct hrtimer *timer,
@@ -25377,7 +25386,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  	base->cpu_base->active_bases |= 1 << base->index;
  
-@@ -872,7 +1027,6 @@ static void __remove_hrtimer(struct hrtimer *timer,
+@@ -872,7 +1031,6 @@ static void __remove_hrtimer(struct hrtimer *timer,
  	if (!timerqueue_del(&base->active, &timer->node))
  		cpu_base->active_bases &= ~(1 << base->index);
  
@@ -25385,7 +25394,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	/*
  	 * Note: If reprogram is false we do not update
  	 * cpu_base->next_timer. This happens when we remove the first
-@@ -883,7 +1037,6 @@ static void __remove_hrtimer(struct hrtimer *timer,
+@@ -883,7 +1041,6 @@ static void __remove_hrtimer(struct hrtimer *timer,
  	 */
  	if (reprogram && timer == cpu_base->next_timer)
  		hrtimer_force_reprogram(cpu_base, 1);
@@ -25393,7 +25402,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  }
  
  /*
-@@ -932,22 +1085,36 @@ static inline ktime_t hrtimer_update_lowres(struct hrtimer *timer, ktime_t tim,
+@@ -932,22 +1089,36 @@ static inline ktime_t hrtimer_update_lowres(struct hrtimer *timer, ktime_t tim,
  	return tim;
  }
  
@@ -25444,7 +25453,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  	/* Remove an active timer from the queue: */
  	remove_hrtimer(timer, base, true);
-@@ -962,21 +1129,28 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
+@@ -962,21 +1133,28 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
  	/* Switch the timer base, if necessary: */
  	new_base = switch_hrtimer_base(timer, base, mode & HRTIMER_MODE_PINNED);
  
@@ -25487,7 +25496,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	unlock_hrtimer_base(timer, &flags);
  }
  EXPORT_SYMBOL_GPL(hrtimer_start_range_ns);
-@@ -1033,7 +1207,7 @@ int hrtimer_cancel(struct hrtimer *timer)
+@@ -1033,7 +1211,7 @@ int hrtimer_cancel(struct hrtimer *timer)
  
  		if (ret >= 0)
  			return ret;
@@ -25496,7 +25505,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	}
  }
  EXPORT_SYMBOL_GPL(hrtimer_cancel);
-@@ -1074,7 +1248,7 @@ u64 hrtimer_get_next_event(void)
+@@ -1074,7 +1252,7 @@ u64 hrtimer_get_next_event(void)
  	raw_spin_lock_irqsave(&cpu_base->lock, flags);
  
  	if (!__hrtimer_hres_active(cpu_base))
@@ -25505,7 +25514,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  	raw_spin_unlock_irqrestore(&cpu_base->lock, flags);
  
-@@ -1097,17 +1271,31 @@ static inline int hrtimer_clockid_to_base(clockid_t clock_id)
+@@ -1097,17 +1275,31 @@ static inline int hrtimer_clockid_to_base(clockid_t clock_id)
  static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
  			   enum hrtimer_mode mode)
  {
@@ -25540,7 +25549,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	timer->base = &cpu_base->clock_base[base];
  	timerqueue_init(&timer->node);
  }
-@@ -1116,7 +1304,13 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
+@@ -1116,7 +1308,13 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
   * hrtimer_init - initialize a timer to the given clock
   * @timer:	the timer to be initialized
   * @clock_id:	the clock to be used
@@ -25555,7 +25564,7 @@ index 88f75f92ef36..2fff8790bc56 100644
   */
  void hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
  		  enum hrtimer_mode mode)
-@@ -1135,19 +1329,19 @@ EXPORT_SYMBOL_GPL(hrtimer_init);
+@@ -1135,19 +1333,19 @@ EXPORT_SYMBOL_GPL(hrtimer_init);
   */
  bool hrtimer_active(const struct hrtimer *timer)
  {
@@ -25581,7 +25590,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  	return false;
  }
-@@ -1173,7 +1367,8 @@ EXPORT_SYMBOL_GPL(hrtimer_active);
+@@ -1173,7 +1371,8 @@ EXPORT_SYMBOL_GPL(hrtimer_active);
  
  static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  			  struct hrtimer_clock_base *base,
@@ -25591,7 +25600,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  {
  	enum hrtimer_restart (*fn)(struct hrtimer *);
  	int restart;
-@@ -1181,16 +1376,16 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
+@@ -1181,16 +1380,16 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  	lockdep_assert_held(&cpu_base->lock);
  
  	debug_deactivate(timer);
@@ -25611,7 +25620,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  	__remove_hrtimer(timer, base, HRTIMER_STATE_INACTIVE, 0);
  	fn = timer->function;
-@@ -1204,15 +1399,15 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
+@@ -1204,15 +1403,15 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  		timer->is_rel = false;
  
  	/*
@@ -25632,7 +25641,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  	/*
  	 * Note: We clear the running state after enqueue_hrtimer and
-@@ -1225,33 +1420,32 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
+@@ -1225,33 +1424,32 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  	 */
  	if (restart != HRTIMER_NORESTART &&
  	    !(timer->state & HRTIMER_STATE_ENQUEUED))
@@ -25677,7 +25686,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  		basenow = ktime_add(now, base->offset);
  
  		while ((node = timerqueue_getnext(&base->active))) {
-@@ -1274,11 +1468,29 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
+@@ -1274,11 +1472,29 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
  			if (basenow < hrtimer_get_softexpires_tv64(timer))
  				break;
  
@@ -25708,7 +25717,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  #ifdef CONFIG_HIGH_RES_TIMERS
  
  /*
-@@ -1289,13 +1501,14 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1289,13 +1505,14 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  {
  	struct hrtimer_cpu_base *cpu_base = this_cpu_ptr(&hrtimer_bases);
  	ktime_t expires_next, now, entry_time, delta;
@@ -25724,7 +25733,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	entry_time = now = hrtimer_update_base(cpu_base);
  retry:
  	cpu_base->in_hrtirq = 1;
-@@ -1308,17 +1521,23 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1308,17 +1525,23 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	 */
  	cpu_base->expires_next = KTIME_MAX;
  
@@ -25751,7 +25760,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  
  	/* Reprogramming necessary ? */
  	if (!tick_program_event(expires_next, 0)) {
-@@ -1339,7 +1558,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1339,7 +1562,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	 * Acquire base lock for updating the offsets and retrieving
  	 * the current time.
  	 */
@@ -25760,7 +25769,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	now = hrtimer_update_base(cpu_base);
  	cpu_base->nr_retries++;
  	if (++retries < 3)
-@@ -1352,7 +1571,8 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1352,7 +1575,8 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	 */
  	cpu_base->nr_hangs++;
  	cpu_base->hang_detected = 1;
@@ -25770,7 +25779,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	delta = ktime_sub(now, entry_time);
  	if ((unsigned int)delta > cpu_base->max_hang_time)
  		cpu_base->max_hang_time = (unsigned int) delta;
-@@ -1394,6 +1614,7 @@ static inline void __hrtimer_peek_ahead_timers(void) { }
+@@ -1394,6 +1618,7 @@ static inline void __hrtimer_peek_ahead_timers(void) { }
  void hrtimer_run_queues(void)
  {
  	struct hrtimer_cpu_base *cpu_base = this_cpu_ptr(&hrtimer_bases);
@@ -25778,7 +25787,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	ktime_t now;
  
  	if (__hrtimer_hres_active(cpu_base))
-@@ -1411,10 +1632,17 @@ void hrtimer_run_queues(void)
+@@ -1411,10 +1636,17 @@ void hrtimer_run_queues(void)
  		return;
  	}
  
@@ -25799,7 +25808,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  }
  
  /*
-@@ -1433,13 +1661,65 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
+@@ -1433,13 +1665,65 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
  	return HRTIMER_NORESTART;
  }
  
@@ -25866,7 +25875,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  int nanosleep_copyout(struct restart_block *restart, struct timespec64 *ts)
  {
  	switch(restart->nanosleep.type) {
-@@ -1459,14 +1739,13 @@ int nanosleep_copyout(struct restart_block *restart, struct timespec64 *ts)
+@@ -1459,14 +1743,13 @@ int nanosleep_copyout(struct restart_block *restart, struct timespec64 *ts)
  	return -ERESTART_RESTARTBLOCK;
  }
  
@@ -25884,7 +25893,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  		hrtimer_start_expires(&t->timer, mode);
  
  		if (likely(t->task))
-@@ -1501,17 +1780,18 @@ static long __sched hrtimer_nanosleep_restart(struct restart_block *restart)
+@@ -1501,17 +1784,18 @@ static long __sched hrtimer_nanosleep_restart(struct restart_block *restart)
  	struct hrtimer_sleeper t;
  	int ret;
  
@@ -25909,7 +25918,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  {
  	struct restart_block *restart;
  	struct hrtimer_sleeper t;
-@@ -1522,9 +1802,9 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
+@@ -1522,9 +1806,9 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
  	if (dl_task(current) || rt_task(current))
  		slack = 0;
  
@@ -25921,7 +25930,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	if (ret != -ERESTART_RESTARTBLOCK)
  		goto out;
  
-@@ -1543,6 +1823,12 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
+@@ -1543,6 +1827,12 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
  	return ret;
  }
  
@@ -25934,7 +25943,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  SYSCALL_DEFINE2(nanosleep, struct timespec __user *, rqtp,
  		struct timespec __user *, rmtp)
  {
-@@ -1578,6 +1864,26 @@ COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
+@@ -1578,6 +1868,26 @@ COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
  }
  #endif
  
@@ -25961,7 +25970,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  /*
   * Functions related to boot-time initialization:
   */
-@@ -1592,7 +1898,12 @@ int hrtimers_prepare_cpu(unsigned int cpu)
+@@ -1592,7 +1902,12 @@ int hrtimers_prepare_cpu(unsigned int cpu)
  	}
  
  	cpu_base->cpu = cpu;
@@ -25975,7 +25984,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	return 0;
  }
  
-@@ -1624,7 +1935,8 @@ static void migrate_hrtimer_list(struct hrtimer_clock_base *old_base,
+@@ -1624,7 +1939,8 @@ static void migrate_hrtimer_list(struct hrtimer_clock_base *old_base,
  		 * sort out already expired timers and reprogram the
  		 * event device.
  		 */
@@ -25985,7 +25994,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	}
  }
  
-@@ -1651,6 +1963,12 @@ int hrtimers_dead_cpu(unsigned int scpu)
+@@ -1651,6 +1967,12 @@ int hrtimers_dead_cpu(unsigned int scpu)
  				     &new_base->clock_base[i]);
  	}
  
@@ -25998,7 +26007,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	raw_spin_unlock(&old_base->lock);
  	raw_spin_unlock(&new_base->lock);
  
-@@ -1665,18 +1983,19 @@ int hrtimers_dead_cpu(unsigned int scpu)
+@@ -1665,18 +1987,19 @@ int hrtimers_dead_cpu(unsigned int scpu)
  void __init hrtimers_init(void)
  {
  	hrtimers_prepare_cpu(smp_processor_id());
@@ -26021,7 +26030,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  {
  	struct hrtimer_sleeper t;
  
-@@ -1697,11 +2016,9 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
+@@ -1697,11 +2020,9 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
  		return -EINTR;
  	}
  
@@ -26034,7 +26043,7 @@ index 88f75f92ef36..2fff8790bc56 100644
  	hrtimer_start_expires(&t.timer, mode);
  
  	if (likely(t.task))
-@@ -1719,7 +2036,7 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
+@@ -1719,7 +2040,7 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
   * schedule_hrtimeout_range - sleep until timeout
   * @expires:	timeout value (ktime_t)
   * @delta:	slack in expires timeout (ktime_t)
@@ -26043,7 +26052,7 @@ index 88f75f92ef36..2fff8790bc56 100644
   *
   * Make the current task sleep until the given expiry time has
   * elapsed. The routine will return immediately unless
-@@ -1758,7 +2075,7 @@ EXPORT_SYMBOL_GPL(schedule_hrtimeout_range);
+@@ -1758,7 +2079,7 @@ EXPORT_SYMBOL_GPL(schedule_hrtimeout_range);
  /**
   * schedule_hrtimeout - sleep until timeout
   * @expires:	timeout value (ktime_t)
@@ -26981,19 +26990,21 @@ index f2674a056c26..40ac38728b7a 100644
  }
  
 diff --git a/kernel/trace/Kconfig b/kernel/trace/Kconfig
-index 434c840e2d82..ad55ddecc1e9 100644
+index 434c840e2d82..cd71733512ed 100644
 --- a/kernel/trace/Kconfig
 +++ b/kernel/trace/Kconfig
-@@ -585,6 +585,9 @@ config HIST_TRIGGERS
+@@ -585,7 +585,10 @@ config HIST_TRIGGERS
  	  event activity as an initial guide for further investigation
  	  using more advanced tools.
  
+-	  See Documentation/trace/events.txt.
 +	  Inter-event tracing of quantities such as latencies is also
 +	  supported using hist triggers under this option.
 +
- 	  See Documentation/trace/events.txt.
++	  See Documentation/trace/histogram.txt.
  	  If in doubt, say N.
  
+ config MMIOTRACE_TEST
 diff --git a/kernel/trace/ring_buffer.c b/kernel/trace/ring_buffer.c
 index 81279c6602ff..8c862ea52171 100644
 --- a/kernel/trace/ring_buffer.c
@@ -27365,7 +27376,7 @@ index 81279c6602ff..8c862ea52171 100644
  			ring_buffer_normalize_time_stamp(buffer,
  							 cpu_buffer->cpu, ts);
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index 752e5daf0896..2ff4998b50dd 100644
+index 752e5daf0896..9e80a80a876e 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
 @@ -1170,6 +1170,14 @@ static struct {
@@ -27480,7 +27491,7 @@ index 752e5daf0896..2ff4998b50dd 100644
 -	"\t            .log2       display log2 value rather than raw number\n\n"
 +	"\t            .syscall    display a syscall id as a syscall name\n"
 +	"\t            .log2       display log2 value rather than raw number\n"
-+	"\t            .usecs      display a $common_timestamp in microseconds\n\n"
++	"\t            .usecs      display a common_timestamp in microseconds\n\n"
  	"\t    The 'pause' parameter can be used to pause an existing hist\n"
  	"\t    trigger or to start a hist trigger but not log any events\n"
  	"\t    until told to do so.  'continue' can be used to start or\n"
@@ -27978,7 +27989,7 @@ index 87468398b9ed..9c8fc6ab1393 100644
  }
  
 diff --git a/kernel/trace/trace_events_hist.c b/kernel/trace/trace_events_hist.c
-index 1c21d0e2a145..eb821cd223b1 100644
+index 1c21d0e2a145..e244f26d4761 100644
 --- a/kernel/trace/trace_events_hist.c
 +++ b/kernel/trace/trace_events_hist.c
 @@ -20,13 +20,39 @@
@@ -28196,7 +28207,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  };
  
  struct hist_trigger_attrs {
-@@ -127,298 +242,3563 @@ struct hist_trigger_attrs {
+@@ -127,298 +242,3574 @@ struct hist_trigger_attrs {
  	char		*vals_str;
  	char		*sort_key_str;
  	char		*name;
@@ -28247,8 +28258,8 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	struct action_data		*actions[HIST_ACTIONS_MAX];
 +	unsigned int			n_actions;
 +
-+	struct hist_field		*synth_var_refs[SYNTH_FIELDS_MAX];
-+	unsigned int			n_synth_var_refs;
++	struct hist_field               *synth_var_refs[SYNTH_FIELDS_MAX];
++	unsigned int                    n_synth_var_refs;
 +	struct field_var		*field_vars[SYNTH_FIELDS_MAX];
 +	unsigned int			n_field_vars;
 +	unsigned int			n_field_var_str;
@@ -28650,7 +28661,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		fmt = "%lu";
 +	else if (strcmp(type, "pid_t") == 0)
 +		fmt = "%d";
-+	else if (strchr(type, '[') != NULL)
++	else if (synth_field_is_string(type))
 +		fmt = "%s";
 +
 +	return fmt;
@@ -28752,7 +28763,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +			strncpy(str_field, str_val, STR_VAR_LEN_MAX);
 +			n_u64 += STR_VAR_LEN_MAX / sizeof(u64);
 +		} else {
-+			entry->fields[i] = var_ref_vals[var_ref_idx + i];
++			entry->fields[n_u64] = var_ref_vals[var_ref_idx + i];
 +			n_u64++;
 +		}
 +	}
@@ -28904,7 +28915,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	if (!field->name) {
 +		ret = -ENOMEM;
 +		goto free;
-+	}
+ 	}
 + out:
 +	return field;
 + free:
@@ -28912,7 +28923,8 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	field = ERR_PTR(ret);
 +	goto out;
 +}
-+
+ 
+-	if (WARN_ON_ONCE(!field))
 +static void free_synth_tracepoint(struct tracepoint *tp)
 +{
 +	if (!tp)
@@ -29108,6 +29120,20 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	struct hist_trigger_data *hist_data;
 +};
 +
++static void add_or_delete_synth_event(struct synth_event *event, int delete)
++{
++	if (delete)
++		free_synth_event(event);
++	else {
++		mutex_lock(&synth_event_mutex);
++		if (!find_synth_event(event->name))
++			list_add(&event->list, &synth_event_list);
++		else
++			free_synth_event(event);
++		mutex_unlock(&synth_event_mutex);
++	}
++}
++
 +static int create_synth_event(int argc, char **argv)
 +{
 +	struct synth_field *field, *fields[SYNTH_FIELDS_MAX];
@@ -29191,23 +29217,10 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	if (event) {
 +		if (delete_event) {
 +			ret = unregister_synth_event(event);
-+			if (!ret)
-+				free_synth_event(event);
-+			else {
-+				mutex_lock(&synth_event_mutex);
-+				if (!find_synth_event(event->name))
-+					list_add(&event->list, &synth_event_list);
-+				mutex_unlock(&synth_event_mutex);
-+			}
++			add_or_delete_synth_event(event, !ret);
 +		} else {
 +			ret = register_synth_event(event);
-+			if (!ret) {
-+				mutex_lock(&synth_event_mutex);
-+				if (!find_synth_event(event->name))
-+					list_add(&event->list, &synth_event_list);
-+				mutex_unlock(&synth_event_mutex);
-+			} else
-+				free_synth_event(event);
++			add_or_delete_synth_event(event, ret);
 +		}
 +	}
 +
@@ -29239,10 +29252,8 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		}
 +	}
 +
-+	list_for_each_entry_safe(event, e, &synth_event_list, list) {
-+		list_del(&event->list);
-+		list_add(&event->list, &release_events);
-+	}
++	list_for_each_entry_safe(event, e, &synth_event_list, list)
++		list_move(&event->list, &release_events);
 +
 +	mutex_unlock(&synth_event_mutex);
 +
@@ -29250,15 +29261,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		list_del(&event->list);
 +
 +		ret = unregister_synth_event(event);
-+		if (ret == 0)
-+			free_synth_event(event);
-+		else {
-+			err = ret;
-+			mutex_lock(&synth_event_mutex);
-+			if (!find_synth_event(event->name))
-+				list_add(&event->list, &synth_event_list);
-+			mutex_unlock(&synth_event_mutex);
-+		}
++		add_or_delete_synth_event(event, !ret);
 +	}
 +
 +	if (err)
@@ -29433,6 +29436,14 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +			return found;
 +	}
 +
++	for (i = 0; i < hist_data->n_synth_var_refs; i++) {
++		hist_field = hist_data->synth_var_refs[i];
++		found = check_field_for_var_refs(hist_data, hist_field,
++						 var_data, var_idx, 0);
++		if (found)
++			return found;
++	}
++
 +	return found;
 +}
 +
@@ -29443,11 +29454,9 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	struct hist_field *found = NULL;
 +	struct hist_var_data *var_data;
 +
-+	found = find_var_ref(hist_data, hist_data, var_idx);
-+	if (found)
-+		return found;
-+
 +	list_for_each_entry(var_data, &tr->hist_vars, list) {
++		if (var_data->hist_data == hist_data)
++			continue;
 +		found = find_var_ref(var_data->hist_data, hist_data, var_idx);
 +		if (found)
 +			break;
@@ -29815,7 +29824,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		 field->flags & HIST_FIELD_FL_ALIAS)
 +		field_name = hist_field_name(field->operands[0], ++level);
 +	else if (field->flags & HIST_FIELD_FL_TIMESTAMP)
-+		field_name = "$common_timestamp";
++		field_name = "common_timestamp";
 +	else if (field->flags & HIST_FIELD_FL_CPU)
 +		field_name = "cpu";
 +	else if (field->flags & HIST_FIELD_FL_EXPR ||
@@ -30197,6 +30206,8 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		strcat(expr, subexpr);
 +		strcat(expr, ")");
 +
++		kfree(subexpr);
++
 +		return expr;
 +	}
 +
@@ -30347,7 +30358,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	if (flags & HIST_FIELD_FL_CPU) {
 +		hist_field->fn = hist_field_cpu;
 +		hist_field->size = sizeof(int);
-+		hist_field->type = kstrdup("int", GFP_KERNEL);
++		hist_field->type = kstrdup("unsigned int", GFP_KERNEL);
 +		if (!hist_field->type)
 +			goto free;
 +		goto out;
@@ -30475,18 +30486,9 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	return ref_field;
 +}
 +
-+static bool is_common_field(char *var_name)
-+{
-+	if (strncmp(var_name, "$common_timestamp", strlen("$common_timestamp")) == 0)
-+		return true;
-+
-+	return false;
-+}
-+
 +static bool is_var_ref(char *var_name)
 +{
-+	if (!var_name || strlen(var_name) < 2 || var_name[0] != '$' ||
-+	    is_common_field(var_name))
++	if (!var_name || strlen(var_name) < 2 || var_name[0] != '$')
 +		return false;
 +
 +	return true;
@@ -30513,8 +30515,24 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +}
 +
 +static char *local_field_var_ref(struct hist_trigger_data *hist_data,
++				 char *system, char *event_name,
 +				 char *var_name)
 +{
++	struct trace_event_call *call;
++
++	if (system && event_name) {
++		call = hist_data->event_file->event_call;
++
++		if (strcmp(system, call->class->system) != 0)
++			return NULL;
++
++		if (strcmp(event_name, trace_event_name(call)) != 0)
++			return NULL;
++	}
++
++	if (!!system != !!event_name)
++		return NULL;
++
 +	if (!is_var_ref(var_name))
 +		return NULL;
 +
@@ -30579,7 +30597,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		}
 +	}
 +
-+	if (strcmp(field_name, "$common_timestamp") == 0) {
++	if (strcmp(field_name, "common_timestamp") == 0) {
 +		*flags |= HIST_FIELD_FL_TIMESTAMP;
 +		hist_data->enable_timestamps = true;
 +		if (*flags & HIST_FIELD_FL_TIMESTAMP_USECS)
@@ -30648,7 +30666,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		}
 +	}
 +
-+	s = local_field_var_ref(hist_data, ref_var);
++	s = local_field_var_ref(hist_data, ref_system, ref_event, ref_var);
 +	if (!s) {
 +		hist_field = parse_var_ref(hist_data, ref_system, ref_event, ref_var);
 +		if (hist_field) {
@@ -31066,7 +31084,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	/* See if a synthetic field variable has already been created */
 +	event_var = find_synthetic_field_var(target_hist_data, subsys_name,
 +					     event_name, field_name);
-+	if (event_var && !IS_ERR(event_var))
++	if (!IS_ERR_OR_NULL(event_var))
 +		return event_var;
 +
 +	var_hist = kzalloc(sizeof(*var_hist), GFP_KERNEL);
@@ -31130,8 +31148,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	/* If we can't find the variable, something went wrong */
 +	event_var = find_synthetic_field_var(target_hist_data, subsys_name,
 +					     event_name, field_name);
-+	if (!event_var || IS_ERR(event_var)) {
-+		kfree(cmd);
++	if (IS_ERR_OR_NULL(event_var)) {
 +		kfree(var_hist->cmd);
 +		kfree(var_hist);
 +		hist_err_event("onmatch: Couldn't find synthetic variable: ",
@@ -31419,13 +31436,11 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +static int onmax_create(struct hist_trigger_data *hist_data,
 +			struct action_data *data)
 +{
-+	struct trace_event_call *call = hist_data->event_file->event_call;
 +	struct trace_event_file *file = hist_data->event_file;
 +	struct hist_field *var_field, *ref_field, *max_var;
 +	unsigned int var_ref_idx = hist_data->n_var_refs;
 +	struct field_var *field_var;
 +	char *onmax_var_str, *param;
-+	const char *event_name;
 +	unsigned long flags;
 +	unsigned int i;
 +	int ret = 0;
@@ -31437,7 +31452,6 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	}
 +	onmax_var_str++;
 +
-+	event_name = trace_event_name(call);
 +	var_field = find_target_event_var(hist_data, NULL, NULL, onmax_var_str);
 +	if (!var_field) {
 +		hist_err("onmax: Couldn't find onmax variable: ", onmax_var_str);
@@ -31464,7 +31478,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	if (IS_ERR(max_var)) {
 +		hist_err("onmax: Couldn't create onmax variable: ", "max");
 +		ret = PTR_ERR(max_var);
-+		goto out;
+ 		goto out;
 +	}
 +	data->onmax.max_var = max_var;
 +
@@ -31538,8 +31552,11 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		return ERR_PTR(-ENOMEM);
 +
 +	onmax_var_str = strsep(&str, ")");
-+	if (!onmax_var_str || !str)
-+		return ERR_PTR(-EINVAL);
++	if (!onmax_var_str || !str) {
++		ret = -EINVAL;
++		goto free;
++	}
++
 +	data->onmax.var_str = kstrdup(onmax_var_str, GFP_KERNEL);
 +	if (!data->onmax.var_str) {
 +		ret = -ENOMEM;
@@ -31757,6 +31774,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		mutex_unlock(&synth_event_mutex);
 +		return -EINVAL;
 +	}
++	event->ref++;
 +	mutex_unlock(&synth_event_mutex);
 +
 +	var_ref_idx = hist_data->n_var_refs;
@@ -31767,7 +31785,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		p = param = kstrdup(data->params[i], GFP_KERNEL);
 +		if (!param) {
 +			ret = -ENOMEM;
-+			goto out;
++			goto err;
 +		}
 +
 +		system = strsep(&param, ".");
@@ -31779,7 +31797,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +			if (!param) {
 +				kfree(p);
 +				ret = -EINVAL;
-+				goto out;
++				goto err;
 +			}
 +		}
 +
@@ -31795,7 +31813,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		if (!hist_field) {
 +			kfree(p);
 +			ret = -EINVAL;
-+			goto out;
++			goto err;
 +		}
 +
 +		if (check_synth_field(event, hist_field, field_pos) == 0) {
@@ -31803,7 +31821,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +			if (!var_ref) {
 +				kfree(p);
 +				ret = -ENOMEM;
-+				goto out;
++				goto err;
 +			}
 +
 +			save_synth_var_ref(hist_data, var_ref);
@@ -31816,21 +31834,26 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +			       system, event_name, param);
 +		kfree(p);
 +		ret = -EINVAL;
-+		goto out;
++		goto err;
 +	}
 +
 +	if (field_pos != event->n_fields) {
 +		hist_err("onmatch: Param count doesn't match synthetic event field count: ", event->name);
 +		ret = -EINVAL;
-+		goto out;
++		goto err;
 +	}
 +
 +	data->fn = action_trace;
 +	data->onmatch.synth_event = event;
 +	data->onmatch.var_ref_idx = var_ref_idx;
-+	event->ref++;
 + out:
 +	return ret;
++ err:
++	mutex_lock(&synth_event_mutex);
++	event->ref--;
++	mutex_unlock(&synth_event_mutex);
++
++	goto out;
 +}
 +
 +static struct action_data *onmatch_parse(struct trace_array *tr, char *str)
@@ -31866,11 +31889,8 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	if (!data->onmatch.match_event) {
 +		ret = -ENOMEM;
 +		goto free;
- 	}
++	}
  
--	if (WARN_ON_ONCE(!field))
--		goto out;
--
 -	if (is_string_field(field)) {
 -		flags |= HIST_FIELD_FL_STRING;
 +	data->onmatch.match_event_system = kstrdup(match_event_system, GFP_KERNEL);
@@ -31953,7 +31973,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	if (WARN_ON(hist_data->n_vals > TRACING_MAP_VALS_MAX))
  		return -EINVAL;
-@@ -426,54 +3806,71 @@ static int create_hitcount_val(struct hist_trigger_data *hist_data)
+@@ -426,54 +3817,71 @@ static int create_hitcount_val(struct hist_trigger_data *hist_data)
  	return 0;
  }
  
@@ -32054,7 +32074,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	int ret;
  
  	ret = create_hitcount_val(hist_data);
-@@ -493,12 +3890,15 @@ static int create_val_fields(struct hist_trigger_data *hist_data,
+@@ -493,12 +3901,15 @@ static int create_val_fields(struct hist_trigger_data *hist_data,
  		field_str = strsep(&fields_str, ",");
  		if (!field_str)
  			break;
@@ -32070,7 +32090,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	if (fields_str && (strcmp(fields_str, "hitcount") != 0))
  		ret = -EINVAL;
   out:
-@@ -511,12 +3911,13 @@ static int create_key_field(struct hist_trigger_data *hist_data,
+@@ -511,12 +3922,13 @@ static int create_key_field(struct hist_trigger_data *hist_data,
  			    struct trace_event_file *file,
  			    char *field_str)
  {
@@ -32086,7 +32106,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  		return -EINVAL;
  
  	flags |= HIST_FIELD_FL_KEY;
-@@ -524,57 +3925,40 @@ static int create_key_field(struct hist_trigger_data *hist_data,
+@@ -524,57 +3936,40 @@ static int create_key_field(struct hist_trigger_data *hist_data,
  	if (strcmp(field_str, "stacktrace") == 0) {
  		flags |= HIST_FIELD_FL_STACKTRACE;
  		key_size = sizeof(unsigned long) * HIST_STACKTRACE_DEPTH;
@@ -32158,7 +32178,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	if (WARN_ON(hist_data->n_keys > TRACING_MAP_KEYS_MAX))
  		return -EINVAL;
-@@ -618,21 +4002,113 @@ static int create_key_fields(struct hist_trigger_data *hist_data,
+@@ -618,21 +4013,113 @@ static int create_key_fields(struct hist_trigger_data *hist_data,
  	return ret;
  }
  
@@ -32274,7 +32294,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	return ret;
  }
  
-@@ -653,10 +4129,9 @@ static int is_descending(const char *str)
+@@ -653,10 +4140,9 @@ static int is_descending(const char *str)
  static int create_sort_keys(struct hist_trigger_data *hist_data)
  {
  	char *fields_str = hist_data->attrs->sort_key_str;
@@ -32286,7 +32306,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	hist_data->n_sort_keys = 1; /* we always have at least one, hitcount */
  
-@@ -670,7 +4145,9 @@ static int create_sort_keys(struct hist_trigger_data *hist_data)
+@@ -670,7 +4156,9 @@ static int create_sort_keys(struct hist_trigger_data *hist_data)
  	}
  
  	for (i = 0; i < TRACING_MAP_SORT_KEYS_MAX; i++) {
@@ -32296,7 +32316,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  		sort_key = &hist_data->sort_keys[i];
  
-@@ -702,34 +4179,210 @@ static int create_sort_keys(struct hist_trigger_data *hist_data)
+@@ -702,34 +4190,210 @@ static int create_sort_keys(struct hist_trigger_data *hist_data)
  			continue;
  		}
  
@@ -32527,7 +32547,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	kfree(hist_data);
  }
  
-@@ -749,6 +4402,9 @@ static int create_tracing_map_fields(struct hist_trigger_data *hist_data)
+@@ -749,6 +4413,9 @@ static int create_tracing_map_fields(struct hist_trigger_data *hist_data)
  
  			if (hist_field->flags & HIST_FIELD_FL_STACKTRACE)
  				cmp_fn = tracing_map_cmp_none;
@@ -32537,7 +32557,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  			else if (is_string_field(field))
  				cmp_fn = tracing_map_cmp_string;
  			else
-@@ -757,36 +4413,29 @@ static int create_tracing_map_fields(struct hist_trigger_data *hist_data)
+@@ -757,36 +4424,29 @@ static int create_tracing_map_fields(struct hist_trigger_data *hist_data)
  			idx = tracing_map_add_key_field(map,
  							hist_field->offset,
  							cmp_fn);
@@ -32552,7 +32572,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 -
 -	return 0;
 -}
- 
+-
 -static bool need_tracing_map_ops(struct hist_trigger_data *hist_data)
 -{
 -	struct hist_field *key_field;
@@ -32560,7 +32580,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 -
 -	for_each_hist_key_field(i, hist_data) {
 -		key_field = hist_data->fields[i];
--
+ 
 -		if (key_field->flags & HIST_FIELD_FL_EXECNAME)
 -			return true;
 +		if (hist_field->flags & HIST_FIELD_FL_VAR) {
@@ -32585,7 +32605,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  {
  	const struct tracing_map_ops *map_ops = NULL;
  	struct hist_trigger_data *hist_data;
-@@ -797,6 +4446,12 @@ create_hist_data(unsigned int map_bits,
+@@ -797,6 +4457,12 @@ create_hist_data(unsigned int map_bits,
  		return ERR_PTR(-ENOMEM);
  
  	hist_data->attrs = attrs;
@@ -32598,7 +32618,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	ret = create_hist_fields(hist_data, file);
  	if (ret)
-@@ -806,8 +4461,7 @@ create_hist_data(unsigned int map_bits,
+@@ -806,8 +4472,7 @@ create_hist_data(unsigned int map_bits,
  	if (ret)
  		goto free;
  
@@ -32608,7 +32628,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	hist_data->map = tracing_map_create(map_bits, hist_data->key_size,
  					    map_ops, hist_data);
-@@ -820,12 +4474,6 @@ create_hist_data(unsigned int map_bits,
+@@ -820,12 +4485,6 @@ create_hist_data(unsigned int map_bits,
  	ret = create_tracing_map_fields(hist_data);
  	if (ret)
  		goto free;
@@ -32621,7 +32641,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
   out:
  	return hist_data;
   free:
-@@ -839,18 +4487,39 @@ create_hist_data(unsigned int map_bits,
+@@ -839,18 +4498,39 @@ create_hist_data(unsigned int map_bits,
  }
  
  static void hist_trigger_elt_update(struct hist_trigger_data *hist_data,
@@ -32665,7 +32685,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  }
  
  static inline void add_to_key(char *compound_key, void *key,
-@@ -877,15 +4546,31 @@ static inline void add_to_key(char *compound_key, void *key,
+@@ -877,15 +4557,31 @@ static inline void add_to_key(char *compound_key, void *key,
  	memcpy(compound_key + key_field->offset, key, size);
  }
  
@@ -32699,7 +32719,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	u64 field_contents;
  	void *key = NULL;
  	unsigned int i;
-@@ -906,7 +4591,7 @@ static void event_hist_trigger(struct event_trigger_data *data, void *rec)
+@@ -906,7 +4602,7 @@ static void event_hist_trigger(struct event_trigger_data *data, void *rec)
  
  			key = entries;
  		} else {
@@ -32708,7 +32728,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  			if (key_field->flags & HIST_FIELD_FL_STRING) {
  				key = (void *)(unsigned long)field_contents;
  				use_compound_key = true;
-@@ -921,9 +4606,18 @@ static void event_hist_trigger(struct event_trigger_data *data, void *rec)
+@@ -921,9 +4617,18 @@ static void event_hist_trigger(struct event_trigger_data *data, void *rec)
  	if (use_compound_key)
  		key = compound_key;
  
@@ -32729,7 +32749,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  }
  
  static void hist_trigger_stacktrace_print(struct seq_file *m,
-@@ -952,6 +4646,7 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -952,6 +4657,7 @@ hist_trigger_entry_print(struct seq_file *m,
  	struct hist_field *key_field;
  	char str[KSYM_SYMBOL_LEN];
  	bool multiline = false;
@@ -32737,7 +32757,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	unsigned int i;
  	u64 uval;
  
-@@ -963,26 +4658,33 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -963,26 +4669,33 @@ hist_trigger_entry_print(struct seq_file *m,
  		if (i > hist_data->n_vals)
  			seq_puts(m, ", ");
  
@@ -32780,7 +32800,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  		} else if (key_field->flags & HIST_FIELD_FL_SYSCALL) {
  			const char *syscall_name;
  
-@@ -991,8 +4693,8 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -991,8 +4704,8 @@ hist_trigger_entry_print(struct seq_file *m,
  			if (!syscall_name)
  				syscall_name = "unknown_syscall";
  
@@ -32791,7 +32811,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  		} else if (key_field->flags & HIST_FIELD_FL_STACKTRACE) {
  			seq_puts(m, "stacktrace:\n");
  			hist_trigger_stacktrace_print(m,
-@@ -1000,15 +4702,14 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -1000,15 +4713,14 @@ hist_trigger_entry_print(struct seq_file *m,
  						      HIST_STACKTRACE_DEPTH);
  			multiline = true;
  		} else if (key_field->flags & HIST_FIELD_FL_LOG2) {
@@ -32810,7 +32830,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  		}
  	}
  
-@@ -1021,17 +4722,23 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -1021,17 +4733,23 @@ hist_trigger_entry_print(struct seq_file *m,
  		   tracing_map_read_sum(elt, HITCOUNT_IDX));
  
  	for (i = 1; i < hist_data->n_vals; i++) {
@@ -32838,7 +32858,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	seq_puts(m, "\n");
  }
  
-@@ -1102,6 +4809,11 @@ static int hist_show(struct seq_file *m, void *v)
+@@ -1102,6 +4820,11 @@ static int hist_show(struct seq_file *m, void *v)
  			hist_trigger_show(m, data, n++);
  	}
  
@@ -32850,7 +32870,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
   out_unlock:
  	mutex_unlock(&event_mutex);
  
-@@ -1120,29 +4832,24 @@ const struct file_operations event_hist_fops = {
+@@ -1120,29 +4843,24 @@ const struct file_operations event_hist_fops = {
  	.release = single_release,
  };
  
@@ -32883,7 +32903,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		seq_printf(m, "%s=", hist_field->var.name);
 +
 +	if (hist_field->flags & HIST_FIELD_FL_TIMESTAMP)
-+		seq_puts(m, "$common_timestamp");
++		seq_puts(m, "common_timestamp");
 +	else if (hist_field->flags & HIST_FIELD_FL_CPU)
 +		seq_puts(m, "cpu");
 +	else if (field_name) {
@@ -32896,7 +32916,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	if (hist_field->flags) {
  		const char *flags_str = get_hist_field_flags(hist_field);
  
-@@ -1156,7 +4863,8 @@ static int event_hist_trigger_print(struct seq_file *m,
+@@ -1156,7 +4874,8 @@ static int event_hist_trigger_print(struct seq_file *m,
  				    struct event_trigger_data *data)
  {
  	struct hist_trigger_data *hist_data = data->private_data;
@@ -32906,7 +32926,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	unsigned int i;
  
  	seq_puts(m, "hist:");
-@@ -1167,25 +4875,47 @@ static int event_hist_trigger_print(struct seq_file *m,
+@@ -1167,25 +4886,47 @@ static int event_hist_trigger_print(struct seq_file *m,
  	seq_puts(m, "keys=");
  
  	for_each_hist_key_field(i, hist_data) {
@@ -32958,7 +32978,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  		}
  	}
  
-@@ -1193,28 +4923,36 @@ static int event_hist_trigger_print(struct seq_file *m,
+@@ -1193,28 +4934,36 @@ static int event_hist_trigger_print(struct seq_file *m,
  
  	for (i = 0; i < hist_data->n_sort_keys; i++) {
  		struct tracing_map_sort_key *sort_key;
@@ -33002,7 +33022,29 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	if (data->filter_str)
  		seq_printf(m, " if %s", data->filter_str);
-@@ -1254,7 +4992,11 @@ static void event_hist_trigger_free(struct event_trigger_ops *ops,
+@@ -1242,6 +4991,21 @@ static int event_hist_trigger_init(struct event_trigger_ops *ops,
+ 	return 0;
+ }
+ 
++static void unregister_field_var_hists(struct hist_trigger_data *hist_data)
++{
++	struct trace_event_file *file;
++	unsigned int i;
++	char *cmd;
++	int ret;
++
++	for (i = 0; i < hist_data->n_field_var_hists; i++) {
++		file = hist_data->field_var_hists[i]->hist_data->event_file;
++		cmd = hist_data->field_var_hists[i]->cmd;
++		ret = event_hist_trigger_func(&trigger_hist_cmd, file,
++					      "!hist", "hist", cmd);
++	}
++}
++
+ static void event_hist_trigger_free(struct event_trigger_ops *ops,
+ 				    struct event_trigger_data *data)
+ {
+@@ -1254,7 +5018,13 @@ static void event_hist_trigger_free(struct event_trigger_ops *ops,
  	if (!data->ref) {
  		if (data->name)
  			del_named_trigger(data);
@@ -33011,10 +33053,12 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +
 +		remove_hist_vars(hist_data);
 +
++		unregister_field_var_hists(hist_data);
++
  		destroy_hist_data(hist_data);
  	}
  }
-@@ -1381,6 +5123,15 @@ static bool hist_trigger_match(struct event_trigger_data *data,
+@@ -1381,6 +5151,15 @@ static bool hist_trigger_match(struct event_trigger_data *data,
  			return false;
  		if (key_field->offset != key_field_test->offset)
  			return false;
@@ -33030,7 +33074,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	}
  
  	for (i = 0; i < hist_data->n_sort_keys; i++) {
-@@ -1412,6 +5163,7 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1412,6 +5191,7 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  		if (named_data) {
  			if (!hist_trigger_match(data, named_data, named_data,
  						true)) {
@@ -33038,7 +33082,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  				ret = -EINVAL;
  				goto out;
  			}
-@@ -1431,13 +5183,16 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1431,13 +5211,16 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  				test->paused = false;
  			else if (hist_data->attrs->clear)
  				hist_clear(test);
@@ -33056,7 +33100,15 @@ index 1c21d0e2a145..eb821cd223b1 100644
  		ret = -ENOENT;
  		goto out;
  	}
-@@ -1458,8 +5213,29 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1446,7 +5229,6 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+ 		data->paused = true;
+ 
+ 	if (named_data) {
+-		destroy_hist_data(data->private_data);
+ 		data->private_data = named_data->private_data;
+ 		set_named_trigger_data(data, named_data);
+ 		data->ops = &event_hist_trigger_named_ops;
+@@ -1458,8 +5240,32 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  			goto out;
  	}
  
@@ -33073,6 +33125,9 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +		tracing_set_time_stamp_abs(file->tr, true);
 +	}
 +
++	if (named_data)
++		destroy_hist_data(hist_data);
++
  	ret++;
 + out:
 +	return ret;
@@ -33087,7 +33142,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	update_cond_flag(file);
  
-@@ -1468,10 +5244,70 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1468,10 +5274,55 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  		update_cond_flag(file);
  		ret--;
  	}
@@ -33141,33 +33196,10 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +	return false;
 +}
 +
-+static void unregister_field_var_hists(struct hist_trigger_data *hist_data)
-+{
-+	struct trace_event_file *file;
-+	unsigned int i;
-+	char *cmd;
-+	int ret;
-+
-+	for (i = 0; i < hist_data->n_field_var_hists; i++) {
-+		file = hist_data->field_var_hists[i]->hist_data->event_file;
-+		cmd = hist_data->field_var_hists[i]->cmd;
-+		ret = event_hist_trigger_func(&trigger_hist_cmd, file,
-+					      "!hist", "hist", cmd);
-+	}
-+}
-+
  static void hist_unregister_trigger(char *glob, struct event_trigger_ops *ops,
  				    struct event_trigger_data *data,
  				    struct trace_event_file *file)
-@@ -1487,6 +5323,7 @@ static void hist_unregister_trigger(char *glob, struct event_trigger_ops *ops,
- 		if (test->cmd_ops->trigger_type == ETT_EVENT_HIST) {
- 			if (!hist_trigger_match(data, test, named_data, false))
- 				continue;
-+			unregister_field_var_hists(test->private_data);
- 			unregistered = true;
- 			list_del_rcu(&test->list);
- 			trace_event_trigger_enable_disable(file, 0);
-@@ -1497,19 +5334,58 @@ static void hist_unregister_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1497,17 +5348,55 @@ static void hist_unregister_trigger(char *glob, struct event_trigger_ops *ops,
  
  	if (unregistered && test->ops->free)
  		test->ops->free(test->ops, test);
@@ -33207,7 +33239,6 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	list_for_each_entry_safe(test, n, &file->triggers, list) {
  		if (test->cmd_ops->trigger_type == ETT_EVENT_HIST) {
 +			hist_data = test->private_data;
-+			unregister_field_var_hists(hist_data);
  			list_del_rcu(&test->list);
  			trace_event_trigger_enable_disable(file, 0);
 +
@@ -33219,14 +33250,12 @@ index 1c21d0e2a145..eb821cd223b1 100644
 +			mutex_unlock(&synth_event_mutex);
 +
  			update_cond_flag(file);
- 			if (test->ops->free)
- 				test->ops->free(test->ops, test);
 +			if (hist_data->enable_timestamps)
 +				tracing_set_time_stamp_abs(file->tr, false);
+ 			if (test->ops->free)
+ 				test->ops->free(test->ops, test);
  		}
- 	}
- }
-@@ -1523,16 +5399,54 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1523,16 +5412,54 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  	struct hist_trigger_attrs *attrs;
  	struct event_trigger_ops *trigger_ops;
  	struct hist_trigger_data *hist_data;
@@ -33286,7 +33315,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	attrs = parse_hist_trigger_attrs(trigger);
  	if (IS_ERR(attrs))
-@@ -1541,7 +5455,7 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1541,7 +5468,7 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  	if (attrs->map_bits)
  		hist_trigger_bits = attrs->map_bits;
  
@@ -33295,7 +33324,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	if (IS_ERR(hist_data)) {
  		destroy_hist_trigger_attrs(attrs);
  		return PTR_ERR(hist_data);
-@@ -1549,10 +5463,11 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1549,10 +5476,11 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  
  	trigger_ops = cmd_ops->get_trigger_ops(cmd, trigger);
  
@@ -33309,7 +33338,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  
  	trigger_data->count = -1;
  	trigger_data->ops = trigger_ops;
-@@ -1570,8 +5485,24 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1570,8 +5498,24 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  			goto out_free;
  	}
  
@@ -33335,7 +33364,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  		ret = 0;
  		goto out_free;
  	}
-@@ -1588,17 +5519,50 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1588,14 +5532,47 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  		goto out_free;
  	} else if (ret < 0)
  		goto out_free;
@@ -33378,16 +33407,12 @@ index 1c21d0e2a145..eb821cd223b1 100644
  	if (cmd_ops->set_filter)
  		cmd_ops->set_filter(NULL, trigger_data, NULL);
  
--	kfree(trigger_data);
 +	remove_hist_vars(hist_data);
- 
-+	kfree(trigger_data);
- 	destroy_hist_data(hist_data);
 +
- 	goto out;
- }
+ 	kfree(trigger_data);
  
-@@ -1625,7 +5589,8 @@ __init int register_trigger_hist_cmd(void)
+ 	destroy_hist_data(hist_data);
+@@ -1625,7 +5602,8 @@ __init int register_trigger_hist_cmd(void)
  }
  
  static void
@@ -33397,7 +33422,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  {
  	struct enable_trigger_data *enable_data = data->private_data;
  	struct event_trigger_data *test;
-@@ -1641,7 +5606,8 @@ hist_enable_trigger(struct event_trigger_data *data, void *rec)
+@@ -1641,7 +5619,8 @@ hist_enable_trigger(struct event_trigger_data *data, void *rec)
  }
  
  static void
@@ -33407,7 +33432,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  {
  	if (!data->count)
  		return;
-@@ -1649,7 +5615,7 @@ hist_enable_count_trigger(struct event_trigger_data *data, void *rec)
+@@ -1649,7 +5628,7 @@ hist_enable_count_trigger(struct event_trigger_data *data, void *rec)
  	if (data->count != -1)
  		(data->count)--;
  
@@ -33416,7 +33441,7 @@ index 1c21d0e2a145..eb821cd223b1 100644
  }
  
  static struct event_trigger_ops hist_enable_trigger_ops = {
-@@ -1754,3 +5720,31 @@ __init int register_trigger_hist_enable_disable_cmds(void)
+@@ -1754,3 +5733,31 @@ __init int register_trigger_hist_enable_disable_cmds(void)
  
  	return ret;
  }
@@ -35616,7 +35641,7 @@ index 59db3223a5d6..22aa3ddbd87b 100644
  unsigned int nr_free_highpages (void)
  {
 diff --git a/mm/memcontrol.c b/mm/memcontrol.c
-index 661f046ad318..27549bf47139 100644
+index 53f7c919b916..6cb4b8c11a42 100644
 --- a/mm/memcontrol.c
 +++ b/mm/memcontrol.c
 @@ -69,6 +69,7 @@
@@ -35734,7 +35759,7 @@ index 661f046ad318..27549bf47139 100644
  	memcg_check_events(memcg, page);
  
  	if (!mem_cgroup_is_root(memcg))
- 		css_put(&memcg->css);
+ 		css_put_many(&memcg->css, nr_entries);
 +	local_unlock_irqrestore(event_lock, flags);
  }
  
@@ -36133,7 +36158,7 @@ index 028cdc7df67e..e03658901324 100644
  #ifdef CONFIG_SLAB
  	struct list_head slabs_partial;	/* partial list first, better asm code */
 diff --git a/mm/slub.c b/mm/slub.c
-index 8e1c027a30f4..8eff8449f67a 100644
+index 8e1c027a30f4..013b1af99f87 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
 @@ -1180,7 +1180,7 @@ static noinline int free_debug_processing(
@@ -36473,7 +36498,15 @@ index 8e1c027a30f4..8eff8449f67a 100644
  
  	/* Clear memory outside IRQ disabled fastpath loop */
  	if (unlikely(flags & __GFP_ZERO)) {
-@@ -3309,7 +3373,7 @@ static void
+@@ -3176,6 +3240,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
+ 	return i;
+ error:
+ 	local_irq_enable();
++	free_delayed(&to_free);
+ 	slab_post_alloc_hook(s, flags, i, p);
+ 	__kmem_cache_free_bulk(s, i, p);
+ 	return 0;
+@@ -3309,7 +3374,7 @@ static void
  init_kmem_cache_node(struct kmem_cache_node *n)
  {
  	n->nr_partial = 0;
@@ -36482,7 +36515,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  	INIT_LIST_HEAD(&n->partial);
  #ifdef CONFIG_SLUB_DEBUG
  	atomic_long_set(&n->nr_slabs, 0);
-@@ -3663,6 +3727,10 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
+@@ -3663,6 +3728,10 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
  							const char *text)
  {
  #ifdef CONFIG_SLUB_DEBUG
@@ -36493,7 +36526,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  	void *addr = page_address(page);
  	void *p;
  	unsigned long *map = kzalloc(BITS_TO_LONGS(page->objects) *
-@@ -3683,6 +3751,7 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
+@@ -3683,6 +3752,7 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
  	slab_unlock(page);
  	kfree(map);
  #endif
@@ -36501,7 +36534,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  }
  
  /*
-@@ -3696,7 +3765,7 @@ static void free_partial(struct kmem_cache *s, struct kmem_cache_node *n)
+@@ -3696,7 +3766,7 @@ static void free_partial(struct kmem_cache *s, struct kmem_cache_node *n)
  	struct page *page, *h;
  
  	BUG_ON(irqs_disabled());
@@ -36510,7 +36543,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  	list_for_each_entry_safe(page, h, &n->partial, lru) {
  		if (!page->inuse) {
  			remove_partial(n, page);
-@@ -3706,7 +3775,7 @@ static void free_partial(struct kmem_cache *s, struct kmem_cache_node *n)
+@@ -3706,7 +3776,7 @@ static void free_partial(struct kmem_cache *s, struct kmem_cache_node *n)
  			"Objects remaining in %s on __kmem_cache_shutdown()");
  		}
  	}
@@ -36519,7 +36552,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  
  	list_for_each_entry_safe(page, h, &discard, lru)
  		discard_slab(s, page);
-@@ -3950,7 +4019,7 @@ int __kmem_cache_shrink(struct kmem_cache *s)
+@@ -3950,7 +4020,7 @@ int __kmem_cache_shrink(struct kmem_cache *s)
  		for (i = 0; i < SHRINK_PROMOTE_MAX; i++)
  			INIT_LIST_HEAD(promote + i);
  
@@ -36528,7 +36561,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  
  		/*
  		 * Build lists of slabs to discard or promote.
-@@ -3981,7 +4050,7 @@ int __kmem_cache_shrink(struct kmem_cache *s)
+@@ -3981,7 +4051,7 @@ int __kmem_cache_shrink(struct kmem_cache *s)
  		for (i = SHRINK_PROMOTE_MAX - 1; i >= 0; i--)
  			list_splice(promote + i, &n->partial);
  
@@ -36537,7 +36570,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  
  		/* Release empty slabs */
  		list_for_each_entry_safe(page, t, &discard, lru)
-@@ -4194,6 +4263,12 @@ void __init kmem_cache_init(void)
+@@ -4194,6 +4264,12 @@ void __init kmem_cache_init(void)
  {
  	static __initdata struct kmem_cache boot_kmem_cache,
  		boot_kmem_cache_node;
@@ -36550,7 +36583,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  
  	if (debug_guardpage_minorder())
  		slub_max_order = 0;
-@@ -4402,7 +4477,7 @@ static int validate_slab_node(struct kmem_cache *s,
+@@ -4402,7 +4478,7 @@ static int validate_slab_node(struct kmem_cache *s,
  	struct page *page;
  	unsigned long flags;
  
@@ -36559,7 +36592,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  
  	list_for_each_entry(page, &n->partial, lru) {
  		validate_slab_slab(s, page, map);
-@@ -4424,7 +4499,7 @@ static int validate_slab_node(struct kmem_cache *s,
+@@ -4424,7 +4500,7 @@ static int validate_slab_node(struct kmem_cache *s,
  		       s->name, count, atomic_long_read(&n->nr_slabs));
  
  out:
@@ -36568,7 +36601,7 @@ index 8e1c027a30f4..8eff8449f67a 100644
  	return count;
  }
  
-@@ -4612,12 +4687,12 @@ static int list_locations(struct kmem_cache *s, char *buf,
+@@ -4612,12 +4688,12 @@ static int list_locations(struct kmem_cache *s, char *buf,
  		if (!atomic_long_read(&n->nr_slabs))
  			continue;
  
@@ -38930,7 +38963,7 @@ index f2019b37370d..17afa65c0b41 100644
  # no events, no triggers, no filters, no function filters,
 diff --git a/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-extended-error-support.tc b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-extended-error-support.tc
 new file mode 100644
-index 000000000000..f7691ffcef9c
+index 000000000000..786dce7e48be
 --- /dev/null
 +++ b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-extended-error-support.tc
 @@ -0,0 +1,39 @@
@@ -38964,8 +38997,8 @@ index 000000000000..f7691ffcef9c
 +do_reset
 +
 +echo "Test extended error support"
-+echo 'hist:keys=pid:ts0=$common_timestamp.usecs if comm=="ping"' > events/sched/sched_wakeup/trigger
-+echo 'hist:keys=pid:ts0=$common_timestamp.usecs if comm=="ping"' >> events/sched/sched_wakeup/trigger &>/dev/null
++echo 'hist:keys=pid:ts0=common_timestamp.usecs if comm=="ping"' > events/sched/sched_wakeup/trigger
++echo 'hist:keys=pid:ts0=common_timestamp.usecs if comm=="ping"' >> events/sched/sched_wakeup/trigger &>/dev/null
 +if ! grep -q "ERROR:" events/sched/sched_wakeup/hist; then
 +    fail "Failed to generate extended error in histogram"
 +fi
@@ -38975,7 +39008,7 @@ index 000000000000..f7691ffcef9c
 +exit 0
 diff --git a/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-field-variable-support.tc b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-field-variable-support.tc
 new file mode 100644
-index 000000000000..46657334ba9a
+index 000000000000..7fd5b4a8f060
 --- /dev/null
 +++ b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-field-variable-support.tc
 @@ -0,0 +1,54 @@
@@ -39011,8 +39044,8 @@ index 000000000000..46657334ba9a
 +echo "Test field variable support"
 +
 +echo 'wakeup_latency u64 lat; pid_t pid; int prio; char comm[16]' > synthetic_events
-+echo 'hist:keys=comm:ts0=$common_timestamp.usecs if comm=="ping"' > events/sched/sched_waking/trigger
-+echo 'hist:keys=next_comm:wakeup_lat=$common_timestamp.usecs-$ts0:onmatch(sched.sched_waking).wakeup_latency($wakeup_lat,next_pid,sched.sched_waking.prio,next_comm) if next_comm=="ping"' > events/sched/sched_switch/trigger
++echo 'hist:keys=comm:ts0=common_timestamp.usecs if comm=="ping"' > events/sched/sched_waking/trigger
++echo 'hist:keys=next_comm:wakeup_lat=common_timestamp.usecs-$ts0:onmatch(sched.sched_waking).wakeup_latency($wakeup_lat,next_pid,sched.sched_waking.prio,next_comm) if next_comm=="ping"' > events/sched/sched_switch/trigger
 +echo 'hist:keys=pid,prio,comm:vals=lat:sort=pid,prio' > events/synthetic/wakeup_latency/trigger
 +
 +ping localhost -c 3
@@ -39024,7 +39057,7 @@ index 000000000000..46657334ba9a
 +    fail "Failed to create histogram with field variable"
 +fi
 +
-+echo '!hist:keys=next_comm:wakeup_lat=$common_timestamp.usecs-$ts0:onmatch(sched.sched_waking).wakeup_latency($wakeup_lat,next_pid,sched.sched_waking.prio,next_comm) if next_comm=="ping"' >> events/sched/sched_switch/trigger
++echo '!hist:keys=next_comm:wakeup_lat=common_timestamp.usecs-$ts0:onmatch(sched.sched_waking).wakeup_latency($wakeup_lat,next_pid,sched.sched_waking.prio,next_comm) if next_comm=="ping"' >> events/sched/sched_switch/trigger
 +
 +if grep -q "synthetic_prio=prio" events/sched/sched_waking/hist; then
 +    fail "Failed to remove histogram with field variable"
@@ -39035,7 +39068,7 @@ index 000000000000..46657334ba9a
 +exit 0
 diff --git a/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-inter-event-combined-hist.tc b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-inter-event-combined-hist.tc
 new file mode 100644
-index 000000000000..8d00064aa0b6
+index 000000000000..c93dbe38b5df
 --- /dev/null
 +++ b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-inter-event-combined-hist.tc
 @@ -0,0 +1,58 @@
@@ -39077,13 +39110,13 @@ index 000000000000..8d00064aa0b6
 +
 +echo "Test combined histogram"
 +
-+echo 'hist:keys=pid:ts0=$common_timestamp.usecs if comm=="ping"' > events/sched/sched_waking/trigger
-+echo 'hist:keys=pid:waking_lat=$common_timestamp.usecs-$ts0:onmatch(sched.sched_waking).waking_latency($waking_lat,pid) if comm=="ping"' > events/sched/sched_wakeup/trigger
++echo 'hist:keys=pid:ts0=common_timestamp.usecs if comm=="ping"' > events/sched/sched_waking/trigger
++echo 'hist:keys=pid:waking_lat=common_timestamp.usecs-$ts0:onmatch(sched.sched_waking).waking_latency($waking_lat,pid) if comm=="ping"' > events/sched/sched_wakeup/trigger
 +echo 'hist:keys=pid,lat:sort=pid,lat' > events/synthetic/waking_latency/trigger
 +
 +echo 'wakeup_latency u64 lat pid_t pid' >> synthetic_events
-+echo 'hist:keys=pid:ts1=$common_timestamp.usecs if comm=="ping"' >> events/sched/sched_wakeup/trigger
-+echo 'hist:keys=next_pid:wakeup_lat=$common_timestamp.usecs-$ts1:onmatch(sched.sched_wakeup).wakeup_latency($wakeup_lat,next_pid) if next_comm=="ping"' > events/sched/sched_switch/trigger
++echo 'hist:keys=pid:ts1=common_timestamp.usecs if comm=="ping"' >> events/sched/sched_wakeup/trigger
++echo 'hist:keys=next_pid:wakeup_lat=common_timestamp.usecs-$ts1:onmatch(sched.sched_wakeup).wakeup_latency($wakeup_lat,next_pid) if next_comm=="ping"' > events/sched/sched_switch/trigger
 +
 +echo 'waking+wakeup_latency u64 lat; pid_t pid' >> synthetic_events
 +echo 'hist:keys=pid,lat:sort=pid,lat:ww_lat=$waking_lat+$wakeup_lat:onmatch(synthetic.wakeup_latency).waking+wakeup_latency($ww_lat,pid)' >> events/synthetic/wakeup_latency/trigger
@@ -39099,7 +39132,7 @@ index 000000000000..8d00064aa0b6
 +exit 0
 diff --git a/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmatch-action-hist.tc b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmatch-action-hist.tc
 new file mode 100644
-index 000000000000..ac13051d9cf8
+index 000000000000..e84e7d048566
 --- /dev/null
 +++ b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmatch-action-hist.tc
 @@ -0,0 +1,50 @@
@@ -39142,8 +39175,8 @@ index 000000000000..ac13051d9cf8
 +echo "Test create histogram for synthetic event"
 +echo "Test histogram variables,simple expression support and onmatch action"
 +
-+echo 'hist:keys=pid:ts0=$common_timestamp.usecs if comm=="ping"' > events/sched/sched_wakeup/trigger
-+echo 'hist:keys=next_pid:wakeup_lat=$common_timestamp.usecs-$ts0:onmatch(sched.sched_wakeup).wakeup_latency($wakeup_lat,next_pid,next_comm) if next_comm=="ping"' > events/sched/sched_switch/trigger
++echo 'hist:keys=pid:ts0=common_timestamp.usecs if comm=="ping"' > events/sched/sched_wakeup/trigger
++echo 'hist:keys=next_pid:wakeup_lat=common_timestamp.usecs-$ts0:onmatch(sched.sched_wakeup).wakeup_latency($wakeup_lat,next_pid,next_comm) if next_comm=="ping"' > events/sched/sched_switch/trigger
 +echo 'hist:keys=comm,pid,lat:wakeup_lat=lat:sort=lat' > events/synthetic/wakeup_latency/trigger
 +ping localhost -c 5
 +if ! grep -q "ping" events/synthetic/wakeup_latency/hist; then
@@ -39155,7 +39188,7 @@ index 000000000000..ac13051d9cf8
 +exit 0
 diff --git a/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmatch-onmax-action-hist.tc b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmatch-onmax-action-hist.tc
 new file mode 100644
-index 000000000000..39bf19d5cc2c
+index 000000000000..7907d8aacde3
 --- /dev/null
 +++ b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmatch-onmax-action-hist.tc
 @@ -0,0 +1,50 @@
@@ -39198,8 +39231,8 @@ index 000000000000..39bf19d5cc2c
 +echo "Test create histogram for synthetic event"
 +echo "Test histogram variables,simple expression support and onmatch-onmax action"
 +
-+echo 'hist:keys=pid:ts0=$common_timestamp.usecs if comm=="ping"' > events/sched/sched_wakeup/trigger
-+echo 'hist:keys=next_pid:wakeup_lat=$common_timestamp.usecs-$ts0:onmatch(sched.sched_wakeup).wakeup_latency($wakeup_lat,next_pid,next_comm):onmax($wakeup_lat).save(next_comm,prev_pid,prev_prio,prev_comm) if next_comm=="ping"' >> events/sched/sched_switch/trigger
++echo 'hist:keys=pid:ts0=common_timestamp.usecs if comm=="ping"' > events/sched/sched_wakeup/trigger
++echo 'hist:keys=next_pid:wakeup_lat=common_timestamp.usecs-$ts0:onmatch(sched.sched_wakeup).wakeup_latency($wakeup_lat,next_pid,next_comm):onmax($wakeup_lat).save(next_comm,prev_pid,prev_prio,prev_comm) if next_comm=="ping"' >> events/sched/sched_switch/trigger
 +echo 'hist:keys=comm,pid,lat:wakeup_lat=lat:sort=lat' > events/synthetic/wakeup_latency/trigger
 +ping localhost -c 5
 +if [ ! grep -q "ping" events/synthetic/wakeup_latency/hist -o ! grep -q "max:" events/sched/sched_switch/hist]; then
@@ -39211,7 +39244,7 @@ index 000000000000..39bf19d5cc2c
 +exit 0
 diff --git a/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmax-action-hist.tc b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmax-action-hist.tc
 new file mode 100644
-index 000000000000..65f55a53126e
+index 000000000000..38b7ed6242b2
 --- /dev/null
 +++ b/tools/testing/selftests/ftrace/test.d/trigger/inter-event/trigger-onmax-action-hist.tc
 @@ -0,0 +1,48 @@
@@ -39253,8 +39286,8 @@ index 000000000000..65f55a53126e
 +
 +echo "Test onmax action"
 +
-+echo 'hist:keys=pid:ts0=$common_timestamp.usecs if comm=="ping"' >> events/sched/sched_waking/trigger
-+echo 'hist:keys=next_pid:wakeup_lat=$common_timestamp.usecs-$ts0:onmax($wakeup_lat).save(next_comm,prev_pid,prev_prio,prev_comm) if next_comm=="ping"' >> events/sched/sched_switch/trigger
++echo 'hist:keys=pid:ts0=common_timestamp.usecs if comm=="ping"' >> events/sched/sched_waking/trigger
++echo 'hist:keys=next_pid:wakeup_lat=common_timestamp.usecs-$ts0:onmax($wakeup_lat).save(next_comm,prev_pid,prev_prio,prev_comm) if next_comm=="ping"' >> events/sched/sched_switch/trigger
 +ping localhost -c 3
 +if ! grep -q "max:" events/sched/sched_switch/hist; then
 +    fail "Failed to create onmax action inter-event histogram"
