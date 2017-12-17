@@ -191,7 +191,7 @@ rt () {
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
 #4.14.4
-#	${git_bin} revert --no-edit d983b6251c5535b5c5eb02ce48bf8eeb7417ef65
+	#${git_bin} revert --no-edit d983b6251c5535b5c5eb02ce48bf8eeb7417ef65
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
