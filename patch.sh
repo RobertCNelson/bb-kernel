@@ -196,7 +196,7 @@ rt () {
 	echo "dir: rt"
 
 #	v4.4.103
-	${git_bin} revert --no-edit cb1831a83e54cd3269a2420fce81c4fd8ae6f667
+#	${git_bin} revert --no-edit cb1831a83e54cd3269a2420fce81c4fd8ae6f667
 
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 	#regenerate="enable"
