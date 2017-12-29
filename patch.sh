@@ -291,6 +291,7 @@ reverts () {
 }
 
 drivers () {
+	dir 'drivers/btrfs'
 	dir 'drivers/pwm'
 	dir 'drivers/spi'
 	dir 'drivers/tsl2550'
