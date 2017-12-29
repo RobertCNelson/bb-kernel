@@ -39,6 +39,7 @@ BUILD=${build_prefix}2
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
+
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
