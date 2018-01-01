@@ -30,7 +30,7 @@ toolchain="gcc_linaro_gnueabihf_7"
 
 #Kernel
 KERNEL_REL=4.15
-KERNEL_TAG=${KERNEL_REL}-rc5
+KERNEL_TAG=${KERNEL_REL}-rc6
 kernel_rt=".X-rtY"
 #Kernel Build
 BUILD=${build_prefix}2
@@ -38,7 +38,6 @@ BUILD=${build_prefix}2
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
-
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
