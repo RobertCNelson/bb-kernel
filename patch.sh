@@ -190,17 +190,51 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-#4.14.10
-	${git_bin} revert --no-edit 88990591f0b0e7d4aedf0255fc26a09a2f899212
-
-#4.14.9
-	${git_bin} revert --no-edit 16e1626e54f835cb009de675d1f6b5a0ff9183d9
-
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
+
+		cd ../
+		if [ ! -d ./linux-rt-devel ] ; then
+			${git_bin} clone -b linux-4.14.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
+		else
+			rm -rf ./linux-rt-devel || true
+			${git_bin} clone -b linux-4.14.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
+		fi
+
+		cd ./KERNEL/
+
+		exit 2
+
+		#https://raphaelhertzog.com/2012/08/08/how-to-use-quilt-to-manage-patches-in-debian-packages/
+
+		#export QUILT_PATCHES=`pwd`/linux-rt-devel/patches
+		#export QUILT_REFRESH_ARGS="-p ab --no-timestamps --no-index"
+
+		#quilt push -a
+
+quilt delete -r 0001-timer-Use-deferrable-base-independent-of-base-nohz_a.patch
+quilt delete -r 0003-timer-Invoke-timer_start_debug-where-it-makes-sense.patch
+quilt delete -r crypto-mcryptd-protect-the-per-CPU-queue-with-a-lock.patch
+quilt delete -r 0003-tracing-Exclude-generic-fields-from-histograms.patch
+quilt delete -r localversion.patch
+
+#fix...
+#quilt push -f
+#quilt refresh
+
+#final...
+#quilt pop -a
+#quilt push -a
+#git add .
+#git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
+		#quilt pop
+		#quilt delete -r localversion.patch
+		#quilt pop -a
+		#while quilt push; do quilt refresh; done
+
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
-#		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
-		xzcat patch-${rt_patch}.patch.xz | patch -p1 || true
+		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
+#		xzcat patch-${rt_patch}.patch.xz | patch -p1 || true
 		rm -f arch/x86/kernel/asm-offsets.c.orig
 		rm -f arch/x86/kernel/asm-offsets.c.rej
 		rm -f patch-${rt_patch}.patch.xz
@@ -210,6 +244,10 @@ rt () {
 		${git_bin} format-patch -1 -o ../patches/rt/
 
 		exit 2
+	fi
+
+	if [ -d ../linux-rt-devel ] ; then
+		rm -rf ../linux-rt-devel || true
 	fi
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
