@@ -192,11 +192,55 @@ rt_cleanup () {
 
 rt () {
 	echo "dir: rt"
-
-#v4.9.66
-	#${git_bin} revert --no-edit 1c37ff78298a6b6063649123356a312e1cce12ca
-
 	rt_patch="${KERNEL_REL}${kernel_rt}"
+
+	#un-matched kernel
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+
+		cd ../
+		if [ ! -d ./linux-rt-devel ] ; then
+			${git_bin} clone -b linux-4.9.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
+		else
+			rm -rf ./linux-rt-devel || true
+			${git_bin} clone -b linux-4.9.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
+		fi
+
+		cd ./KERNEL/
+
+		exit 2
+
+		#https://raphaelhertzog.com/2012/08/08/how-to-use-quilt-to-manage-patches-in-debian-packages/
+
+		#export QUILT_PATCHES=`pwd`/linux-rt-devel/patches
+		#export QUILT_REFRESH_ARGS="-p ab --no-timestamps --no-index"
+
+		#quilt push -a
+
+		quilt delete -r localversion.patch
+
+		#fix...
+		#quilt push -f
+		#quilt refresh
+
+		#final...
+		#quilt pop -a
+		#quilt push -a
+		#git add .
+		#git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
+		#quilt pop
+		#quilt delete -r localversion.patch
+		#quilt pop -a
+		#while quilt push; do quilt refresh; done
+
+		exit 2
+	fi
+
+	if [ -d ../linux-rt-devel ] ; then
+		rm -rf ../linux-rt-devel || true
+	fi
+
+	#matched kernel
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
