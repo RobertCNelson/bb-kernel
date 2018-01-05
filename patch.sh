@@ -190,6 +190,7 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	#un-matched kernel
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 
@@ -212,31 +213,34 @@ rt () {
 
 		#quilt push -a
 
-quilt delete -r 0001-timer-Use-deferrable-base-independent-of-base-nohz_a.patch
-quilt delete -r 0003-timer-Invoke-timer_start_debug-where-it-makes-sense.patch
-quilt delete -r crypto-mcryptd-protect-the-per-CPU-queue-with-a-lock.patch
-quilt delete -r 0003-tracing-Exclude-generic-fields-from-histograms.patch
-quilt delete -r localversion.patch
+		quilt delete -r 0001-timer-Use-deferrable-base-independent-of-base-nohz_a.patch
+		quilt delete -r 0003-timer-Invoke-timer_start_debug-where-it-makes-sense.patch
+		quilt delete -r crypto-mcryptd-protect-the-per-CPU-queue-with-a-lock.patch
+		quilt delete -r 0003-tracing-Exclude-generic-fields-from-histograms.patch
+		quilt delete -r localversion.patch
 
-#fix...
-#quilt push -f
-#quilt refresh
+		#fix...
+		#quilt push -f
+		#quilt refresh
 
-#final...
-#quilt pop -a
-#quilt push -a
-#git add .
-#git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
-		#quilt pop
-		#quilt delete -r localversion.patch
+		#final...
 		#quilt pop -a
-		#while quilt push; do quilt refresh; done
+		#quilt push -a
+		#git add .
+		#git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
 
+		exit 2
+	fi
+
+	if [ -d ../linux-rt-devel ] ; then
+		rm -rf ../linux-rt-devel || true
+	fi
+
+	#matched kernel
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
-#		xzcat patch-${rt_patch}.patch.xz | patch -p1 || true
-		rm -f arch/x86/kernel/asm-offsets.c.orig
-		rm -f arch/x86/kernel/asm-offsets.c.rej
 		rm -f patch-${rt_patch}.patch.xz
 		rm -f localversion-rt
 		${git_bin} add .
@@ -244,10 +248,6 @@ quilt delete -r localversion.patch
 		${git_bin} format-patch -1 -o ../patches/rt/
 
 		exit 2
-	fi
-
-	if [ -d ../linux-rt-devel ] ; then
-		rm -rf ../linux-rt-devel || true
 	fi
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
