@@ -213,10 +213,6 @@ rt () {
 
 		#quilt push -a
 
-		quilt delete -r 0001-timer-Use-deferrable-base-independent-of-base-nohz_a.patch
-		quilt delete -r 0003-timer-Invoke-timer_start_debug-where-it-makes-sense.patch
-		quilt delete -r crypto-mcryptd-protect-the-per-CPU-queue-with-a-lock.patch
-		quilt delete -r 0003-tracing-Exclude-generic-fields-from-histograms.patch
 		quilt delete -r localversion.patch
 
 		#fix...
@@ -251,7 +247,6 @@ rt () {
 	fi
 
 	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
-	${git} "${DIR}/patches/rt/0002-rt-fix-missing-types.h-in-spinlock_types.h.patch"
 }
 
 wireguard_fail () {
