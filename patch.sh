@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2017 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2018 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -160,12 +160,19 @@ aufs4 () {
 
 		rm -rf ../aufs4-standalone/ || true
 
-		exit 2
-	fi
+		git reset --hard HEAD~5
 
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
+
+		${git} "${DIR}/patches/aufs4/0001-merge-aufs4-kbuild.patch"
+		${git} "${DIR}/patches/aufs4/0002-merge-aufs4-base.patch"
+		${git} "${DIR}/patches/aufs4/0003-merge-aufs4-mmap.patch"
+		${git} "${DIR}/patches/aufs4/0004-merge-aufs4-standalone.patch"
+		${git} "${DIR}/patches/aufs4/0005-merge-aufs4.patch"
+
+		wdir="aufs4"
+		number=5
+		cleanup
 	fi
 
 	${git} "${DIR}/patches/aufs4/0001-merge-aufs4-kbuild.patch"
@@ -173,12 +180,6 @@ aufs4 () {
 	${git} "${DIR}/patches/aufs4/0003-merge-aufs4-mmap.patch"
 	${git} "${DIR}/patches/aufs4/0004-merge-aufs4-standalone.patch"
 	${git} "${DIR}/patches/aufs4/0005-merge-aufs4.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="aufs4"
-		number=5
-		cleanup
-	fi
 }
 
 rt_cleanup () {
@@ -189,6 +190,10 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
+
+	${git_bin} revert --no-edit a6d5930ccf3c746fa737b221d42adb6811945eec
+	${git_bin} revert --no-edit 36ae2e6f5c01f2c01c3224969f676b1b3b547aaf
+	${git_bin} revert --no-edit 4db98c583205ce93771ee16eeb5543185706df0c
 
 	#un-matched kernel
 	#regenerate="enable"
@@ -275,21 +280,18 @@ wireguard () {
 
 		rm -rf ../WireGuard/ || true
 
-		exit 2
-	fi
+		git reset --hard HEAD^
 
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
-	fi
 
-	${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
+		${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
 
-	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="WireGuard"
 		number=1
 		cleanup
 	fi
+
+	${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
 }
 
 local_patch () {
@@ -382,6 +384,7 @@ drivers () {
 	dir 'drivers/btrfs'
 	dir 'drivers/pwm'
 	dir 'drivers/spi'
+	dir 'drivers/ssd1306'
 	dir 'drivers/tsl2550'
 	dir 'drivers/tps65217'
 	dir 'drivers/opp'
@@ -499,6 +502,7 @@ drivers () {
 	dir 'drivers/ti/mcasp'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
+	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/uio'
 	dir 'drivers/ti/gpio'
 }
