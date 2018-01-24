@@ -390,18 +390,6 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/tty/rt-serial-warn-fix.patch"
 	${git} "${DIR}/patches/backports/tty/0002-of-Add-check-to-of_scan_flat_dt-before-accessing-ini.patch"
 
-	subsystem="fbtft"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/staging/fbtft/* ./drivers/staging/fbtft/
-		cp -v ~/linux-src/include/video/mipi_display.h ./include/video/mipi_display.h
-
-		post_backports
-	else
-		patch_backports
-	fi
-
 	backport_tag="v4.7.10"
 
 	subsystem="i2c"
@@ -464,6 +452,18 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0026-staging-iio-cdc-fix-improper-return-value.patch"
 
 	backport_tag="v4.8.17"
+
+	subsystem="fbtft"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/staging/fbtft/* ./drivers/staging/fbtft/
+		cp -v ~/linux-src/include/video/mipi_display.h ./include/video/mipi_display.h
+
+		post_backports
+	else
+		patch_backports
+	fi
 
 	subsystem="touchscreen"
 	if [ "x${regenerate}" = "xenable" ] ; then
