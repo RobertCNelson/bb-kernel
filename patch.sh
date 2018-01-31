@@ -195,6 +195,7 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	${git_bin} revert --no-edit c98ff7299b404f110167883695f81080723e6e15
 	${git_bin} revert --no-edit ca2d736867200b931ca61383af2fd68bb5fd2ecb
 
 	#un-matched kernel
@@ -525,6 +526,7 @@ drivers () {
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/rtc'
 	dir 'drivers/ti/serial'
+	dir 'drivers/ti/tsc'
 	#dir 'drivers/ti/spi'
 	dir 'drivers/ti/uio'
 
