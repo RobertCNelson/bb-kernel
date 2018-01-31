@@ -191,9 +191,7 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	${git_bin} revert --no-edit a6d5930ccf3c746fa737b221d42adb6811945eec
-	${git_bin} revert --no-edit 36ae2e6f5c01f2c01c3224969f676b1b3b547aaf
-	${git_bin} revert --no-edit 4db98c583205ce93771ee16eeb5543185706df0c
+	${git_bin} revert --no-edit fdd88d753d4b3142f7cd38b0278c29b03c1e0929
 
 	#un-matched kernel
 	#regenerate="enable"
@@ -381,6 +379,7 @@ reverts () {
 }
 
 drivers () {
+	dir 'drivers/ar1021_i2c'
 	dir 'drivers/btrfs'
 	dir 'drivers/pwm'
 	dir 'drivers/spi'

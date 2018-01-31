@@ -1,6 +1,6 @@
-From 77d280f69114bba704566ffde302831583e70429 Mon Sep 17 00:00:00 2001
+From 0e6b5a8a474534ed63a64a6f149a6e25a2cdbc50 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 24 Jan 2018 10:56:34 -0600
+Date: Wed, 31 Jan 2018 09:35:52 -0600
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -36,7 +36,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/chacha20-arm.S                | 1471 +++++++++
  net/wireguard/crypto/chacha20-arm64.S              | 1940 ++++++++++++
  net/wireguard/crypto/chacha20-x86_64.S             | 2630 ++++++++++++++++
- net/wireguard/crypto/chacha20poly1305.c            |  858 +++++
+ net/wireguard/crypto/chacha20poly1305.c            |  852 +++++
  net/wireguard/crypto/chacha20poly1305.h            |   93 +
  net/wireguard/crypto/curve25519-arm.S              | 2110 +++++++++++++
  net/wireguard/crypto/curve25519-arm.h              |   14 +
@@ -50,7 +50,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/poly1305-arm64.S              |  820 +++++
  net/wireguard/crypto/poly1305-mips64.S             |  357 +++
  net/wireguard/crypto/poly1305-x86_64.S             | 2803 +++++++++++++++++
- net/wireguard/device.c                             |  415 +++
+ net/wireguard/device.c                             |  421 +++
  net/wireguard/device.h                             |   64 +
  net/wireguard/hashtables.c                         |  168 +
  net/wireguard/hashtables.h                         |   52 +
@@ -11613,10 +11613,10 @@ index 000000000000..39883f3718b6
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/chacha20poly1305.c b/net/wireguard/crypto/chacha20poly1305.c
 new file mode 100644
-index 000000000000..89cf0550398b
+index 000000000000..25eb4b4b3a1d
 --- /dev/null
 +++ b/net/wireguard/crypto/chacha20poly1305.c
-@@ -0,0 +1,858 @@
+@@ -0,0 +1,852 @@
 +/* SPDX-License-Identifier: OpenSSL OR (BSD-3-Clause OR GPL-2.0)
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -11730,24 +11730,19 @@ index 000000000000..89cf0550398b
 +	return le64_to_cpup(p);
 +}
 +
-+static inline u32 rotl32(u32 v, u8 n)
-+{
-+	return (v << n) | (v >> (sizeof(v) * 8 - n));
-+}
-+
 +struct chacha20_ctx {
 +	u32 state[CHACHA20_BLOCK_SIZE / sizeof(u32)];
 +} __aligned(32);
 +
 +#define QUARTER_ROUND(x, a, b, c, d) ( \
 +	x[a] += x[b], \
-+	x[d] = rotl32((x[d] ^ x[a]), 16), \
++	x[d] = rol32((x[d] ^ x[a]), 16), \
 +	x[c] += x[d], \
-+	x[b] = rotl32((x[b] ^ x[c]), 12), \
++	x[b] = rol32((x[b] ^ x[c]), 12), \
 +	x[a] += x[b], \
-+	x[d] = rotl32((x[d] ^ x[a]), 8), \
++	x[d] = rol32((x[d] ^ x[a]), 8), \
 +	x[c] += x[d], \
-+	x[b] = rotl32((x[b] ^ x[c]), 7) \
++	x[b] = rol32((x[b] ^ x[c]), 7) \
 +)
 +
 +#define C(i, j) (i * 4 + j)
@@ -11778,21 +11773,20 @@ index 000000000000..89cf0550398b
 +	DOUBLE_ROUND(x) \
 +)
 +
-+static void chacha20_block_generic(struct chacha20_ctx *ctx, void *stream)
++static void chacha20_block_generic(struct chacha20_ctx *ctx, __le32 *stream)
 +{
 +	u32 x[CHACHA20_BLOCK_SIZE / sizeof(u32)];
-+	__le32 *out = stream;
 +	int i;
 +
-+	for (i = 0; i < ARRAY_SIZE(x); i++)
++	for (i = 0; i < ARRAY_SIZE(x); ++i)
 +		x[i] = ctx->state[i];
 +
 +	TWENTY_ROUNDS(x);
 +
-+	for (i = 0; i < ARRAY_SIZE(x); i++)
-+		out[i] = cpu_to_le32(x[i] + ctx->state[i]);
++	for (i = 0; i < ARRAY_SIZE(x); ++i)
++		stream[i] = cpu_to_le32(x[i] + ctx->state[i]);
 +
-+	ctx->state[12]++;
++	++ctx->state[12];
 +}
 +
 +static void hchacha20_generic(u8 derived_key[CHACHA20POLY1305_KEYLEN], const u8 nonce[16], const u8 key[CHACHA20POLY1305_KEYLEN])
@@ -11838,7 +11832,7 @@ index 000000000000..89cf0550398b
 +
 +static void chacha20_crypt(struct chacha20_ctx *ctx, u8 *dst, const u8 *src, u32 bytes, bool have_simd)
 +{
-+	u8 buf[CHACHA20_BLOCK_SIZE];
++	__le32 buf[CHACHA20_BLOCK_SIZE / sizeof(__le32)];
 +
 +	if (!have_simd
 +#if defined(CONFIG_X86_64)
@@ -11893,13 +11887,13 @@ index 000000000000..89cf0550398b
 +
 +	while (bytes >= CHACHA20_BLOCK_SIZE) {
 +		chacha20_block_generic(ctx, buf);
-+		crypto_xor(dst, buf, CHACHA20_BLOCK_SIZE);
++		crypto_xor(dst, (u8 *)buf, CHACHA20_BLOCK_SIZE);
 +		bytes -= CHACHA20_BLOCK_SIZE;
 +		dst += CHACHA20_BLOCK_SIZE;
 +	}
 +	if (bytes) {
 +		chacha20_block_generic(ctx, buf);
-+		crypto_xor(dst, buf, bytes);
++		crypto_xor(dst, (u8 *)buf, bytes);
 +	}
 +}
 +
@@ -24986,10 +24980,10 @@ index 000000000000..9275b49e91ed
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/device.c b/net/wireguard/device.c
 new file mode 100644
-index 000000000000..f47c12690dc4
+index 000000000000..1614d615fefe
 --- /dev/null
 +++ b/net/wireguard/device.c
-@@ -0,0 +1,415 @@
+@@ -0,0 +1,421 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -25227,6 +25221,10 @@ index 000000000000..f47c12690dc4
 +	free_netdev(dev);
 +}
 +
++static const struct device_type device_type = {
++	.name = KBUILD_MODNAME
++};
++
 +static void setup(struct net_device *dev)
 +{
 +	struct wireguard_device *wg = netdev_priv(dev);
@@ -25249,6 +25247,8 @@ index 000000000000..f47c12690dc4
 +	dev->hw_features |= WG_NETDEV_FEATURES;
 +	dev->hw_enc_features |= WG_NETDEV_FEATURES;
 +	dev->mtu = ETH_DATA_LEN - MESSAGE_MINIMUM_LENGTH - sizeof(struct udphdr) - max(sizeof(struct ipv6hdr), sizeof(struct iphdr));
++
++	SET_NETDEV_DEVTYPE(dev, &device_type);
 +
 +	/* We need to keep the dst around in case of icmp replies. */
 +	netif_keep_dst(dev);
