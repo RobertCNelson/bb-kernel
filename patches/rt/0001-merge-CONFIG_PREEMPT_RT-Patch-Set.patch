@@ -1,6 +1,6 @@
-From e0c51a4355071df0b31410027a265ce474366276 Mon Sep 17 00:00:00 2001
+From 5ae57802a7169a6299887c168b3e5157366fdff7 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 8 Feb 2018 13:47:07 -0600
+Date: Tue, 13 Feb 2018 09:29:19 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -121,6 +121,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/acpi/acpica/hwxface.c                      |    4 +-
  drivers/acpi/acpica/utmutex.c                      |    4 +-
  drivers/ata/libata-sff.c                           |    4 +-
+ drivers/block/brd.c                                |    1 -
  drivers/block/zram/zcomp.c                         |   13 +-
  drivers/block/zram/zcomp.h                         |    1 +
  drivers/block/zram/zram_drv.c                      |   31 +-
@@ -258,7 +259,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/rcu_assign_pointer.h                 |   54 +
  include/linux/rcupdate.h                           |   75 +-
  include/linux/rcutree.h                            |    8 +
- include/linux/ring_buffer.h                        |   14 +-
+ include/linux/ring_buffer.h                        |   17 +-
  include/linux/rtmutex.h                            |   22 +-
  include/linux/rwlock_rt.h                          |  119 +
  include/linux/rwlock_types.h                       |    4 +
@@ -360,7 +361,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/signal.c                                    |  120 +-
  kernel/softirq.c                                   |  840 +++-
  kernel/stop_machine.c                              |   26 +-
- kernel/time/hrtimer.c                              |  822 +++-
+ kernel/time/hrtimer.c                              |  829 +++-
  kernel/time/itimer.c                               |    1 +
  kernel/time/jiffies.c                              |    7 +-
  kernel/time/ntp.c                                  |   26 +
@@ -374,11 +375,11 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/time/timekeeping.h                          |    3 +-
  kernel/time/timer.c                                |  147 +-
  kernel/trace/Kconfig                               |    5 +-
- kernel/trace/ring_buffer.c                         |  179 +-
+ kernel/trace/ring_buffer.c                         |  185 +-
  kernel/trace/trace.c                               |  225 +-
  kernel/trace/trace.h                               |   27 +-
  kernel/trace/trace_events.c                        |   33 +-
- kernel/trace/trace_events_hist.c                   | 4804 ++++++++++++++++++--
+ kernel/trace/trace_events_hist.c                   | 4818 ++++++++++++++++++--
  kernel/trace/trace_events_trigger.c                |   53 +-
  kernel/trace/trace_hwlat.c                         |    2 +-
  kernel/trace/trace_kprobe.c                        |   18 +-
@@ -456,7 +457,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../inter-event/trigger-onmax-action-hist.tc       |   48 +
  .../trigger-synthetic-event-createremove.tc        |   54 +
  virt/kvm/arm/arm.c                                 |    6 +-
- 451 files changed, 16898 insertions(+), 5072 deletions(-)
+ 452 files changed, 16959 insertions(+), 5042 deletions(-)
  create mode 100644 Documentation/trace/histogram.txt
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -6626,7 +6627,7 @@ index b7a3904b953c..de00fe24927e 100644
  	nbytes %= bsize * 3;
  
 diff --git a/arch/x86/entry/common.c b/arch/x86/entry/common.c
-index 390abbc4c915..9b71a7ffe5f7 100644
+index 60e21ccfb6d6..0e27f35febe7 100644
 --- a/arch/x86/entry/common.c
 +++ b/arch/x86/entry/common.c
 @@ -133,7 +133,7 @@ static long syscall_trace_enter(struct pt_regs *regs)
@@ -6847,15 +6848,15 @@ index 371b3a4af000..06613a805b25 100644
  	canary += tsc + (tsc << 32UL);
  	canary &= CANARY_MASK;
 diff --git a/arch/x86/include/asm/thread_info.h b/arch/x86/include/asm/thread_info.h
-index 00223333821a..472169252f8d 100644
+index eda3b6823ca4..0242d91734ee 100644
 --- a/arch/x86/include/asm/thread_info.h
 +++ b/arch/x86/include/asm/thread_info.h
-@@ -55,11 +55,14 @@ struct task_struct;
- 
+@@ -56,11 +56,14 @@ struct task_struct;
  struct thread_info {
  	unsigned long		flags;		/* low level flags */
-+	int                     preempt_lazy_count;     /* 0 => lazy preemptable
-+							   <0 => BUG */
+ 	u32			status;		/* thread synchronous flags */
++	int			preempt_lazy_count;	/* 0 => lazy preemptable
++							  <0 => BUG */
  };
  
  #define INIT_THREAD_INFO(tsk)			\
@@ -6865,7 +6866,7 @@ index 00223333821a..472169252f8d 100644
  }
  
  #define init_stack		(init_thread_union.stack)
-@@ -68,6 +71,10 @@ struct thread_info {
+@@ -69,6 +72,10 @@ struct thread_info {
  
  #include <asm/asm-offsets.h>
  
@@ -6876,7 +6877,7 @@ index 00223333821a..472169252f8d 100644
  #endif
  
  /*
-@@ -83,6 +90,7 @@ struct thread_info {
+@@ -84,6 +91,7 @@ struct thread_info {
  #define TIF_SYSCALL_EMU		6	/* syscall emulation active */
  #define TIF_SYSCALL_AUDIT	7	/* syscall auditing active */
  #define TIF_SECCOMP		8	/* secure computing */
@@ -6884,7 +6885,7 @@ index 00223333821a..472169252f8d 100644
  #define TIF_USER_RETURN_NOTIFY	11	/* notify kernel of userspace return */
  #define TIF_UPROBE		12	/* breakpointed or singlestepping */
  #define TIF_PATCH_PENDING	13	/* pending live patching update */
-@@ -109,6 +117,7 @@ struct thread_info {
+@@ -110,6 +118,7 @@ struct thread_info {
  #define _TIF_SYSCALL_EMU	(1 << TIF_SYSCALL_EMU)
  #define _TIF_SYSCALL_AUDIT	(1 << TIF_SYSCALL_AUDIT)
  #define _TIF_SECCOMP		(1 << TIF_SECCOMP)
@@ -6892,7 +6893,7 @@ index 00223333821a..472169252f8d 100644
  #define _TIF_USER_RETURN_NOTIFY	(1 << TIF_USER_RETURN_NOTIFY)
  #define _TIF_UPROBE		(1 << TIF_UPROBE)
  #define _TIF_PATCH_PENDING	(1 << TIF_PATCH_PENDING)
-@@ -150,6 +159,8 @@ struct thread_info {
+@@ -151,6 +160,8 @@ struct thread_info {
  #define _TIF_WORK_CTXSW_PREV (_TIF_WORK_CTXSW|_TIF_USER_RETURN_NOTIFY)
  #define _TIF_WORK_CTXSW_NEXT (_TIF_WORK_CTXSW)
  
@@ -8073,6 +8074,18 @@ index cc2f2e35f4c2..0f0bc86e02df 100644
  
  	return consumed;
  }
+diff --git a/drivers/block/brd.c b/drivers/block/brd.c
+index 2d7178f7754e..c1cf87718c2e 100644
+--- a/drivers/block/brd.c
++++ b/drivers/block/brd.c
+@@ -60,7 +60,6 @@ struct brd_device {
+ /*
+  * Look up and return a brd's page for a given sector.
+  */
+-static DEFINE_MUTEX(brd_mutex);
+ static struct page *brd_lookup_page(struct brd_device *brd, sector_t sector)
+ {
+ 	pgoff_t idx;
 diff --git a/drivers/block/zram/zcomp.c b/drivers/block/zram/zcomp.c
 index 5b8992beffec..40345483a022 100644
 --- a/drivers/block/zram/zcomp.c
@@ -14108,7 +14121,7 @@ index 37d6fd3b7ff8..a082fde7d6bc 100644
  unsigned long get_state_synchronize_rcu(void);
  void cond_synchronize_rcu(unsigned long oldstate);
 diff --git a/include/linux/ring_buffer.h b/include/linux/ring_buffer.h
-index fa6ace66fea5..47f9791971a4 100644
+index fa6ace66fea5..ea8c1dd830f7 100644
 --- a/include/linux/ring_buffer.h
 +++ b/include/linux/ring_buffer.h
 @@ -37,10 +37,12 @@ struct ring_buffer_event {
@@ -14142,7 +14155,17 @@ index fa6ace66fea5..47f9791971a4 100644
  
  /*
   * ring_buffer_discard_commit will remove an event that has not
-@@ -181,6 +183,8 @@ void ring_buffer_normalize_time_stamp(struct ring_buffer *buffer,
+@@ -118,6 +120,9 @@ int ring_buffer_unlock_commit(struct ring_buffer *buffer,
+ int ring_buffer_write(struct ring_buffer *buffer,
+ 		      unsigned long length, void *data);
+ 
++void ring_buffer_nest_start(struct ring_buffer *buffer);
++void ring_buffer_nest_end(struct ring_buffer *buffer);
++
+ struct ring_buffer_event *
+ ring_buffer_peek(struct ring_buffer *buffer, int cpu, u64 *ts,
+ 		 unsigned long *lost_events);
+@@ -181,6 +186,8 @@ void ring_buffer_normalize_time_stamp(struct ring_buffer *buffer,
  				      int cpu, u64 *ts);
  void ring_buffer_set_clock(struct ring_buffer *buffer,
  			   u64 (*clock)(void));
@@ -16759,7 +16782,7 @@ index 8c20af8738ac..223c558f9901 100644
  
  	/*
 diff --git a/kernel/exit.c b/kernel/exit.c
-index f6cad39f35df..3a70d88abda8 100644
+index e3a08761eb40..26f3b352b37a 100644
 --- a/kernel/exit.c
 +++ b/kernel/exit.c
 @@ -159,7 +159,7 @@ static void __exit_signal(struct task_struct *tsk)
@@ -24632,7 +24655,7 @@ index b7591261652d..2aa4ce60811c 100644
  	}
  
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index 88f75f92ef36..fb3413d2b738 100644
+index 052773df9f03..74bfa741c6ae 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
 @@ -59,6 +59,15 @@
@@ -24985,7 +25008,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	 * If a hang was detected in the last timer interrupt then we
  	 * leave the hang delay active in the hardware. We want the
  	 * system to make progress. That also prevents the following
-@@ -581,81 +643,38 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
+@@ -581,83 +643,38 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
  	 * set. So we'd effectivly block all timers until the T2 event
  	 * fires.
  	 */
@@ -25081,12 +25104,14 @@ index 88f75f92ef36..fb3413d2b738 100644
 +static inline int hrtimer_is_hres_enabled(void)
  {
 -	base->expires_next = KTIME_MAX;
+-	base->hang_detected = 0;
 -	base->hres_active = 0;
+-	base->next_timer = NULL;
 +	return hrtimer_hres_enabled;
  }
  
  /*
-@@ -667,7 +686,7 @@ static void retrigger_next_event(void *arg)
+@@ -669,7 +686,7 @@ static void retrigger_next_event(void *arg)
  {
  	struct hrtimer_cpu_base *base = this_cpu_ptr(&hrtimer_bases);
  
@@ -25095,7 +25120,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  		return;
  
  	raw_spin_lock(&base->lock);
-@@ -696,6 +715,29 @@ static void hrtimer_switch_to_hres(void)
+@@ -698,6 +715,29 @@ static void hrtimer_switch_to_hres(void)
  	retrigger_next_event(NULL);
  }
  
@@ -25125,7 +25150,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  static void clock_was_set_work(struct work_struct *work)
  {
  	clock_was_set();
-@@ -711,25 +753,105 @@ void clock_was_set_delayed(void)
+@@ -713,25 +753,105 @@ void clock_was_set_delayed(void)
  {
  	schedule_work(&hrtimer_work);
  }
@@ -25241,7 +25266,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  /*
   * Clock realtime was set
   *
-@@ -828,6 +950,33 @@ u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
+@@ -830,6 +950,33 @@ u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
  }
  EXPORT_SYMBOL_GPL(hrtimer_forward);
  
@@ -25275,7 +25300,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  /*
   * enqueue_hrtimer - internal function to (re)start a timer
   *
-@@ -837,9 +986,10 @@ EXPORT_SYMBOL_GPL(hrtimer_forward);
+@@ -839,9 +986,10 @@ EXPORT_SYMBOL_GPL(hrtimer_forward);
   * Returns 1 when the new timer is the leftmost timer in the tree.
   */
  static int enqueue_hrtimer(struct hrtimer *timer,
@@ -25288,7 +25313,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  
  	base->cpu_base->active_bases |= 1 << base->index;
  
-@@ -872,7 +1022,6 @@ static void __remove_hrtimer(struct hrtimer *timer,
+@@ -874,7 +1022,6 @@ static void __remove_hrtimer(struct hrtimer *timer,
  	if (!timerqueue_del(&base->active, &timer->node))
  		cpu_base->active_bases &= ~(1 << base->index);
  
@@ -25296,7 +25321,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	/*
  	 * Note: If reprogram is false we do not update
  	 * cpu_base->next_timer. This happens when we remove the first
-@@ -883,7 +1032,6 @@ static void __remove_hrtimer(struct hrtimer *timer,
+@@ -885,7 +1032,6 @@ static void __remove_hrtimer(struct hrtimer *timer,
  	 */
  	if (reprogram && timer == cpu_base->next_timer)
  		hrtimer_force_reprogram(cpu_base, 1);
@@ -25304,7 +25329,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  }
  
  /*
-@@ -932,22 +1080,36 @@ static inline ktime_t hrtimer_update_lowres(struct hrtimer *timer, ktime_t tim,
+@@ -934,22 +1080,36 @@ static inline ktime_t hrtimer_update_lowres(struct hrtimer *timer, ktime_t tim,
  	return tim;
  }
  
@@ -25355,7 +25380,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  
  	/* Remove an active timer from the queue: */
  	remove_hrtimer(timer, base, true);
-@@ -962,21 +1124,37 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
+@@ -964,21 +1124,37 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
  	/* Switch the timer base, if necessary: */
  	new_base = switch_hrtimer_base(timer, base, mode & HRTIMER_MODE_PINNED);
  
@@ -25407,7 +25432,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	unlock_hrtimer_base(timer, &flags);
  }
  EXPORT_SYMBOL_GPL(hrtimer_start_range_ns);
-@@ -1033,7 +1211,7 @@ int hrtimer_cancel(struct hrtimer *timer)
+@@ -1035,7 +1211,7 @@ int hrtimer_cancel(struct hrtimer *timer)
  
  		if (ret >= 0)
  			return ret;
@@ -25416,7 +25441,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	}
  }
  EXPORT_SYMBOL_GPL(hrtimer_cancel);
-@@ -1074,7 +1252,7 @@ u64 hrtimer_get_next_event(void)
+@@ -1076,7 +1252,7 @@ u64 hrtimer_get_next_event(void)
  	raw_spin_lock_irqsave(&cpu_base->lock, flags);
  
  	if (!__hrtimer_hres_active(cpu_base))
@@ -25425,7 +25450,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  
  	raw_spin_unlock_irqrestore(&cpu_base->lock, flags);
  
-@@ -1097,17 +1275,31 @@ static inline int hrtimer_clockid_to_base(clockid_t clock_id)
+@@ -1099,17 +1275,31 @@ static inline int hrtimer_clockid_to_base(clockid_t clock_id)
  static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
  			   enum hrtimer_mode mode)
  {
@@ -25460,7 +25485,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	timer->base = &cpu_base->clock_base[base];
  	timerqueue_init(&timer->node);
  }
-@@ -1116,7 +1308,13 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
+@@ -1118,7 +1308,13 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
   * hrtimer_init - initialize a timer to the given clock
   * @timer:	the timer to be initialized
   * @clock_id:	the clock to be used
@@ -25475,7 +25500,7 @@ index 88f75f92ef36..fb3413d2b738 100644
   */
  void hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
  		  enum hrtimer_mode mode)
-@@ -1135,19 +1333,19 @@ EXPORT_SYMBOL_GPL(hrtimer_init);
+@@ -1137,19 +1333,19 @@ EXPORT_SYMBOL_GPL(hrtimer_init);
   */
  bool hrtimer_active(const struct hrtimer *timer)
  {
@@ -25501,7 +25526,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  
  	return false;
  }
-@@ -1173,7 +1371,8 @@ EXPORT_SYMBOL_GPL(hrtimer_active);
+@@ -1175,7 +1371,8 @@ EXPORT_SYMBOL_GPL(hrtimer_active);
  
  static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  			  struct hrtimer_clock_base *base,
@@ -25511,7 +25536,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  {
  	enum hrtimer_restart (*fn)(struct hrtimer *);
  	int restart;
-@@ -1181,16 +1380,16 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
+@@ -1183,16 +1380,16 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  	lockdep_assert_held(&cpu_base->lock);
  
  	debug_deactivate(timer);
@@ -25531,7 +25556,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  
  	__remove_hrtimer(timer, base, HRTIMER_STATE_INACTIVE, 0);
  	fn = timer->function;
-@@ -1204,15 +1403,15 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
+@@ -1206,15 +1403,15 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  		timer->is_rel = false;
  
  	/*
@@ -25552,7 +25577,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  
  	/*
  	 * Note: We clear the running state after enqueue_hrtimer and
-@@ -1225,33 +1424,31 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
+@@ -1227,33 +1424,31 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
  	 */
  	if (restart != HRTIMER_NORESTART &&
  	    !(timer->state & HRTIMER_STATE_ENQUEUED))
@@ -25596,7 +25621,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  		basenow = ktime_add(now, base->offset);
  
  		while ((node = timerqueue_getnext(&base->active))) {
-@@ -1274,11 +1471,29 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
+@@ -1276,11 +1471,29 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
  			if (basenow < hrtimer_get_softexpires_tv64(timer))
  				break;
  
@@ -25627,7 +25652,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  #ifdef CONFIG_HIGH_RES_TIMERS
  
  /*
-@@ -1289,13 +1504,14 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1291,13 +1504,14 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  {
  	struct hrtimer_cpu_base *cpu_base = this_cpu_ptr(&hrtimer_bases);
  	ktime_t expires_next, now, entry_time, delta;
@@ -25643,7 +25668,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	entry_time = now = hrtimer_update_base(cpu_base);
  retry:
  	cpu_base->in_hrtirq = 1;
-@@ -1308,17 +1524,23 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1310,17 +1524,23 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	 */
  	cpu_base->expires_next = KTIME_MAX;
  
@@ -25670,7 +25695,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  
  	/* Reprogramming necessary ? */
  	if (!tick_program_event(expires_next, 0)) {
-@@ -1339,7 +1561,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1341,7 +1561,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	 * Acquire base lock for updating the offsets and retrieving
  	 * the current time.
  	 */
@@ -25679,7 +25704,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	now = hrtimer_update_base(cpu_base);
  	cpu_base->nr_retries++;
  	if (++retries < 3)
-@@ -1352,7 +1574,8 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1354,7 +1574,8 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	 */
  	cpu_base->nr_hangs++;
  	cpu_base->hang_detected = 1;
@@ -25689,7 +25714,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	delta = ktime_sub(now, entry_time);
  	if ((unsigned int)delta > cpu_base->max_hang_time)
  		cpu_base->max_hang_time = (unsigned int) delta;
-@@ -1394,6 +1617,7 @@ static inline void __hrtimer_peek_ahead_timers(void) { }
+@@ -1396,6 +1617,7 @@ static inline void __hrtimer_peek_ahead_timers(void) { }
  void hrtimer_run_queues(void)
  {
  	struct hrtimer_cpu_base *cpu_base = this_cpu_ptr(&hrtimer_bases);
@@ -25697,7 +25722,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	ktime_t now;
  
  	if (__hrtimer_hres_active(cpu_base))
-@@ -1411,10 +1635,17 @@ void hrtimer_run_queues(void)
+@@ -1413,10 +1635,17 @@ void hrtimer_run_queues(void)
  		return;
  	}
  
@@ -25718,7 +25743,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  }
  
  /*
-@@ -1433,13 +1664,65 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
+@@ -1435,13 +1664,65 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
  	return HRTIMER_NORESTART;
  }
  
@@ -25785,7 +25810,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  int nanosleep_copyout(struct restart_block *restart, struct timespec64 *ts)
  {
  	switch(restart->nanosleep.type) {
-@@ -1459,14 +1742,13 @@ int nanosleep_copyout(struct restart_block *restart, struct timespec64 *ts)
+@@ -1461,14 +1742,13 @@ int nanosleep_copyout(struct restart_block *restart, struct timespec64 *ts)
  	return -ERESTART_RESTARTBLOCK;
  }
  
@@ -25803,7 +25828,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  		hrtimer_start_expires(&t->timer, mode);
  
  		if (likely(t->task))
-@@ -1501,17 +1783,18 @@ static long __sched hrtimer_nanosleep_restart(struct restart_block *restart)
+@@ -1503,17 +1783,18 @@ static long __sched hrtimer_nanosleep_restart(struct restart_block *restart)
  	struct hrtimer_sleeper t;
  	int ret;
  
@@ -25828,7 +25853,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  {
  	struct restart_block *restart;
  	struct hrtimer_sleeper t;
-@@ -1522,9 +1805,9 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
+@@ -1524,9 +1805,9 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
  	if (dl_task(current) || rt_task(current))
  		slack = 0;
  
@@ -25840,7 +25865,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	if (ret != -ERESTART_RESTARTBLOCK)
  		goto out;
  
-@@ -1543,6 +1826,12 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
+@@ -1545,6 +1826,12 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
  	return ret;
  }
  
@@ -25853,7 +25878,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  SYSCALL_DEFINE2(nanosleep, struct timespec __user *, rqtp,
  		struct timespec __user *, rmtp)
  {
-@@ -1578,6 +1867,26 @@ COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
+@@ -1580,6 +1867,26 @@ COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
  }
  #endif
  
@@ -25880,12 +25905,18 @@ index 88f75f92ef36..fb3413d2b738 100644
  /*
   * Functions related to boot-time initialization:
   */
-@@ -1592,7 +1901,12 @@ int hrtimers_prepare_cpu(unsigned int cpu)
+@@ -1593,9 +1900,17 @@ int hrtimers_prepare_cpu(unsigned int cpu)
+ 		timerqueue_init_head(&cpu_base->clock_base[i].active);
  	}
  
+-	cpu_base->active_bases = 0;
  	cpu_base->cpu = cpu;
 -	hrtimer_init_hres(cpu_base);
++	cpu_base->active_bases = 0;
 +	cpu_base->hres_active = 0;
++	cpu_base->hang_detected = 0;
++	cpu_base->next_timer = NULL;
++	cpu_base->softirq_next_timer = NULL;
 +	cpu_base->expires_next = KTIME_MAX;
 +	cpu_base->softirq_expires_next = KTIME_MAX;
 +#ifdef CONFIG_PREEMPT_RT_BASE
@@ -25894,7 +25925,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	return 0;
  }
  
-@@ -1624,7 +1938,7 @@ static void migrate_hrtimer_list(struct hrtimer_clock_base *old_base,
+@@ -1627,7 +1942,7 @@ static void migrate_hrtimer_list(struct hrtimer_clock_base *old_base,
  		 * sort out already expired timers and reprogram the
  		 * event device.
  		 */
@@ -25903,7 +25934,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	}
  }
  
-@@ -1636,6 +1950,12 @@ int hrtimers_dead_cpu(unsigned int scpu)
+@@ -1639,6 +1954,12 @@ int hrtimers_dead_cpu(unsigned int scpu)
  	BUG_ON(cpu_online(scpu));
  	tick_cancel_sched_timer(scpu);
  
@@ -25916,7 +25947,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	local_irq_disable();
  	old_base = &per_cpu(hrtimer_bases, scpu);
  	new_base = this_cpu_ptr(&hrtimer_bases);
-@@ -1651,12 +1971,19 @@ int hrtimers_dead_cpu(unsigned int scpu)
+@@ -1654,12 +1975,19 @@ int hrtimers_dead_cpu(unsigned int scpu)
  				     &new_base->clock_base[i]);
  	}
  
@@ -25936,7 +25967,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	return 0;
  }
  
-@@ -1665,18 +1992,19 @@ int hrtimers_dead_cpu(unsigned int scpu)
+@@ -1668,18 +1996,19 @@ int hrtimers_dead_cpu(unsigned int scpu)
  void __init hrtimers_init(void)
  {
  	hrtimers_prepare_cpu(smp_processor_id());
@@ -25959,7 +25990,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  {
  	struct hrtimer_sleeper t;
  
-@@ -1697,11 +2025,9 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
+@@ -1700,11 +2029,9 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
  		return -EINTR;
  	}
  
@@ -25972,7 +26003,7 @@ index 88f75f92ef36..fb3413d2b738 100644
  	hrtimer_start_expires(&t.timer, mode);
  
  	if (likely(t.task))
-@@ -1719,7 +2045,7 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
+@@ -1722,7 +2049,7 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
   * schedule_hrtimeout_range - sleep until timeout
   * @expires:	timeout value (ktime_t)
   * @delta:	slack in expires timeout (ktime_t)
@@ -25981,7 +26012,7 @@ index 88f75f92ef36..fb3413d2b738 100644
   *
   * Make the current task sleep until the given expiry time has
   * elapsed. The routine will return immediately unless
-@@ -1758,7 +2084,7 @@ EXPORT_SYMBOL_GPL(schedule_hrtimeout_range);
+@@ -1761,7 +2088,7 @@ EXPORT_SYMBOL_GPL(schedule_hrtimeout_range);
  /**
   * schedule_hrtimeout - sleep until timeout
   * @expires:	timeout value (ktime_t)
@@ -26899,7 +26930,7 @@ index 434c840e2d82..cd71733512ed 100644
  
  config MMIOTRACE_TEST
 diff --git a/kernel/trace/ring_buffer.c b/kernel/trace/ring_buffer.c
-index 0476a9372014..c4d554286334 100644
+index 0476a9372014..76fe2d01d801 100644
 --- a/kernel/trace/ring_buffer.c
 +++ b/kernel/trace/ring_buffer.c
 @@ -42,6 +42,8 @@ int ring_buffer_print_entry_header(struct trace_seq *s)
@@ -26983,7 +27014,15 @@ index 0476a9372014..c4d554286334 100644
  /* Flag when events were overwritten */
  #define RB_MISSED_EVENTS	(1 << 31)
  /* Missed count stored at end */
-@@ -489,6 +515,7 @@ struct ring_buffer {
+@@ -452,6 +478,7 @@ struct ring_buffer_per_cpu {
+ 	struct buffer_page		*reader_page;
+ 	unsigned long			lost_events;
+ 	unsigned long			last_overrun;
++	unsigned long			nest;
+ 	local_t				entries_bytes;
+ 	local_t				entries;
+ 	local_t				overrun;
+@@ -489,6 +516,7 @@ struct ring_buffer {
  	u64				(*clock)(void);
  
  	struct rb_irq_work		irq_work;
@@ -26991,7 +27030,7 @@ index 0476a9372014..c4d554286334 100644
  };
  
  struct ring_buffer_iter {
-@@ -1383,6 +1410,16 @@ void ring_buffer_set_clock(struct ring_buffer *buffer,
+@@ -1383,6 +1411,16 @@ void ring_buffer_set_clock(struct ring_buffer *buffer,
  	buffer->clock = clock;
  }
  
@@ -27008,7 +27047,7 @@ index 0476a9372014..c4d554286334 100644
  static void rb_reset_cpu(struct ring_buffer_per_cpu *cpu_buffer);
  
  static inline unsigned long rb_page_entries(struct buffer_page *bpage)
-@@ -2214,12 +2251,15 @@ rb_move_tail(struct ring_buffer_per_cpu *cpu_buffer,
+@@ -2214,12 +2252,15 @@ rb_move_tail(struct ring_buffer_per_cpu *cpu_buffer,
  
  /* Slow path, do not inline */
  static noinline struct ring_buffer_event *
@@ -27028,7 +27067,7 @@ index 0476a9372014..c4d554286334 100644
  		event->time_delta = delta & TS_MASK;
  		event->array[0] = delta >> TS_SHIFT;
  	} else {
-@@ -2262,7 +2302,9 @@ rb_update_event(struct ring_buffer_per_cpu *cpu_buffer,
+@@ -2262,7 +2303,9 @@ rb_update_event(struct ring_buffer_per_cpu *cpu_buffer,
  	 * add it to the start of the resevered space.
  	 */
  	if (unlikely(info->add_timestamp)) {
@@ -27039,7 +27078,7 @@ index 0476a9372014..c4d554286334 100644
  		length -= RB_LEN_TIME_EXTEND;
  		delta = 0;
  	}
-@@ -2450,7 +2492,7 @@ static __always_inline void rb_end_commit(struct ring_buffer_per_cpu *cpu_buffer
+@@ -2450,7 +2493,7 @@ static __always_inline void rb_end_commit(struct ring_buffer_per_cpu *cpu_buffer
  
  static inline void rb_event_discard(struct ring_buffer_event *event)
  {
@@ -27048,7 +27087,7 @@ index 0476a9372014..c4d554286334 100644
  		event = skip_time_extend(event);
  
  	/* array[0] holds the actual length for the discarded event */
-@@ -2494,10 +2536,11 @@ rb_update_write_stamp(struct ring_buffer_per_cpu *cpu_buffer,
+@@ -2494,10 +2537,11 @@ rb_update_write_stamp(struct ring_buffer_per_cpu *cpu_buffer,
  			cpu_buffer->write_stamp =
  				cpu_buffer->commit_page->page->time_stamp;
  		else if (event->type_len == RINGBUF_TYPE_TIME_EXTEND) {
@@ -27063,60 +27102,13 @@ index 0476a9372014..c4d554286334 100644
  		} else
  			cpu_buffer->write_stamp += event->time_delta;
  	}
-@@ -2542,61 +2585,29 @@ rb_wakeups(struct ring_buffer *buffer, struct ring_buffer_per_cpu *cpu_buffer)
-  * The lock and unlock are done within a preempt disable section.
-  * The current_context per_cpu variable can only be modified
-  * by the current task between lock and unlock. But it can
-- * be modified more than once via an interrupt. To pass this
-- * information from the lock to the unlock without having to
-- * access the 'in_interrupt()' functions again (which do show
-- * a bit of overhead in something as critical as function tracing,
-- * we use a bitmask trick.
-- *
-- *  bit 0 =  NMI context
-- *  bit 1 =  IRQ context
-- *  bit 2 =  SoftIRQ context
-- *  bit 3 =  normal context.
-- *
-- * This works because this is the order of contexts that can
-- * preempt other contexts. A SoftIRQ never preempts an IRQ
-- * context.
-- *
-- * When the context is determined, the corresponding bit is
-- * checked and set (if it was set, then a recursion of that context
-- * happened).
-- *
-- * On unlock, we need to clear this bit. To do so, just subtract
-- * 1 from the current_context and AND it to itself.
-+ * be modified more than once via an interrupt. There are four
-+ * different contexts that we need to consider.
-  *
-- * (binary)
-- *  101 - 1 = 100
-- *  101 & 100 = 100 (clearing bit zero)
-+ *  Normal context.
-+ *  SoftIRQ context
-+ *  IRQ context
-+ *  NMI context
-  *
-- *  1010 - 1 = 1001
-- *  1010 & 1001 = 1000 (clearing bit 1)
-- *
-- * The least significant bit can be cleared this way, and it
-- * just so happens that it is the same bit corresponding to
-- * the current context.
-+ * If for some reason the ring buffer starts to recurse, we only allow
-+ * that to happen at most 6 times (one for each context, plus possibly
-+ * two levels of synthetic event generation). If it happens 7 times,
-+ * then we consider this a recusive loop and do not let it go further.
-  */
- 
- static __always_inline int
+@@ -2580,22 +2624,19 @@ static __always_inline int
  trace_recursive_lock(struct ring_buffer_per_cpu *cpu_buffer)
  {
--	unsigned int val = cpu_buffer->current_context;
--	int bit;
--
+ 	unsigned int val = cpu_buffer->current_context;
++	unsigned long pc = preempt_count();
+ 	int bit;
+ 
 -	if (in_interrupt()) {
 -		if (in_nmi())
 -			bit = RB_CTX_NMI;
@@ -27125,32 +27117,81 @@ index 0476a9372014..c4d554286334 100644
 -		else
 -			bit = RB_CTX_SOFTIRQ;
 -	} else
--		bit = RB_CTX_NORMAL;
--
++	if (!(pc & (NMI_MASK | HARDIRQ_MASK | SOFTIRQ_OFFSET)))
+ 		bit = RB_CTX_NORMAL;
++	else
++		bit = pc & NMI_MASK ? RB_CTX_NMI :
++			pc & HARDIRQ_MASK ? RB_CTX_IRQ : RB_CTX_SOFTIRQ;
+ 
 -	if (unlikely(val & (1 << bit)))
-+	if (cpu_buffer->current_context >= 6)
++	if (unlikely(val & (1 << (bit + cpu_buffer->nest))))
  		return 1;
  
 -	val |= (1 << bit);
--	cpu_buffer->current_context = val;
-+	cpu_buffer->current_context++;
-+	/* Interrupts must see this update */
-+	barrier();
++	val |= (1 << (bit + cpu_buffer->nest));
+ 	cpu_buffer->current_context = val;
  
  	return 0;
- }
-@@ -2604,7 +2615,9 @@ trace_recursive_lock(struct ring_buffer_per_cpu *cpu_buffer)
+@@ -2604,7 +2645,57 @@ trace_recursive_lock(struct ring_buffer_per_cpu *cpu_buffer)
  static __always_inline void
  trace_recursive_unlock(struct ring_buffer_per_cpu *cpu_buffer)
  {
 -	cpu_buffer->current_context &= cpu_buffer->current_context - 1;
-+	/* Don't let the dec leak out */
-+	barrier();
-+	cpu_buffer->current_context--;
++	cpu_buffer->current_context &=
++		cpu_buffer->current_context - (1 << cpu_buffer->nest);
++}
++
++/* The recursive locking above uses 4 bits */
++#define NESTED_BITS 4
++
++/**
++ * ring_buffer_nest_start - Allow to trace while nested
++ * @buffer: The ring buffer to modify
++ *
++ * The ring buffer has a safty mechanism to prevent recursion.
++ * But there may be a case where a trace needs to be done while
++ * tracing something else. In this case, calling this function
++ * will allow this function to nest within a currently active
++ * ring_buffer_lock_reserve().
++ *
++ * Call this function before calling another ring_buffer_lock_reserve() and
++ * call ring_buffer_nest_end() after the nested ring_buffer_unlock_commit().
++ */
++void ring_buffer_nest_start(struct ring_buffer *buffer)
++{
++	struct ring_buffer_per_cpu *cpu_buffer;
++	int cpu;
++
++	/* Enabled by ring_buffer_nest_end() */
++	preempt_disable_notrace();
++	cpu = raw_smp_processor_id();
++	cpu_buffer = buffer->buffers[cpu];
++	/* This is the shift value for the above recusive locking */
++	cpu_buffer->nest += NESTED_BITS;
++}
++
++/**
++ * ring_buffer_nest_end - Allow to trace while nested
++ * @buffer: The ring buffer to modify
++ *
++ * Must be called after ring_buffer_nest_start() and after the
++ * ring_buffer_unlock_commit().
++ */
++void ring_buffer_nest_end(struct ring_buffer *buffer)
++{
++	struct ring_buffer_per_cpu *cpu_buffer;
++	int cpu;
++
++	/* disabled by ring_buffer_nest_start() */
++	cpu = raw_smp_processor_id();
++	cpu_buffer = buffer->buffers[cpu];
++	/* This is the shift value for the above recusive locking */
++	cpu_buffer->nest -= NESTED_BITS;
++	preempt_enable_notrace();
  }
  
  /**
-@@ -2680,7 +2693,7 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
+@@ -2680,7 +2771,7 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
  	 * If this is the first commit on the page, then it has the same
  	 * timestamp as the page itself.
  	 */
@@ -27159,7 +27200,7 @@ index 0476a9372014..c4d554286334 100644
  		info->delta = 0;
  
  	/* See if we shot pass the end of this buffer page */
-@@ -2758,8 +2771,11 @@ rb_reserve_next_event(struct ring_buffer *buffer,
+@@ -2758,8 +2849,11 @@ rb_reserve_next_event(struct ring_buffer *buffer,
  	/* make sure this diff is calculated here */
  	barrier();
  
@@ -27173,7 +27214,7 @@ index 0476a9372014..c4d554286334 100644
  		info.delta = diff;
  		if (unlikely(test_time_stamp(info.delta)))
  			rb_handle_timestamp(cpu_buffer, &info);
-@@ -3441,14 +3457,13 @@ rb_update_read_stamp(struct ring_buffer_per_cpu *cpu_buffer,
+@@ -3441,14 +3535,13 @@ rb_update_read_stamp(struct ring_buffer_per_cpu *cpu_buffer,
  		return;
  
  	case RINGBUF_TYPE_TIME_EXTEND:
@@ -27191,7 +27232,7 @@ index 0476a9372014..c4d554286334 100644
  		return;
  
  	case RINGBUF_TYPE_DATA:
-@@ -3472,14 +3487,13 @@ rb_update_iter_read_stamp(struct ring_buffer_iter *iter,
+@@ -3472,14 +3565,13 @@ rb_update_iter_read_stamp(struct ring_buffer_iter *iter,
  		return;
  
  	case RINGBUF_TYPE_TIME_EXTEND:
@@ -27209,7 +27250,7 @@ index 0476a9372014..c4d554286334 100644
  		return;
  
  	case RINGBUF_TYPE_DATA:
-@@ -3703,6 +3717,8 @@ rb_buffer_peek(struct ring_buffer_per_cpu *cpu_buffer, u64 *ts,
+@@ -3703,6 +3795,8 @@ rb_buffer_peek(struct ring_buffer_per_cpu *cpu_buffer, u64 *ts,
  	struct buffer_page *reader;
  	int nr_loops = 0;
  
@@ -27218,7 +27259,7 @@ index 0476a9372014..c4d554286334 100644
   again:
  	/*
  	 * We repeat when a time extend is encountered.
-@@ -3739,12 +3755,17 @@ rb_buffer_peek(struct ring_buffer_per_cpu *cpu_buffer, u64 *ts,
+@@ -3739,12 +3833,17 @@ rb_buffer_peek(struct ring_buffer_per_cpu *cpu_buffer, u64 *ts,
  		goto again;
  
  	case RINGBUF_TYPE_TIME_STAMP:
@@ -27238,7 +27279,7 @@ index 0476a9372014..c4d554286334 100644
  			*ts = cpu_buffer->read_stamp + event->time_delta;
  			ring_buffer_normalize_time_stamp(cpu_buffer->buffer,
  							 cpu_buffer->cpu, ts);
-@@ -3769,6 +3790,9 @@ rb_iter_peek(struct ring_buffer_iter *iter, u64 *ts)
+@@ -3769,6 +3868,9 @@ rb_iter_peek(struct ring_buffer_iter *iter, u64 *ts)
  	struct ring_buffer_event *event;
  	int nr_loops = 0;
  
@@ -27248,7 +27289,7 @@ index 0476a9372014..c4d554286334 100644
  	cpu_buffer = iter->cpu_buffer;
  	buffer = cpu_buffer->buffer;
  
-@@ -3821,12 +3845,17 @@ rb_iter_peek(struct ring_buffer_iter *iter, u64 *ts)
+@@ -3821,12 +3923,17 @@ rb_iter_peek(struct ring_buffer_iter *iter, u64 *ts)
  		goto again;
  
  	case RINGBUF_TYPE_TIME_STAMP:
@@ -27882,7 +27923,7 @@ index d53268a4e167..9ba230a4052f 100644
  }
  
 diff --git a/kernel/trace/trace_events_hist.c b/kernel/trace/trace_events_hist.c
-index 7eb975a2d0e1..e47b56632367 100644
+index 7eb975a2d0e1..49afef3cc384 100644
 --- a/kernel/trace/trace_events_hist.c
 +++ b/kernel/trace/trace_events_hist.c
 @@ -20,13 +20,39 @@
@@ -28100,7 +28141,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  };
  
  struct hist_trigger_attrs {
-@@ -127,298 +242,3573 @@ struct hist_trigger_attrs {
+@@ -127,298 +242,3583 @@ struct hist_trigger_attrs {
  	char		*vals_str;
  	char		*sort_key_str;
  	char		*name;
@@ -28632,6 +28673,7 @@ index 7eb975a2d0e1..e47b56632367 100644
 +	struct trace_event_file *trace_file = __data;
 +	struct synth_trace_event *entry;
 +	struct trace_event_buffer fbuffer;
++	struct ring_buffer *buffer;
 +	struct synth_event *event;
 +	unsigned int i, n_u64;
 +	int fields_size = 0;
@@ -28643,10 +28685,17 @@ index 7eb975a2d0e1..e47b56632367 100644
 +
 +	fields_size = event->n_u64 * sizeof(u64);
 +
++	/*
++	 * Avoid ring buffer recursion detection, as this event
++	 * is being performed within another event.
++	 */
++	buffer = trace_file->tr->trace_buffer.buffer;
++	ring_buffer_nest_start(buffer);
++
 +	entry = trace_event_buffer_reserve(&fbuffer, trace_file,
 +					   sizeof(*entry) + fields_size);
 +	if (!entry)
-+		return;
++		goto out;
 +
 +	for (i = 0, n_u64 = 0; i < event->n_fields; i++) {
 +		if (event->fields[i]->is_string) {
@@ -28662,6 +28711,8 @@ index 7eb975a2d0e1..e47b56632367 100644
 +	}
 +
 +	trace_event_buffer_commit(&fbuffer);
++out:
++	ring_buffer_nest_end(buffer);
 +}
  
 -	if (comm_from)
@@ -28694,16 +28745,16 @@ index 7eb975a2d0e1..e47b56632367 100644
 +				i == event->n_fields - 1 ? "" : ", ");
 +	}
 +	pos += snprintf(buf + pos, LEN_OR_ZERO, "\"");
- 
--	if (comm)
--		save_comm(comm, current);
++
 +	for (i = 0; i < event->n_fields; i++) {
 +		pos += snprintf(buf + pos, LEN_OR_ZERO,
 +				", REC->%s", event->fields[i]->name);
 +	}
 +
 +#undef LEN_OR_ZERO
-+
+ 
+-	if (comm)
+-		save_comm(comm, current);
 +	/* return the length of print_fmt */
 +	return pos;
  }
@@ -28730,11 +28781,11 @@ index 7eb975a2d0e1..e47b56632367 100644
 +	/* Second: actually write the @print_fmt */
 +	__set_synth_event_print_fmt(event, print_fmt, len + 1);
 +	call->print_fmt = print_fmt;
-+
-+	return 0;
-+}
  
 -static void destroy_hist_field(struct hist_field *hist_field)
++	return 0;
++}
++
 +static void free_synth_field(struct synth_field *field)
  {
 -	kfree(hist_field);
@@ -28768,10 +28819,14 @@ index 7eb975a2d0e1..e47b56632367 100644
 -	if (flags & HIST_FIELD_FL_HITCOUNT) {
 -		hist_field->fn = hist_field_counter;
 -		goto out;
+-	}
 +	field = kzalloc(sizeof(*field), GFP_KERNEL);
 +	if (!field)
 +		return ERR_PTR(-ENOMEM);
-+
+ 
+-	if (flags & HIST_FIELD_FL_STACKTRACE) {
+-		hist_field->fn = hist_field_none;
+-		goto out;
 +	len = strlen(field_type) + 1;
 +	array = strchr(field_name, '[');
 +	if (array)
@@ -28787,8 +28842,8 @@ index 7eb975a2d0e1..e47b56632367 100644
 +		*array = '\0';
  	}
  
--	if (flags & HIST_FIELD_FL_STACKTRACE) {
--		hist_field->fn = hist_field_none;
+-	if (flags & HIST_FIELD_FL_LOG2) {
+-		hist_field->fn = hist_field_log2;
 -		goto out;
 +	field->size = synth_field_size(field->type);
 +	if (!field->size) {
@@ -28796,8 +28851,7 @@ index 7eb975a2d0e1..e47b56632367 100644
 +		goto free;
  	}
  
--	if (flags & HIST_FIELD_FL_LOG2) {
--		hist_field->fn = hist_field_log2;
+-	if (WARN_ON_ONCE(!field))
 -		goto out;
 +	if (synth_field_is_string(field->type))
 +		field->is_string = true;
@@ -28808,7 +28862,7 @@ index 7eb975a2d0e1..e47b56632367 100644
 +	if (!field->name) {
 +		ret = -ENOMEM;
 +		goto free;
- 	}
++	}
 + out:
 +	return field;
 + free:
@@ -28816,8 +28870,7 @@ index 7eb975a2d0e1..e47b56632367 100644
 +	field = ERR_PTR(ret);
 +	goto out;
 +}
- 
--	if (WARN_ON_ONCE(!field))
++
 +static void free_synth_tracepoint(struct tracepoint *tp)
 +{
 +	if (!tp)
@@ -31370,7 +31423,7 @@ index 7eb975a2d0e1..e47b56632367 100644
 +	if (IS_ERR(max_var)) {
 +		hist_err("onmax: Couldn't create onmax variable: ", "max");
 +		ret = PTR_ERR(max_var);
- 		goto out;
++		goto out;
 +	}
 +	data->onmax.max_var = max_var;
 +
@@ -31865,7 +31918,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	if (WARN_ON(hist_data->n_vals > TRACING_MAP_VALS_MAX))
  		return -EINVAL;
-@@ -426,54 +3816,71 @@ static int create_hitcount_val(struct hist_trigger_data *hist_data)
+@@ -426,54 +3826,71 @@ static int create_hitcount_val(struct hist_trigger_data *hist_data)
  	return 0;
  }
  
@@ -31966,7 +32019,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	int ret;
  
  	ret = create_hitcount_val(hist_data);
-@@ -493,12 +3900,15 @@ static int create_val_fields(struct hist_trigger_data *hist_data,
+@@ -493,12 +3910,15 @@ static int create_val_fields(struct hist_trigger_data *hist_data,
  		field_str = strsep(&fields_str, ",");
  		if (!field_str)
  			break;
@@ -31982,7 +32035,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	if (fields_str && (strcmp(fields_str, "hitcount") != 0))
  		ret = -EINVAL;
   out:
-@@ -511,12 +3921,13 @@ static int create_key_field(struct hist_trigger_data *hist_data,
+@@ -511,12 +3931,13 @@ static int create_key_field(struct hist_trigger_data *hist_data,
  			    struct trace_event_file *file,
  			    char *field_str)
  {
@@ -31998,7 +32051,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		return -EINVAL;
  
  	flags |= HIST_FIELD_FL_KEY;
-@@ -524,57 +3935,40 @@ static int create_key_field(struct hist_trigger_data *hist_data,
+@@ -524,57 +3945,40 @@ static int create_key_field(struct hist_trigger_data *hist_data,
  	if (strcmp(field_str, "stacktrace") == 0) {
  		flags |= HIST_FIELD_FL_STACKTRACE;
  		key_size = sizeof(unsigned long) * HIST_STACKTRACE_DEPTH;
@@ -32070,7 +32123,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	if (WARN_ON(hist_data->n_keys > TRACING_MAP_KEYS_MAX))
  		return -EINVAL;
-@@ -618,21 +4012,113 @@ static int create_key_fields(struct hist_trigger_data *hist_data,
+@@ -618,21 +4022,113 @@ static int create_key_fields(struct hist_trigger_data *hist_data,
  	return ret;
  }
  
@@ -32186,7 +32239,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	return ret;
  }
  
-@@ -653,10 +4139,9 @@ static int is_descending(const char *str)
+@@ -653,10 +4149,9 @@ static int is_descending(const char *str)
  static int create_sort_keys(struct hist_trigger_data *hist_data)
  {
  	char *fields_str = hist_data->attrs->sort_key_str;
@@ -32198,7 +32251,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	hist_data->n_sort_keys = 1; /* we always have at least one, hitcount */
  
-@@ -670,7 +4155,9 @@ static int create_sort_keys(struct hist_trigger_data *hist_data)
+@@ -670,7 +4165,9 @@ static int create_sort_keys(struct hist_trigger_data *hist_data)
  	}
  
  	for (i = 0; i < TRACING_MAP_SORT_KEYS_MAX; i++) {
@@ -32208,7 +32261,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  		sort_key = &hist_data->sort_keys[i];
  
-@@ -702,34 +4189,210 @@ static int create_sort_keys(struct hist_trigger_data *hist_data)
+@@ -702,34 +4199,210 @@ static int create_sort_keys(struct hist_trigger_data *hist_data)
  			continue;
  		}
  
@@ -32439,7 +32492,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	kfree(hist_data);
  }
  
-@@ -749,6 +4412,9 @@ static int create_tracing_map_fields(struct hist_trigger_data *hist_data)
+@@ -749,6 +4422,9 @@ static int create_tracing_map_fields(struct hist_trigger_data *hist_data)
  
  			if (hist_field->flags & HIST_FIELD_FL_STACKTRACE)
  				cmp_fn = tracing_map_cmp_none;
@@ -32449,7 +32502,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  			else if (is_string_field(field))
  				cmp_fn = tracing_map_cmp_string;
  			else
-@@ -757,36 +4423,29 @@ static int create_tracing_map_fields(struct hist_trigger_data *hist_data)
+@@ -757,36 +4433,29 @@ static int create_tracing_map_fields(struct hist_trigger_data *hist_data)
  			idx = tracing_map_add_key_field(map,
  							hist_field->offset,
  							cmp_fn);
@@ -32497,7 +32550,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  {
  	const struct tracing_map_ops *map_ops = NULL;
  	struct hist_trigger_data *hist_data;
-@@ -797,6 +4456,12 @@ create_hist_data(unsigned int map_bits,
+@@ -797,6 +4466,12 @@ create_hist_data(unsigned int map_bits,
  		return ERR_PTR(-ENOMEM);
  
  	hist_data->attrs = attrs;
@@ -32510,7 +32563,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	ret = create_hist_fields(hist_data, file);
  	if (ret)
-@@ -806,8 +4471,7 @@ create_hist_data(unsigned int map_bits,
+@@ -806,8 +4481,7 @@ create_hist_data(unsigned int map_bits,
  	if (ret)
  		goto free;
  
@@ -32520,7 +32573,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	hist_data->map = tracing_map_create(map_bits, hist_data->key_size,
  					    map_ops, hist_data);
-@@ -820,12 +4484,6 @@ create_hist_data(unsigned int map_bits,
+@@ -820,12 +4494,6 @@ create_hist_data(unsigned int map_bits,
  	ret = create_tracing_map_fields(hist_data);
  	if (ret)
  		goto free;
@@ -32533,7 +32586,7 @@ index 7eb975a2d0e1..e47b56632367 100644
   out:
  	return hist_data;
   free:
-@@ -839,18 +4497,39 @@ create_hist_data(unsigned int map_bits,
+@@ -839,18 +4507,39 @@ create_hist_data(unsigned int map_bits,
  }
  
  static void hist_trigger_elt_update(struct hist_trigger_data *hist_data,
@@ -32577,7 +32630,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  }
  
  static inline void add_to_key(char *compound_key, void *key,
-@@ -877,15 +4556,31 @@ static inline void add_to_key(char *compound_key, void *key,
+@@ -877,15 +4566,31 @@ static inline void add_to_key(char *compound_key, void *key,
  	memcpy(compound_key + key_field->offset, key, size);
  }
  
@@ -32611,7 +32664,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	u64 field_contents;
  	void *key = NULL;
  	unsigned int i;
-@@ -906,7 +4601,7 @@ static void event_hist_trigger(struct event_trigger_data *data, void *rec)
+@@ -906,7 +4611,7 @@ static void event_hist_trigger(struct event_trigger_data *data, void *rec)
  
  			key = entries;
  		} else {
@@ -32620,7 +32673,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  			if (key_field->flags & HIST_FIELD_FL_STRING) {
  				key = (void *)(unsigned long)field_contents;
  				use_compound_key = true;
-@@ -921,9 +4616,18 @@ static void event_hist_trigger(struct event_trigger_data *data, void *rec)
+@@ -921,9 +4626,18 @@ static void event_hist_trigger(struct event_trigger_data *data, void *rec)
  	if (use_compound_key)
  		key = compound_key;
  
@@ -32641,7 +32694,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  }
  
  static void hist_trigger_stacktrace_print(struct seq_file *m,
-@@ -952,6 +4656,7 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -952,6 +4666,7 @@ hist_trigger_entry_print(struct seq_file *m,
  	struct hist_field *key_field;
  	char str[KSYM_SYMBOL_LEN];
  	bool multiline = false;
@@ -32649,7 +32702,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	unsigned int i;
  	u64 uval;
  
-@@ -963,26 +4668,33 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -963,26 +4678,33 @@ hist_trigger_entry_print(struct seq_file *m,
  		if (i > hist_data->n_vals)
  			seq_puts(m, ", ");
  
@@ -32692,7 +32745,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		} else if (key_field->flags & HIST_FIELD_FL_SYSCALL) {
  			const char *syscall_name;
  
-@@ -991,8 +4703,8 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -991,8 +4713,8 @@ hist_trigger_entry_print(struct seq_file *m,
  			if (!syscall_name)
  				syscall_name = "unknown_syscall";
  
@@ -32703,7 +32756,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		} else if (key_field->flags & HIST_FIELD_FL_STACKTRACE) {
  			seq_puts(m, "stacktrace:\n");
  			hist_trigger_stacktrace_print(m,
-@@ -1000,15 +4712,14 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -1000,15 +4722,14 @@ hist_trigger_entry_print(struct seq_file *m,
  						      HIST_STACKTRACE_DEPTH);
  			multiline = true;
  		} else if (key_field->flags & HIST_FIELD_FL_LOG2) {
@@ -32722,7 +32775,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		}
  	}
  
-@@ -1021,17 +4732,23 @@ hist_trigger_entry_print(struct seq_file *m,
+@@ -1021,17 +4742,23 @@ hist_trigger_entry_print(struct seq_file *m,
  		   tracing_map_read_sum(elt, HITCOUNT_IDX));
  
  	for (i = 1; i < hist_data->n_vals; i++) {
@@ -32750,7 +32803,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	seq_puts(m, "\n");
  }
  
-@@ -1102,6 +4819,11 @@ static int hist_show(struct seq_file *m, void *v)
+@@ -1102,6 +4829,11 @@ static int hist_show(struct seq_file *m, void *v)
  			hist_trigger_show(m, data, n++);
  	}
  
@@ -32762,7 +32815,7 @@ index 7eb975a2d0e1..e47b56632367 100644
   out_unlock:
  	mutex_unlock(&event_mutex);
  
-@@ -1120,29 +4842,24 @@ const struct file_operations event_hist_fops = {
+@@ -1120,29 +4852,24 @@ const struct file_operations event_hist_fops = {
  	.release = single_release,
  };
  
@@ -32808,7 +32861,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	if (hist_field->flags) {
  		const char *flags_str = get_hist_field_flags(hist_field);
  
-@@ -1156,7 +4873,8 @@ static int event_hist_trigger_print(struct seq_file *m,
+@@ -1156,7 +4883,8 @@ static int event_hist_trigger_print(struct seq_file *m,
  				    struct event_trigger_data *data)
  {
  	struct hist_trigger_data *hist_data = data->private_data;
@@ -32818,7 +32871,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	unsigned int i;
  
  	seq_puts(m, "hist:");
-@@ -1167,25 +4885,47 @@ static int event_hist_trigger_print(struct seq_file *m,
+@@ -1167,25 +4895,47 @@ static int event_hist_trigger_print(struct seq_file *m,
  	seq_puts(m, "keys=");
  
  	for_each_hist_key_field(i, hist_data) {
@@ -32870,7 +32923,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		}
  	}
  
-@@ -1193,28 +4933,36 @@ static int event_hist_trigger_print(struct seq_file *m,
+@@ -1193,28 +4943,36 @@ static int event_hist_trigger_print(struct seq_file *m,
  
  	for (i = 0; i < hist_data->n_sort_keys; i++) {
  		struct tracing_map_sort_key *sort_key;
@@ -32914,7 +32967,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	if (data->filter_str)
  		seq_printf(m, " if %s", data->filter_str);
-@@ -1242,6 +4990,21 @@ static int event_hist_trigger_init(struct event_trigger_ops *ops,
+@@ -1242,6 +5000,21 @@ static int event_hist_trigger_init(struct event_trigger_ops *ops,
  	return 0;
  }
  
@@ -32936,7 +32989,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  static void event_hist_trigger_free(struct event_trigger_ops *ops,
  				    struct event_trigger_data *data)
  {
-@@ -1254,7 +5017,13 @@ static void event_hist_trigger_free(struct event_trigger_ops *ops,
+@@ -1254,7 +5027,13 @@ static void event_hist_trigger_free(struct event_trigger_ops *ops,
  	if (!data->ref) {
  		if (data->name)
  			del_named_trigger(data);
@@ -32950,7 +33003,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		destroy_hist_data(hist_data);
  	}
  }
-@@ -1381,6 +5150,15 @@ static bool hist_trigger_match(struct event_trigger_data *data,
+@@ -1381,6 +5160,15 @@ static bool hist_trigger_match(struct event_trigger_data *data,
  			return false;
  		if (key_field->offset != key_field_test->offset)
  			return false;
@@ -32966,7 +33019,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	}
  
  	for (i = 0; i < hist_data->n_sort_keys; i++) {
-@@ -1412,6 +5190,7 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1412,6 +5200,7 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  		if (named_data) {
  			if (!hist_trigger_match(data, named_data, named_data,
  						true)) {
@@ -32974,7 +33027,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  				ret = -EINVAL;
  				goto out;
  			}
-@@ -1431,13 +5210,16 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1431,13 +5220,16 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  				test->paused = false;
  			else if (hist_data->attrs->clear)
  				hist_clear(test);
@@ -32992,7 +33045,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		ret = -ENOENT;
  		goto out;
  	}
-@@ -1446,7 +5228,6 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1446,7 +5238,6 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  		data->paused = true;
  
  	if (named_data) {
@@ -33000,7 +33053,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		data->private_data = named_data->private_data;
  		set_named_trigger_data(data, named_data);
  		data->ops = &event_hist_trigger_named_ops;
-@@ -1458,8 +5239,32 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1458,8 +5249,32 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  			goto out;
  	}
  
@@ -33034,7 +33087,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	update_cond_flag(file);
  
-@@ -1468,10 +5273,55 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1468,10 +5283,55 @@ static int hist_register_trigger(char *glob, struct event_trigger_ops *ops,
  		update_cond_flag(file);
  		ret--;
  	}
@@ -33091,7 +33144,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  static void hist_unregister_trigger(char *glob, struct event_trigger_ops *ops,
  				    struct event_trigger_data *data,
  				    struct trace_event_file *file)
-@@ -1497,17 +5347,55 @@ static void hist_unregister_trigger(char *glob, struct event_trigger_ops *ops,
+@@ -1497,17 +5357,55 @@ static void hist_unregister_trigger(char *glob, struct event_trigger_ops *ops,
  
  	if (unregistered && test->ops->free)
  		test->ops->free(test->ops, test);
@@ -33147,7 +33200,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  			if (test->ops->free)
  				test->ops->free(test->ops, test);
  		}
-@@ -1523,16 +5411,54 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1523,16 +5421,54 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  	struct hist_trigger_attrs *attrs;
  	struct event_trigger_ops *trigger_ops;
  	struct hist_trigger_data *hist_data;
@@ -33207,7 +33260,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	attrs = parse_hist_trigger_attrs(trigger);
  	if (IS_ERR(attrs))
-@@ -1541,7 +5467,7 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1541,7 +5477,7 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  	if (attrs->map_bits)
  		hist_trigger_bits = attrs->map_bits;
  
@@ -33216,7 +33269,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	if (IS_ERR(hist_data)) {
  		destroy_hist_trigger_attrs(attrs);
  		return PTR_ERR(hist_data);
-@@ -1549,10 +5475,11 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1549,10 +5485,11 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  
  	trigger_ops = cmd_ops->get_trigger_ops(cmd, trigger);
  
@@ -33230,7 +33283,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  
  	trigger_data->count = -1;
  	trigger_data->ops = trigger_ops;
-@@ -1570,8 +5497,24 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1570,8 +5507,24 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  			goto out_free;
  	}
  
@@ -33256,7 +33309,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  		ret = 0;
  		goto out_free;
  	}
-@@ -1588,14 +5531,47 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
+@@ -1588,14 +5541,47 @@ static int event_hist_trigger_func(struct event_command *cmd_ops,
  		goto out_free;
  	} else if (ret < 0)
  		goto out_free;
@@ -33304,7 +33357,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  	kfree(trigger_data);
  
  	destroy_hist_data(hist_data);
-@@ -1625,7 +5601,8 @@ __init int register_trigger_hist_cmd(void)
+@@ -1625,7 +5611,8 @@ __init int register_trigger_hist_cmd(void)
  }
  
  static void
@@ -33314,7 +33367,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  {
  	struct enable_trigger_data *enable_data = data->private_data;
  	struct event_trigger_data *test;
-@@ -1641,7 +5618,8 @@ hist_enable_trigger(struct event_trigger_data *data, void *rec)
+@@ -1641,7 +5628,8 @@ hist_enable_trigger(struct event_trigger_data *data, void *rec)
  }
  
  static void
@@ -33324,7 +33377,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  {
  	if (!data->count)
  		return;
-@@ -1649,7 +5627,7 @@ hist_enable_count_trigger(struct event_trigger_data *data, void *rec)
+@@ -1649,7 +5637,7 @@ hist_enable_count_trigger(struct event_trigger_data *data, void *rec)
  	if (data->count != -1)
  		(data->count)--;
  
@@ -33333,7 +33386,7 @@ index 7eb975a2d0e1..e47b56632367 100644
  }
  
  static struct event_trigger_ops hist_enable_trigger_ops = {
-@@ -1754,3 +5732,31 @@ __init int register_trigger_hist_enable_disable_cmds(void)
+@@ -1754,3 +5742,31 @@ __init int register_trigger_hist_enable_disable_cmds(void)
  
  	return ret;
  }
@@ -35559,7 +35612,7 @@ index 59db3223a5d6..22aa3ddbd87b 100644
  unsigned int nr_free_highpages (void)
  {
 diff --git a/mm/memcontrol.c b/mm/memcontrol.c
-index 53f7c919b916..6cb4b8c11a42 100644
+index 66e7efabf0a1..b2fb2903137e 100644
 --- a/mm/memcontrol.c
 +++ b/mm/memcontrol.c
 @@ -69,6 +69,7 @@
@@ -35656,7 +35709,7 @@ index 53f7c919b916..6cb4b8c11a42 100644
  }
  
  DEFINE_STATIC_KEY_FALSE(memcg_sockets_enabled_key);
-@@ -5993,6 +5996,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
+@@ -6007,6 +6010,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
  	struct mem_cgroup *memcg, *swap_memcg;
  	unsigned int nr_entries;
  	unsigned short oldid;
@@ -35664,7 +35717,7 @@ index 53f7c919b916..6cb4b8c11a42 100644
  
  	VM_BUG_ON_PAGE(PageLRU(page), page);
  	VM_BUG_ON_PAGE(page_count(page), page);
-@@ -6038,13 +6042,17 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
+@@ -6052,13 +6056,17 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
  	 * important here to have the interrupts disabled because it is the
  	 * only synchronisation we have for udpating the per-CPU variables.
  	 */
@@ -38160,10 +38213,10 @@ index 15fa5baa8fae..8191404ef520 100644
  void __kfree_skb_defer(struct sk_buff *skb)
  {
 diff --git a/net/core/sock.c b/net/core/sock.c
-index 415f441c63b9..77b829301a3b 100644
+index beb1e299fed3..ce67d3e26302 100644
 --- a/net/core/sock.c
 +++ b/net/core/sock.c
-@@ -2762,12 +2762,11 @@ void lock_sock_nested(struct sock *sk, int subclass)
+@@ -2759,12 +2759,11 @@ void lock_sock_nested(struct sock *sk, int subclass)
  	if (sk->sk_lock.owned)
  		__lock_sock(sk);
  	sk->sk_lock.owned = 1;
