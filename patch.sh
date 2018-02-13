@@ -191,9 +191,6 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	${git_bin} revert --no-edit fb9f2d9ab83d9ab1d5286db9432266b353c201c1
-	${git_bin} revert --no-edit fdd88d753d4b3142f7cd38b0278c29b03c1e0929
-
 	#un-matched kernel
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then

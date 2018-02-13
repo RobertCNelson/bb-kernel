@@ -1,6 +1,6 @@
-From fe7c41d56ac3c73fa3b33b01420d77e29ad61ffc Mon Sep 17 00:00:00 2001
+From 69241b103946f3a64b15baec41961e2235623e09 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 8 Feb 2018 13:44:55 -0600
+Date: Tue, 13 Feb 2018 09:28:53 -0600
 Subject: [PATCH 5/5] merge: aufs4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -94,9 +94,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/wkq.c                                      |  390 ++++
  fs/aufs/wkq.h                                      |   93 +
  fs/aufs/xattr.c                                    |  355 ++++
- fs/aufs/xino.c                                     | 1418 +++++++++++++++
+ fs/aufs/xino.c                                     | 1469 +++++++++++++++
  include/uapi/linux/aufs_type.h                     |  447 +++++
- 91 files changed, 36799 insertions(+)
+ 91 files changed, 36850 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -35659,10 +35659,10 @@ index 000000000000..ffff4efbbc22
 +}
 diff --git a/fs/aufs/xino.c b/fs/aufs/xino.c
 new file mode 100644
-index 000000000000..6c12fe667a27
+index 000000000000..2f9167a71758
 --- /dev/null
 +++ b/fs/aufs/xino.c
-@@ -0,0 +1,1418 @@
+@@ -0,0 +1,1469 @@
 +/*
 + * Copyright (C) 2005-2017 Junjiro R. Okajima
 + *
@@ -35688,6 +35688,9 @@ index 000000000000..6c12fe667a27
 +#include <linux/statfs.h>
 +#include "aufs.h"
 +
++static ssize_t xino_fread_wkq(vfs_readf_t func, struct file *file, void *buf,
++			      size_t size, loff_t *pos);
++
 +/* todo: unnecessary to support mmap_sem since kernel-space? */
 +ssize_t xino_fread(vfs_readf_t func, struct file *file, void *kbuf, size_t size,
 +		   loff_t *pos)
@@ -35698,20 +35701,68 @@ index 000000000000..6c12fe667a27
 +		void *k;
 +		char __user *u;
 +	} buf;
++	int i;
++	const int prevent_endless = 10;
 +
++	i = 0;
 +	buf.k = kbuf;
 +	oldfs = get_fs();
 +	set_fs(KERNEL_DS);
 +	do {
-+		/* todo: signal_pending? */
 +		err = func(file, buf.u, size, pos);
-+	} while (err == -EAGAIN || err == -EINTR);
++		if (err == -EINTR
++		    && !au_wkq_test()
++		    && fatal_signal_pending(current)) {
++			set_fs(oldfs);
++			err = xino_fread_wkq(func, file, kbuf, size, pos);
++			BUG_ON(err == -EINTR);
++			oldfs = get_fs();
++			set_fs(KERNEL_DS);
++		}
++	} while (i++ < prevent_endless
++		 && (err == -EAGAIN || err == -EINTR));
 +	set_fs(oldfs);
 +
 +#if 0 /* reserved for future use */
 +	if (err > 0)
 +		fsnotify_access(file->f_path.dentry);
 +#endif
++
++	return err;
++}
++
++struct xino_fread_args {
++	ssize_t *errp;
++	vfs_readf_t func;
++	struct file *file;
++	void *buf;
++	size_t size;
++	loff_t *pos;
++};
++
++static void call_xino_fread(void *args)
++{
++	struct xino_fread_args *a = args;
++	*a->errp = xino_fread(a->func, a->file, a->buf, a->size, a->pos);
++}
++
++static ssize_t xino_fread_wkq(vfs_readf_t func, struct file *file, void *buf,
++			       size_t size, loff_t *pos)
++{
++	ssize_t err;
++	int wkq_err;
++	struct xino_fread_args args = {
++		.errp	= &err,
++		.func	= func,
++		.file	= file,
++		.buf	= buf,
++		.size	= size,
++		.pos	= pos
++	};
++
++	wkq_err = au_wkq_wait(call_xino_fread, &args);
++	if (unlikely(wkq_err))
++		err = wkq_err;
 +
 +	return err;
 +}
@@ -37083,7 +37134,7 @@ index 000000000000..6c12fe667a27
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..82c2398b2039
+index 000000000000..347a5fb0390b
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,447 @@
@@ -37128,7 +37179,7 @@ index 000000000000..82c2398b2039
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.14-20171218"
++#define AUFS_VERSION	"4.14-20180212"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
