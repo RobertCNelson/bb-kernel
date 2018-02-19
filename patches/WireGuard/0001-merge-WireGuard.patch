@@ -1,6 +1,6 @@
-From 4ec38a2564cfcc6c6acaabed5595418f5d4d3229 Mon Sep 17 00:00:00 2001
+From 63a96a423eb7eb26f06ce56081e6c154cd2ad70c Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 12 Feb 2018 12:27:31 -0600
+Date: Sun, 18 Feb 2018 19:45:20 -0600
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -9,7 +9,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/Makefile                                       |    1 +
  net/wireguard/Kconfig                              |   30 +
  net/wireguard/Makefile                             |   19 +
- net/wireguard/allowedips.c                         |  326 ++
+ net/wireguard/allowedips.c                         |  327 ++
  net/wireguard/allowedips.h                         |   44 +
  net/wireguard/compat/Makefile.include              |   70 +
  .../compat/checksum/checksum_partial_compat.h      |  208 ++
@@ -31,7 +31,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/cookie.c                             |  195 ++
  net/wireguard/cookie.h                             |   52 +
  net/wireguard/crypto/blake2s-x86_64.S              |  685 ++++
- net/wireguard/crypto/blake2s.c                     |  296 ++
+ net/wireguard/crypto/blake2s.c                     |  294 ++
  net/wireguard/crypto/blake2s.h                     |   94 +
  net/wireguard/crypto/chacha20-arm.S                | 1471 +++++++++
  net/wireguard/crypto/chacha20-arm64.S              | 1940 ++++++++++++
@@ -81,7 +81,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/timers.h                             |   21 +
  net/wireguard/uapi/wireguard.h                     |  182 ++
  net/wireguard/version.h                            |    1 +
- 76 files changed, 32345 insertions(+)
+ 76 files changed, 32344 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -244,10 +244,10 @@ index 000000000000..844f0be5a9e3
 +obj-$(if $(KBUILD_EXTMOD),m,$(CONFIG_WIREGUARD)) := wireguard.o
 diff --git a/net/wireguard/allowedips.c b/net/wireguard/allowedips.c
 new file mode 100644
-index 000000000000..2c9127156dab
+index 000000000000..282b819b2a1f
 --- /dev/null
 +++ b/net/wireguard/allowedips.c
-@@ -0,0 +1,326 @@
+@@ -0,0 +1,327 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -420,6 +420,7 @@ index 000000000000..2c9127156dab
 +	return peer;
 +}
 +
++__attribute__((nonnull(1)))
 +static inline bool node_placement(struct allowedips_node __rcu *trie, const u8 *key, u8 cidr, u8 bits, struct allowedips_node **rnode, struct mutex *lock)
 +{
 +	bool exact = false;
@@ -5152,10 +5153,10 @@ index 000000000000..ee683e45a6c4
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/blake2s.c b/net/wireguard/crypto/blake2s.c
 new file mode 100644
-index 000000000000..2fbaf093c3d6
+index 000000000000..1bb3cc1d235e
 --- /dev/null
 +++ b/net/wireguard/crypto/blake2s.c
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,294 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -5171,18 +5172,21 @@ index 000000000000..2fbaf093c3d6
 +#include <linux/bug.h>
 +#include <asm/unaligned.h>
 +
-+typedef struct {
-+	u8 digest_length;
-+	u8 key_length;
-+	u8 fanout;
-+	u8 depth;
-+	u32 leaf_length;
-+	u32 node_offset;
-+	u16 xof_length;
-+	u8 node_depth;
-+	u8 inner_length;
-+	u8 salt[8];
-+	u8 personal[8];
++typedef union {
++	struct {
++		u8 digest_length;
++		u8 key_length;
++		u8 fanout;
++		u8 depth;
++		u32 leaf_length;
++		u32 node_offset;
++		u16 xof_length;
++		u8 node_depth;
++		u8 inner_length;
++		u8 salt[8];
++		u8 personal[8];
++	};
++	__le32 words[8];
 +} __packed blake2s_param;
 +
 +static const u32 blake2s_iv[8] = {
@@ -5223,16 +5227,11 @@ index 000000000000..2fbaf093c3d6
 +
 +static inline void blake2s_init_param(struct blake2s_state *state, const blake2s_param *param)
 +{
-+	const __le32 *p;
 +	int i;
 +
 +	memset(state, 0, sizeof(struct blake2s_state));
 +	for (i = 0; i < 8; ++i)
-+		state->h[i] = blake2s_iv[i];
-+	p = (const __le32 *)param;
-+	/* IV XOR ParamBlock */
-+	for (i = 0; i < 8; ++i)
-+		state->h[i] ^= le32_to_cpu(p[i]);
++		state->h[i] = blake2s_iv[i] ^ le32_to_cpu(param->words[i]);
 +}
 +
 +void blake2s_init(struct blake2s_state *state, const size_t outlen)
@@ -32963,11 +32962,11 @@ index 000000000000..8b8a1f254bb6
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..965424809630
+index 000000000000..664cbdc48323
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20180202"
++#define WIREGUARD_VERSION "0.0.20180218"
 -- 
-2.15.1
+2.16.1
 
