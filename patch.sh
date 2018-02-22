@@ -160,7 +160,7 @@ aufs4 () {
 
 		rm -rf ../aufs4-standalone/ || true
 
-		git reset --hard HEAD~5
+		${git_bin} reset --hard HEAD~5
 
 		start_cleanup
 
@@ -276,7 +276,7 @@ wireguard () {
 
 		rm -rf ../WireGuard/ || true
 
-		git reset --hard HEAD^
+		${git_bin} reset --hard HEAD^
 
 		start_cleanup
 
@@ -296,7 +296,7 @@ local_patch () {
 }
 
 #external_git
-#aufs4
+aufs4
 #rt
 wireguard
 #local_patch
@@ -515,6 +515,7 @@ beaglebone () {
 
 		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
 		git format-patch -1 -o ../patches/beaglebone/generated/
