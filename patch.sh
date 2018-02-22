@@ -160,7 +160,7 @@ aufs4 () {
 
 		rm -rf ../aufs4-standalone/ || true
 
-		git reset --hard HEAD~5
+		${git_bin} reset --hard HEAD~5
 
 		start_cleanup
 
@@ -190,6 +190,9 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
+
+	${git_bin} revert --no-edit d6d0c0a618a15ba4dadd7ad6131a814359a53973
+	${git_bin} revert --no-edit f369f1486116b0f3e9630a2481addde6854df541
 
 	#un-matched kernel
 	#regenerate="enable"
@@ -276,7 +279,7 @@ wireguard () {
 
 		rm -rf ../WireGuard/ || true
 
-		git reset --hard HEAD^
+		${git_bin} reset --hard HEAD^
 
 		start_cleanup
 
