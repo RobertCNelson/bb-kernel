@@ -1,17 +1,17 @@
-From e6b99aa99cce653700ae4f061e26dbad7d56ff3c Mon Sep 17 00:00:00 2001
+From 71b55ee34276bc3a4cae9102361f6bf06bc4612e Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 22 Feb 2018 10:39:03 -0600
+Date: Mon, 5 Mar 2018 07:32:58 -0600
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  net/Kconfig                                        |    1 +
  net/Makefile                                       |    1 +
- net/wireguard/Kconfig                              |   30 +
+ net/wireguard/Kconfig                              |   31 +
  net/wireguard/Makefile                             |   19 +
  net/wireguard/allowedips.c                         |  328 ++
  net/wireguard/allowedips.h                         |   44 +
- net/wireguard/compat/Makefile.include              |   70 +
+ net/wireguard/compat/Makefile.include              |   71 +
  .../compat/checksum/checksum_partial_compat.h      |  208 ++
  net/wireguard/compat/compat-asm.h                  |   18 +
  net/wireguard/compat/compat.h                      |  632 ++++
@@ -43,7 +43,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/curve25519-fiat32.h           |  838 +++++
  net/wireguard/crypto/curve25519-hacl64.h           |  751 +++++
  net/wireguard/crypto/curve25519-x86_64.S           | 3261 ++++++++++++++++++++
- net/wireguard/crypto/curve25519-x86_64.h           |  175 ++
+ net/wireguard/crypto/curve25519-x86_64.h           |  176 ++
  net/wireguard/crypto/curve25519.c                  |   81 +
  net/wireguard/crypto/curve25519.h                  |   25 +
  net/wireguard/crypto/poly1305-arm.S                | 1115 +++++++
@@ -55,7 +55,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/hashtables.c                         |  168 +
  net/wireguard/hashtables.h                         |   52 +
  net/wireguard/main.c                               |   69 +
- net/wireguard/messages.h                           |  129 +
+ net/wireguard/messages.h                           |  128 +
  net/wireguard/netlink.c                            |  517 ++++
  net/wireguard/netlink.h                            |   12 +
  net/wireguard/noise.c                              |  635 ++++
@@ -81,7 +81,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/timers.h                             |   21 +
  net/wireguard/uapi/wireguard.h                     |  182 ++
  net/wireguard/version.h                            |    1 +
- 76 files changed, 32345 insertions(+)
+ 76 files changed, 32347 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -183,14 +183,15 @@ index 14fede520840..cb3489d9dedd 100644
  obj-$(CONFIG_XFRM)		+= xfrm/
 diff --git a/net/wireguard/Kconfig b/net/wireguard/Kconfig
 new file mode 100644
-index 000000000000..4385995d61c5
+index 000000000000..25bcb9d0fc9c
 --- /dev/null
 +++ b/net/wireguard/Kconfig
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,31 @@
 +config WIREGUARD
 +	tristate "IP: WireGuard secure network tunnel"
 +	depends on NET && INET
 +	select NET_UDP_TUNNEL
++	select DST_CACHE
 +	select CRYPTO_BLKCIPHER
 +	select VFP
 +	select VFPv3
@@ -628,21 +629,22 @@ index 000000000000..97ecf693be87
 +#endif /* _WG_ALLOWEDIPS_H */
 diff --git a/net/wireguard/compat/Makefile.include b/net/wireguard/compat/Makefile.include
 new file mode 100644
-index 000000000000..863cd28fe547
+index 000000000000..94159fc1d357
 --- /dev/null
 +++ b/net/wireguard/compat/Makefile.include
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,71 @@
 +# SPDX-License-Identifier: GPL-2.0
 +#
 +# Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
 +
 +ifeq ($(wildcard $(src)/compat/compat.h),)
-+ccflags-y += -include $(srctree)/$(src)/compat/compat.h
-+asflags-y += -include $(srctree)/$(src)/compat/compat-asm.h
++cmd_include_path_prefix := $(srctree)/$(src)
 +else
-+ccflags-y += -include $(src)/compat/compat.h
-+asflags-y += -include $(src)/compat/compat-asm.h
++cmd_include_path_prefix := $(src)
 +endif
++
++ccflags-y += -include $(cmd_include_path_prefix)/compat/compat.h
++asflags-y += -include $(cmd_include_path_prefix)/compat/compat-asm.h
 +
 +ifeq ($(wildcard $(srctree)/include/linux/ptr_ring.h),)
 +ccflags-y += -I$(src)/compat/ptr_ring/include
@@ -676,7 +678,7 @@ index 000000000000..863cd28fe547
 +endif
 +
 +ifeq ($(shell grep -F "int crypto_memneq" "$(srctree)/include/crypto/algapi.h"),)
-+ccflags-y += -include $(src)/compat/memneq/include.h
++ccflags-y += -include $(cmd_include_path_prefix)/compat/memneq/include.h
 +wireguard-y += compat/memneq/memneq.o
 +endif
 +
@@ -942,7 +944,7 @@ index 000000000000..73bbfbccacf1
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..ba251a08a7e0
+index 000000000000..f92fe54a2847
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
 @@ -0,0 +1,632 @@
@@ -1430,7 +1432,7 @@ index 000000000000..ba251a08a7e0
 +#else
 +#define ___COMPAT_NETLINK_DUMP_BLOCK return get_device_dump_real(skb, cb);
 +#endif
-+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 14) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)) || LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 63)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0)
 +#define get_device_dump(a, b) get_device_dump_real(a, b); \
 +static int get_device_dump(a, b) { \
 +	struct wireguard_device *wg = (struct wireguard_device *)cb->args[0]; \
@@ -1961,7 +1963,7 @@ index 000000000000..2d18acd9b6c8
 +}
 diff --git a/net/wireguard/compat/memneq/memneq.c b/net/wireguard/compat/memneq/memneq.c
 new file mode 100644
-index 000000000000..0bcb4b81544f
+index 000000000000..1c427d405537
 --- /dev/null
 +++ b/net/wireguard/compat/memneq/memneq.c
 @@ -0,0 +1,170 @@
@@ -2029,7 +2031,7 @@ index 000000000000..0bcb4b81544f
 +#include <crypto/algapi.h>
 +
 +/* Make the optimizer believe the variable can be manipulated arbitrarily. */
-+#define COMPILER_OPTIMIZER_HIDE_VAR(var) __asm__ ("" : "=r" (var) : "0" (var))
++#define COMPILER_OPTIMIZER_HIDE_VAR(var) asm("" : "=r" (var) : "0" (var))
 +
 +#ifndef __HAVE_ARCH_CRYPTO_MEMNEQ
 +
@@ -5154,7 +5156,7 @@ index 000000000000..ee683e45a6c4
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/blake2s.c b/net/wireguard/crypto/blake2s.c
 new file mode 100644
-index 000000000000..1bb3cc1d235e
+index 000000000000..d5d65c10b7ba
 --- /dev/null
 +++ b/net/wireguard/crypto/blake2s.c
 @@ -0,0 +1,294 @@
@@ -5273,8 +5275,8 @@ index 000000000000..1bb3cc1d235e
 +#include <asm/processor.h>
 +#include <asm/fpu/api.h>
 +#include <asm/simd.h>
-+static bool blake2s_use_avx __read_mostly;
-+static bool blake2s_use_avx512 __read_mostly;
++static bool blake2s_use_avx __ro_after_init;
++static bool blake2s_use_avx512 __ro_after_init;
 +void __init blake2s_fpu_init(void)
 +{
 +#ifndef CONFIG_UML
@@ -11613,7 +11615,7 @@ index 000000000000..39883f3718b6
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/chacha20poly1305.c b/net/wireguard/crypto/chacha20poly1305.c
 new file mode 100644
-index 000000000000..25eb4b4b3a1d
+index 000000000000..45825e990bb5
 --- /dev/null
 +++ b/net/wireguard/crypto/chacha20poly1305.c
 @@ -0,0 +1,852 @@
@@ -11657,11 +11659,11 @@ index 000000000000..25eb4b4b3a1d
 +asmlinkage void poly1305_blocks_avx512(void *ctx, const u8 *inp, size_t len, u32 padbit);
 +#endif
 +
-+static bool chacha20poly1305_use_ssse3 __read_mostly;
-+static bool chacha20poly1305_use_avx __read_mostly;
-+static bool chacha20poly1305_use_avx2 __read_mostly;
-+static bool chacha20poly1305_use_avx512 __read_mostly;
-+static bool chacha20poly1305_use_avx512vl __read_mostly;
++static bool chacha20poly1305_use_ssse3 __ro_after_init;
++static bool chacha20poly1305_use_avx __ro_after_init;
++static bool chacha20poly1305_use_avx2 __ro_after_init;
++static bool chacha20poly1305_use_avx512 __ro_after_init;
++static bool chacha20poly1305_use_avx512vl __ro_after_init;
 +
 +void __init chacha20poly1305_fpu_init(void)
 +{
@@ -11693,7 +11695,7 @@ index 000000000000..25eb4b4b3a1d
 +asmlinkage void poly1305_emit_neon(void *ctx, u8 mac[16], const u32 nonce[4]);
 +asmlinkage void chacha20_neon(u8 *out, const u8 *in, size_t len, const u32 key[8], const u32 counter[4]);
 +#endif
-+static bool chacha20poly1305_use_neon __read_mostly;
++static bool chacha20poly1305_use_neon __ro_after_init;
 +void __init chacha20poly1305_fpu_init(void)
 +{
 +#if defined(CONFIG_ARM64)
@@ -14686,7 +14688,7 @@ index 000000000000..b8e2c1d96482
 +#endif
 diff --git a/net/wireguard/crypto/curve25519-arm.h b/net/wireguard/crypto/curve25519-arm.h
 new file mode 100644
-index 000000000000..4142e4e91aef
+index 000000000000..4271ab582933
 --- /dev/null
 +++ b/net/wireguard/crypto/curve25519-arm.h
 @@ -0,0 +1,14 @@
@@ -14699,7 +14701,7 @@ index 000000000000..4142e4e91aef
 +#include <asm/neon.h>
 +#include <asm/simd.h>
 +asmlinkage void curve25519_neon(u8 mypublic[CURVE25519_POINT_SIZE], const u8 secret[CURVE25519_POINT_SIZE], const u8 basepoint[CURVE25519_POINT_SIZE]);
-+static bool curve25519_use_neon __read_mostly;
++static bool curve25519_use_neon __ro_after_init;
 +void __init curve25519_fpu_init(void)
 +{
 +	curve25519_use_neon = elf_hwcap & HWCAP_NEON;
@@ -19574,10 +19576,10 @@ index 000000000000..57fe50f9a808
 +#endif /* CONFIG_AS_AVX */
 diff --git a/net/wireguard/crypto/curve25519-x86_64.h b/net/wireguard/crypto/curve25519-x86_64.h
 new file mode 100644
-index 000000000000..dba58121d760
+index 000000000000..c90b13d04f29
 --- /dev/null
 +++ b/net/wireguard/crypto/curve25519-x86_64.h
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,176 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -19589,7 +19591,8 @@ index 000000000000..dba58121d760
 +#include <asm/processor.h>
 +#include <asm/fpu/api.h>
 +#include <asm/simd.h>
-+static bool curve25519_use_avx __read_mostly;
++
++static bool curve25519_use_avx __ro_after_init;
 +void __init curve25519_fpu_init(void)
 +{
 +#ifndef CONFIG_UML
@@ -25796,10 +25799,10 @@ index 000000000000..ebda16afe343
 +MODULE_ALIAS_GENL_FAMILY(WG_GENL_NAME);
 diff --git a/net/wireguard/messages.h b/net/wireguard/messages.h
 new file mode 100644
-index 000000000000..e221b51cd2f9
+index 000000000000..f3d47ef9ebb3
 --- /dev/null
 +++ b/net/wireguard/messages.h
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,128 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -25862,8 +25865,7 @@ index 000000000000..e221b51cd2f9
 +	MESSAGE_HANDSHAKE_INITIATION = 1,
 +	MESSAGE_HANDSHAKE_RESPONSE = 2,
 +	MESSAGE_HANDSHAKE_COOKIE = 3,
-+	MESSAGE_DATA = 4,
-+	MESSAGE_TOTAL = 5
++	MESSAGE_DATA = 4
 +};
 +
 +struct message_header {
@@ -27113,7 +27115,7 @@ index 000000000000..b346ca9a6564
 +}
 diff --git a/net/wireguard/noise.h b/net/wireguard/noise.h
 new file mode 100644
-index 000000000000..0851770d2c91
+index 000000000000..5eb3a8877431
 --- /dev/null
 +++ b/net/wireguard/noise.h
 @@ -0,0 +1,117 @@
@@ -27173,10 +27175,10 @@ index 000000000000..0851770d2c91
 +};
 +
 +struct noise_static_identity {
-+	bool has_identity;
 +	u8 static_public[NOISE_PUBLIC_KEY_LEN];
 +	u8 static_private[NOISE_PUBLIC_KEY_LEN];
 +	struct rw_semaphore lock;
++	bool has_identity;
 +};
 +
 +enum noise_handshake_state {
@@ -27228,7 +27230,7 @@ index 000000000000..0851770d2c91
 +bool noise_handshake_create_initiation(struct message_handshake_initiation *dst, struct noise_handshake *handshake);
 +struct wireguard_peer *noise_handshake_consume_initiation(struct message_handshake_initiation *src, struct wireguard_device *wg);
 +
-+bool noise_handshake_create_response(struct message_handshake_response *dst, struct noise_handshake *peer);
++bool noise_handshake_create_response(struct message_handshake_response *dst, struct noise_handshake *handshake);
 +struct wireguard_peer *noise_handshake_consume_response(struct message_handshake_response *src, struct wireguard_device *wg);
 +
 +bool noise_handshake_begin_session(struct noise_handshake *handshake, struct noise_keypairs *keypairs);
@@ -32963,11 +32965,11 @@ index 000000000000..8b8a1f254bb6
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..664cbdc48323
+index 000000000000..2915e9a0eddc
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20180218"
++#define WIREGUARD_VERSION "0.0.20180304"
 -- 
 2.16.1
 
