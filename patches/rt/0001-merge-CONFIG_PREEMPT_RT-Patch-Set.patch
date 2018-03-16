@@ -1,6 +1,6 @@
-From 46229fb0e50310a96e4bfe4d8394bde1804c23e1 Mon Sep 17 00:00:00 2001
+From b90be9f9ef507f39dcc91d959d69e788a4155cce Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 5 Mar 2018 07:58:32 -0600
+Date: Fri, 16 Mar 2018 12:10:42 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -741,7 +741,7 @@ index 000000000000..6f2aeabf7faa
 +
 +These data are also reset when the wakeup histogram is reset.
 diff --git a/Makefile b/Makefile
-index d874d7de0cde..5180ee152090 100644
+index 0e22e4eb85cc..f343aec158bc 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -799,6 +799,9 @@ KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
@@ -2993,10 +2993,10 @@ index d437f3871e53..65098846bbcb 100644
  	jz	restore_all
  	call	preempt_schedule_irq
 diff --git a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
-index a03b22c615d9..979f941563b2 100644
+index 59a4e1604a36..41877afd3824 100644
 --- a/arch/x86/entry/entry_64.S
 +++ b/arch/x86/entry/entry_64.S
-@@ -619,7 +619,23 @@ retint_kernel:
+@@ -623,7 +623,23 @@ retint_kernel:
  	bt	$9, EFLAGS(%rsp)		/* were interrupts off? */
  	jnc	1f
  0:	cmpl	$0, PER_CPU_VAR(__preempt_count)
@@ -3020,7 +3020,7 @@ index a03b22c615d9..979f941563b2 100644
  	call	preempt_schedule_irq
  	jmp	0b
  1:
-@@ -909,6 +925,7 @@ bad_gs:
+@@ -913,6 +929,7 @@ bad_gs:
  	jmp	2b
  	.previous
  
@@ -3028,7 +3028,7 @@ index a03b22c615d9..979f941563b2 100644
  /* Call softirq on interrupt stack. Interrupts are off. */
  ENTRY(do_softirq_own_stack)
  	pushq	%rbp
-@@ -921,6 +938,7 @@ ENTRY(do_softirq_own_stack)
+@@ -925,6 +942,7 @@ ENTRY(do_softirq_own_stack)
  	decl	PER_CPU_VAR(irq_count)
  	ret
  END(do_softirq_own_stack)
@@ -27316,7 +27316,7 @@ index 80016b329d94..b7342b6e6a5a 100644
   * Set one of the process-wide special case CPU timers or RLIMIT_CPU.
   * The tsk->sighand->siglock must be held by the caller.
 diff --git a/kernel/time/posix-timers.c b/kernel/time/posix-timers.c
-index f2826c35e918..464a98155a0e 100644
+index fc7c37ad90a0..48ca053dae2e 100644
 --- a/kernel/time/posix-timers.c
 +++ b/kernel/time/posix-timers.c
 @@ -506,6 +506,7 @@ static enum hrtimer_restart posix_timer_fn(struct hrtimer *timer)
@@ -27325,19 +27325,19 @@ index f2826c35e918..464a98155a0e 100644
  	struct task_struct *rtn = current->group_leader;
 +	int sig = event->sigev_signo;
  
- 	if ((event->sigev_notify & SIGEV_THREAD_ID ) &&
- 		(!(rtn = find_task_by_vpid(event->sigev_notify_thread_id)) ||
-@@ -514,7 +515,8 @@ static struct pid *good_sigevent(sigevent_t * event)
- 		return NULL;
- 
- 	if (((event->sigev_notify & ~SIGEV_THREAD_ID) != SIGEV_NONE) &&
--	    ((event->sigev_signo <= 0) || (event->sigev_signo > SIGRTMAX)))
-+	    (sig <= 0 || sig > SIGRTMAX || sig_kernel_only(sig) ||
-+	     sig_kernel_coredump(sig)))
- 		return NULL;
- 
- 	return task_pid(rtn);
-@@ -826,6 +828,20 @@ SYSCALL_DEFINE1(timer_getoverrun, timer_t, timer_id)
+ 	switch (event->sigev_notify) {
+ 	case SIGEV_SIGNAL | SIGEV_THREAD_ID:
+@@ -515,7 +516,8 @@ static struct pid *good_sigevent(sigevent_t * event)
+ 		/* FALLTHRU */
+ 	case SIGEV_SIGNAL:
+ 	case SIGEV_THREAD:
+-		if (event->sigev_signo <= 0 || event->sigev_signo > SIGRTMAX)
++		if (sig <= 0 || sig > SIGRTMAX ||
++		    sig_kernel_only(sig) || sig_kernel_coredump(sig))
+ 			return NULL;
+ 		/* FALLTHRU */
+ 	case SIGEV_NONE:
+@@ -830,6 +832,20 @@ SYSCALL_DEFINE1(timer_getoverrun, timer_t, timer_id)
  	return overrun;
  }
  
@@ -27358,7 +27358,7 @@ index f2826c35e918..464a98155a0e 100644
  /* Set a POSIX.1b interval timer. */
  /* timr->it_lock is taken. */
  static int
-@@ -903,6 +919,7 @@ retry:
+@@ -907,6 +923,7 @@ retry:
  	if (!timr)
  		return -EINVAL;
  
@@ -27366,7 +27366,7 @@ index f2826c35e918..464a98155a0e 100644
  	kc = clockid_to_kclock(timr->it_clock);
  	if (WARN_ON_ONCE(!kc || !kc->timer_set))
  		error = -EINVAL;
-@@ -911,9 +928,12 @@ retry:
+@@ -915,9 +932,12 @@ retry:
  
  	unlock_timer(timr, flag);
  	if (error == TIMER_RETRY) {
@@ -27379,7 +27379,7 @@ index f2826c35e918..464a98155a0e 100644
  
  	if (old_setting && !error &&
  	    copy_to_user(old_setting, &old_spec, sizeof (old_spec)))
-@@ -951,10 +971,15 @@ retry_delete:
+@@ -955,10 +975,15 @@ retry_delete:
  	if (!timer)
  		return -EINVAL;
  
@@ -27395,7 +27395,7 @@ index f2826c35e918..464a98155a0e 100644
  
  	spin_lock(&current->sighand->siglock);
  	list_del(&timer->list);
-@@ -980,8 +1005,18 @@ static void itimer_delete(struct k_itimer *timer)
+@@ -984,8 +1009,18 @@ static void itimer_delete(struct k_itimer *timer)
  retry_delete:
  	spin_lock_irqsave(&timer->it_lock, flags);
  
@@ -32178,7 +32178,7 @@ index c842f40c1173..035a5f6e3de9 100644
  }
  
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 389807c1c36f..6f88d6601ee4 100644
+index b2f589012c6b..d59d5cdc230a 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -186,6 +186,7 @@ static unsigned int napi_gen_id = NR_CPUS;
@@ -32281,7 +32281,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  }
  
  /**
-@@ -2270,6 +2276,7 @@ static inline void __netif_reschedule(struct Qdisc *q)
+@@ -2277,6 +2283,7 @@ static inline void __netif_reschedule(struct Qdisc *q)
  	sd->output_queue_tailp = &q->next_sched;
  	raise_softirq_irqoff(NET_TX_SOFTIRQ);
  	local_irq_restore(flags);
@@ -32289,7 +32289,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  }
  
  void __netif_schedule(struct Qdisc *q)
-@@ -2354,6 +2361,7 @@ void __dev_kfree_skb_irq(struct sk_buff *skb, enum skb_free_reason reason)
+@@ -2361,6 +2368,7 @@ void __dev_kfree_skb_irq(struct sk_buff *skb, enum skb_free_reason reason)
  	__this_cpu_write(softnet_data.completion_queue, skb);
  	raise_softirq_irqoff(NET_TX_SOFTIRQ);
  	local_irq_restore(flags);
@@ -32297,7 +32297,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  }
  EXPORT_SYMBOL(__dev_kfree_skb_irq);
  
-@@ -2929,7 +2937,11 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
+@@ -2936,7 +2944,11 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
  	 * This permits __QDISC___STATE_RUNNING owner to get the lock more
  	 * often and dequeue packets faster.
  	 */
@@ -32309,7 +32309,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  	if (unlikely(contended))
  		spin_lock(&q->busylock);
  
-@@ -2989,9 +3001,44 @@ static void skb_update_prio(struct sk_buff *skb)
+@@ -2996,9 +3008,44 @@ static void skb_update_prio(struct sk_buff *skb)
  #define skb_update_prio(skb)
  #endif
  
@@ -32354,7 +32354,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  #define RECURSION_LIMIT 10
  
  /**
-@@ -3186,7 +3233,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
+@@ -3193,7 +3240,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
  
  		if (txq->xmit_lock_owner != cpu) {
  
@@ -32363,7 +32363,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  				goto recursion_alert;
  
  			skb = validate_xmit_skb(skb, dev);
-@@ -3196,9 +3243,9 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
+@@ -3203,9 +3250,9 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
  			HARD_TX_LOCK(dev, txq, cpu);
  
  			if (!netif_xmit_stopped(txq)) {
@@ -32375,7 +32375,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  				if (dev_xmit_complete(rc)) {
  					HARD_TX_UNLOCK(dev, txq);
  					goto out;
-@@ -3572,6 +3619,7 @@ drop:
+@@ -3579,6 +3626,7 @@ drop:
  	rps_unlock(sd);
  
  	local_irq_restore(flags);
@@ -32383,7 +32383,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  
  	atomic_long_inc(&skb->dev->rx_dropped);
  	kfree_skb(skb);
-@@ -3590,7 +3638,7 @@ static int netif_rx_internal(struct sk_buff *skb)
+@@ -3597,7 +3645,7 @@ static int netif_rx_internal(struct sk_buff *skb)
  		struct rps_dev_flow voidflow, *rflow = &voidflow;
  		int cpu;
  
@@ -32392,7 +32392,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  		rcu_read_lock();
  
  		cpu = get_rps_cpu(skb->dev, skb, &rflow);
-@@ -3600,13 +3648,13 @@ static int netif_rx_internal(struct sk_buff *skb)
+@@ -3607,13 +3655,13 @@ static int netif_rx_internal(struct sk_buff *skb)
  		ret = enqueue_to_backlog(skb, cpu, &rflow->last_qtail);
  
  		rcu_read_unlock();
@@ -32409,7 +32409,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  	}
  	return ret;
  }
-@@ -3640,16 +3688,44 @@ int netif_rx_ni(struct sk_buff *skb)
+@@ -3647,16 +3695,44 @@ int netif_rx_ni(struct sk_buff *skb)
  
  	trace_netif_rx_ni_entry(skb);
  
@@ -32458,7 +32458,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  static void net_tx_action(struct softirq_action *h)
  {
  	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
-@@ -3691,7 +3767,7 @@ static void net_tx_action(struct softirq_action *h)
+@@ -3698,7 +3774,7 @@ static void net_tx_action(struct softirq_action *h)
  			head = head->next_sched;
  
  			root_lock = qdisc_lock(q);
@@ -32467,7 +32467,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  				smp_mb__before_atomic();
  				clear_bit(__QDISC_STATE_SCHED,
  					  &q->state);
-@@ -4113,7 +4189,7 @@ static void flush_backlog(void *arg)
+@@ -4120,7 +4196,7 @@ static void flush_backlog(void *arg)
  	skb_queue_walk_safe(&sd->input_pkt_queue, skb, tmp) {
  		if (skb->dev == dev) {
  			__skb_unlink(skb, &sd->input_pkt_queue);
@@ -32476,7 +32476,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  			input_queue_head_incr(sd);
  		}
  	}
-@@ -4122,10 +4198,13 @@ static void flush_backlog(void *arg)
+@@ -4129,10 +4205,13 @@ static void flush_backlog(void *arg)
  	skb_queue_walk_safe(&sd->process_queue, skb, tmp) {
  		if (skb->dev == dev) {
  			__skb_unlink(skb, &sd->process_queue);
@@ -32491,7 +32491,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  }
  
  static int napi_gro_complete(struct sk_buff *skb)
-@@ -4592,6 +4671,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
+@@ -4599,6 +4678,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
  		sd->rps_ipi_list = NULL;
  
  		local_irq_enable();
@@ -32499,7 +32499,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  
  		/* Send pending IPI's to kick RPS processing on remote cpus. */
  		while (remsd) {
-@@ -4605,6 +4685,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
+@@ -4612,6 +4692,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
  	} else
  #endif
  		local_irq_enable();
@@ -32507,7 +32507,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  }
  
  static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
-@@ -4686,9 +4767,11 @@ void __napi_schedule(struct napi_struct *n)
+@@ -4693,9 +4774,11 @@ void __napi_schedule(struct napi_struct *n)
  	local_irq_save(flags);
  	____napi_schedule(this_cpu_ptr(&softnet_data), n);
  	local_irq_restore(flags);
@@ -32519,7 +32519,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  /**
   * __napi_schedule_irqoff - schedule for receive
   * @n: entry to schedule
-@@ -4700,6 +4783,7 @@ void __napi_schedule_irqoff(struct napi_struct *n)
+@@ -4707,6 +4790,7 @@ void __napi_schedule_irqoff(struct napi_struct *n)
  	____napi_schedule(this_cpu_ptr(&softnet_data), n);
  }
  EXPORT_SYMBOL(__napi_schedule_irqoff);
@@ -32527,7 +32527,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  
  void __napi_complete(struct napi_struct *n)
  {
-@@ -4923,13 +5007,21 @@ static void net_rx_action(struct softirq_action *h)
+@@ -4930,13 +5014,21 @@ static void net_rx_action(struct softirq_action *h)
  	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
  	unsigned long time_limit = jiffies + 2;
  	int budget = netdev_budget;
@@ -32549,7 +32549,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  	for (;;) {
  		struct napi_struct *n;
  
-@@ -4959,7 +5051,7 @@ static void net_rx_action(struct softirq_action *h)
+@@ -4966,7 +5058,7 @@ static void net_rx_action(struct softirq_action *h)
  	list_splice_tail(&repoll, &list);
  	list_splice(&list, &sd->poll_list);
  	if (!list_empty(&sd->poll_list))
@@ -32558,7 +32558,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  
  	net_rps_action_and_irq_enable(sd);
  }
-@@ -7298,7 +7390,7 @@ EXPORT_SYMBOL(free_netdev);
+@@ -7305,7 +7397,7 @@ EXPORT_SYMBOL(free_netdev);
  void synchronize_net(void)
  {
  	might_sleep();
@@ -32567,7 +32567,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  		synchronize_rcu_expedited();
  	else
  		synchronize_rcu();
-@@ -7539,16 +7631,20 @@ static int dev_cpu_callback(struct notifier_block *nfb,
+@@ -7546,16 +7638,20 @@ static int dev_cpu_callback(struct notifier_block *nfb,
  
  	raise_softirq_irqoff(NET_TX_SOFTIRQ);
  	local_irq_enable();
@@ -32589,7 +32589,7 @@ index 389807c1c36f..6f88d6601ee4 100644
  
  	return NOTIFY_OK;
  }
-@@ -7850,8 +7946,9 @@ static int __init net_dev_init(void)
+@@ -7857,8 +7953,9 @@ static int __init net_dev_init(void)
  	for_each_possible_cpu(i) {
  		struct softnet_data *sd = &per_cpu(softnet_data, i);
  
@@ -33106,7 +33106,7 @@ index 4f70d12e392d..9378d0919ed8 100644
  	mmput(mm);
  	kvm_put_kvm(vcpu->kvm);
 diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
-index d080f06fd8d9..a8d8150fd398 100644
+index b814ae6822b6..3eee5a73ba37 100644
 --- a/virt/kvm/kvm_main.c
 +++ b/virt/kvm/kvm_main.c
 @@ -228,8 +228,7 @@ int kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
@@ -33119,7 +33119,7 @@ index d080f06fd8d9..a8d8150fd398 100644
  	kvm_async_pf_vcpu_init(vcpu);
  
  	vcpu->pre_pcpu = -1;
-@@ -2008,7 +2007,7 @@ static int kvm_vcpu_check_block(struct kvm_vcpu *vcpu)
+@@ -2007,7 +2006,7 @@ static int kvm_vcpu_check_block(struct kvm_vcpu *vcpu)
  void kvm_vcpu_block(struct kvm_vcpu *vcpu)
  {
  	ktime_t start, cur;
@@ -33128,7 +33128,7 @@ index d080f06fd8d9..a8d8150fd398 100644
  	bool waited = false;
  	u64 block_ns;
  
-@@ -2033,7 +2032,7 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
+@@ -2032,7 +2031,7 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
  	kvm_arch_vcpu_blocking(vcpu);
  
  	for (;;) {
@@ -33137,7 +33137,7 @@ index d080f06fd8d9..a8d8150fd398 100644
  
  		if (kvm_vcpu_check_block(vcpu) < 0)
  			break;
-@@ -2042,7 +2041,7 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
+@@ -2041,7 +2040,7 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
  		schedule();
  	}
  
@@ -33146,7 +33146,7 @@ index d080f06fd8d9..a8d8150fd398 100644
  	cur = ktime_get();
  
  	kvm_arch_vcpu_unblocking(vcpu);
-@@ -2074,11 +2073,11 @@ void kvm_vcpu_kick(struct kvm_vcpu *vcpu)
+@@ -2073,11 +2072,11 @@ void kvm_vcpu_kick(struct kvm_vcpu *vcpu)
  {
  	int me;
  	int cpu = vcpu->cpu;
@@ -33161,7 +33161,7 @@ index d080f06fd8d9..a8d8150fd398 100644
  		++vcpu->stat.halt_wakeup;
  	}
  
-@@ -2179,7 +2178,7 @@ void kvm_vcpu_on_spin(struct kvm_vcpu *me)
+@@ -2178,7 +2177,7 @@ void kvm_vcpu_on_spin(struct kvm_vcpu *me)
  				continue;
  			if (vcpu == me)
  				continue;
@@ -33171,5 +33171,5 @@ index d080f06fd8d9..a8d8150fd398 100644
  			if (!kvm_vcpu_eligible_for_directed_yield(vcpu))
  				continue;
 -- 
-2.16.1
+2.16.2
 
