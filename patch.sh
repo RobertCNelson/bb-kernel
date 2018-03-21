@@ -191,7 +191,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	${git_bin} revert --no-edit a80de288d6c5188f734e13302ca83141cd0211d6
+	${git_bin} revert --no-edit cd21b3400bc117ebf919d47ca80a5a04ec92a0a9
+	${git_bin} revert --no-edit 076c7c06801a71035c077ea3f621fc9d33a51a9b
 
 	#un-matched kernel
 	#regenerate="enable"
