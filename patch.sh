@@ -195,51 +195,11 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	${git_bin} revert --no-edit aa14f4bd6c4f32b19cdbfe37d918d1cb3baaf260
+	${git_bin} revert --no-edit 48226104275c0d8ddf307e432de8f6e6c5316bff
+	${git_bin} revert --no-edit 0e6661b400404028aed71e80b785a3a42b1d85e1
 	${git_bin} revert --no-edit 13e75c74cd69ca460778fad5ab902f0b20869267
 
-	#un-matched kernel
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-
-		cd ../
-		if [ ! -d ./linux-rt-devel ] ; then
-			${git_bin} clone -b linux-4.9.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
-		else
-			rm -rf ./linux-rt-devel || true
-			${git_bin} clone -b linux-4.9.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
-		fi
-
-		cd ./KERNEL/
-
-		exit 2
-
-		#https://raphaelhertzog.com/2012/08/08/how-to-use-quilt-to-manage-patches-in-debian-packages/
-
-		#export QUILT_PATCHES=`pwd`/linux-rt-devel/patches
-		#export QUILT_REFRESH_ARGS="-p ab --no-timestamps --no-index"
-
-		#quilt push -a
-
-		quilt delete -r localversion.patch
-
-		#fix...
-		#quilt push -f
-		#quilt refresh
-
-		#final...
-		#quilt pop -a
-		#quilt push -a
-		#git add .
-		#git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
-
-		exit 2
-	fi
-
-	if [ -d ../linux-rt-devel ] ; then
-		rm -rf ../linux-rt-devel || true
-	fi
-
-	#matched kernel
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
@@ -296,6 +256,42 @@ wireguard () {
 	${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
 }
 
+ti_pm_firmware () {
+	echo "dir: drivers/ti/firmware"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+
+		cd ../
+		if [ ! -d ./ti-amx3-cm3-pm-firmware ] ; then
+			${git_bin} clone -b ti-v4.1.y-next git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
+		else
+			rm -rf ./ti-amx3-cm3-pm-firmware || true
+			${git_bin} clone -b ti-v4.1.y-next git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
+		fi
+		cd ./KERNEL/
+
+		cp -v ../ti-amx3-cm3-pm-firmware/bin/am* ./firmware/
+
+		${git_bin} add -f ./firmware/am*
+		${git_bin} commit -a -m 'add am33x firmware' -s
+		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
+
+		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
+
+		${git_bin} reset --hard HEAD^
+
+		start_cleanup
+
+		${git} "${DIR}/patches/drivers/ti/firmware/0001-add-am33x-firmware.patch"
+
+		wdir="drivers/ti/firmware"
+		number=1
+		cleanup
+	fi
+
+	${git} "${DIR}/patches/drivers/ti/firmware/0001-add-am33x-firmware.patch"
+}
+
 local_patch () {
 	echo "dir: dir"
 	${git} "${DIR}/patches/dir/0001-patch.patch"
@@ -306,6 +302,7 @@ sync_cherrypicks
 aufs4
 rt
 wireguard
+ti_pm_firmware
 #local_patch
 
 pre_backports () {
@@ -469,50 +466,6 @@ drivers () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="drivers/ti/bbb_overlays"
 		number=41
-		cleanup
-	fi
-
-	echo "dir: drivers/ti/firmware"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	#http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=summary
-	#git clone git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git
-
-	#cd ti-amx3-cm3-pm-firmware/
-	#git checkout origin/ti-v4.1.y-next -b tmp
-
-	#commit ee4acf427055d7e87d9d1d82296cbd05e388642e
-	#Author: Dave Gerlach <d-gerlach@ti.com>
-	#Date:   Tue Sep 6 14:33:11 2016 -0500
-	#
-	#    CM3: Firmware release 0x192
-	#    
-	#    This version, 0x192, includes the following changes:
-	#         - Fix DDR IO CTRL handling during suspend so both am335x and am437x
-	#           use optimal low power state and restore the exact previous
-	#           configuration.
-	#        - Explicitly configure PER state in standby, even though it is
-	#           configured to ON state to ensure proper state.
-	#         - Add new 'halt' flag in IPC_REG4 bit 11 to allow HLOS to configure
-	#           the suspend path to wait immediately before suspending the system
-	#           entirely to allow JTAG visiblity for debug.
-	#         - Fix board voltage scaling binaries i2c speed configuration in
-	#           order to properly configure 100khz operation.
-	#    
-	#    Signed-off-by: Dave Gerlach <d-gerlach@ti.com>
-
-	#cp -v bin/am* /opt/github/bb.org/ti-4.4/normal/KERNEL/firmware/
-
-	#git add -f ./firmware/am*
-
-	${git} "${DIR}/patches/drivers/ti/firmware/0001-add-am33x-firmware.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="drivers/ti/firmware"
-		number=1
 		cleanup
 	fi
 
