@@ -1,6 +1,6 @@
-From 597c8d8e35a6d353738c5a38a428b5501c51f669 Mon Sep 17 00:00:00 2001
+From b4437982bb931ba59071eff585fc6d620613f2e3 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 21 Mar 2018 16:34:52 -0500
+Date: Sun, 25 Mar 2018 21:53:45 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -172,6 +172,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/scsi/libsas/sas_ata.c                      |    4 +-
  drivers/scsi/qla2xxx/qla_inline.h                  |    4 +-
  drivers/staging/greybus/audio_manager.c            |    2 +-
+ drivers/target/target_core_tmr.c                   |    2 -
+ drivers/target/target_core_transport.c             |    6 -
  drivers/thermal/x86_pkg_temp_thermal.c             |   52 +-
  drivers/tty/Kconfig                                |    6 +-
  drivers/tty/goldfish.c                             |    2 +
@@ -183,7 +185,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/usb/gadget/function/f_fs.c                 |    2 +-
  drivers/usb/gadget/function/f_ncm.c                |   30 +-
  drivers/usb/gadget/legacy/inode.c                  |    4 +-
- fs/aio.c                                           |   24 +-
+ fs/aio.c                                           |   15 +-
  fs/autofs4/autofs_i.h                              |    1 +
  fs/autofs4/expire.c                                |    2 +-
  fs/buffer.c                                        |   21 +-
@@ -456,7 +458,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../inter-event/trigger-onmax-action-hist.tc       |   48 +
  .../trigger-synthetic-event-createremove.tc        |   54 +
  virt/kvm/arm/arm.c                                 |    6 +-
- 451 files changed, 17029 insertions(+), 5034 deletions(-)
+ 453 files changed, 17025 insertions(+), 5037 deletions(-)
  create mode 100644 Documentation/trace/histogram.txt
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -9957,6 +9959,43 @@ index aa6508b44fab..045696ce85c7 100644
  #include <linux/idr.h>
  
  #include "audio_manager.h"
+diff --git a/drivers/target/target_core_tmr.c b/drivers/target/target_core_tmr.c
+index 9c7bc1ca341a..3d35dad1de2c 100644
+--- a/drivers/target/target_core_tmr.c
++++ b/drivers/target/target_core_tmr.c
+@@ -114,8 +114,6 @@ static bool __target_check_io_state(struct se_cmd *se_cmd,
+ {
+ 	struct se_session *sess = se_cmd->se_sess;
+ 
+-	assert_spin_locked(&sess->sess_cmd_lock);
+-	WARN_ON_ONCE(!irqs_disabled());
+ 	/*
+ 	 * If command already reached CMD_T_COMPLETE state within
+ 	 * target_complete_cmd() or CMD_T_FABRIC_STOP due to shutdown,
+diff --git a/drivers/target/target_core_transport.c b/drivers/target/target_core_transport.c
+index e6d51135d105..b00829995131 100644
+--- a/drivers/target/target_core_transport.c
++++ b/drivers/target/target_core_transport.c
+@@ -2966,9 +2966,6 @@ __transport_wait_for_tasks(struct se_cmd *cmd, bool fabric_stop,
+ 	__acquires(&cmd->t_state_lock)
+ {
+ 
+-	assert_spin_locked(&cmd->t_state_lock);
+-	WARN_ON_ONCE(!irqs_disabled());
+-
+ 	if (fabric_stop)
+ 		cmd->transport_state |= CMD_T_FABRIC_STOP;
+ 
+@@ -3238,9 +3235,6 @@ static int __transport_check_aborted_status(struct se_cmd *cmd, int send_status)
+ {
+ 	int ret;
+ 
+-	assert_spin_locked(&cmd->t_state_lock);
+-	WARN_ON_ONCE(!irqs_disabled());
+-
+ 	if (!(cmd->transport_state & CMD_T_ABORTED))
+ 		return 0;
+ 	/*
 diff --git a/drivers/thermal/x86_pkg_temp_thermal.c b/drivers/thermal/x86_pkg_temp_thermal.c
 index d93eee2f101b..0287333b1f3c 100644
 --- a/drivers/thermal/x86_pkg_temp_thermal.c
@@ -10347,7 +10386,7 @@ index 5c28bee327e1..ed49dba4704d 100644
  					epdata->status = -EINTR;
  			} else {
 diff --git a/fs/aio.c b/fs/aio.c
-index 5a2487217072..462329c4a0b0 100644
+index c3ace7833a03..360e60944540 100644
 --- a/fs/aio.c
 +++ b/fs/aio.c
 @@ -40,6 +40,7 @@
@@ -10358,16 +10397,15 @@ index 5a2487217072..462329c4a0b0 100644
  
  #include <asm/kmap_types.h>
  #include <linux/uaccess.h>
-@@ -115,7 +116,7 @@ struct kioctx {
- 	struct page		**ring_pages;
- 	long			nr_pages;
+@@ -117,6 +118,7 @@ struct kioctx {
  
--	struct work_struct	free_work;
-+	struct swork_event	free_work;
+ 	struct rcu_head		free_rcu;
+ 	struct work_struct	free_work;	/* see free_ioctx() */
++	struct swork_event	free_swork;	/* see free_ioctx() */
  
  	/*
  	 * signals when all in-flight requests are done
-@@ -258,6 +259,7 @@ static int __init aio_setup(void)
+@@ -259,6 +261,7 @@ static int __init aio_setup(void)
  		.mount		= aio_mount,
  		.kill_sb	= kill_anon_super,
  	};
@@ -10375,30 +10413,7 @@ index 5a2487217072..462329c4a0b0 100644
  	aio_mnt = kern_mount(&aio_fs);
  	if (IS_ERR(aio_mnt))
  		panic("Failed to create aio fs mount.");
-@@ -588,9 +590,9 @@ static int kiocb_cancel(struct aio_kiocb *kiocb)
- 	return cancel(&kiocb->common);
- }
- 
--static void free_ioctx(struct work_struct *work)
-+static void free_ioctx(struct swork_event *sev)
- {
--	struct kioctx *ctx = container_of(work, struct kioctx, free_work);
-+	struct kioctx *ctx = container_of(sev, struct kioctx, free_work);
- 
- 	pr_debug("freeing %p\n", ctx);
- 
-@@ -609,8 +611,8 @@ static void free_ioctx_reqs(struct percpu_ref *ref)
- 	if (ctx->rq_wait && atomic_dec_and_test(&ctx->rq_wait->count))
- 		complete(&ctx->rq_wait->comp);
- 
--	INIT_WORK(&ctx->free_work, free_ioctx);
--	schedule_work(&ctx->free_work);
-+	INIT_SWORK(&ctx->free_work, free_ioctx);
-+	swork_queue(&ctx->free_work);
- }
- 
- /*
-@@ -618,9 +620,9 @@ static void free_ioctx_reqs(struct percpu_ref *ref)
+@@ -633,9 +636,9 @@ static void free_ioctx_reqs(struct percpu_ref *ref)
   * and ctx->users has dropped to 0, so we know no more kiocbs can be submitted -
   * now it's safe to cancel any that need to be.
   */
@@ -10406,11 +10421,11 @@ index 5a2487217072..462329c4a0b0 100644
 +static void free_ioctx_users_work(struct swork_event *sev)
  {
 -	struct kioctx *ctx = container_of(ref, struct kioctx, users);
-+	struct kioctx *ctx = container_of(sev, struct kioctx, free_work);
++	struct kioctx *ctx = container_of(sev, struct kioctx, free_swork);
  	struct aio_kiocb *req;
  
  	spin_lock_irq(&ctx->ctx_lock);
-@@ -639,6 +641,14 @@ static void free_ioctx_users(struct percpu_ref *ref)
+@@ -654,6 +657,14 @@ static void free_ioctx_users(struct percpu_ref *ref)
  	percpu_ref_put(&ctx->reqs);
  }
  
@@ -10418,8 +10433,8 @@ index 5a2487217072..462329c4a0b0 100644
 +{
 +	struct kioctx *ctx = container_of(ref, struct kioctx, users);
 +
-+	INIT_SWORK(&ctx->free_work, free_ioctx_users_work);
-+	swork_queue(&ctx->free_work);
++	INIT_SWORK(&ctx->free_swork, free_ioctx_users_work);
++	swork_queue(&ctx->free_swork);
 +}
 +
  static int ioctx_add_table(struct kioctx *ctx, struct mm_struct *mm)
