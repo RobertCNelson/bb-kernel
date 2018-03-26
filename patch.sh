@@ -198,51 +198,9 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+	${git_bin} revert --no-edit 5ae91b40db1df6899365c170d49bcb0d7f0f5190
+	${git_bin} revert --no-edit c68e1f443fca1ecb00d3c206d29ca14f4f21184b
 
-	#un-matched kernel
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-
-		cd ../
-		if [ ! -d ./linux-rt-devel ] ; then
-			${git_bin} clone -b linux-4.4.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
-		else
-			rm -rf ./linux-rt-devel || true
-			${git_bin} clone -b linux-4.4.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
-		fi
-
-		cd ./KERNEL/
-
-		exit 2
-
-		#https://raphaelhertzog.com/2012/08/08/how-to-use-quilt-to-manage-patches-in-debian-packages/
-
-		#export QUILT_PATCHES=`pwd`/linux-rt-devel/patches
-		#export QUILT_REFRESH_ARGS="-p ab --no-timestamps --no-index"
-
-		#quilt push -a
-
-		quilt delete -r localversion.patch
-
-		#fix...
-		#quilt push -f
-		#quilt refresh
-
-		#final...
-		#quilt pop -a
-		#quilt push -a
-		#git add .
-		#git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
-
-		exit 2
-	fi
-
-	if [ -d ../linux-rt-devel ] ; then
-		rm -rf ../linux-rt-devel || true
-	fi
-
-	#matched kernel
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
@@ -452,6 +410,7 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0024-iio-trigger-free-trigger-resource-correctly.patch"
 	${git} "${DIR}/patches/backports/iio/0025-iio-light-fix-improper-return-value.patch"
 	${git} "${DIR}/patches/backports/iio/0026-staging-iio-cdc-fix-improper-return-value.patch"
+	${git} "${DIR}/patches/backports/iio/0027-iio-st_pressure-st_accel-Initialise-sensor-platform-.patch"
 
 	backport_tag="v4.8.17"
 
@@ -480,6 +439,8 @@ lts44_backports () {
 		patch_backports
 	fi
 	${git} "${DIR}/patches/backports/touchscreen/0002-Input-elants_i2c-avoid-divide-by-0-errors-on-bad-tou.patch"
+	${git} "${DIR}/patches/backports/touchscreen/0003-Input-tsc2007-check-for-presence-and-power-down-tsc2.patch"
+	${git} "${DIR}/patches/backports/touchscreen/0004-Input-ar1021_i2c-fix-too-long-name-in-driver-s-devic.patch"
 
 	echo "dir: lts44_backports"
 	#regenerate="enable"
