@@ -411,6 +411,7 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0025-iio-light-fix-improper-return-value.patch"
 	${git} "${DIR}/patches/backports/iio/0026-staging-iio-cdc-fix-improper-return-value.patch"
 	${git} "${DIR}/patches/backports/iio/0027-iio-st_pressure-st_accel-Initialise-sensor-platform-.patch"
+	${git} "${DIR}/patches/backports/iio/0028-iio-st_pressure-st_accel-pass-correct-platform-data-.patch"
 
 	backport_tag="v4.8.17"
 
