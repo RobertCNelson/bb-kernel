@@ -191,49 +191,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#un-matched kernel
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
+	#${git_bin} revert --no-edit xyz
 
-		cd ../
-		if [ ! -d ./linux-rt-devel ] ; then
-			${git_bin} clone -b linux-4.14.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
-		else
-			rm -rf ./linux-rt-devel || true
-			${git_bin} clone -b linux-4.14.y-rt-patches https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git --depth=1
-		fi
-
-		cd ./KERNEL/
-
-		exit 2
-
-		#https://raphaelhertzog.com/2012/08/08/how-to-use-quilt-to-manage-patches-in-debian-packages/
-
-		#export QUILT_PATCHES=`pwd`/linux-rt-devel/patches
-		#export QUILT_REFRESH_ARGS="-p ab --no-timestamps --no-index"
-
-		#quilt push -a
-
-		quilt delete -r localversion.patch
-
-		#fix...
-		#quilt push -f
-		#quilt refresh
-
-		#final...
-		#quilt pop -a
-		#quilt push -a
-		#git add .
-		#git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
-
-		exit 2
-	fi
-
-	if [ -d ../linux-rt-devel ] ; then
-		rm -rf ../linux-rt-devel || true
-	fi
-
-	#matched kernel
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
@@ -396,15 +355,18 @@ reverts () {
 		start_cleanup
 	fi
 
-	#https://github.com/torvalds/linux/commit/00f0ea70d2b82b7d7afeb1bdedc9169eb8ea6675
-	#
-	#Causes bone_capemgr to get stuck on slot 1 and just eventually exit "without" checking slot2/3/4...
-	#
-	#[    5.406775] bone_capemgr bone_capemgr: Baseboard: 'A335BNLT,00C0,2516BBBK2626'
-	#[    5.414178] bone_capemgr bone_capemgr: compatible-baseboard=ti,beaglebone-black - #slots=4
-	#[    5.422573] bone_capemgr bone_capemgr: Failed to add slot #1
+		#Breaks boot on am335x-boneblack
+		#debug: [bootz 0x82000000 - 88000000] ...
+		### Flattened Device Tree blob at 88000000
+		#   Booting using the fdt blob at 0x88000000
+		#   reserving fdt memory region: addr=88000000 size=88000
+		#   Loading Device Tree to 8ff75000, end 8fffffff ... OK
+		#
+		#Starting kernel ...
 
-	#${git} "${DIR}/patches/reverts/0001-Revert-eeprom-at24-check-if-the-chip-is-functional-i.patch"
+		#git revert --no-edit c083dc5f3738d394223baa0f90705397b0844acd
+
+		${git} "${DIR}/patches/reverts/0001-Revert-clk-ti-am33xx-add-set-rate-parent-support-for.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
@@ -427,7 +389,6 @@ drivers () {
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/etnaviv'
 	dir 'drivers/ti/eqep'
-	dir 'drivers/ti/mcasp'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
