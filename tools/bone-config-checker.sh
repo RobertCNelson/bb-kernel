@@ -108,7 +108,9 @@ config="CONFIG_ARM_ERRATA_775420" ; config_disable
 # Kernel Features
 #
 config="CONFIG_SMP" ; config_disable
-config="CONFIG_THUMB2_KERNEL" ; config_enable
+
+#broken in gcc/as...sid/stretch...
+#config="CONFIG_THUMB2_KERNEL" ; config_enable
 
 #
 # VOP Driver
@@ -136,6 +138,7 @@ config="CONFIG_NET_VENDOR_INTEL" ; config_disable
 config="CONFIG_NET_VENDOR_MARVELL" ; config_disable
 config="CONFIG_NET_VENDOR_MELLANOX" ; config_disable
 config="CONFIG_NET_VENDOR_NETRONOME" ; config_disable
+config="CONFIG_NET_VENDOR_NATSEMI" ; config_disable
 config="CONFIG_NET_VENDOR_8390" ; config_disable
 config="CONFIG_NET_VENDOR_QUALCOMM" ; config_disable
 config="CONFIG_NET_VENDOR_RENESAS" ; config_disable
@@ -145,7 +148,6 @@ config="CONFIG_NET_VENDOR_SEEQ" ; config_disable
 config="CONFIG_NET_VENDOR_SOLARFLARE" ; config_disable
 config="CONFIG_NET_VENDOR_STMICRO" ; config_disable
 config="CONFIG_NET_VENDOR_VIA" ; config_disable
-config="CONFIG_NET_VENDOR_WIZNET" ; config_disable
 config="CONFIG_NET_VENDOR_SYNOPSYS" ; config_disable
 config="CONFIG_MDIO_BCM_UNIMAC" ; config_disable
 
@@ -175,6 +177,12 @@ config="CONFIG_TERANETICS_PHY" ; config_disable
 #
 config="CONFIG_TOUCHSCREEN_EDT_FT5X06" ; config_enable
 config="CONFIG_TOUCHSCREEN_TI_AM335X_TSC" ; config_enable
+config="CONFIG_TOUCHSCREEN_AR1021_I2C" ; config_enable
+
+#
+# Hardware I/O ports
+#
+config="CONFIG_SERIO_LIBPS2" ; config_disable
 
 #
 # Serial drivers
@@ -190,13 +198,23 @@ config="CONFIG_SERIAL_8250_OMAP_TTYO_FIXUP" ; config_enable
 # Non-8250 serial port support
 #
 config="CONFIG_SERIAL_FSL_LPUART" ; config_disable
-config="CONFIG_SERIAL_DEV_BUS" ; config_enable
-config="CONFIG_SERIAL_DEV_CTRL_TTYPORT" ; config_enable
 
 #
 # I2C system bus drivers (mostly embedded / system-on-chip)
 #
 config="CONFIG_I2C_RK3X" ; config_disable
+
+#
+# AX.25 network device drivers
+#
+config="CONFIG_CAN" ; config_enable
+
+#
+# CAN Device Drivers
+#
+config="CONFIG_CAN_DEV" ; config_enable
+config="CONFIG_CAN_C_CAN" ; config_enable
+config="CONFIG_CAN_C_CAN_PLATFORM" ; config_enable
 
 #
 # SPI Master Controller Drivers
@@ -238,9 +256,14 @@ config="CONFIG_CHARGER_ISP1704" ; config_disable
 config="CONFIG_CHARGER_TWL4030" ; config_disable
 config="CONFIG_CHARGER_BQ2415X" ; config_disable
 
+#broken...
+config="CONFIG_CHARGER_TPS65217" ; config_disable
+
 #
 # Watchdog Device Drivers
 #
+config="CONFIG_SOFT_WATCHDOG" ; config_enable
+config="CONFIG_OMAP_WATCHDOG" ; config_enable
 config="CONFIG_DA9052_WATCHDOG" ; config_disable
 config="CONFIG_DW_WATCHDOG" ; config_disable
 config="CONFIG_TWL4030_WATCHDOG" ; config_disable
@@ -285,6 +308,18 @@ config="CONFIG_REGULATOR_TPS65218" ; config_disable
 config="CONFIG_REGULATOR_TPS6524X" ; config_disable
 
 #
+# Misc devices
+#
+config="CONFIG_ENCLOSURE_SERVICES" ; config_disable
+config="CONFIG_TIEQEP" ; config_enable
+
+#
+# Generic fallback / legacy drivers
+#
+config="CONFIG_MD_RAID456" ; config_disable
+config="CONFIG_DM_RAID" ; config_disable
+
+#
 # Graphics support
 #
 config="CONFIG_DRM_EXYNOS" ; config_disable
@@ -295,9 +330,11 @@ config="CONFIG_DRM_DUMB_VGA_DAC" ; config_disable
 config="CONFIG_DRM_ETNAVIV" ; config_disable
 config="CONFIG_DRM_MXS" ; config_disable
 config="CONFIG_DRM_MXSFB" ; config_disable
+config="CONFIG_DRM_VIRTIO_GPU" ; config_disable
 
 #breaks tilcd + tfp410...
 config="CONFIG_OMAP2_DSS" ; config_disable
+config="CONFIG_DRM_PANEL_SIMPLE" ; config_enable
 
 #
 # I2C encoder or helper chips
@@ -306,10 +343,47 @@ config="CONFIG_DRM_I2C_ADIHDMI" ; config_enable
 config="CONFIG_DRM_I2C_NXP_TDA998X" ; config_enable
 
 #
+# Console display driver support
+#
+config="CONFIG_SOUND" ; config_enable
+config="CONFIG_SND" ; config_enable
+config="CONFIG_SND_TIMER" ; config_enable
+config="CONFIG_SND_PCM" ; config_enable
+config="CONFIG_SND_DMAENGINE_PCM" ; config_enable
+
+#
+# HD-Audio
+#
+config="CONFIG_SND_SOC" ; config_enable
+config="CONFIG_SND_EDMA_SOC" ; config_enable
+config="CONFIG_SND_DAVINCI_SOC_I2S" ; config_enable
+config="CONFIG_SND_DAVINCI_SOC_MCASP" ; config_enable
+config="CONFIG_SND_DAVINCI_SOC_GENERIC_EVM" ; config_enable
+config="CONFIG_SND_AM33XX_SOC_EVM" ; config_enable
+
+#
+# Common SoC Audio options for Freescale CPUs:
+#
+config="CONFIG_SND_SOC_FSL_SSI" ; config_disable
+config="CONFIG_SND_SOC_FSL_SPDIF" ; config_disable
+config="CONFIG_SND_SOC_IMX_AUDMUX" ; config_disable
+
+config="CONFIG_SND_OMAP_SOC" ; config_enable
+config="CONFIG_SND_OMAP_SOC_HDMI_AUDIO" ; config_disable
+config="CONFIG_SND_OMAP_SOC_RX51" ; config_disable
+
+#
+# CODEC drivers
+#
+config="CONFIG_SND_SIMPLE_CARD_UTILS" ; config_enable
+config="CONFIG_SND_SIMPLE_CARD" ; config_enable
+
+#
 # Miscellaneous USB options
 #
 #http://bugs.elinux.org/issues/127
-config="CONFIG_USB_OTG" ; config_disable
+#2017.10.20 re-enable...
+config="CONFIG_USB_OTG" ; config_enable
 
 #
 # USB Host Controller Drivers
@@ -368,6 +442,8 @@ config="CONFIG_MMC_SDHCI" ; config_disable
 config="CONFIG_MMC_SDHCI_PLTFM" ; config_disable
 config="CONFIG_MMC_SDHCI_OF_ARASAN" ; config_disable
 config="CONFIG_MMC_DW" ; config_disable
+config="CONFIG_MMC_CQHCI" ; config_disable
+config="CONFIG_MEMSTICK" ; config_disable
 
 #
 # MemoryStick drivers
@@ -400,15 +476,24 @@ config="CONFIG_SUNXI_SRAM" ; config_disable
 #
 # Analog to digital converters
 #
+config="CONFIG_TI_AM335X_ADC" ; config_enable
 config="CONFIG_VF610_ADC" ; config_disable
 
 #
 # Temperature sensors
 #
+config="CONFIG_PWM_OMAP_DMTIMER" ; config_enable
 config="CONFIG_PWM_TIECAP" ; config_enable
 config="CONFIG_PWM_TIEHRPWM" ; config_enable
 config="CONFIG_RESET_IMX7" ; config_disable
 config="CONFIG_RESET_SUNXI" ; config_disable
+
+config="CONFIG_EXOFS_FS" ; config_disable
+
+#
+# Common Clock Framework
+#
+config="CONFIG_COMMON_CLK_SI5351" ; config_disable
 
 exit
 
@@ -450,13 +535,10 @@ config="CONFIG_BACKLIGHT_PWM" ; config_enable
 config="CONFIG_BACKLIGHT_PANDORA" ; config_disable
 config="CONFIG_BACKLIGHT_GPIO" ; config_enable
 
-
 #
 # Pin controllers
 #
 config="CONFIG_GPIO_OF_HELPER" ; config_enable
-
-
 
 #u-boot overlays
 config="CONFIG_MFD_TI_AM335X_TSCADC" ; config_enable
