@@ -560,7 +560,6 @@ reverts
 drivers
 soc
 beaglebone
-dir 'build/gcc'
 sgx
 
 packaging () {
