@@ -291,7 +291,7 @@ local_patch () {
 }
 
 #external_git
-aufs4
+#aufs4
 #rt
 wireguard
 ti_pm_firmware
@@ -386,7 +386,6 @@ drivers () {
 	dir 'drivers/opp'
 	dir 'drivers/wiznet'
 	dir 'drivers/ti/overlays'
-	dir 'drivers/ti/clock'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/etnaviv'
 	dir 'drivers/ti/eqep'
