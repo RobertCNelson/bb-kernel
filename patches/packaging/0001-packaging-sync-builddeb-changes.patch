@@ -1,15 +1,83 @@
-From d93e606201f3cb015d952ca3789d2f19cc0d2868 Mon Sep 17 00:00:00 2001
+From 8d0f5a0e02b72a2e21b870023de248f6332b3d8f Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 14 Dec 2017 09:54:09 -0600
+Date: Mon, 23 Apr 2018 13:24:42 -0500
 Subject: [PATCH] packaging: sync builddeb changes
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- scripts/package/builddeb | 34 ++++++++++++++++++++++++++++++++--
- 1 file changed, 32 insertions(+), 2 deletions(-)
+ scripts/package/Makefile | 31 ++++++++++++++++++++++++++-----
+ scripts/package/builddeb | 40 +++++++++++++++++++++++++++++++++++-----
+ 2 files changed, 61 insertions(+), 10 deletions(-)
 
+diff --git a/scripts/package/Makefile b/scripts/package/Makefile
+index 348af5b20618..9fbcf5ed0ca7 100644
+--- a/scripts/package/Makefile
++++ b/scripts/package/Makefile
+@@ -32,10 +32,14 @@ MKSPEC     := $(srctree)/scripts/package/mkspec
+ 
+ quiet_cmd_src_tar = TAR     $(2).tar.gz
+       cmd_src_tar = \
++set -e; \
+ if test "$(objtree)" != "$(srctree)"; then \
+-	echo "Building source tarball is not possible outside the"; \
+-	echo "kernel source tree. Don't set KBUILD_OUTPUT, or use the"; \
+-	echo "binrpm-pkg or bindeb-pkg target instead."; \
++	echo >&2; \
++	echo >&2 "  ERROR:"; \
++	echo >&2 "  Building source tarball is not possible outside the"; \
++	echo >&2 "  kernel source tree. Don't set KBUILD_OUTPUT, or use the"; \
++	echo >&2 "  binrpm-pkg or bindeb-pkg target instead."; \
++	echo >&2; \
+ 	false; \
+ fi ; \
+ $(srctree)/scripts/setlocalversion --save-scmversion; \
+@@ -45,11 +49,12 @@ rm -f $(objtree)/.scmversion
+ 
+ # rpm-pkg
+ # ---------------------------------------------------------------------------
+-rpm-pkg rpm: FORCE
++rpm-pkg: FORCE
+ 	$(MAKE) clean
+ 	$(CONFIG_SHELL) $(MKSPEC) >$(objtree)/kernel.spec
+ 	$(call cmd,src_tar,$(KERNELPATH),kernel.spec)
+-	+rpmbuild $(RPMOPTS) --target $(UTS_MACHINE) -ta $(KERNELPATH).tar.gz
++	+rpmbuild $(RPMOPTS) --target $(UTS_MACHINE) -ta $(KERNELPATH).tar.gz \
++	--define='_smp_mflags %{nil}'
+ 
+ # binrpm-pkg
+ # ---------------------------------------------------------------------------
+@@ -93,6 +98,21 @@ bindeb-pkg: FORCE
+ 
+ clean-dirs += $(objtree)/debian/
+ 
++# snap-pkg
++# ---------------------------------------------------------------------------
++snap-pkg: FORCE
++	rm -rf $(objtree)/snap
++	mkdir $(objtree)/snap
++	$(MAKE) clean
++	$(call cmd,src_tar,$(KERNELPATH))
++	sed "s@KERNELRELEASE@$(KERNELRELEASE)@; \
++		s@SRCTREE@$(shell realpath $(KERNELPATH).tar.gz)@" \
++		$(srctree)/scripts/package/snapcraft.template > \
++		$(objtree)/snap/snapcraft.yaml
++	cd $(objtree)/snap && \
++	snapcraft --target-arch=$(UTS_MACHINE)
++
++clean-dirs += $(objtree)/snap/
+ 
+ # tarball targets
+ # ---------------------------------------------------------------------------
+@@ -137,6 +157,7 @@ help: FORCE
+ 	@echo '  binrpm-pkg          - Build only the binary kernel RPM package'
+ 	@echo '  deb-pkg             - Build both source and binary deb kernel packages'
+ 	@echo '  bindeb-pkg          - Build only the binary kernel deb package'
++	@echo '  snap-pkg            - Build only the binary kernel snap package (will connect to external hosts)'
+ 	@echo '  tar-pkg             - Build the kernel as an uncompressed tarball'
+ 	@echo '  targz-pkg           - Build the kernel as a gzip compressed tarball'
+ 	@echo '  tarbz2-pkg          - Build the kernel as a bzip2 compressed tarball'
 diff --git a/scripts/package/builddeb b/scripts/package/builddeb
-index 0bc87473f68f..8daf8101b186 100755
+index 0bc87473f68f..65837b889516 100755
 --- a/scripts/package/builddeb
 +++ b/scripts/package/builddeb
 @@ -92,10 +92,12 @@ else
@@ -67,6 +135,15 @@ index 0bc87473f68f..8daf8101b186 100755
  Description: Linux kernel, version $version
   This package contains the Linux kernel, modules and corresponding other
   files, version: $version.
+@@ -313,7 +327,7 @@ fi
+ 
+ # Build kernel header package
+ (cd $srctree; find . -name Makefile\* -o -name Kconfig\* -o -name \*.pl) > "$objtree/debian/hdrsrcfiles"
+-(cd $srctree; find arch/*/include include scripts -type f) >> "$objtree/debian/hdrsrcfiles"
++(cd $srctree; find arch/*/include include scripts -type f -o -type l) >> "$objtree/debian/hdrsrcfiles"
+ (cd $srctree; find arch/$SRCARCH -name module.lds -o -name Kbuild.platforms -o -name Platform) >> "$objtree/debian/hdrsrcfiles"
+ (cd $srctree; find $(find arch/$SRCARCH -name include -o -name scripts -type d) -type f) >> "$objtree/debian/hdrsrcfiles"
+ if grep -q '^CONFIG_STACK_VALIDATION=y' $KCONFIG_CONFIG ; then
 @@ -341,6 +355,22 @@ Description: Linux kernel headers for $KERNELRELEASE on \${kernel:debarch}
   This is useful for people who need to build external modules
  EOF
@@ -90,6 +167,18 @@ index 0bc87473f68f..8daf8101b186 100755
  cat <<EOF >> debian/control
  
  Package: $libc_headers_packagename
+@@ -408,9 +438,9 @@ EOF
+ 	dpkg-source -cdebian/control -ldebian/changelog --format="3.0 (custom)" --target-format="3.0 (quilt)" \
+ 		-b / ../${sourcename}_${version}.orig.tar.gz  ../${sourcename}_${packageversion}.debian.tar.gz
+ 	mv ${sourcename}_${packageversion}*dsc ..
+-	dpkg-genchanges > ../${sourcename}_${packageversion}_${debarch}.changes
++	dpkg-genchanges -Vkernel:debarch="${debarch}" > ../${sourcename}_${packageversion}_${debarch}.changes
+ else
+-	dpkg-genchanges -b > ../${sourcename}_${packageversion}_${debarch}.changes
++	dpkg-genchanges -b -Vkernel:debarch="${debarch}" > ../${sourcename}_${packageversion}_${debarch}.changes
+ fi
+ 
+ exit 0
 -- 
-2.15.1
+2.17.0
 
