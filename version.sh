@@ -4,8 +4,8 @@ ARCH=$(uname -m)
 
 config="omap2plus_defconfig"
 
-build_prefix="-bone"
-branch_prefix="am33x-v"
+build_prefix="-bone-rt-r"
+branch_prefix="am33x-rt-v"
 branch_postfix=""
 
 #arm
@@ -30,8 +30,8 @@ toolchain="gcc_linaro_gnueabihf_7"
 
 #Kernel
 KERNEL_REL=4.16
-KERNEL_TAG=${KERNEL_REL}.6
-kernel_rt=".X-rtY"
+KERNEL_TAG=${KERNEL_REL}.7
+kernel_rt=".7-rt1"
 #Kernel Build
 BUILD=${build_prefix}10
 
