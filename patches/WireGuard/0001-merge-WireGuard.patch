@@ -1,6 +1,6 @@
-From 111fd3b0dd64ebeb5dc888dc363cdce5157dfe57 Mon Sep 17 00:00:00 2001
+From 6431551d4da52b53e62adacc9c08be380135ce59 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 10 May 2018 13:45:34 -0500
+Date: Thu, 17 May 2018 15:48:48 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -14,7 +14,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/compat/Makefile.include         |   71 +
  .../compat/checksum/checksum_partial_compat.h |  208 ++
  net/wireguard/compat/compat-asm.h             |   18 +
- net/wireguard/compat/compat.h                 |  631 ++++
+ net/wireguard/compat/compat.h                 |  643 ++++
  net/wireguard/compat/dst_cache/dst_cache.c    |  175 ++
  .../compat/dst_cache/include/net/dst_cache.h  |   97 +
  .../compat/fpu/include/asm/fpu/api.h          |    1 +
@@ -62,11 +62,11 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/peer.c                          |  136 +
  net/wireguard/peer.h                          |   73 +
  net/wireguard/queueing.c                      |   46 +
- net/wireguard/queueing.h                      |  143 +
+ net/wireguard/queueing.h                      |  145 +
  net/wireguard/ratelimiter.c                   |  199 ++
  net/wireguard/ratelimiter.h                   |   19 +
  net/wireguard/receive.c                       |  490 +++
- net/wireguard/selftest/allowedips.h           |  573 ++++
+ net/wireguard/selftest/allowedips.h           |  586 ++++
  net/wireguard/selftest/blake2s.h              |  559 ++++
  net/wireguard/selftest/chacha20poly1305.h     | 1356 ++++++++
  net/wireguard/selftest/counter.h              |   92 +
@@ -80,7 +80,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/timers.h                        |   21 +
  net/wireguard/uapi/wireguard.h                |  182 ++
  net/wireguard/version.h                       |    1 +
- 75 files changed, 32583 insertions(+)
+ 75 files changed, 32610 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -961,10 +961,10 @@ index 000000000000..73bbfbccacf1
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..742c4b2abd4a
+index 000000000000..e0771884f5a0
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
-@@ -0,0 +1,631 @@
+@@ -0,0 +1,643 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1001,7 +1001,10 @@ index 000000000000..742c4b2abd4a
 +#error "WireGuard requires Linux >= 3.10"
 +#endif
 +
-+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0) && !defined(ISRHEL7)
++#if defined(ISRHEL7)
++#include <linux/skbuff.h>
++#define headers_end headers_start
++#elif LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)
 +#define headers_start data
 +#define headers_end data
 +#endif
@@ -1542,6 +1545,15 @@ index 000000000000..742c4b2abd4a
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 +#include <net/genetlink.h>
 +#define genl_dump_check_consistent(a, b) genl_dump_check_consistent(a, b, &genl_family)
++#endif
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0) && !defined(ISRHEL7) && !defined(ISOPENSUSE15)
++static inline void *skb_put_data(struct sk_buff *skb, const void *data, unsigned int len)
++{
++	void *tmp = skb_put(skb, len);
++	memcpy(tmp, data, len);
++	return tmp;
++}
 +#endif
 +
 +/* https://lkml.org/lkml/2017/6/23/790 */
@@ -11626,7 +11638,7 @@ index 000000000000..39883f3718b6
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/chacha20poly1305.c b/net/wireguard/crypto/chacha20poly1305.c
 new file mode 100644
-index 000000000000..353cdf9d1ac3
+index 000000000000..c066d93636d3
 --- /dev/null
 +++ b/net/wireguard/crypto/chacha20poly1305.c
 @@ -0,0 +1,854 @@
@@ -12168,7 +12180,7 @@ index 000000000000..353cdf9d1ac3
 +
 +static void poly1305_update(struct poly1305_ctx *ctx, const u8 *inp, size_t len, bool have_simd)
 +{
-+	const size_t num = ctx->num;
++	const size_t num = ctx->num % POLY1305_BLOCK_SIZE;
 +	size_t rem;
 +
 +	if (num) {
@@ -12202,7 +12214,7 @@ index 000000000000..353cdf9d1ac3
 +
 +static void poly1305_finish(struct poly1305_ctx *ctx, u8 mac[16], bool have_simd)
 +{
-+	size_t num = ctx->num;
++	size_t num = ctx->num % POLY1305_BLOCK_SIZE;
 +
 +	if (num) {
 +		ctx->data[num++] = 1;   /* pad bit */
@@ -26152,10 +26164,10 @@ index 000000000000..85dea6be3fef
 +}
 diff --git a/net/wireguard/queueing.h b/net/wireguard/queueing.h
 new file mode 100644
-index 000000000000..c507536614bb
+index 000000000000..0057cfa7a18c
 --- /dev/null
 +++ b/net/wireguard/queueing.h
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,145 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -26222,8 +26234,10 @@ index 000000000000..c507536614bb
 +
 +static inline void skb_reset(struct sk_buff *skb)
 +{
++	const int pfmemalloc = skb->pfmemalloc;
 +	skb_scrub_packet(skb, true);
 +	memset(&skb->headers_start, 0, offsetof(struct sk_buff, headers_end) - offsetof(struct sk_buff, headers_start));
++	skb->pfmemalloc = pfmemalloc;
 +	skb->queue_mapping = 0;
 +	skb->nohdr = 0;
 +	skb->peeked = 0;
@@ -27027,10 +27041,10 @@ index 000000000000..27d3d04f7fb6
 +}
 diff --git a/net/wireguard/selftest/allowedips.h b/net/wireguard/selftest/allowedips.h
 new file mode 100644
-index 000000000000..5ad761290ef9
+index 000000000000..1cf8c8f26ff4
 --- /dev/null
 +++ b/net/wireguard/selftest/allowedips.h
-@@ -0,0 +1,573 @@
+@@ -0,0 +1,586 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -27040,12 +27054,22 @@ index 000000000000..5ad761290ef9
 +
 +#ifdef DEBUG_PRINT_TRIE_GRAPHVIZ
 +#include <linux/siphash.h>
++
++static __init void swap_endian_and_apply_cidr(u8 *dst, const u8 *src, u8 bits, u8 cidr)
++{
++	swap_endian(dst, src, bits);
++	memset(dst + (cidr + 7) / 8, 0, bits / 8 - (cidr + 7) / 8);
++	if (cidr)
++		dst[(cidr + 7) / 8 - 1] &= ~0U << ((8 - (cidr % 8)) % 8);
++}
++
 +static __init void print_node(struct allowedips_node *node, u8 bits)
 +{
 +	u32 color = 0;
 +	char *style = "dotted";
 +	char *fmt_connection = KERN_DEBUG "\t\"%p/%d\" -> \"%p/%d\";\n";
 +	char *fmt_declaration = KERN_DEBUG "\t\"%p/%d\"[style=%s, color=\"#%06x\"];\n";
++	u8 ip1[16], ip2[16];
 +	if (bits == 32) {
 +		fmt_connection = KERN_DEBUG "\t\"%pI4/%d\" -> \"%pI4/%d\";\n";
 +		fmt_declaration = KERN_DEBUG "\t\"%pI4/%d\"[style=%s, color=\"#%06x\"];\n";
@@ -27059,13 +27083,16 @@ index 000000000000..5ad761290ef9
 +		color = hsiphash_1u32(0xdeadbeef, &key) % 200 << 16 | hsiphash_1u32(0xbabecafe, &key) % 200 << 8 | hsiphash_1u32(0xabad1dea, &key) % 200;
 +		style = "bold";
 +	}
-+	printk(fmt_declaration, node->bits, node->cidr, style, color);
++	swap_endian_and_apply_cidr(ip1, node->bits, bits, node->cidr);
++	printk(fmt_declaration, ip1, node->cidr, style, color);
 +	if (node->bit[0]) {
-+		printk(fmt_connection, node->bits, node->cidr, node->bit[0]->bits, node->bit[0]->cidr);
++		swap_endian_and_apply_cidr(ip2, node->bit[0]->bits, bits, node->cidr);
++		printk(fmt_connection, ip1, node->cidr, ip2, node->bit[0]->cidr);
 +		print_node(node->bit[0], bits);
 +	}
 +	if (node->bit[1]) {
-+		printk(fmt_connection, node->bits, node->cidr, node->bit[1]->bits, node->bit[1]->cidr);
++		swap_endian_and_apply_cidr(ip2, node->bit[1]->bits, bits, node->cidr);
++		printk(fmt_connection, ip1, node->cidr, ip2, node->bit[1]->cidr);
 +		print_node(node->bit[1], bits);
 +	}
 +}
@@ -32333,7 +32360,7 @@ index 000000000000..9b1aec0e3d9c
 +}
 diff --git a/net/wireguard/socket.c b/net/wireguard/socket.c
 new file mode 100644
-index 000000000000..6c81cc6a3169
+index 000000000000..663a462abb08
 --- /dev/null
 +++ b/net/wireguard/socket.c
 @@ -0,0 +1,393 @@
@@ -32520,11 +32547,11 @@ index 000000000000..6c81cc6a3169
 +
 +	skb_reserve(skb, SKB_HEADER_LEN);
 +	skb_set_inner_network_header(skb, 0);
-+	memcpy(skb_put(skb, len), buffer, len);
++	skb_put_data(skb, buffer, len);
 +	return socket_send_skb_to_peer(peer, skb, ds);
 +}
 +
-+int socket_send_buffer_as_reply_to_skb(struct wireguard_device *wg, struct sk_buff *in_skb, void *out_buffer, size_t len)
++int socket_send_buffer_as_reply_to_skb(struct wireguard_device *wg, struct sk_buff *in_skb, void *buffer, size_t len)
 +{
 +	int ret = 0;
 +	struct sk_buff *skb;
@@ -32541,7 +32568,7 @@ index 000000000000..6c81cc6a3169
 +		return -ENOMEM;
 +	skb_reserve(skb, SKB_HEADER_LEN);
 +	skb_set_inner_network_header(skb, 0);
-+	memcpy(skb_put(skb, len), out_buffer, len);
++	skb_put_data(skb, buffer, len);
 +
 +	if (endpoint.addr.sa_family == AF_INET)
 +		ret = send4(wg, skb, &endpoint, 0, NULL);
@@ -33193,11 +33220,11 @@ index 000000000000..8b8a1f254bb6
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..7a3b987dcd7d
+index 000000000000..409184f25e7c
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20180420"
++#define WIREGUARD_VERSION "0.0.20180514"
 -- 
 2.17.0
 
