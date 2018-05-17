@@ -1,0 +1,58 @@
+From 928d4c76589ba59e3ab036ef855331a54b48830b Mon Sep 17 00:00:00 2001
+From: Nikita Yushchenko <nikita.yoush@cogentembedded.com>
+Date: Fri, 19 May 2017 17:48:00 +0300
+Subject: [PATCH 31/31] iio: hi8435: avoid garbage event at first enable
+
+[ Upstream commit ee19ac340c5fdfd89c6348be4563453c61ab54a9 ]
+
+Currently, driver generates events for channels if new reading differs
+from previous one. This "previous value" is initialized to zero, which
+results into event if value is constant-one.
+
+Fix that by initializing "previous value" by reading at event enable
+time.
+
+This provides reliable sequence for userspace:
+- enable event,
+- AFTER THAT read current value,
+- AFTER THAT each event will correspond to change.
+
+Signed-off-by: Nikita Yushchenko <nikita.yoush@cogentembedded.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+Signed-off-by: Sasha Levin <alexander.levin@microsoft.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/iio/adc/hi8435.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iio/adc/hi8435.c b/drivers/iio/adc/hi8435.c
+index 09e2315bed5d..7401f102dff4 100644
+--- a/drivers/iio/adc/hi8435.c
++++ b/drivers/iio/adc/hi8435.c
+@@ -121,10 +121,21 @@ static int hi8435_write_event_config(struct iio_dev *idev,
+ 				     enum iio_event_direction dir, int state)
+ {
+ 	struct hi8435_priv *priv = iio_priv(idev);
++	int ret;
++	u32 tmp;
++
++	if (state) {
++		ret = hi8435_readl(priv, HI8435_SO31_0_REG, &tmp);
++		if (ret < 0)
++			return ret;
++		if (tmp & BIT(chan->channel))
++			priv->event_prev_val |= BIT(chan->channel);
++		else
++			priv->event_prev_val &= ~BIT(chan->channel);
+ 
+-	priv->event_scan_mask &= ~BIT(chan->channel);
+-	if (state)
+ 		priv->event_scan_mask |= BIT(chan->channel);
++	} else
++		priv->event_scan_mask &= ~BIT(chan->channel);
+ 
+ 	return 0;
+ }
+-- 
+2.17.0
+
