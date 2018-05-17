@@ -1,0 +1,56 @@
+From c7260da2c576c9924a75e7bc3d7aabf633591857 Mon Sep 17 00:00:00 2001
+From: Nikita Yushchenko <nikita.yoush@cogentembedded.com>
+Date: Fri, 19 May 2017 17:48:02 +0300
+Subject: [PATCH 30/31] iio: hi8435: cleanup reset gpio
+
+[ Upstream commit 61305664a542f874283f74bf0b27ddb31f5045d7 ]
+
+Reset GPIO is active low.
+
+Currently driver uses gpiod_set_value(1) to clean reset, which depends
+on device tree to contain GPIO_ACTIVE_HIGH - that does not match reality.
+
+This fixes driver to use _raw version of gpiod_set_value() to enforce
+active-low semantics despite of what's written in device tree. Allowing
+device tree to override that only opens possibility for errors and does
+not add any value.
+
+Additionally, use _cansleep version to make things work with i2c-gpio
+and other sleeping gpio drivers.
+
+Signed-off-by: Nikita Yushchenko <nikita.yoush@cogentembedded.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+Signed-off-by: Sasha Levin <alexander.levin@microsoft.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/iio/adc/hi8435.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/iio/adc/hi8435.c b/drivers/iio/adc/hi8435.c
+index c73c6c62a6ac..09e2315bed5d 100644
+--- a/drivers/iio/adc/hi8435.c
++++ b/drivers/iio/adc/hi8435.c
+@@ -442,13 +442,15 @@ static int hi8435_probe(struct spi_device *spi)
+ 	priv->spi = spi;
+ 
+ 	reset_gpio = devm_gpiod_get(&spi->dev, NULL, GPIOD_OUT_LOW);
+-	if (IS_ERR(reset_gpio)) {
+-		/* chip s/w reset if h/w reset failed */
++	if (!IS_ERR(reset_gpio)) {
++		/* need >=100ns low pulse to reset chip */
++		gpiod_set_raw_value_cansleep(reset_gpio, 0);
++		udelay(1);
++		gpiod_set_raw_value_cansleep(reset_gpio, 1);
++	} else {
++		/* s/w reset chip if h/w reset is not available */
+ 		hi8435_writeb(priv, HI8435_CTRL_REG, HI8435_CTRL_SRST);
+ 		hi8435_writeb(priv, HI8435_CTRL_REG, 0);
+-	} else {
+-		udelay(5);
+-		gpiod_set_value(reset_gpio, 1);
+ 	}
+ 
+ 	spi_set_drvdata(spi, idev);
+-- 
+2.17.0
+

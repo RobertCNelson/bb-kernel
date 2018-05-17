@@ -411,6 +411,9 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0026-staging-iio-cdc-fix-improper-return-value.patch"
 	${git} "${DIR}/patches/backports/iio/0027-iio-st_pressure-st_accel-Initialise-sensor-platform-.patch"
 	${git} "${DIR}/patches/backports/iio/0028-iio-st_pressure-st_accel-pass-correct-platform-data-.patch"
+	${git} "${DIR}/patches/backports/iio/0029-iio-magnetometer-st_magn_spi-fix-spi_device_id-table.patch"
+	${git} "${DIR}/patches/backports/iio/0030-iio-hi8435-cleanup-reset-gpio.patch"
+	${git} "${DIR}/patches/backports/iio/0031-iio-hi8435-avoid-garbage-event-at-first-enable.patch"
 
 	backport_tag="v4.8.17"
 
