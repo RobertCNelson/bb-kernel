@@ -28,11 +28,12 @@ toolchain="gcc_linaro_gnueabihf_4_7"
 #toolchain="gcc_linaro_aarch64_gnu_6"
 #toolchain="gcc_linaro_aarch64_gnu_7"
 
-#Kernel/Build
+#Kernel
 KERNEL_REL=3.8
 KERNEL_TAG=${KERNEL_REL}.13
-BUILD=${build_prefix}86
 kernel_rt=".X-rtY"
+#Kernel Build
+BUILD=${build_prefix}86
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
