@@ -193,6 +193,10 @@ rt () {
 
 	#v4.14.42
 	${git_bin} revert --no-edit ece94a76618e1df547ea99544fb69de5a5079633
+	#v4.14.45
+	${git_bin} revert --no-edit 2565b271aed0199f5ff977429486e3b59e68e708
+	${git_bin} revert --no-edit 3623c1f37efaf6ab2eed458a2ad11e49ebc2e08b
+	${git_bin} revert --no-edit 1366b31d18297ff1879f0becf941425503408447
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
