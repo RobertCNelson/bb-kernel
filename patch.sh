@@ -191,7 +191,7 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.16.15
+	#v4.16.14
 	${git_bin} revert --no-edit cb43adab6f4c66bd01f503d6cbbddabfc8d3daa8
 	${git_bin} revert --no-edit 0ea40e76fb392a6926089ddfbbcba3c3a33de924
 
