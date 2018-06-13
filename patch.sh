@@ -375,9 +375,22 @@ reverts () {
 
 	${git} "${DIR}/patches/reverts/0001-Revert-eeprom-at24-check-if-the-chip-is-functional-i.patch"
 
+	## 4.9
+	## debian@beaglebone:~$ ls /dev/spidev*
+	## /dev/spidev1.0  /dev/spidev2.0  /dev/spidev2.1
+	##
+	## to 4.14
+	##
+	## debian@beaglebone:~$ ls /dev/spidev*
+	## /dev/spidev0.0  /dev/spidev1.0  /dev/spidev1.1
+
+	##git revert --no-edit cddfae253c875076750a03bd05ba5b1569e6876e -s
+
+	${git} "${DIR}/patches/reverts/0002-Revert-ARM-dts-am33xx-Add-spi-alias-to-match-SOC-sch.patch"
+
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=1
+		number=2
 		cleanup
 	fi
 }
