@@ -355,18 +355,10 @@ reverts () {
 		start_cleanup
 	fi
 
-		#Breaks boot on am335x-boneblack
-		#debug: [bootz 0x82000000 - 88000000] ...
-		### Flattened Device Tree blob at 88000000
-		#   Booting using the fdt blob at 0x88000000
-		#   reserving fdt memory region: addr=88000000 size=88000
-		#   Loading Device Tree to 8ff75000, end 8fffffff ... OK
-		#
-		#Starting kernel ...
+	## notes
+	##git revert --no-edit xyz -s
 
-		#git revert --no-edit c083dc5f3738d394223baa0f90705397b0844acd
-
-		#${git} "${DIR}/patches/reverts/0001-Revert-clk-ti-am33xx-add-set-rate-parent-support-for.patch"
+	#${git} "${DIR}/patches/reverts/0001-Revert-xyz.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
@@ -391,6 +383,7 @@ drivers () {
 	dir 'drivers/ti/eqep'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
+	dir 'drivers/ti/spi'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/uio'
 	dir 'drivers/ti/gpio'

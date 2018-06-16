@@ -1,6 +1,6 @@
-From 0b3b3c6510257e1391432c9e5f0e29d4ca7c380f Mon Sep 17 00:00:00 2001
+From 6ddf9330f2b176f1056bd095ca397b5f67d6fc1a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 11 Jun 2018 19:19:50 -0500
+Date: Sat, 16 Jun 2018 11:07:05 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -39,8 +39,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/chacha20-x86_64.S        | 2630 ++++++++++++++++
  net/wireguard/crypto/chacha20.c               |  239 ++
  net/wireguard/crypto/chacha20.h               |   46 +
- net/wireguard/crypto/chacha20poly1305.c       |  280 ++
- net/wireguard/crypto/chacha20poly1305.h       |   90 +
+ net/wireguard/crypto/chacha20poly1305.c       |  281 ++
+ net/wireguard/crypto/chacha20poly1305.h       |   51 +
  net/wireguard/crypto/curve25519-arm.S         | 2110 +++++++++++++
  net/wireguard/crypto/curve25519-arm.h         |   14 +
  net/wireguard/crypto/curve25519-fiat32.h      |  838 +++++
@@ -55,6 +55,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/poly1305-x86_64.S        | 2790 +++++++++++++++++
  net/wireguard/crypto/poly1305.c               |  375 +++
  net/wireguard/crypto/poly1305.h               |   34 +
+ net/wireguard/crypto/simd.h                   |   59 +
  net/wireguard/device.c                        |  426 +++
  net/wireguard/device.h                        |   64 +
  net/wireguard/hashtables.c                    |  168 +
@@ -71,7 +72,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/queueing.h                      |  145 +
  net/wireguard/ratelimiter.c                   |  199 ++
  net/wireguard/ratelimiter.h                   |   19 +
- net/wireguard/receive.c                       |  490 +++
+ net/wireguard/receive.c                       |  495 +++
  net/wireguard/selftest/allowedips.h           |  586 ++++
  net/wireguard/selftest/blake2s.h              |  559 ++++
  net/wireguard/selftest/chacha20poly1305.h     | 1418 +++++++++
@@ -79,14 +80,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/selftest/curve25519.h           |  607 ++++
  net/wireguard/selftest/poly1305.h             | 1568 +++++++++
  net/wireguard/selftest/ratelimiter.h          |  157 +
- net/wireguard/send.c                          |  351 +++
+ net/wireguard/send.c                          |  352 +++
  net/wireguard/socket.c                        |  393 +++
  net/wireguard/socket.h                        |   35 +
  net/wireguard/timers.c                        |  195 ++
  net/wireguard/timers.h                        |   22 +
  net/wireguard/uapi/wireguard.h                |  182 ++
  net/wireguard/version.h                       |    1 +
- 81 files changed, 33688 insertions(+)
+ 82 files changed, 33715 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -135,6 +136,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  create mode 100644 net/wireguard/crypto/poly1305-x86_64.S
  create mode 100644 net/wireguard/crypto/poly1305.c
  create mode 100644 net/wireguard/crypto/poly1305.h
+ create mode 100644 net/wireguard/crypto/simd.h
  create mode 100644 net/wireguard/device.c
  create mode 100644 net/wireguard/device.h
  create mode 100644 net/wireguard/hashtables.c
@@ -12431,10 +12433,10 @@ index 000000000000..01fb99abf34a
 +#endif /* _WG_CHACHA20_H */
 diff --git a/net/wireguard/crypto/chacha20poly1305.c b/net/wireguard/crypto/chacha20poly1305.c
 new file mode 100644
-index 000000000000..ccc6e1c9fa68
+index 000000000000..df1c5aa99bd0
 --- /dev/null
 +++ b/net/wireguard/crypto/chacha20poly1305.c
-@@ -0,0 +1,280 @@
+@@ -0,0 +1,281 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -12443,6 +12445,7 @@ index 000000000000..ccc6e1c9fa68
 +#include "chacha20poly1305.h"
 +#include "chacha20.h"
 +#include "poly1305.h"
++#include "simd.h"
 +
 +#include <linux/kernel.h>
 +#include <crypto/scatterwalk.h>
@@ -12502,9 +12505,9 @@ index 000000000000..ccc6e1c9fa68
 +{
 +	bool have_simd;
 +
-+	have_simd = chacha20poly1305_init_simd();
++	have_simd = simd_get();
 +	__chacha20poly1305_encrypt(dst, src, src_len, ad, ad_len, nonce, key, have_simd);
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +}
 +
 +bool chacha20poly1305_encrypt_sg(struct scatterlist *dst, struct scatterlist *src, const size_t src_len,
@@ -12613,9 +12616,9 @@ index 000000000000..ccc6e1c9fa68
 +{
 +	bool have_simd, ret;
 +
-+	have_simd = chacha20poly1305_init_simd();
++	have_simd = simd_get();
 +	ret = __chacha20poly1305_decrypt(dst, src, src_len, ad, ad_len, nonce, key, have_simd);
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +	return ret;
 +}
 +
@@ -12690,13 +12693,13 @@ index 000000000000..ccc6e1c9fa68
 +			       const u8 nonce[XCHACHA20POLY1305_NONCELEN],
 +			       const u8 key[CHACHA20POLY1305_KEYLEN])
 +{
-+	bool have_simd = chacha20poly1305_init_simd();
++	bool have_simd = simd_get();
 +	u8 derived_key[CHACHA20POLY1305_KEYLEN] __aligned(16);
 +
 +	hchacha20(derived_key, nonce, key, have_simd);
 +	__chacha20poly1305_encrypt(dst, src, src_len, ad, ad_len, le64_to_cpup((__le64 *)(nonce + 16)), derived_key, have_simd);
 +	memzero_explicit(derived_key, CHACHA20POLY1305_KEYLEN);
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +}
 +
 +bool xchacha20poly1305_decrypt(u8 *dst, const u8 *src, const size_t src_len,
@@ -12704,23 +12707,23 @@ index 000000000000..ccc6e1c9fa68
 +			       const u8 nonce[XCHACHA20POLY1305_NONCELEN],
 +			       const u8 key[CHACHA20POLY1305_KEYLEN])
 +{
-+	bool ret, have_simd = chacha20poly1305_init_simd();
++	bool ret, have_simd = simd_get();
 +	u8 derived_key[CHACHA20POLY1305_KEYLEN] __aligned(16);
 +
 +	hchacha20(derived_key, nonce, key, have_simd);
 +	ret = __chacha20poly1305_decrypt(dst, src, src_len, ad, ad_len, le64_to_cpup((__le64 *)(nonce + 16)), derived_key, have_simd);
 +	memzero_explicit(derived_key, CHACHA20POLY1305_KEYLEN);
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +	return ret;
 +}
 +
 +#include "../selftest/chacha20poly1305.h"
 diff --git a/net/wireguard/crypto/chacha20poly1305.h b/net/wireguard/crypto/chacha20poly1305.h
 new file mode 100644
-index 000000000000..39919cd11918
+index 000000000000..43b0a17bdb33
 --- /dev/null
 +++ b/net/wireguard/crypto/chacha20poly1305.h
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,51 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -12766,45 +12769,6 @@ index 000000000000..39919cd11918
 +					    const u8 *ad, const size_t ad_len,
 +					    const u8 nonce[XCHACHA20POLY1305_NONCELEN],
 +					    const u8 key[CHACHA20POLY1305_KEYLEN]);
-+
-+#if defined(CONFIG_X86_64)
-+#include <linux/version.h>
-+#include <asm/fpu/api.h>
-+#include <asm/simd.h>
-+#elif IS_ENABLED(CONFIG_KERNEL_MODE_NEON)
-+#include <asm/neon.h>
-+#include <asm/simd.h>
-+#endif
-+
-+static inline bool chacha20poly1305_init_simd(void)
-+{
-+	bool have_simd = false;
-+#if defined(CONFIG_X86_64) && !defined(CONFIG_UML)
-+	have_simd = irq_fpu_usable();
-+	if (have_simd)
-+		kernel_fpu_begin();
-+#elif IS_ENABLED(CONFIG_KERNEL_MODE_NEON)
-+#if defined(CONFIG_ARM64)
-+	have_simd = true; /* ARM64 supports NEON in any context. */
-+#elif defined(CONFIG_ARM)
-+	have_simd = may_use_simd(); /* ARM doesn't support NEON in interrupt context. */
-+#endif
-+	if (have_simd)
-+		kernel_neon_begin();
-+#endif
-+	return have_simd;
-+}
-+
-+static inline void chacha20poly1305_deinit_simd(bool was_on)
-+{
-+#if defined(CONFIG_X86_64) && !defined(CONFIG_UML)
-+	if (was_on)
-+		kernel_fpu_end();
-+#elif IS_ENABLED(CONFIG_KERNEL_MODE_NEON)
-+	if (was_on)
-+		kernel_neon_end();
-+#endif
-+}
 +
 +#ifdef DEBUG
 +bool chacha20poly1305_selftest(void);
@@ -24701,6 +24665,71 @@ index 000000000000..876234c53701
 +#endif
 +
 +#endif /* _WG_POLY1305_H */
+diff --git a/net/wireguard/crypto/simd.h b/net/wireguard/crypto/simd.h
+new file mode 100644
+index 000000000000..07936bff4362
+--- /dev/null
++++ b/net/wireguard/crypto/simd.h
+@@ -0,0 +1,59 @@
++/* SPDX-License-Identifier: GPL-2.0
++ *
++ * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
++ */
++
++#ifndef _WG_SIMD_H
++#define _WG_SIMD_H
++
++#if defined(CONFIG_X86_64)
++#include <linux/version.h>
++#include <asm/fpu/api.h>
++#include <asm/simd.h>
++#elif IS_ENABLED(CONFIG_KERNEL_MODE_NEON)
++#include <asm/neon.h>
++#include <asm/simd.h>
++#endif
++
++static inline bool simd_get(void)
++{
++	bool have_simd = false;
++#if defined(CONFIG_X86_64) && !defined(CONFIG_UML) && !defined(CONFIG_PREEMPT_RT_BASE)
++	have_simd = irq_fpu_usable();
++	if (have_simd)
++		kernel_fpu_begin();
++#elif IS_ENABLED(CONFIG_KERNEL_MODE_NEON) && !defined(CONFIG_PREEMPT_RT_BASE)
++#if defined(CONFIG_ARM64)
++	have_simd = true; /* ARM64 supports NEON in any context. */
++#elif defined(CONFIG_ARM)
++	have_simd = may_use_simd(); /* ARM doesn't support NEON in interrupt context. */
++#endif
++	if (have_simd)
++		kernel_neon_begin();
++#endif
++	return have_simd;
++}
++
++static inline void simd_put(bool was_on)
++{
++#if defined(CONFIG_X86_64) && !defined(CONFIG_UML) && !defined(CONFIG_PREEMPT_RT_BASE)
++	if (was_on)
++		kernel_fpu_end();
++#elif IS_ENABLED(CONFIG_KERNEL_MODE_NEON) && !defined(CONFIG_PREEMPT_RT_BASE)
++	if (was_on)
++		kernel_neon_end();
++#endif
++}
++
++static inline bool simd_relax(bool was_on)
++{
++#ifdef CONFIG_PREEMPT
++	if (was_on && need_resched()) {
++		simd_put(true);
++		return simd_get();
++	}
++#endif
++	return was_on;
++}
++
++#endif /* _WG_SIMD_H */
 diff --git a/net/wireguard/device.c b/net/wireguard/device.c
 new file mode 100644
 index 000000000000..40b9e5cac614
@@ -27174,7 +27203,7 @@ index 000000000000..eb343c1cff74
 +#endif /* _WG_PEER_H */
 diff --git a/net/wireguard/queueing.c b/net/wireguard/queueing.c
 new file mode 100644
-index 000000000000..85dea6be3fef
+index 000000000000..f33395e29c11
 --- /dev/null
 +++ b/net/wireguard/queueing.c
 @@ -0,0 +1,46 @@
@@ -27221,7 +27250,7 @@ index 000000000000..85dea6be3fef
 +{
 +	if (multicore)
 +		free_percpu(queue->worker);
-+	WARN_ON(!ptr_ring_empty_bh(&queue->ring));
++	WARN_ON(!__ptr_ring_empty(&queue->ring));
 +	ptr_ring_cleanup(&queue->ring, NULL);
 +}
 diff --git a/net/wireguard/queueing.h b/net/wireguard/queueing.h
@@ -27607,10 +27636,10 @@ index 000000000000..8931c0615374
 +#endif /* _WG_RATELIMITER_H */
 diff --git a/net/wireguard/receive.c b/net/wireguard/receive.c
 new file mode 100644
-index 000000000000..27d3d04f7fb6
+index 000000000000..c5062f884009
 --- /dev/null
 +++ b/net/wireguard/receive.c
-@@ -0,0 +1,490 @@
+@@ -0,0 +1,495 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -27623,6 +27652,7 @@ index 000000000000..27d3d04f7fb6
 +#include "messages.h"
 +#include "cookie.h"
 +#include "socket.h"
++#include "crypto/simd.h"
 +
 +#include <linux/ip.h>
 +#include <linux/ipv6.h>
@@ -27991,7 +28021,6 @@ index 000000000000..27d3d04f7fb6
 +	bool free;
 +
 +	local_bh_disable();
-+	spin_lock_bh(&queue->ring.consumer_lock);
 +	while ((skb = __ptr_ring_peek(&queue->ring)) != NULL && (state = atomic_read(&PACKET_CB(skb)->state)) != PACKET_STATE_UNCRYPTED) {
 +		__ptr_ring_discard_one(&queue->ring);
 +		peer = PACKET_PEER(skb);
@@ -28018,8 +28047,13 @@ index 000000000000..27d3d04f7fb6
 +		peer_put(peer);
 +		if (unlikely(free))
 +			dev_kfree_skb(skb);
++
++		/* Don't totally kill scheduling latency by keeping preemption disabled forever. */
++		if (need_resched()) {
++			local_bh_enable();
++			local_bh_disable();
++		}
 +	}
-+	spin_unlock_bh(&queue->ring.consumer_lock);
 +	local_bh_enable();
 +}
 +
@@ -28027,15 +28061,15 @@ index 000000000000..27d3d04f7fb6
 +{
 +	struct crypt_queue *queue = container_of(work, struct multicore_worker, work)->ptr;
 +	struct sk_buff *skb;
-+	bool have_simd = chacha20poly1305_init_simd();
++	bool have_simd = simd_get();
 +
 +	while ((skb = ptr_ring_consume_bh(&queue->ring)) != NULL) {
 +		enum packet_state state = likely(skb_decrypt(skb, &PACKET_CB(skb)->keypair->receiving, have_simd)) ? PACKET_STATE_CRYPTED : PACKET_STATE_DEAD;
-+
 +		queue_enqueue_per_peer(&PACKET_PEER(skb)->rx_queue, skb, state);
++		have_simd = simd_relax(have_simd);
 +	}
 +
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +}
 +
 +static void packet_consume_data(struct wireguard_device *wg, struct sk_buff *skb)
@@ -29260,7 +29294,7 @@ index 000000000000..3770d05d2139
 +#endif
 diff --git a/net/wireguard/selftest/chacha20poly1305.h b/net/wireguard/selftest/chacha20poly1305.h
 new file mode 100644
-index 000000000000..e9070ba383a4
+index 000000000000..9baca0b06260
 --- /dev/null
 +++ b/net/wireguard/selftest/chacha20poly1305.h
 @@ -0,0 +1,1418 @@
@@ -30552,7 +30586,7 @@ index 000000000000..e9070ba383a4
 +
 +static inline void chacha20poly1305_selftest_encrypt_bignonce(u8 *dst, const u8 *src, const size_t src_len, const u8 *ad, const size_t ad_len, const u8 nonce[12], const u8 key[CHACHA20POLY1305_KEYLEN])
 +{
-+	bool have_simd = chacha20poly1305_init_simd();
++	bool have_simd = simd_get();
 +	struct poly1305_ctx poly1305_state;
 +	struct chacha20_ctx chacha20_state;
 +	union {
@@ -30575,7 +30609,7 @@ index 000000000000..e9070ba383a4
 +	b.lens[1] = cpu_to_le64(src_len);
 +	poly1305_update(&poly1305_state, (u8 *)b.lens, sizeof(b.lens), have_simd);
 +	poly1305_finish(&poly1305_state, dst + src_len, have_simd);
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +	memzero_explicit(&chacha20_state, sizeof(chacha20_state));
 +	memzero_explicit(&b, sizeof(b));
 +}
@@ -30623,7 +30657,7 @@ index 000000000000..e9070ba383a4
 +			success = false;
 +		}
 +	}
-+	have_simd = chacha20poly1305_init_simd();
++	have_simd = simd_get();
 +	for (i = 0; i < ARRAY_SIZE(chacha20poly1305_enc_vectors); ++i) {
 +		if (chacha20poly1305_enc_vectors[i].nlen != 8)
 +			continue;
@@ -30637,7 +30671,7 @@ index 000000000000..e9070ba383a4
 +			success = false;
 +		}
 +	}
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +	for (i = 0; i < ARRAY_SIZE(chacha20poly1305_dec_vectors); ++i) {
 +		memset(computed_result, 0, sizeof(computed_result));
 +		ret = chacha20poly1305_decrypt(computed_result, chacha20poly1305_dec_vectors[i].input, chacha20poly1305_dec_vectors[i].ilen, chacha20poly1305_dec_vectors[i].assoc, chacha20poly1305_dec_vectors[i].alen, le64_to_cpu(*(__force __le64 *)chacha20poly1305_dec_vectors[i].nonce), chacha20poly1305_dec_vectors[i].key);
@@ -30646,7 +30680,7 @@ index 000000000000..e9070ba383a4
 +			success = false;
 +		}
 +	}
-+	have_simd = chacha20poly1305_init_simd();
++	have_simd = simd_get();
 +	for (i = 0; i < ARRAY_SIZE(chacha20poly1305_dec_vectors); ++i) {
 +		memset(heap_dst, 0, MAXIMUM_TEST_BUFFER_LEN);
 +		memcpy(heap_src, chacha20poly1305_dec_vectors[i].input, chacha20poly1305_dec_vectors[i].ilen);
@@ -30658,7 +30692,7 @@ index 000000000000..e9070ba383a4
 +			success = false;
 +		}
 +	}
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +	for (i = 0; i < ARRAY_SIZE(xchacha20poly1305_enc_vectors); ++i) {
 +		memset(computed_result, 0, sizeof(computed_result));
 +		xchacha20poly1305_encrypt(computed_result, xchacha20poly1305_enc_vectors[i].input, xchacha20poly1305_enc_vectors[i].ilen, xchacha20poly1305_enc_vectors[i].assoc, xchacha20poly1305_enc_vectors[i].alen, xchacha20poly1305_enc_vectors[i].nonce, xchacha20poly1305_enc_vectors[i].key);
@@ -31395,7 +31429,7 @@ index 000000000000..1f099e9fb219
 +#endif
 diff --git a/net/wireguard/selftest/poly1305.h b/net/wireguard/selftest/poly1305.h
 new file mode 100644
-index 000000000000..41acf7c07ab5
+index 000000000000..7439ac05e790
 --- /dev/null
 +++ b/net/wireguard/selftest/poly1305.h
 @@ -0,0 +1,1568 @@
@@ -32890,7 +32924,7 @@ index 000000000000..41acf7c07ab5
 +
 +bool __init poly1305_selftest(void)
 +{
-+	bool have_simd = chacha20poly1305_init_simd();
++	bool have_simd = simd_get();
 +	bool success = true;
 +	size_t i;
 +
@@ -32959,7 +32993,7 @@ index 000000000000..41acf7c07ab5
 +			}
 +		}
 +	}
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +
 +	if (success)
 +		pr_info("poly1305 self-tests: pass\n");
@@ -33132,10 +33166,10 @@ index 000000000000..7e017ce5ab60
 +#endif
 diff --git a/net/wireguard/send.c b/net/wireguard/send.c
 new file mode 100644
-index 000000000000..6e04ad45b800
+index 000000000000..d3e3d752d84d
 --- /dev/null
 +++ b/net/wireguard/send.c
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,352 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -33148,6 +33182,7 @@ index 000000000000..6e04ad45b800
 +#include "socket.h"
 +#include "messages.h"
 +#include "cookie.h"
++#include "crypto/simd.h"
 +
 +#include <linux/uio.h>
 +#include <linux/inetdevice.h>
@@ -33361,7 +33396,6 @@ index 000000000000..6e04ad45b800
 +	struct sk_buff *first;
 +	enum packet_state state;
 +
-+	spin_lock_bh(&queue->ring.consumer_lock);
 +	while ((first = __ptr_ring_peek(&queue->ring)) != NULL && (state = atomic_read(&PACKET_CB(first)->state)) != PACKET_STATE_UNCRYPTED) {
 +		__ptr_ring_discard_one(&queue->ring);
 +		peer = PACKET_PEER(first);
@@ -33375,14 +33409,13 @@ index 000000000000..6e04ad45b800
 +		noise_keypair_put(keypair);
 +		peer_put(peer);
 +	}
-+	spin_unlock_bh(&queue->ring.consumer_lock);
 +}
 +
 +void packet_encrypt_worker(struct work_struct *work)
 +{
 +	struct crypt_queue *queue = container_of(work, struct multicore_worker, work)->ptr;
 +	struct sk_buff *first, *skb, *next;
-+	bool have_simd = chacha20poly1305_init_simd();
++	bool have_simd = simd_get();
 +
 +	while ((first = ptr_ring_consume_bh(&queue->ring)) != NULL) {
 +		enum packet_state state = PACKET_STATE_CRYPTED;
@@ -33396,8 +33429,10 @@ index 000000000000..6e04ad45b800
 +			}
 +		}
 +		queue_enqueue_per_peer(&PACKET_PEER(first)->tx_queue, first, state);
++
++		have_simd = simd_relax(have_simd);
 +	}
-+	chacha20poly1305_deinit_simd(have_simd);
++	simd_put(have_simd);
 +}
 +
 +static void packet_create_data(struct sk_buff *first)
@@ -34346,11 +34381,11 @@ index 000000000000..8b8a1f254bb6
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..59830cc36ebe
+index 000000000000..f990e776297e
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20180531"
++#define WIREGUARD_VERSION "0.0.20180613"
 -- 
 2.17.1
 
