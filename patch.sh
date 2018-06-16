@@ -191,12 +191,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.16.14
-	${git_bin} revert --no-edit cb43adab6f4c66bd01f503d6cbbddabfc8d3daa8
-	${git_bin} revert --no-edit 0ea40e76fb392a6926089ddfbbcba3c3a33de924
-
-	#v4.16.13
-	${git_bin} revert --no-edit f941ccc0a0dc93bbaeaa01e8f467a3f6f86e6448
+	#v4.16.16
+	${git_bin} revert --no-edit e3bb8f0fa2b3f362a0f8a4c1912555eafadd085a
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -359,18 +355,11 @@ reverts () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
-		## 4.9
-		## debian@beaglebone:~$ ls /dev/spidev*
-		## /dev/spidev1.0  /dev/spidev2.0  /dev/spidev2.1
-		##
-		## to 4.14
-		##
-		## debian@beaglebone:~$ ls /dev/spidev*
-		## /dev/spidev0.0  /dev/spidev1.0  /dev/spidev1.1
 
-		##git revert --no-edit cddfae253c875076750a03bd05ba5b1569e6876e -s
+	## notes
+	##git revert --no-edit xyz -s
 
-		${git} "${DIR}/patches/reverts/0001-Revert-ARM-dts-am33xx-Add-spi-alias-to-match-SOC-sch.patch"
+	#${git} "${DIR}/patches/reverts/0001-Revert-xyz.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
@@ -395,6 +384,7 @@ drivers () {
 	dir 'drivers/ti/eqep'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
+	dir 'drivers/ti/spi'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/uio'
 	dir 'drivers/ti/gpio'
@@ -484,7 +474,7 @@ beaglebone () {
 
 ###
 #backports
-reverts
+#reverts
 drivers
 soc
 beaglebone
