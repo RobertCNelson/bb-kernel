@@ -291,7 +291,7 @@ local_patch () {
 }
 
 #external_git
-aufs4
+#aufs4
 #rt
 wireguard
 ti_pm_firmware
@@ -456,8 +456,6 @@ beaglebone () {
 		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
-
-		device="am335x-pocketbeagle.dtb" ; dtb_makefile_append
 
 		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
