@@ -191,6 +191,10 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	#v4.14.51
+	${git_bin} revert --no-edit e7a65e899d521eba676a1e652f9bf48d67722a18
+	${git_bin} revert --no-edit 0742396317a0a0e41ab47e9de10cd6f16317f049
+
 	#v4.14.48
 	${git_bin} revert --no-edit c6a95f37d3a0539424b66c2e31b657b10aaa2b53
 	${git_bin} revert --no-edit 8441a0014a29e4230d492947e5599415f219d9a9
