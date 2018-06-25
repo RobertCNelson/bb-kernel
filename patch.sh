@@ -414,6 +414,7 @@ lts44_backports () {
 	${git} "${DIR}/patches/backports/iio/0029-iio-magnetometer-st_magn_spi-fix-spi_device_id-table.patch"
 	${git} "${DIR}/patches/backports/iio/0030-iio-hi8435-cleanup-reset-gpio.patch"
 	${git} "${DIR}/patches/backports/iio/0031-iio-hi8435-avoid-garbage-event-at-first-enable.patch"
+	${git} "${DIR}/patches/backports/iio/0032-iio-kfifo_buf-check-for-uint-overflow.patch"
 
 	backport_tag="v4.8.17"
 

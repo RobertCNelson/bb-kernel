@@ -150,6 +150,9 @@ debian_regs () {
 	check_dpkg
 	pkg="flex"
 	check_dpkg
+	#v4.18-rc0
+	pkg="pkg-config"
+	check_dpkg
 
 	unset warn_dpkg_ia32
 	unset stop_pkg_search
@@ -356,12 +359,21 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="xenial"
 			;;
+		tara)
+			#19
+			#http://blog.linuxmint.com/?p=2975
+			deb_distro="bionic"
+			;;
 		esac
 
 		#Future Debian Code names:
 		case "${deb_distro}" in
 		bullseye)
 			#Debian 11
+			deb_distro="sid"
+			;;
+		bookworm)
+			#Debian 12
 			deb_distro="sid"
 			;;
 		esac
@@ -381,9 +393,10 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		artful|bionic)
+		artful|bionic|cosmic)
 			#17.10 artful: (EOL: July 2018)
 			#18.04 bionic: (EOL:) lts: bionic -> xyz
+			#18.10 cosmic:
 			unset warn_eol_distro
 			;;
 		yakkety|zesty)
