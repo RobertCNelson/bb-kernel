@@ -1,6 +1,6 @@
-From 692b3ecc48882f79c30998e5476013d69fc0b929 Mon Sep 17 00:00:00 2001
+From 221d192a0d4ab8a921064f5a88ccac0aee98cea2 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 21 Jun 2018 16:14:09 -0500
+Date: Mon, 2 Jul 2018 15:53:33 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -14,7 +14,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/compat/Makefile.include         |   71 +
  .../compat/checksum/checksum_partial_compat.h |  208 ++
  net/wireguard/compat/compat-asm.h             |   18 +
- net/wireguard/compat/compat.h                 |  698 +++++
+ net/wireguard/compat/compat.h                 |  704 +++++
  net/wireguard/compat/dst_cache/dst_cache.c    |  175 ++
  .../compat/dst_cache/include/net/dst_cache.h  |   97 +
  .../compat/fpu/include/asm/fpu/api.h          |    1 +
@@ -55,7 +55,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/poly1305-x86_64.S        | 2790 +++++++++++++++++
  net/wireguard/crypto/poly1305.c               |  376 +++
  net/wireguard/crypto/poly1305.h               |   34 +
- net/wireguard/crypto/simd.h                   |   59 +
+ net/wireguard/crypto/simd.h                   |   60 +
  net/wireguard/device.c                        |  426 +++
  net/wireguard/device.h                        |   64 +
  net/wireguard/hashtables.c                    |  168 +
@@ -80,14 +80,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/selftest/curve25519.h           |  607 ++++
  net/wireguard/selftest/poly1305.h             | 1569 +++++++++
  net/wireguard/selftest/ratelimiter.h          |  159 +
- net/wireguard/send.c                          |  352 +++
+ net/wireguard/send.c                          |  351 +++
  net/wireguard/socket.c                        |  393 +++
  net/wireguard/socket.h                        |   35 +
  net/wireguard/timers.c                        |  195 ++
- net/wireguard/timers.h                        |   22 +
+ net/wireguard/timers.h                        |   27 +
  net/wireguard/uapi/wireguard.h                |  182 ++
  net/wireguard/version.h                       |    1 +
- 82 files changed, 33787 insertions(+)
+ 82 files changed, 33798 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -977,10 +977,10 @@ index 000000000000..73bbfbccacf1
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..ba2f028be50e
+index 000000000000..2c1b663d72d4
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
-@@ -0,0 +1,698 @@
+@@ -0,0 +1,704 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1065,13 +1065,6 @@ index 000000000000..ba2f028be50e
 +#include <linux/if.h>
 +#include <net/ip_tunnels.h>
 +#define IP6_ECN_set_ce(a, b) IP6_ECN_set_ce(b)
-+#endif
-+
-+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0)
-+#define time_is_before_jiffies64(a) time_after64(get_jiffies_64(), a)
-+#define time_is_after_jiffies64(a) time_before64(get_jiffies_64(), a)
-+#define time_is_before_eq_jiffies64(a) time_after_eq64(get_jiffies_64(), a)
-+#define time_is_after_eq_jiffies64(a) time_before_eq64(get_jiffies_64(), a)
 +#endif
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 12, 0) && IS_ENABLED(CONFIG_IPV6) && !defined(ISRHEL7)
@@ -1317,11 +1310,24 @@ index 000000000000..ba2f028be50e
 +#endif
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0) && !defined(ISRHEL7)
-+#include <linux/ktime.h>
-+static inline u64 ktime_get_ns(void)
++#include <linux/hrtimer.h>
++static inline u64 ktime_get_boot_ns(void)
 +{
-+	return ktime_to_ns(ktime_get());
++	return ktime_to_ns(ktime_get_boottime());
 +}
++#endif
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
++#include <linux/hrtimer.h>
++#else
++#include <linux/timekeeping.h>
++#endif
++static inline u64 __wgcompat_ktime_get_boot_fast_ns(void)
++{
++	return ktime_get_boot_ns();
++}
++#define ktime_get_boot_fast_ns __wgcompat_ktime_get_boot_fast_ns
 +#endif
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
@@ -1862,7 +1868,7 @@ index 000000000000..7ec22f768a8f
 +}
 diff --git a/net/wireguard/compat/dst_cache/include/net/dst_cache.h b/net/wireguard/compat/dst_cache/include/net/dst_cache.h
 new file mode 100644
-index 000000000000..5a083c7e05e9
+index 000000000000..48021c0d6be1
 --- /dev/null
 +++ b/net/wireguard/compat/dst_cache/include/net/dst_cache.h
 @@ -0,0 +1,97 @@
@@ -1958,7 +1964,7 @@ index 000000000000..5a083c7e05e9
 + *	@dst_cache: the cache
 + *
 + *	No synchronization is enforced: it must be called only when the cache
-+ *	is unsed.
++ *	is unused.
 + */
 +void dst_cache_destroy(struct dst_cache *dst_cache);
 +
@@ -4305,7 +4311,7 @@ index 000000000000..3498e5018e60
 +#endif
 diff --git a/net/wireguard/cookie.c b/net/wireguard/cookie.c
 new file mode 100644
-index 000000000000..41f6ddb49812
+index 000000000000..7981227e7fd1
 --- /dev/null
 +++ b/net/wireguard/cookie.c
 @@ -0,0 +1,194 @@
@@ -4319,17 +4325,17 @@ index 000000000000..41f6ddb49812
 +#include "device.h"
 +#include "messages.h"
 +#include "ratelimiter.h"
++#include "timers.h"
 +#include "crypto/blake2s.h"
 +#include "crypto/chacha20poly1305.h"
 +
-+#include <linux/jiffies.h>
 +#include <net/ipv6.h>
 +#include <crypto/algapi.h>
 +
 +void cookie_checker_init(struct cookie_checker *checker, struct wireguard_device *wg)
 +{
 +	init_rwsem(&checker->secret_lock);
-+	checker->secret_birthdate = get_jiffies_64();
++	checker->secret_birthdate = ktime_get_boot_fast_ns();
 +	get_random_bytes(checker->secret, NOISE_HASH_LEN);
 +	checker->device = wg;
 +}
@@ -4388,9 +4394,9 @@ index 000000000000..41f6ddb49812
 +{
 +	struct blake2s_state state;
 +
-+	if (!time_is_after_jiffies64(checker->secret_birthdate + COOKIE_SECRET_MAX_AGE)) {
++	if (has_expired(checker->secret_birthdate, COOKIE_SECRET_MAX_AGE)) {
 +		down_write(&checker->secret_lock);
-+		checker->secret_birthdate = get_jiffies_64();
++		checker->secret_birthdate = ktime_get_boot_fast_ns();
 +		get_random_bytes(checker->secret, NOISE_HASH_LEN);
 +		up_write(&checker->secret_lock);
 +	}
@@ -4452,7 +4458,7 @@ index 000000000000..41f6ddb49812
 +	up_write(&peer->latest_cookie.lock);
 +
 +	down_read(&peer->latest_cookie.lock);
-+	if (peer->latest_cookie.is_valid && time_is_after_jiffies64(peer->latest_cookie.birthdate + COOKIE_SECRET_MAX_AGE - COOKIE_SECRET_LATENCY))
++	if (peer->latest_cookie.is_valid && !has_expired(peer->latest_cookie.birthdate, COOKIE_SECRET_MAX_AGE - COOKIE_SECRET_LATENCY))
 +		compute_mac2(macs->mac2, message, len, peer->latest_cookie.cookie);
 +	else
 +		memset(macs->mac2, 0, COOKIE_LEN);
@@ -4493,7 +4499,7 @@ index 000000000000..41f6ddb49812
 +	if (ret) {
 +		down_write(&entry->peer->latest_cookie.lock);
 +		memcpy(entry->peer->latest_cookie.cookie, cookie, COOKIE_LEN);
-+		entry->peer->latest_cookie.birthdate = get_jiffies_64();
++		entry->peer->latest_cookie.birthdate = ktime_get_boot_fast_ns();
 +		entry->peer->latest_cookie.is_valid = true;
 +		entry->peer->latest_cookie.have_sent_mac1 = false;
 +		up_write(&entry->peer->latest_cookie.lock);
@@ -24720,10 +24726,10 @@ index 000000000000..876234c53701
 +#endif /* _WG_POLY1305_H */
 diff --git a/net/wireguard/crypto/simd.h b/net/wireguard/crypto/simd.h
 new file mode 100644
-index 000000000000..07936bff4362
+index 000000000000..007f66ea34b7
 --- /dev/null
 +++ b/net/wireguard/crypto/simd.h
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,60 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -24732,6 +24738,7 @@ index 000000000000..07936bff4362
 +#ifndef _WG_SIMD_H
 +#define _WG_SIMD_H
 +
++#include <linux/sched.h>
 +#if defined(CONFIG_X86_64)
 +#include <linux/version.h>
 +#include <asm/fpu/api.h>
@@ -24785,7 +24792,7 @@ index 000000000000..07936bff4362
 +#endif /* _WG_SIMD_H */
 diff --git a/net/wireguard/device.c b/net/wireguard/device.c
 new file mode 100644
-index 000000000000..40b9e5cac614
+index 000000000000..df9189b6e19d
 --- /dev/null
 +++ b/net/wireguard/device.c
 @@ -0,0 +1,426 @@
@@ -24896,7 +24903,7 @@ index 000000000000..40b9e5cac614
 +		timers_stop(peer);
 +		noise_handshake_clear(&peer->handshake);
 +		noise_keypairs_clear(&peer->keypairs);
-+		peer->last_sent_handshake = get_jiffies_64() - REKEY_TIMEOUT - HZ;
++		peer->last_sent_handshake = ktime_get_boot_fast_ns() - (u64)(REKEY_TIMEOUT + 1) * NSEC_PER_SEC;
 +	}
 +	mutex_unlock(&wg->device_update_lock);
 +	skb_queue_purge(&wg->incoming_handshakes);
@@ -25596,7 +25603,7 @@ index 000000000000..a4f707ddb35f
 +MODULE_ALIAS_GENL_FAMILY(WG_GENL_NAME);
 diff --git a/net/wireguard/messages.h b/net/wireguard/messages.h
 new file mode 100644
-index 000000000000..f3d47ef9ebb3
+index 000000000000..2983af0234d7
 --- /dev/null
 +++ b/net/wireguard/messages.h
 @@ -0,0 +1,128 @@
@@ -25629,8 +25636,8 @@ index 000000000000..f3d47ef9ebb3
 +#define noise_encrypted_len(plain_len) (plain_len + NOISE_AUTHTAG_LEN)
 +
 +enum cookie_values {
-+	COOKIE_SECRET_MAX_AGE = 2 * 60 * HZ,
-+	COOKIE_SECRET_LATENCY = 5 * HZ,
++	COOKIE_SECRET_MAX_AGE = 2 * 60,
++	COOKIE_SECRET_LATENCY = 5,
 +	COOKIE_NONCE_LEN = XCHACHA20POLY1305_NONCELEN,
 +	COOKIE_LEN = 16
 +};
@@ -25644,14 +25651,14 @@ index 000000000000..f3d47ef9ebb3
 +enum limits {
 +	REKEY_AFTER_MESSAGES = U64_MAX - 0xffff,
 +	REJECT_AFTER_MESSAGES = U64_MAX - COUNTER_WINDOW_SIZE - 1,
-+	REKEY_TIMEOUT = 5 * HZ,
-+	REKEY_TIMEOUT_JITTER_MAX = HZ / 3,
-+	REKEY_AFTER_TIME = 120 * HZ,
-+	REJECT_AFTER_TIME = 180 * HZ,
-+	INITIATIONS_PER_SECOND = HZ / 50,
++	REKEY_TIMEOUT = 5,
++	REKEY_TIMEOUT_JITTER_MAX_JIFFIES = HZ / 3,
++	REKEY_AFTER_TIME = 120,
++	REJECT_AFTER_TIME = 180,
++	INITIATIONS_PER_SECOND = 50,
 +	MAX_PEERS_PER_DEVICE = 1U << 20,
-+	KEEPALIVE_TIMEOUT = 10 * HZ,
-+	MAX_TIMER_HANDSHAKES = (90 * HZ) / REKEY_TIMEOUT,
++	KEEPALIVE_TIMEOUT = 10,
++	MAX_TIMER_HANDSHAKES = 90 / REKEY_TIMEOUT,
 +	MAX_QUEUED_INCOMING_HANDSHAKES = 4096, /* TODO: replace this with DQL */
 +	MAX_STAGED_PACKETS = 128,
 +	MAX_QUEUED_PACKETS = 1024 /* TODO: replace this with DQL */
@@ -25730,7 +25737,7 @@ index 000000000000..f3d47ef9ebb3
 +#endif /* _WG_MESSAGES_H */
 diff --git a/net/wireguard/netlink.c b/net/wireguard/netlink.c
 new file mode 100644
-index 000000000000..2f5157d3363d
+index 000000000000..aef743fbde1f
 --- /dev/null
 +++ b/net/wireguard/netlink.c
 @@ -0,0 +1,519 @@
@@ -25846,7 +25853,7 @@ index 000000000000..2f5157d3363d
 +		if (fail)
 +			goto err;
 +
-+		if (nla_put(skb, WGPEER_A_LAST_HANDSHAKE_TIME, sizeof(struct timespec), &peer->walltime_last_handshake) || nla_put_u16(skb, WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, peer->persistent_keepalive_interval / HZ) ||
++		if (nla_put(skb, WGPEER_A_LAST_HANDSHAKE_TIME, sizeof(struct timespec), &peer->walltime_last_handshake) || nla_put_u16(skb, WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, peer->persistent_keepalive_interval) ||
 +				nla_put_u64_64bit(skb, WGPEER_A_TX_BYTES, peer->tx_bytes, WGPEER_A_UNSPEC) || nla_put_u64_64bit(skb, WGPEER_A_RX_BYTES, peer->rx_bytes, WGPEER_A_UNSPEC))
 +			goto err;
 +
@@ -26112,7 +26119,7 @@ index 000000000000..2f5157d3363d
 +		const u16 persistent_keepalive_interval = nla_get_u16(attrs[WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL]);
 +		const bool send_keepalive = !peer->persistent_keepalive_interval && persistent_keepalive_interval && netif_running(wg->dev);
 +
-+		peer->persistent_keepalive_interval = (unsigned long)persistent_keepalive_interval * HZ;
++		peer->persistent_keepalive_interval = persistent_keepalive_interval;
 +		if (send_keepalive)
 +			packet_send_keepalive(peer);
 +	}
@@ -26273,7 +26280,7 @@ index 000000000000..c1cd9b019bd1
 +#endif /* _WG_NETLINK_H */
 diff --git a/net/wireguard/noise.c b/net/wireguard/noise.c
 new file mode 100644
-index 000000000000..b3e5f8f6d89f
+index 000000000000..84bde39e7ede
 --- /dev/null
 +++ b/net/wireguard/noise.c
 @@ -0,0 +1,649 @@
@@ -26563,7 +26570,7 @@ index 000000000000..b3e5f8f6d89f
 +	spin_lock_init(&key->counter.receive.lock);
 +	atomic64_set(&key->counter.counter, 0);
 +	memset(key->counter.receive.backtrack, 0, sizeof(key->counter.receive.backtrack));
-+	key->birthdate = get_jiffies_64();
++	key->birthdate = ktime_get_boot_fast_ns();
 +	key->is_valid = true;
 +}
 +
@@ -26740,7 +26747,7 @@ index 000000000000..b3e5f8f6d89f
 +
 +	down_read(&handshake->lock);
 +	replay_attack = memcmp(t, handshake->latest_timestamp, NOISE_TIMESTAMP_LEN) <= 0;
-+	flood_attack = !time_is_before_jiffies64(handshake->last_initiation_consumption + INITIATIONS_PER_SECOND);
++	flood_attack = handshake->last_initiation_consumption + NSEC_PER_SEC / INITIATIONS_PER_SECOND > ktime_get_boot_fast_ns();
 +	up_read(&handshake->lock);
 +	if (replay_attack || flood_attack) {
 +		peer_put(wg_peer);
@@ -26755,7 +26762,7 @@ index 000000000000..b3e5f8f6d89f
 +	memcpy(handshake->hash, hash, NOISE_HASH_LEN);
 +	memcpy(handshake->chaining_key, chaining_key, NOISE_HASH_LEN);
 +	handshake->remote_index = src->sender_index;
-+	handshake->last_initiation_consumption = get_jiffies_64();
++	handshake->last_initiation_consumption = ktime_get_boot_fast_ns();
 +	handshake->state = HANDSHAKE_CONSUMED_INITIATION;
 +	up_write(&handshake->lock);
 +
@@ -26928,7 +26935,7 @@ index 000000000000..b3e5f8f6d89f
 +}
 diff --git a/net/wireguard/noise.h b/net/wireguard/noise.h
 new file mode 100644
-index 000000000000..5eb3a8877431
+index 000000000000..b8d18b93e5d3
 --- /dev/null
 +++ b/net/wireguard/noise.h
 @@ -0,0 +1,117 @@
@@ -26950,7 +26957,7 @@ index 000000000000..5eb3a8877431
 +#include <linux/atomic.h>
 +#include <linux/rwsem.h>
 +#include <linux/mutex.h>
-+#include <linux/jiffies.h>
++#include <linux/ktime.h>
 +#include <linux/kref.h>
 +
 +union noise_counter {
@@ -27051,7 +27058,7 @@ index 000000000000..5eb3a8877431
 +#endif /* _WG_NOISE_H */
 diff --git a/net/wireguard/peer.c b/net/wireguard/peer.c
 new file mode 100644
-index 000000000000..6c61b7fa8b81
+index 000000000000..966915804f4b
 --- /dev/null
 +++ b/net/wireguard/peer.c
 @@ -0,0 +1,136 @@
@@ -27112,7 +27119,7 @@ index 000000000000..6c61b7fa8b81
 +	skb_queue_head_init(&peer->staged_packet_queue);
 +	list_add_tail(&peer->peer_list, &wg->peer_list);
 +	pubkey_hashtable_add(&wg->peer_hashtable, peer);
-+	peer->last_sent_handshake = get_jiffies_64() - REKEY_TIMEOUT - HZ;
++	peer->last_sent_handshake = ktime_get_boot_fast_ns() - (u64)(REKEY_TIMEOUT + 1) * NSEC_PER_SEC;
 +	pr_debug("%s: Peer %llu created\n", wg->dev->name, peer->internal_id);
 +	return peer;
 +}
@@ -27193,7 +27200,7 @@ index 000000000000..6c61b7fa8b81
 +}
 diff --git a/net/wireguard/peer.h b/net/wireguard/peer.h
 new file mode 100644
-index 000000000000..eb343c1cff74
+index 000000000000..867b9c3348d9
 --- /dev/null
 +++ b/net/wireguard/peer.h
 @@ -0,0 +1,73 @@
@@ -27249,7 +27256,7 @@ index 000000000000..eb343c1cff74
 +	u64 rx_bytes, tx_bytes;
 +	struct timer_list timer_retransmit_handshake, timer_send_keepalive, timer_new_handshake, timer_zero_key_material, timer_persistent_keepalive;
 +	unsigned int timer_handshake_attempts;
-+	unsigned long persistent_keepalive_interval;
++	u16 persistent_keepalive_interval;
 +	bool timers_enabled, timer_need_another_keepalive, sent_lastminute_handshake;
 +	struct timespec walltime_last_handshake;
 +	struct kref refcount;
@@ -27475,7 +27482,7 @@ index 000000000000..0057cfa7a18c
 +#endif /* _WG_QUEUEING_H */
 diff --git a/net/wireguard/ratelimiter.c b/net/wireguard/ratelimiter.c
 new file mode 100644
-index 000000000000..e1afcd6b9b96
+index 000000000000..140d99ed0cb5
 --- /dev/null
 +++ b/net/wireguard/ratelimiter.c
 @@ -0,0 +1,205 @@
@@ -27538,7 +27545,7 @@ index 000000000000..e1afcd6b9b96
 +	unsigned int i;
 +	struct ratelimiter_entry *entry;
 +	struct hlist_node *temp;
-+	const u64 now = ktime_get_ns();
++	const u64 now = ktime_get_boot_fast_ns();
 +
 +	for (i = 0; i < table_size; ++i) {
 +		spin_lock(&table_lock);
@@ -27588,7 +27595,7 @@ index 000000000000..e1afcd6b9b96
 +			 * tokens, rather than as part of the rate.
 +			 */
 +			spin_lock(&entry->lock);
-+			now = ktime_get_ns();
++			now = ktime_get_boot_fast_ns();
 +			tokens = min_t(u64, TOKEN_MAX, entry->tokens + now - entry->last_time_ns);
 +			entry->last_time_ns = now;
 +			ret = tokens >= PACKET_COST;
@@ -27611,7 +27618,7 @@ index 000000000000..e1afcd6b9b96
 +	entry->ip = data.ip;
 +	INIT_HLIST_NODE(&entry->hash);
 +	spin_lock_init(&entry->lock);
-+	entry->last_time_ns = ktime_get_ns();
++	entry->last_time_ns = ktime_get_boot_fast_ns();
 +	entry->tokens = TOKEN_MAX - PACKET_COST;
 +	spin_lock(&table_lock);
 +	hlist_add_head_rcu(&entry->hash, bucket);
@@ -27711,7 +27718,7 @@ index 000000000000..8931c0615374
 +#endif /* _WG_RATELIMITER_H */
 diff --git a/net/wireguard/receive.c b/net/wireguard/receive.c
 new file mode 100644
-index 000000000000..ac23e47584d1
+index 000000000000..d150a0b2b198
 --- /dev/null
 +++ b/net/wireguard/receive.c
 @@ -0,0 +1,489 @@
@@ -27811,9 +27818,9 @@ index 000000000000..ac23e47584d1
 +
 +	under_load = skb_queue_len(&wg->incoming_handshakes) >= MAX_QUEUED_INCOMING_HANDSHAKES / 8;
 +	if (under_load)
-+		last_under_load = get_jiffies_64();
++		last_under_load = ktime_get_boot_fast_ns();
 +	else if (last_under_load)
-+		under_load = time_is_after_jiffies64(last_under_load + HZ);
++		under_load = !has_expired(last_under_load, 1);
 +	mac_state = cookie_validate_packet(&wg->cookie_checker, skb, under_load);
 +	if ((under_load && mac_state == VALID_MAC_WITH_COOKIE) || (!under_load && mac_state == VALID_MAC_BUT_NO_COOKIE))
 +		packet_needs_cookie = false;
@@ -27907,7 +27914,7 @@ index 000000000000..ac23e47584d1
 +	rcu_read_lock_bh();
 +	keypair = rcu_dereference_bh(peer->keypairs.current_keypair);
 +	if (likely(keypair && keypair->sending.is_valid) && keypair->i_am_the_initiator &&
-+	    unlikely(time_is_before_eq_jiffies64(keypair->sending.birthdate + REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT)))
++	    unlikely(has_expired(keypair->sending.birthdate, REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT)))
 +		send = true;
 +	rcu_read_unlock_bh();
 +
@@ -27927,7 +27934,7 @@ index 000000000000..ac23e47584d1
 +	if (unlikely(!key))
 +		return false;
 +
-+	if (unlikely(!key->is_valid || time_is_before_eq_jiffies64(key->birthdate + REJECT_AFTER_TIME) || key->counter.receive.counter >= REJECT_AFTER_MESSAGES)) {
++	if (unlikely(!key->is_valid || has_expired(key->birthdate, REJECT_AFTER_TIME) || key->counter.receive.counter >= REJECT_AFTER_MESSAGES)) {
 +		key->is_valid = false;
 +		return false;
 +	}
@@ -33238,10 +33245,10 @@ index 000000000000..0bdff1e5b9bc
 +#endif
 diff --git a/net/wireguard/send.c b/net/wireguard/send.c
 new file mode 100644
-index 000000000000..d3e3d752d84d
+index 000000000000..7a8bea107065
 --- /dev/null
 +++ b/net/wireguard/send.c
-@@ -0,0 +1,352 @@
+@@ -0,0 +1,351 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -33259,7 +33266,6 @@ index 000000000000..d3e3d752d84d
 +#include <linux/uio.h>
 +#include <linux/inetdevice.h>
 +#include <linux/socket.h>
-+#include <linux/jiffies.h>
 +#include <net/ip_tunnels.h>
 +#include <net/udp.h>
 +#include <net/sock.h>
@@ -33269,11 +33275,11 @@ index 000000000000..d3e3d752d84d
 +	struct message_handshake_initiation packet;
 +
 +	down_write(&peer->handshake.lock);
-+	if (!time_is_before_jiffies64(peer->last_sent_handshake + REKEY_TIMEOUT)) {
++	if (!has_expired(peer->last_sent_handshake, REKEY_TIMEOUT)) {
 +		up_write(&peer->handshake.lock);
 +		return; /* This function is rate limited. */
 +	}
-+	peer->last_sent_handshake = get_jiffies_64();
++	peer->last_sent_handshake = ktime_get_boot_fast_ns();
 +	up_write(&peer->handshake.lock);
 +
 +	net_dbg_ratelimited("%s: Sending handshake initiation to peer %llu (%pISpfsc)\n", peer->device->dev->name, peer->internal_id, &peer->endpoint.addr);
@@ -33303,7 +33309,7 @@ index 000000000000..d3e3d752d84d
 +	/* First checking the timestamp here is just an optimization; it will
 +	 * be caught while properly locked inside the actual work queue.
 +	 */
-+	if (!time_is_before_jiffies64(peer->last_sent_handshake + REKEY_TIMEOUT))
++	if (!has_expired(peer->last_sent_handshake, REKEY_TIMEOUT))
 +		return;
 +
 +	peer = peer_rcu_get(peer);
@@ -33317,7 +33323,7 @@ index 000000000000..d3e3d752d84d
 +	struct message_handshake_response packet;
 +
 +	net_dbg_ratelimited("%s: Sending handshake response to peer %llu (%pISpfsc)\n", peer->device->dev->name, peer->internal_id, &peer->endpoint.addr);
-+	peer->last_sent_handshake = get_jiffies_64();
++	peer->last_sent_handshake = ktime_get_boot_fast_ns();
 +
 +	if (noise_handshake_create_response(&packet, &peer->handshake)) {
 +		cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
@@ -33348,7 +33354,7 @@ index 000000000000..d3e3d752d84d
 +	keypair = rcu_dereference_bh(peer->keypairs.current_keypair);
 +	if (likely(keypair && keypair->sending.is_valid) &&
 +	   (unlikely(atomic64_read(&keypair->sending.counter.counter) > REKEY_AFTER_MESSAGES) ||
-+	   (keypair->i_am_the_initiator && unlikely(time_is_before_eq_jiffies64(keypair->sending.birthdate + REKEY_AFTER_TIME)))))
++	   (keypair->i_am_the_initiator && unlikely(has_expired(keypair->sending.birthdate, REKEY_AFTER_TIME)))))
 +		send = true;
 +	rcu_read_unlock_bh();
 +
@@ -33550,7 +33556,7 @@ index 000000000000..d3e3d752d84d
 +	key = &keypair->sending;
 +	if (unlikely(!key || !key->is_valid))
 +		goto out_nokey;
-+	if (unlikely(time_is_before_eq_jiffies64(key->birthdate + REJECT_AFTER_TIME)))
++	if (unlikely(has_expired(key->birthdate, REJECT_AFTER_TIME)))
 +		goto out_invalid;
 +
 +	/* After we know we have a somewhat valid key, we now try to assign nonces to
@@ -33581,7 +33587,7 @@ index 000000000000..d3e3d752d84d
 +	skb_queue_walk(&packets, skb)
 +		skb_orphan(skb);
 +	/* Then we put them back on the top of the queue. We're not too concerned about
-+	 * accidently getting things a little out of order if packets are being added
++	 * accidentally getting things a little out of order if packets are being added
 +	 * really fast, because this queue is for before packets can even be sent and
 +	 * it's small anyway.
 +	 */
@@ -34036,7 +34042,7 @@ index 000000000000..9faba77c1170
 +#endif /* _WG_SOCKET_H */
 diff --git a/net/wireguard/timers.c b/net/wireguard/timers.c
 new file mode 100644
-index 000000000000..d3150de28889
+index 000000000000..d351fdea610d
 --- /dev/null
 +++ b/net/wireguard/timers.c
 @@ -0,0 +1,195 @@
@@ -34087,10 +34093,10 @@ index 000000000000..d3150de28889
 +		 * of a partial exchange.
 +		 */
 +		if (likely(timers_active(peer)) && !timer_pending(&peer->timer_zero_key_material))
-+			mod_timer(&peer->timer_zero_key_material, jiffies + (REJECT_AFTER_TIME * 3));
++			mod_timer(&peer->timer_zero_key_material, jiffies + REJECT_AFTER_TIME * 3 * HZ);
 +	} else {
 +		++peer->timer_handshake_attempts;
-+		pr_debug("%s: Handshake for peer %llu (%pISpfsc) did not complete after %d seconds, retrying (try %d)\n", peer->device->dev->name, peer->internal_id, &peer->endpoint.addr, REKEY_TIMEOUT / HZ, peer->timer_handshake_attempts + 1);
++		pr_debug("%s: Handshake for peer %llu (%pISpfsc) did not complete after %d seconds, retrying (try %d)\n", peer->device->dev->name, peer->internal_id, &peer->endpoint.addr, REKEY_TIMEOUT, peer->timer_handshake_attempts + 1);
 +
 +		/* We clear the endpoint address src address, in case this is the cause of trouble. */
 +		socket_clear_peer_endpoint_src(peer);
@@ -34108,7 +34114,7 @@ index 000000000000..d3150de28889
 +	if (peer->timer_need_another_keepalive) {
 +		peer->timer_need_another_keepalive = false;
 +		if (likely(timers_active(peer)))
-+			mod_timer(&peer->timer_send_keepalive, jiffies + KEEPALIVE_TIMEOUT);
++			mod_timer(&peer->timer_send_keepalive, jiffies + KEEPALIVE_TIMEOUT * HZ);
 +	}
 +	peer_put(peer);
 +}
@@ -34117,7 +34123,7 @@ index 000000000000..d3150de28889
 +{
 +	peer_get_from_timer(timer_new_handshake);
 +
-+	pr_debug("%s: Retrying handshake with peer %llu (%pISpfsc) because we stopped hearing back after %d seconds\n", peer->device->dev->name, peer->internal_id, &peer->endpoint.addr, (KEEPALIVE_TIMEOUT + REKEY_TIMEOUT) / HZ);
++	pr_debug("%s: Retrying handshake with peer %llu (%pISpfsc) because we stopped hearing back after %d seconds\n", peer->device->dev->name, peer->internal_id, &peer->endpoint.addr, KEEPALIVE_TIMEOUT + REKEY_TIMEOUT);
 +	/* We clear the endpoint address src address, in case this is the cause of trouble. */
 +	socket_clear_peer_endpoint_src(peer);
 +	packet_send_queued_handshake_initiation(peer, false);
@@ -34135,7 +34141,7 @@ index 000000000000..d3150de28889
 +{
 +	struct wireguard_peer *peer = container_of(work, struct wireguard_peer, clear_peer_work);
 +
-+	pr_debug("%s: Zeroing out all keys for peer %llu (%pISpfsc), since we haven't received a new one in %d seconds\n", peer->device->dev->name, peer->internal_id, &peer->endpoint.addr, (REJECT_AFTER_TIME * 3) / HZ);
++	pr_debug("%s: Zeroing out all keys for peer %llu (%pISpfsc), since we haven't received a new one in %d seconds\n", peer->device->dev->name, peer->internal_id, &peer->endpoint.addr, REJECT_AFTER_TIME * 3);
 +	noise_handshake_clear(&peer->handshake);
 +	noise_keypairs_clear(&peer->keypairs);
 +	peer_put(peer);
@@ -34154,7 +34160,7 @@ index 000000000000..d3150de28889
 +void timers_data_sent(struct wireguard_peer *peer)
 +{
 +	if (likely(timers_active(peer)) && !timer_pending(&peer->timer_new_handshake))
-+		mod_timer(&peer->timer_new_handshake, jiffies + KEEPALIVE_TIMEOUT + REKEY_TIMEOUT);
++		mod_timer(&peer->timer_new_handshake, jiffies + (KEEPALIVE_TIMEOUT + REKEY_TIMEOUT) * HZ);
 +}
 +
 +/* Should be called after an authenticated data packet is received. */
@@ -34162,7 +34168,7 @@ index 000000000000..d3150de28889
 +{
 +	if (likely(timers_active(peer))) {
 +		if (!timer_pending(&peer->timer_send_keepalive))
-+			mod_timer(&peer->timer_send_keepalive, jiffies + KEEPALIVE_TIMEOUT);
++			mod_timer(&peer->timer_send_keepalive, jiffies + KEEPALIVE_TIMEOUT * HZ);
 +		else
 +			peer->timer_need_another_keepalive = true;
 +	}
@@ -34186,7 +34192,7 @@ index 000000000000..d3150de28889
 +void timers_handshake_initiated(struct wireguard_peer *peer)
 +{
 +	if (likely(timers_active(peer)))
-+		mod_timer(&peer->timer_retransmit_handshake, jiffies + REKEY_TIMEOUT + prandom_u32_max(REKEY_TIMEOUT_JITTER_MAX));
++		mod_timer(&peer->timer_retransmit_handshake, jiffies + REKEY_TIMEOUT * HZ + prandom_u32_max(REKEY_TIMEOUT_JITTER_MAX_JIFFIES));
 +}
 +
 +/* Should be called after a handshake response message is received and processed or when getting key confirmation via the first data message. */
@@ -34203,14 +34209,14 @@ index 000000000000..d3150de28889
 +void timers_session_derived(struct wireguard_peer *peer)
 +{
 +	if (likely(timers_active(peer)))
-+		mod_timer(&peer->timer_zero_key_material, jiffies + (REJECT_AFTER_TIME * 3));
++		mod_timer(&peer->timer_zero_key_material, jiffies + REJECT_AFTER_TIME * 3 * HZ);
 +}
 +
 +/* Should be called before a packet with authentication -- keepalive, data, or handshake -- is sent, or after one is received. */
 +void timers_any_authenticated_packet_traversal(struct wireguard_peer *peer)
 +{
 +	if (peer->persistent_keepalive_interval && likely(timers_active(peer)))
-+		mod_timer(&peer->timer_persistent_keepalive, jiffies + peer->persistent_keepalive_interval);
++		mod_timer(&peer->timer_persistent_keepalive, jiffies + peer->persistent_keepalive_interval * HZ);
 +}
 +
 +void timers_init(struct wireguard_peer *peer)
@@ -34237,10 +34243,10 @@ index 000000000000..d3150de28889
 +}
 diff --git a/net/wireguard/timers.h b/net/wireguard/timers.h
 new file mode 100644
-index 000000000000..6c67a6a279fd
+index 000000000000..1c46555de7e8
 --- /dev/null
 +++ b/net/wireguard/timers.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,27 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -34261,6 +34267,11 @@ index 000000000000..6c67a6a279fd
 +void timers_handshake_complete(struct wireguard_peer *peer);
 +void timers_session_derived(struct wireguard_peer *peer);
 +void timers_any_authenticated_packet_traversal(struct wireguard_peer *peer);
++
++static inline bool has_expired(u64 birthday_nanoseconds, u64 expiration_seconds)
++{
++	return (s64)(birthday_nanoseconds + expiration_seconds * NSEC_PER_SEC) <= (s64)ktime_get_boot_fast_ns();
++}
 +
 +#endif /* _WG_TIMERS_H */
 diff --git a/net/wireguard/uapi/wireguard.h b/net/wireguard/uapi/wireguard.h
@@ -34453,11 +34464,11 @@ index 000000000000..8b8a1f254bb6
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..aeb04739a6d7
+index 000000000000..71eb87e3d02f
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20180620"
++#define WIREGUARD_VERSION "0.0.20180625"
 -- 
-2.17.1
+2.18.0
 
