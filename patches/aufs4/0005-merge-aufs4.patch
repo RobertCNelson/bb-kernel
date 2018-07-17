@@ -1,6 +1,6 @@
-From 7c795dd34bbd39c22ed3b7224f5155a4e42dcdd7 Mon Sep 17 00:00:00 2001
+From c77484c805c1a95318bdc56820f48ca4bebd8476 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 11 Jul 2018 11:02:46 -0500
+Date: Tue, 17 Jul 2018 09:37:24 -0500
 Subject: [PATCH 5/5] merge: aufs4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -94,9 +94,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/wkq.c                                 |  391 ++++
  fs/aufs/wkq.h                                 |   94 +
  fs/aufs/xattr.c                               |  356 ++++
- fs/aufs/xino.c                                | 1599 ++++++++++++++
+ fs/aufs/xino.c                                | 1593 ++++++++++++++
  include/uapi/linux/aufs_type.h                |  448 ++++
- 91 files changed, 37115 insertions(+)
+ 91 files changed, 37109 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -35793,10 +35793,10 @@ index 000000000000..da60e29e1d97
 +}
 diff --git a/fs/aufs/xino.c b/fs/aufs/xino.c
 new file mode 100644
-index 000000000000..ba54f9d9c0da
+index 000000000000..0cd631e35080
 --- /dev/null
 +++ b/fs/aufs/xino.c
-@@ -0,0 +1,1599 @@
+@@ -0,0 +1,1593 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2005-2018 Junjiro R. Okajima
@@ -36934,51 +36934,65 @@ index 000000000000..ba54f9d9c0da
 +	}
 +}
 +
++struct au_xino_do_set_br {
++	vfs_writef_t writef;
++	struct au_branch *br;
++	ino_t h_ino;
++	aufs_bindex_t bshared;
++};
++
++static int au_xino_do_set_br(struct super_block *sb, struct path *path,
++			     struct au_xino_do_set_br *args)
++{
++	int err;
++	struct file *file;
++
++	if (args->bshared >= 0) {
++		/* shared xino */
++		au_xino_set_br_shared(sb, args->br, args->bshared);
++		file = au_xino_file(args->br);
++		goto out_ino; /* success */
++	}
++
++	/* new xino */
++	file = au_xino_create2(sb, path, au_xino_file(args->br));
++	err = PTR_ERR(file);
++	if (IS_ERR(file))
++		goto out;
++	if (!args->br->br_xino) {
++		err = au_xino_init(args->br, file);
++		fput(file);
++		if (unlikely(err))
++			goto out;
++	} else {
++		au_xino_file_set(args->br, file);
++		fput(file);
++	}
++
++out_ino:
++	err = au_xino_do_write(args->writef, file, args->h_ino, AUFS_ROOT_INO);
++out:
++	AuTraceErr(err);
++	return err;
++}
++
 +static int au_xino_set_br(struct super_block *sb, struct path *path)
 +{
 +	int err;
-+	ino_t h_ino;
-+	aufs_bindex_t bindex, bbot, bshared;
-+	struct file *f;
-+	struct au_branch *br;
++	aufs_bindex_t bindex, bbot;
++	struct au_xino_do_set_br args;
 +	struct inode *inode;
-+	vfs_writef_t writef;
-+	struct au_xino *xi;
 +
 +	SiMustWriteLock(sb);
 +
 +	bbot = au_sbbot(sb);
 +	inode = d_inode(sb->s_root);
-+	writef = au_sbi(sb)->si_xwrite;
++	args.writef = au_sbi(sb)->si_xwrite;
 +	for (bindex = 0; bindex <= bbot; bindex++) {
-+		br = au_sbr(sb, bindex);
-+		bshared = is_sb_shared(sb, bindex, bindex - 1);
-+		if (bshared >= 0) {
-+			/* shared xino */
-+			au_xino_set_br_shared(sb, br, bshared);
-+			f = au_xino_file(br);
-+			goto ino;
-+		}
-+
-+		/* new xino */
-+		f = au_xino_create2(sb, path, au_xino_file(br));
-+		err = PTR_ERR(f);
-+		if (IS_ERR(f))
-+			break;
-+		xi = br->br_xino;
-+		if (!xi) {
-+			err = au_xino_init(br, f);
-+			fput(f);
-+			if (unlikely(err))
-+				break;
-+		} else {
-+			au_xino_file_set(br, f);
-+			fput(f);
-+		}
-+
-+	ino: /* indented label */
-+		h_ino = au_h_iptr(inode, bindex)->i_ino;
-+		err = au_xino_do_write(writef, f, h_ino, AUFS_ROOT_INO);
++		args.h_ino = au_h_iptr(inode, bindex)->i_ino;
++		args.br = au_sbr(sb, bindex);
++		args.bshared = is_sb_shared(sb, bindex, bindex - 1);
++		err = au_xino_do_set_br(sb, path, &args);
 +		if (unlikely(err))
 +			break;
 +	}
@@ -37127,38 +37141,18 @@ index 000000000000..ba54f9d9c0da
 +		    struct path *base)
 +{
 +	int err;
-+	aufs_bindex_t bshared;
-+	struct file *file;
++	struct au_xino_do_set_br args = {
++		.h_ino	= h_ino,
++		.br	= br
++	};
 +
-+	err = 0;
-+	bshared = sbr_find_shared(sb, /*btop*/0, au_sbbot(sb), au_br_sb(br));
-+	if (bshared >= 0) {
-+		au_xino_set_br_shared(sb, br, bshared);
-+		file = au_xino_file(br);
-+		goto out_ino; /* success */
-+	}
-+
-+	file = au_xino_create2(sb, base, NULL);
-+	err = PTR_ERR(file);
-+	if (IS_ERR(file))
-+		goto out;
-+
-+	if (!br->br_xino) {
-+		err = au_xino_init(br, file);
-+		fput(file);
-+		if (unlikely(err))
-+			goto out;
-+	} else {
-+		au_xino_file_set(br, file);
-+		fput(file);
-+	}
-+
-+out_ino:
-+	err = au_xino_do_write(au_sbi(sb)->si_xwrite, file, h_ino,
-+			       AUFS_ROOT_INO);
++	args.writef = au_sbi(sb)->si_xwrite;
++	args.bshared = sbr_find_shared(sb, /*btop*/0, au_sbbot(sb),
++				       au_br_sb(br));
++	err = au_xino_do_set_br(sb, base, &args);
 +	if (unlikely(err))
 +		au_xino_put(br);
-+out:
++
 +	return err;
 +}
 +
@@ -37398,7 +37392,7 @@ index 000000000000..ba54f9d9c0da
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..1c4a8730ef71
+index 000000000000..232a4cc31df5
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,448 @@
@@ -37444,7 +37438,7 @@ index 000000000000..1c4a8730ef71
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.17-20180709"
++#define AUFS_VERSION	"4.17-20180716"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
