@@ -153,9 +153,6 @@ debian_regs () {
 	#v4.18-rc0
 	pkg="pkg-config"
 	check_dpkg
-	#v4.18-rc5
-	pkg="libssl-dev"
-	check_dpkg
 
 	unset warn_dpkg_ia32
 	unset stop_pkg_search
@@ -451,6 +448,9 @@ debian_regs () {
 
 		pkg="libncurses5-dev:${deb_arch}"
 		check_dpkg
+		pkg="libssl-dev:${deb_arch}"
+		check_dpkg
+
 		if [ "x${build_git}" = "xtrue" ] ; then
 			#git
 			pkg="libcurl4-gnutls-dev:${deb_arch}"
@@ -458,8 +458,6 @@ debian_regs () {
 			pkg="libelf-dev:${deb_arch}"
 			check_dpkg
 			pkg="libexpat1-dev:${deb_arch}"
-			check_dpkg
-			pkg="libssl-dev:${deb_arch}"
 			check_dpkg
 		fi
 
