@@ -1,6 +1,6 @@
-From 7155a58b7019d444e4ff2e429045ccdf3b9adac8 Mon Sep 17 00:00:00 2001
+From a4f80cec9d37b217a9d2749d2bd9d0b954e45e01 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 15 Jul 2018 17:38:39 -0500
+Date: Sun, 22 Jul 2018 18:20:01 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -14,7 +14,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/compat/Makefile.include         |   71 +
  .../compat/checksum/checksum_partial_compat.h |  208 ++
  net/wireguard/compat/compat-asm.h             |   18 +
- net/wireguard/compat/compat.h                 |  708 +++++
+ net/wireguard/compat/compat.h                 |  717 +++++
  net/wireguard/compat/dst_cache/dst_cache.c    |  175 ++
  .../compat/dst_cache/include/net/dst_cache.h  |   97 +
  .../compat/fpu/include/asm/fpu/api.h          |    1 +
@@ -66,7 +66,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/netlink.h                       |   12 +
  net/wireguard/noise.c                         |  649 ++++
  net/wireguard/noise.h                         |  117 +
- net/wireguard/peer.c                          |  140 +
+ net/wireguard/peer.c                          |  141 +
  net/wireguard/peer.h                          |   74 +
  net/wireguard/queueing.c                      |   48 +
  net/wireguard/queueing.h                      |  155 +
@@ -87,7 +87,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/timers.h                        |   27 +
  net/wireguard/uapi/wireguard.h                |  182 ++
  net/wireguard/version.h                       |    1 +
- 82 files changed, 33837 insertions(+)
+ 82 files changed, 33847 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -977,10 +977,10 @@ index 000000000000..73bbfbccacf1
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..997ae39fb5ca
+index 000000000000..7943ab81ba7a
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
-@@ -0,0 +1,708 @@
+@@ -0,0 +1,717 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1582,6 +1582,15 @@ index 000000000000..997ae39fb5ca
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0) && !defined(ISRHEL7)
 +#define napi_complete_done(n, work_done) napi_complete(n)
++#endif
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
++#include <linux/netdevice.h>
++/* NAPI_STATE_SCHED gets set by netif_napi_add anyway, so this is safe.
++ * Also, kernels without NAPI_STATE_NO_BUSY_POLL don't have a call to
++ * napi_hash_add inside of netif_napi_add.
++ */
++#define NAPI_STATE_NO_BUSY_POLL NAPI_STATE_SCHED
 +#endif
 +
 +/* https://lkml.kernel.org/r/20170624021727.17835-1-Jason@zx2c4.com */
@@ -24796,7 +24805,7 @@ index 000000000000..007f66ea34b7
 +#endif /* _WG_SIMD_H */
 diff --git a/net/wireguard/device.c b/net/wireguard/device.c
 new file mode 100644
-index 000000000000..89944ca52667
+index 000000000000..54a94fbe8a81
 --- /dev/null
 +++ b/net/wireguard/device.c
 @@ -0,0 +1,429 @@
@@ -25028,9 +25037,9 @@ index 000000000000..89944ca52667
 +	peer_remove_all(wg); /* The final references are cleared in the below calls to destroy_workqueue. */
 +	destroy_workqueue(wg->handshake_receive_wq);
 +	destroy_workqueue(wg->handshake_send_wq);
++	destroy_workqueue(wg->packet_crypt_wq);
 +	packet_queue_free(&wg->decrypt_queue, true);
 +	packet_queue_free(&wg->encrypt_queue, true);
-+	destroy_workqueue(wg->packet_crypt_wq);
 +	rcu_barrier_bh(); /* Wait for all the peers to be actually freed. */
 +	ratelimiter_uninit();
 +	memzero_explicit(&wg->static_identity, sizeof(struct noise_static_identity));
@@ -27065,10 +27074,10 @@ index 000000000000..b8d18b93e5d3
 +#endif /* _WG_NOISE_H */
 diff --git a/net/wireguard/peer.c b/net/wireguard/peer.c
 new file mode 100644
-index 000000000000..3d2fff0aaf9d
+index 000000000000..e8081f5b6fa2
 --- /dev/null
 +++ b/net/wireguard/peer.c
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,141 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -27127,6 +27136,7 @@ index 000000000000..3d2fff0aaf9d
 +	list_add_tail(&peer->peer_list, &wg->peer_list);
 +	pubkey_hashtable_add(&wg->peer_hashtable, peer);
 +	peer->last_sent_handshake = ktime_get_boot_fast_ns() - (u64)(REKEY_TIMEOUT + 1) * NSEC_PER_SEC;
++	set_bit(NAPI_STATE_NO_BUSY_POLL, &peer->napi.state);
 +	netif_napi_add(wg->dev, &peer->napi, packet_rx_poll, NAPI_POLL_WEIGHT);
 +	napi_enable(&peer->napi);
 +	pr_debug("%s: Peer %llu created\n", wg->dev->name, peer->internal_id);
@@ -27742,7 +27752,7 @@ index 000000000000..8931c0615374
 +#endif /* _WG_RATELIMITER_H */
 diff --git a/net/wireguard/receive.c b/net/wireguard/receive.c
 new file mode 100644
-index 000000000000..144064eb5c69
+index 000000000000..732ac2b9b3de
 --- /dev/null
 +++ b/net/wireguard/receive.c
 @@ -0,0 +1,499 @@
@@ -28090,7 +28100,7 @@ index 000000000000..144064eb5c69
 +	if (unlikely(routed_peer != peer))
 +		goto dishonest_packet_peer;
 +
-+	if (unlikely(napi_gro_receive(&peer->napi, skb) == NET_RX_DROP)) {
++	if (unlikely(napi_gro_receive(&peer->napi, skb) == GRO_DROP)) {
 +		++dev->stats.rx_dropped;
 +		net_dbg_ratelimited("%s: Failed to give packet to userspace from peer %llu (%pISpfsc)\n", dev->name, peer->internal_id, &peer->endpoint.addr);
 +	} else
@@ -34503,11 +34513,11 @@ index 000000000000..8b8a1f254bb6
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..e0f6a73836a8
+index 000000000000..cb5a6a42f02f
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20180708"
++#define WIREGUARD_VERSION "0.0.20180718"
 -- 
 2.18.0
 
