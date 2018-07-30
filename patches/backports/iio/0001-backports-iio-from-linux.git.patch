@@ -1,6 +1,6 @@
-From 216be47a299c3ad2d7f00519c4c817abc055b664 Mon Sep 17 00:00:00 2001
+From 5fb7387d067a5ae1011633ac75c42bde92eaf885 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 25 Jun 2018 09:25:05 -0500
+Date: Mon, 30 Jul 2018 13:51:38 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -63,7 +63,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/iio/buffer/Makefile                   |    2 +
  drivers/iio/buffer/industrialio-buffer-dma.c  |  683 +++++++
  .../buffer/industrialio-buffer-dmaengine.c    |  208 ++
- drivers/iio/buffer/kfifo_buf.c                |    7 -
+ drivers/iio/buffer/kfifo_buf.c                |   11 +-
  drivers/iio/chemical/Kconfig                  |   22 +
  drivers/iio/chemical/Makefile                 |    2 +
  drivers/iio/chemical/ams-iaq-core.c           |  200 ++
@@ -275,7 +275,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/iio/adc/ad_sigma_delta.h        |    3 -
  include/linux/iio/buffer-dma.h                |  152 ++
  include/linux/iio/buffer-dmaengine.h          |   18 +
- include/linux/iio/buffer.h                    |   18 +
+ include/linux/iio/buffer.h                    |   24 +-
  include/linux/iio/common/st_sensors.h         |   22 +-
  include/linux/iio/configfs.h                  |   15 +
  include/linux/iio/consumer.h                  |   53 +
@@ -287,7 +287,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/platform_data/ad5761.h          |   44 +
  .../linux/platform_data/st_sensors_pdata.h    |    2 +
  include/uapi/linux/iio/types.h                |    3 +
- 282 files changed, 27538 insertions(+), 2583 deletions(-)
+ 282 files changed, 27543 insertions(+), 2588 deletions(-)
  create mode 100644 drivers/iio/accel/mma7455.h
  create mode 100644 drivers/iio/accel/mma7455_core.c
  create mode 100644 drivers/iio/accel/mma7455_i2c.c
@@ -12359,10 +12359,16 @@ index 000000000000..9fabed47053d
 +}
 +EXPORT_SYMBOL_GPL(iio_dmaengine_buffer_free);
 diff --git a/drivers/iio/buffer/kfifo_buf.c b/drivers/iio/buffer/kfifo_buf.c
-index 7ef9b13262a8..c5b999f0c519 100644
+index e44181f9eb36..c5b999f0c519 100644
 --- a/drivers/iio/buffer/kfifo_buf.c
 +++ b/drivers/iio/buffer/kfifo_buf.c
-@@ -24,13 +24,6 @@ static inline int __iio_allocate_kfifo(struct iio_kfifo *buf,
+@@ -19,18 +19,11 @@ struct iio_kfifo {
+ #define iio_to_kfifo(r) container_of(r, struct iio_kfifo, buffer)
+ 
+ static inline int __iio_allocate_kfifo(struct iio_kfifo *buf,
+-			size_t bytes_per_datum, unsigned int length)
++				int bytes_per_datum, int length)
+ {
  	if ((length == 0) || (bytes_per_datum == 0))
  		return -EINVAL;
  
@@ -12376,6 +12382,15 @@ index 7ef9b13262a8..c5b999f0c519 100644
  	return __kfifo_alloc((struct __kfifo *)&buf->kf, length,
  			     bytes_per_datum, GFP_KERNEL);
  }
+@@ -71,7 +64,7 @@ static int iio_set_bytes_per_datum_kfifo(struct iio_buffer *r, size_t bpd)
+ 	return 0;
+ }
+ 
+-static int iio_set_length_kfifo(struct iio_buffer *r, unsigned int length)
++static int iio_set_length_kfifo(struct iio_buffer *r, int length)
+ {
+ 	/* Avoid an invalid state */
+ 	if (length < 2)
 diff --git a/drivers/iio/chemical/Kconfig b/drivers/iio/chemical/Kconfig
 index 3061b7299f0f..f73290f84c90 100644
 --- a/drivers/iio/chemical/Kconfig
@@ -40186,7 +40201,7 @@ index 000000000000..5dcddf427bb0
 +
 +#endif
 diff --git a/include/linux/iio/buffer.h b/include/linux/iio/buffer.h
-index 1600c55828e0..70a5164f4728 100644
+index 93a774ce4922..70a5164f4728 100644
 --- a/include/linux/iio/buffer.h
 +++ b/include/linux/iio/buffer.h
 @@ -17,6 +17,12 @@
@@ -40218,13 +40233,16 @@ index 1600c55828e0..70a5164f4728 100644
   *
   * The purpose of this structure is to make the buffer element
   * modular as event for a given driver, different usecases may require
-@@ -51,9 +63,13 @@ struct iio_buffer_access_funcs {
- 	int (*set_bytes_per_datum)(struct iio_buffer *buffer, size_t bpd);
- 	int (*set_length)(struct iio_buffer *buffer, int length);
+@@ -49,11 +61,15 @@ struct iio_buffer_access_funcs {
+ 	int (*request_update)(struct iio_buffer *buffer);
  
+ 	int (*set_bytes_per_datum)(struct iio_buffer *buffer, size_t bpd);
+-	int (*set_length)(struct iio_buffer *buffer, unsigned int length);
++	int (*set_length)(struct iio_buffer *buffer, int length);
++
 +	int (*enable)(struct iio_buffer *buffer, struct iio_dev *indio_dev);
 +	int (*disable)(struct iio_buffer *buffer, struct iio_dev *indio_dev);
-+
+ 
  	void (*release)(struct iio_buffer *buffer);
  
  	unsigned int modes;
@@ -40245,6 +40263,17 @@ index 1600c55828e0..70a5164f4728 100644
   * @demux_list:		[INTERN] list of operations required to demux the scan.
   * @demux_bounce:	[INTERN] buffer for doing gather from incoming scan.
   * @buffer_list:	[INTERN] entry in the devices list of current buffers.
+@@ -78,8 +96,8 @@ struct iio_buffer_access_funcs {
+  * @watermark:		[INTERN] number of datums to wait for poll/read.
+  */
+ struct iio_buffer {
+-	unsigned int				length;
+-	size_t					bytes_per_datum;
++	int					length;
++	int					bytes_per_datum;
+ 	struct attribute_group			*scan_el_attrs;
+ 	long					*scan_mask;
+ 	bool					scan_timestamp;
 diff --git a/include/linux/iio/common/st_sensors.h b/include/linux/iio/common/st_sensors.h
 index 2fe939c73cd2..99403b19092f 100644
 --- a/include/linux/iio/common/st_sensors.h
