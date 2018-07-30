@@ -195,6 +195,9 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	#v4.9.115
+	${git_bin} revert --no-edit 3118ceb456200d73179ddf29f2b95f59e35465f9
+
 	#v4.9.104
 	${git_bin} revert --no-edit 527ed41ff2776311bdae56c2472ee0a5cbb60605
 	${git_bin} revert --no-edit bcefedb87cf9625d33d0e53dfdc52e43744593c1
