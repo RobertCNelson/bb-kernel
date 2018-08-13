@@ -191,7 +191,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+	#v4.18
+	${git_bin} revert --no-edit b5b1404d0815894de0690de8a1ab58269e56eae6
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -292,8 +293,8 @@ local_patch () {
 
 #external_git
 #aufs4
-#rt
-wireguard
+rt
+#wireguard
 ti_pm_firmware
 #local_patch
 
