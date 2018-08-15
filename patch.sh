@@ -195,15 +195,10 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.9.115
-	${git_bin} revert --no-edit 3118ceb456200d73179ddf29f2b95f59e35465f9
+	#v4.9.120 needs to revert around: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/log/kernel/cpu.c?h=v4.9.120
 
-	#v4.9.104
-	${git_bin} revert --no-edit 527ed41ff2776311bdae56c2472ee0a5cbb60605
-	${git_bin} revert --no-edit bcefedb87cf9625d33d0e53dfdc52e43744593c1
-
-	#v4.9.101
-	${git_bin} revert --no-edit 205cd52bbee7fe6452912fe01ceade970bccc926
+	#v4.9.117
+	${git_bin} revert --no-edit 7d044d940faeb6a7e65a1d215415e425822f365c
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
