@@ -33,7 +33,7 @@ KERNEL_REL=4.18
 KERNEL_TAG=${KERNEL_REL}.1
 kernel_rt="-rc8-rt1"
 #Kernel Build
-BUILD=${build_prefix}3
+BUILD=${build_prefix}4
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
@@ -42,6 +42,6 @@ BUILD=${build_prefix}3
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
-DISTRO=cross
+DISTRO=xross
 DEBARCH=armhf
 #
