@@ -191,8 +191,7 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.18
-	${git_bin} revert --no-edit b5b1404d0815894de0690de8a1ab58269e56eae6
+	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -292,7 +291,7 @@ local_patch () {
 }
 
 #external_git
-aufs4
+#aufs4
 #rt
 wireguard
 ti_pm_firmware
@@ -369,12 +368,12 @@ reverts () {
 }
 
 drivers () {
+#	dir 'drivers/android'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/btrfs'
 	dir 'drivers/pwm'
 	dir 'drivers/spi'
 	dir 'drivers/ssd1306'
-	dir 'drivers/tsl2550'
 	dir 'drivers/tps65217'
 	dir 'drivers/opp'
 	dir 'drivers/wiznet'
@@ -399,7 +398,6 @@ soc () {
 	dir 'soc/ti/bone_common'
 	dir 'soc/ti/uboot'
 	dir 'soc/ti/blue'
-	dir 'soc/ti/sancloud'
 	dir 'soc/ti/abbbi'
 	dir 'soc/ti/am335x_olimex_som'
 	dir 'soc/ti/beaglebone_capes'
@@ -442,8 +440,6 @@ beaglebone () {
 
 #		device="am335x-boneblack-roboticscape.dtb" ; dtb_makefile_append
 #		device="am335x-boneblack-wireless-roboticscape.dtb" ; dtb_makefile_append
-
-		device="am335x-sancloud-bbe.dtb" ; dtb_makefile_append
 
 		device="am335x-abbbi.dtb" ; dtb_makefile_append
 
