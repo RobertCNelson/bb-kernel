@@ -140,10 +140,16 @@ aufs4 () {
 
 		cd ../
 		if [ ! -d ./aufs4-standalone ] ; then
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=30
+			cd ./aufs4-standalone
+			git checkout 177de03d53c1fbf4c126ae862abae9cf22eb82a5 -b tmp
+			cd ../
 		else
 			rm -rf ./aufs4-standalone || true
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=30
+			cd ./aufs4-standalone
+			git checkout 177de03d53c1fbf4c126ae862abae9cf22eb82a5 -b tmp
+			cd ../
 		fi
 		cd ./KERNEL/
 
@@ -191,8 +197,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.18
-	${git_bin} revert --no-edit b5b1404d0815894de0690de8a1ab58269e56eae6
+	#v4.x
+	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -221,10 +227,18 @@ wireguard () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
 		if [ ! -d ./WireGuard ] ; then
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=20
+			cd ./WireGuard
+			#https://git.zx2c4.com/WireGuard/commit/?id=02da5711330c4944c2b69a52a936c4ef15268930
+			git checkout 02da5711330c4944c2b69a52a936c4ef15268930 -b tmp
+			cd ./../
 		else
 			rm -rf ./WireGuard || true
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=20
+			cd ./WireGuard
+			#https://git.zx2c4.com/WireGuard/commit/?id=02da5711330c4944c2b69a52a936c4ef15268930
+			git checkout 02da5711330c4944c2b69a52a936c4ef15268930 -b tmp
+			cd ./../
 		fi
 		cd ./KERNEL/
 
