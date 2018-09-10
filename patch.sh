@@ -229,15 +229,15 @@ wireguard () {
 		if [ ! -d ./WireGuard ] ; then
 			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=20
 			cd ./WireGuard
-			#https://git.zx2c4.com/WireGuard/commit/?id=02da5711330c4944c2b69a52a936c4ef15268930
-			git checkout 02da5711330c4944c2b69a52a936c4ef15268930 -b tmp
+			#https://git.zx2c4.com/WireGuard/commit/?id=99db4f88b38964f34a898e258c8d2fc608f45ebe
+			git checkout 99db4f88b38964f34a898e258c8d2fc608f45ebe -b tmp
 			cd ./../
 		else
 			rm -rf ./WireGuard || true
 			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=20
 			cd ./WireGuard
-			#https://git.zx2c4.com/WireGuard/commit/?id=02da5711330c4944c2b69a52a936c4ef15268930
-			git checkout 02da5711330c4944c2b69a52a936c4ef15268930 -b tmp
+			#https://git.zx2c4.com/WireGuard/commit/?id=99db4f88b38964f34a898e258c8d2fc608f45ebe
+			git checkout 99db4f88b38964f34a898e258c8d2fc608f45ebe -b tmp
 			cd ./../
 		fi
 		cd ./KERNEL/
