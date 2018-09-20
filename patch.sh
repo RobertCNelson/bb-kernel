@@ -197,8 +197,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.x
-	#${git_bin} revert --no-edit xyz
+	#v4.18.9
+	${git_bin} revert --no-edit b3f70869623d5da84a21dbe8b0e13cbeac2b0f31
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
