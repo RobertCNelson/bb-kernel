@@ -22,6 +22,7 @@ KERNEL_ARCH=arm
 #toolchain="gcc_linaro_gnueabihf_5"
 #toolchain="gcc_linaro_gnueabihf_6"
 toolchain="gcc_linaro_gnueabihf_7"
+#toolchain="gcc_arm_gnueabihf_8"
 #arm64
 #KERNEL_ARCH=arm64
 #toolchain="gcc_linaro_aarch64_gnu_5"
@@ -30,10 +31,10 @@ toolchain="gcc_linaro_gnueabihf_7"
 
 #Kernel
 KERNEL_REL=4.18
-KERNEL_TAG=${KERNEL_REL}.9
+KERNEL_TAG=${KERNEL_REL}.10
 kernel_rt=".7-rt5"
 #Kernel Build
-BUILD=${build_prefix}9
+BUILD=${build_prefix}10
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
