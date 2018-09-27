@@ -140,16 +140,10 @@ aufs4 () {
 
 		cd ../
 		if [ ! -d ./aufs4-standalone ] ; then
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=30
-			cd ./aufs4-standalone
-			git checkout 177de03d53c1fbf4c126ae862abae9cf22eb82a5 -b tmp
-			cd ../
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
 		else
 			rm -rf ./aufs4-standalone || true
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=30
-			cd ./aufs4-standalone
-			git checkout 177de03d53c1fbf4c126ae862abae9cf22eb82a5 -b tmp
-			cd ../
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
 		fi
 		cd ./KERNEL/
 
@@ -196,6 +190,10 @@ rt_cleanup () {
 rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
+
+	#v4.18.10
+	${git_bin} revert --no-edit 0c6e2a79715a607067fc6b0d5407f88b8d9453eb
+	${git_bin} revert --no-edit 05a993198dedc4196fb69696ad35cb1764984642
 
 	#v4.18.9
 	${git_bin} revert --no-edit b3f70869623d5da84a21dbe8b0e13cbeac2b0f31
