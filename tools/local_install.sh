@@ -123,8 +123,8 @@ mmc_write_boot () {
 	fi
 }
 
-if [ -f "${DIR}/system.sh" ] ; then
-	. "${DIR}/system.sh"
+if [ -f "${DIR}/../system.sh" ] ; then
+	. "${DIR}/../system.sh"
 
 	if [ -f "${DIR}/KERNEL/arch/arm/boot/zImage" ] ; then
 		KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
