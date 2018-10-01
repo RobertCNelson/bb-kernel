@@ -1,13 +1,13 @@
-From 4a9ebb7a7a759e7fb7320362ff7497ea7999e45d Mon Sep 17 00:00:00 2001
+From 903620c0eb5026f324d06073307c047b31e5ee60 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 27 Sep 2018 16:46:16 -0500
+Date: Mon, 1 Oct 2018 11:06:14 -0500
 Subject: [PATCH 5/5] merge: aufs4
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  Documentation/ABI/testing/debugfs-aufs        |   55 +
  Documentation/ABI/testing/sysfs-aufs          |   31 +
- Documentation/filesystems/aufs/README         |  393 ++++
+ Documentation/filesystems/aufs/README         |  394 ++++
  .../filesystems/aufs/design/01intro.txt       |  171 ++
  .../filesystems/aufs/design/02struct.txt      |  258 +++
  .../filesystems/aufs/design/03atomic_open.txt |   85 +
@@ -25,21 +25,21 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/Kconfig                               |  199 ++
  fs/aufs/Makefile                              |   46 +
  fs/aufs/aufs.h                                |   62 +
- fs/aufs/branch.c                              | 1413 ++++++++++++
- fs/aufs/branch.h                              |  401 ++++
+ fs/aufs/branch.c                              | 1422 +++++++++++++
+ fs/aufs/branch.h                              |  367 ++++
  fs/aufs/conf.mk                               |   40 +
- fs/aufs/cpup.c                                | 1441 +++++++++++++
+ fs/aufs/cpup.c                                | 1444 +++++++++++++
  fs/aufs/cpup.h                                |  100 +
  fs/aufs/dbgaufs.c                             |  519 +++++
  fs/aufs/dbgaufs.h                             |   53 +
  fs/aufs/dcsub.c                               |  225 ++
  fs/aufs/dcsub.h                               |  137 ++
- fs/aufs/debug.c                               |  442 ++++
+ fs/aufs/debug.c                               |  440 ++++
  fs/aufs/debug.h                               |  226 ++
  fs/aufs/dentry.c                              | 1153 ++++++++++
  fs/aufs/dentry.h                              |  267 +++
  fs/aufs/dinfo.c                               |  554 +++++
- fs/aufs/dir.c                                 |  760 +++++++
+ fs/aufs/dir.c                                 |  762 +++++++
  fs/aufs/dir.h                                 |  132 ++
  fs/aufs/dirren.c                              | 1316 ++++++++++++
  fs/aufs/dirren.h                              |  140 ++
@@ -54,9 +54,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/fstype.h                              |  401 ++++
  fs/aufs/hbl.h                                 |   65 +
  fs/aufs/hfsnotify.c                           |  290 +++
- fs/aufs/hfsplus.c                             |   57 +
+ fs/aufs/hfsplus.c                             |   60 +
  fs/aufs/hnotify.c                             |  720 +++++++
- fs/aufs/i_op.c                                | 1508 +++++++++++++
+ fs/aufs/i_op.c                                | 1509 +++++++++++++
  fs/aufs/i_op_add.c                            |  934 ++++++++
  fs/aufs/i_op_del.c                            |  512 +++++
  fs/aufs/i_op_ren.c                            | 1247 +++++++++++
@@ -97,7 +97,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/xattr.c                               |  356 ++++
  fs/aufs/xino.c                                | 1890 +++++++++++++++++
  include/uapi/linux/aufs_type.h                |  448 ++++
- 92 files changed, 37675 insertions(+)
+ 92 files changed, 37658 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -291,10 +291,10 @@ index 000000000000..82f9518495ea
 +		will be empty. About XINO files, see the aufs manual.
 diff --git a/Documentation/filesystems/aufs/README b/Documentation/filesystems/aufs/README
 new file mode 100644
-index 000000000000..013ea14d0665
+index 000000000000..79eb50ae06bd
 --- /dev/null
 +++ b/Documentation/filesystems/aufs/README
-@@ -0,0 +1,393 @@
+@@ -0,0 +1,394 @@
 +
 +Aufs4 -- advanced multi layered unification filesystem version 4.x
 +http://aufs.sf.net
@@ -671,6 +671,7 @@ index 000000000000..013ea14d0665
 +OmegaPhil made a donation (2016/1, 2018/4).
 +Tomasz Szewczyk made a donation (2016/4).
 +James Burry made a donation (2016/12).
++Carsten Rose made a donation (2018/9).
 +
 +Thank you very much.
 +Donations are always, including future donations, very important and
@@ -2442,10 +2443,10 @@ index 000000000000..2456917434aa
 +#endif /* __AUFS_H__ */
 diff --git a/fs/aufs/branch.c b/fs/aufs/branch.c
 new file mode 100644
-index 000000000000..24c47dfd16f3
+index 000000000000..2fc6dc1e38b1
 --- /dev/null
 +++ b/fs/aufs/branch.c
-@@ -0,0 +1,1413 @@
+@@ -0,0 +1,1422 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2005-2018 Junjiro R. Okajima
@@ -2486,8 +2487,10 @@ index 000000000000..24c47dfd16f3
 +	au_dr_hino_free(&br->br_dirren);
 +	au_xino_put(br);
 +
-+	AuLCntZero(au_br_count(br));
-+	au_br_count_fin(br, /*do_sync*/0);
++	AuLCntZero(au_lcnt_read(&br->br_nfiles, /*do_rev*/0));
++	au_lcnt_fin(&br->br_nfiles, /*do_sync*/0);
++	AuLCntZero(au_lcnt_read(&br->br_count, /*do_rev*/0));
++	au_lcnt_fin(&br->br_count, /*do_sync*/0);
 +
 +	wbr = br->br_wbr;
 +	if (wbr) {
@@ -2515,6 +2518,7 @@ index 000000000000..24c47dfd16f3
 +	path_put(&br->br_path);
 +	lockdep_on();
 +	kfree(wbr);
++	au_lcnt_wait_for_fin(&br->br_nfiles);
 +	au_lcnt_wait_for_fin(&br->br_count);
 +	/* I don't know why, but percpu_refcount requires this */
 +	/* synchronize_rcu(); */
@@ -2842,7 +2846,8 @@ index 000000000000..24c47dfd16f3
 +	br->br_perm = add->perm;
 +	br->br_path = add->path; /* set first, path_get() later */
 +	spin_lock_init(&br->br_dykey_lock);
-+	au_br_count_init(br);
++	au_lcnt_init(&br->br_nfiles, /*release*/NULL);
++	au_lcnt_init(&br->br_count, /*release*/NULL);
 +	br->br_id = au_new_br_id(sb);
 +	AuDebugOn(br->br_id < 0);
 +
@@ -3476,11 +3481,16 @@ index 000000000000..24c47dfd16f3
 +		AuVerbose(verbose, "no more branches left\n");
 +		goto out;
 +	}
++
 +	br = au_sbr(sb, bindex);
 +	AuDebugOn(!path_equal(&br->br_path, &del->h_path));
++	if (unlikely(au_lcnt_read(&br->br_count, /*do_rev*/1))) {
++		AuVerbose(verbose, "br %pd2 is busy now\n", del->h_path.dentry);
++		goto out;
++	}
 +
 +	br_id = br->br_id;
-+	opened = au_br_count(br);
++	opened = au_lcnt_read(&br->br_nfiles, /*do_rev*/1);
 +	if (unlikely(opened)) {
 +		to_free = au_array_alloc(&opened, empty_cb, sb, NULL);
 +		err = PTR_ERR(to_free);
@@ -3861,10 +3871,10 @@ index 000000000000..24c47dfd16f3
 +}
 diff --git a/fs/aufs/branch.h b/fs/aufs/branch.h
 new file mode 100644
-index 000000000000..73f475669d5b
+index 000000000000..2b0f58bb9d01
 --- /dev/null
 +++ b/fs/aufs/branch.h
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,367 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2005-2018 Junjiro R. Okajima
@@ -3981,7 +3991,8 @@ index 000000000000..73f475669d5b
 +	struct path		br_path;
 +	spinlock_t		br_dykey_lock;
 +	struct au_dykey		*br_dykey[AuBrDynOp];
-+	au_lcnt_t		br_count;
++	au_lcnt_t		br_nfiles;	/* opened files */
++	au_lcnt_t		br_count;	/* in-use for other */
 +
 +	struct au_wbr		*br_wbr;
 +	struct au_br_fhsm	*br_fhsm;
@@ -4017,31 +4028,6 @@ index 000000000000..73f475669d5b
 +static inline struct super_block *au_br_sb(struct au_branch *br)
 +{
 +	return au_br_mnt(br)->mnt_sb;
-+}
-+
-+static inline void au_br_get(struct au_branch *br)
-+{
-+	au_lcnt_inc(&br->br_count);
-+}
-+
-+static inline void au_br_put(struct au_branch *br)
-+{
-+	au_lcnt_dec(&br->br_count);
-+}
-+
-+static inline long au_br_count(struct au_branch *br)
-+{
-+	return au_lcnt_read(&br->br_count, /*do_rev*/1);
-+}
-+
-+static inline void au_br_count_init(struct au_branch *br)
-+{
-+	au_lcnt_init(&br->br_count, /*release*/NULL);
-+}
-+
-+static inline void au_br_count_fin(struct au_branch *br, int do_sync)
-+{
-+	au_lcnt_fin(&br->br_count, do_sync);
 +}
 +
 +static inline int au_br_rdonly(struct au_branch *br)
@@ -4204,16 +4190,6 @@ index 000000000000..73f475669d5b
 +	return au_br_sb(au_sbr(sb, bindex));
 +}
 +
-+static inline void au_sbr_get(struct super_block *sb, aufs_bindex_t bindex)
-+{
-+	au_br_get(au_sbr(sb, bindex));
-+}
-+
-+static inline void au_sbr_put(struct super_block *sb, aufs_bindex_t bindex)
-+{
-+	au_br_put(au_sbr(sb, bindex));
-+}
-+
 +static inline int au_sbr_perm(struct super_block *sb, aufs_bindex_t bindex)
 +{
 +	return au_sbr(sb, bindex)->br_perm;
@@ -4314,10 +4290,10 @@ index 000000000000..12782f8e0f38
 +-include ${srctree}/${src}/conf_priv.mk
 diff --git a/fs/aufs/cpup.c b/fs/aufs/cpup.c
 new file mode 100644
-index 000000000000..93d6496aaf68
+index 000000000000..8556c9687a1f
 --- /dev/null
 +++ b/fs/aufs/cpup.c
-@@ -0,0 +1,1441 @@
+@@ -0,0 +1,1444 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2005-2018 Junjiro R. Okajima
@@ -4767,6 +4743,7 @@ index 000000000000..93d6496aaf68
 +			.label = &&out_src
 +		}
 +	};
++	struct au_branch *br;
 +	struct super_block *sb, *h_src_sb;
 +	struct inode *h_src_inode;
 +	struct task_struct *tsk = current;
@@ -4804,11 +4781,13 @@ index 000000000000..93d6496aaf68
 +		task_work_run();
 +		flush_delayed_fput();
 +	}
-+	au_sbr_put(sb, file[DST].bindex);
++	br = au_sbr(sb, file[DST].bindex);
++	au_lcnt_dec(&br->br_nfiles);
 +
 +out_src:
 +	fput(file[SRC].file);
-+	au_sbr_put(sb, file[SRC].bindex);
++	br = au_sbr(sb, file[SRC].bindex);
++	au_lcnt_dec(&br->br_nfiles);
 +out:
 +	return err;
 +}
@@ -6825,10 +6804,10 @@ index 000000000000..c610133deea8
 +#endif /* __AUFS_DCSUB_H__ */
 diff --git a/fs/aufs/debug.c b/fs/aufs/debug.c
 new file mode 100644
-index 000000000000..32bdcf20fc45
+index 000000000000..b5061a056baa
 --- /dev/null
 +++ b/fs/aufs/debug.c
-@@ -0,0 +1,442 @@
+@@ -0,0 +1,440 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2005-2018 Junjiro R. Okajima
@@ -7131,11 +7110,11 @@ index 000000000000..32bdcf20fc45
 +	if (!sb || IS_ERR(sb))
 +		goto out;
 +
-+	dpri("s%d: {perm 0x%x, id %d, cnt %ld?, wbr %p}, "
++	dpri("s%d: {perm 0x%x, id %d, wbr %p}, "
 +	     "%s, dev 0x%02x%02x, flags 0x%lx, cnt %d, active %d, "
 +	     "xino %d\n",
-+	     bindex, br->br_perm, br->br_id, /*au_br_count(br)*/-1L,
-+	     br->br_wbr, au_sbtype(sb), MAJOR(sb->s_dev), MINOR(sb->s_dev),
++	     bindex, br->br_perm, br->br_id, br->br_wbr,
++	     au_sbtype(sb), MAJOR(sb->s_dev), MINOR(sb->s_dev),
 +	     sb->s_flags, sb->s_count,
 +	     atomic_read(&sb->s_active),
 +	     !!au_xino_file(br->br_xino, /*idx*/-1));
@@ -7166,9 +7145,7 @@ index 000000000000..32bdcf20fc45
 +
 +	a->mnt.mnt_sb = sb;
 +	a->fake.br_path.mnt = &a->mnt;
-+	/* au_br_count_init(&a->fake); */
 +	err = do_pri_br(-1, &a->fake);
-+	/* au_br_count_fin(&a->fake, /\*do_sync*\/1); */
 +	kfree(a);
 +	dpri("dev 0x%x\n", sb->s_dev);
 +	if (err || !au_test_aufs(sb))
@@ -9497,10 +9474,10 @@ index 000000000000..7e56fe742f1b
 +}
 diff --git a/fs/aufs/dir.c b/fs/aufs/dir.c
 new file mode 100644
-index 000000000000..7f386bf41d06
+index 000000000000..48e067fe67bb
 --- /dev/null
 +++ b/fs/aufs/dir.c
-@@ -0,0 +1,760 @@
+@@ -0,0 +1,762 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2005-2018 Junjiro R. Okajima
@@ -10091,6 +10068,7 @@ index 000000000000..7f386bf41d06
 +{
 +	int err;
 +	struct file *h_file;
++	struct au_branch *br;
 +
 +	h_file = au_h_open(dentry, arg->bindex,
 +			   O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_LARGEFILE,
@@ -10115,7 +10093,8 @@ index 000000000000..7f386bf41d06
 +
 +out_put:
 +	fput(h_file);
-+	au_sbr_put(dentry->d_sb, arg->bindex);
++	br = au_sbr(dentry->d_sb, arg->bindex);
++	au_lcnt_dec(&br->br_nfiles);
 +out:
 +	return err;
 +}
@@ -12326,7 +12305,7 @@ index 000000000000..d4015351e709
 +#endif /* __AUFS_DYNOP_H__ */
 diff --git a/fs/aufs/export.c b/fs/aufs/export.c
 new file mode 100644
-index 000000000000..f64dd0a9d7bd
+index 000000000000..0358fbec3cf2
 --- /dev/null
 +++ b/fs/aufs/export.c
 @@ -0,0 +1,838 @@
@@ -12954,7 +12933,7 @@ index 000000000000..f64dd0a9d7bd
 +
 +	/* is the parent dir cached? */
 +	br = au_sbr(sb, nsi_lock.bindex);
-+	au_br_get(br);
++	au_lcnt_inc(&br->br_nfiles);
 +	dentry = decode_by_dir_ino(sb, ino, dir_ino, &nsi_lock);
 +	if (IS_ERR(dentry))
 +		goto out_unlock;
@@ -12978,7 +12957,7 @@ index 000000000000..f64dd0a9d7bd
 +	dentry = ERR_PTR(-ESTALE);
 +out_unlock:
 +	if (br)
-+		au_br_put(br);
++		au_lcnt_dec(&br->br_nfiles);
 +	si_read_unlock(sb);
 +out:
 +	AuTraceErrPtr(dentry);
@@ -14428,7 +14407,7 @@ index 000000000000..9162fb324a05
 +}
 diff --git a/fs/aufs/file.c b/fs/aufs/file.c
 new file mode 100644
-index 000000000000..7d48beb43a5c
+index 000000000000..c01b98791c45
 --- /dev/null
 +++ b/fs/aufs/file.c
 @@ -0,0 +1,863 @@
@@ -14517,7 +14496,7 @@ index 000000000000..7d48beb43a5c
 +		}
 +	}
 +	flags &= ~O_CREAT;
-+	au_br_get(br);
++	au_lcnt_inc(&br->br_nfiles);
 +	h_path.dentry = h_dentry;
 +	h_path.mnt = au_br_mnt(br);
 +	h_file = vfsub_dentry_open(&h_path, flags);
@@ -14536,7 +14515,7 @@ index 000000000000..7d48beb43a5c
 +	goto out; /* success */
 +
 +out_br:
-+	au_br_put(br);
++	au_lcnt_dec(&br->br_nfiles);
 +out:
 +	return h_file;
 +}
@@ -14732,7 +14711,7 @@ index 000000000000..7d48beb43a5c
 +			return 0; /* success */
 +		h_file_tmp = h_file;
 +		get_file(h_file_tmp);
-+		au_br_get(br);
++		au_lcnt_inc(&br->br_nfiles);
 +		au_set_h_fptr(file, btop, NULL);
 +	}
 +	AuDebugOn(au_fi(file)->fi_hdir);
@@ -14770,7 +14749,7 @@ index 000000000000..7d48beb43a5c
 +out:
 +	if (h_file_tmp) {
 +		fput(h_file_tmp);
-+		au_br_put(br);
++		au_lcnt_dec(&br->br_nfiles);
 +	}
 +	return err;
 +}
@@ -15644,7 +15623,7 @@ index 000000000000..11bc65480fb7
 +#endif /* __AUFS_FILE_H__ */
 diff --git a/fs/aufs/finfo.c b/fs/aufs/finfo.c
 new file mode 100644
-index 000000000000..54d422a253d6
+index 000000000000..44636ce6c484
 --- /dev/null
 +++ b/fs/aufs/finfo.c
 @@ -0,0 +1,149 @@
@@ -15678,7 +15657,7 @@ index 000000000000..54d422a253d6
 +		allow_write_access(hf->hf_file);
 +	fput(hf->hf_file);
 +	hf->hf_file = NULL;
-+	au_br_put(hf->hf_br);
++	au_lcnt_dec(&hf->hf_br->br_nfiles);
 +	hf->hf_br = NULL;
 +}
 +
@@ -16573,10 +16552,10 @@ index 000000000000..920afbf070b0
 +};
 diff --git a/fs/aufs/hfsplus.c b/fs/aufs/hfsplus.c
 new file mode 100644
-index 000000000000..7435a46dda84
+index 000000000000..8c1211c250b4
 --- /dev/null
 +++ b/fs/aufs/hfsplus.c
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,60 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2010-2018 Junjiro R. Okajima
@@ -16629,9 +16608,12 @@ index 000000000000..7435a46dda84
 +void au_h_open_post(struct dentry *dentry, aufs_bindex_t bindex,
 +		    struct file *h_file)
 +{
++	struct au_branch *br;
++
 +	if (h_file) {
 +		fput(h_file);
-+		au_sbr_put(dentry->d_sb, bindex);
++		br = au_sbr(dentry->d_sb, bindex);
++		au_lcnt_dec(&br->br_nfiles);
 +	}
 +}
 diff --git a/fs/aufs/hnotify.c b/fs/aufs/hnotify.c
@@ -17362,10 +17344,10 @@ index 000000000000..bd4bce90d7ba
 +}
 diff --git a/fs/aufs/i_op.c b/fs/aufs/i_op.c
 new file mode 100644
-index 000000000000..ec1146ceb9a6
+index 000000000000..80f83b1a369d
 --- /dev/null
 +++ b/fs/aufs/i_op.c
-@@ -0,0 +1,1508 @@
+@@ -0,0 +1,1509 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2005-2018 Junjiro R. Okajima
@@ -17628,7 +17610,7 @@ index 000000000000..ec1146ceb9a6
 + *     + vfsub_atomic_open()
 + *       + branch fs ->atomic_open()
 + *	   may call the actual 'open' for h_file
-+ *       + au_br_get() only if opened
++ *       + inc br_nfiles only if opened
 + * + au_aopen_no_open() or au_aopen_do_open()
 + *
 + * au_aopen_do_open()
@@ -17762,7 +17744,7 @@ index 000000000000..ec1146ceb9a6
 +	parent = dentry->d_parent;	/* dir is locked */
 +	di_write_lock_parent(parent);
 +	err = au_lkup_dentry(dentry, /*btop*/0, AuLkup_ALLOW_NEG);
-+	if (unlikely(err))
++	if (unlikely(err < 0))
 +		goto out_parent;
 +
 +	AuDbgDentry(dentry);
@@ -17806,7 +17788,7 @@ index 000000000000..ec1146ceb9a6
 +		if (args.file)
 +			fput(args.file);
 +		if (did_open)
-+			au_br_put(args.br);
++			au_lcnt_dec(&args.br->br_nfiles);
 +	}
 +	goto out_sb; /* success */
 +
@@ -18751,7 +18733,8 @@ index 000000000000..ec1146ceb9a6
 +	return (inode->i_mode & (S_IFBLK | S_IFCHR | S_IFIFO | S_IFSOCK));
 +}
 +
-+static int aufs_update_time(struct inode *inode, struct timespec64 *ts, int flags)
++static int aufs_update_time(struct inode *inode, struct timespec64 *ts,
++			    int flags)
 +{
 +	int err;
 +	aufs_bindex_t bindex;
@@ -18876,7 +18859,7 @@ index 000000000000..ec1146ceb9a6
 +};
 diff --git a/fs/aufs/i_op_add.c b/fs/aufs/i_op_add.c
 new file mode 100644
-index 000000000000..1d33208e3504
+index 000000000000..a4a79cb3cb6b
 --- /dev/null
 +++ b/fs/aufs/i_op_add.c
 @@ -0,0 +1,934 @@
@@ -19225,7 +19208,7 @@ index 000000000000..1d33208e3504
 +	if (try_aopen && h_dir->i_op->atomic_open
 +	    && (*aopen->opened & FILE_OPENED))
 +		/* aopen->file is still opened */
-+		au_br_put(aopen->br);
++		au_lcnt_dec(&aopen->br->br_nfiles);
 +
 +out_unpin:
 +	au_unpin(&a->pin);
@@ -23115,7 +23098,7 @@ index 000000000000..28e61b270e58
 +#endif /* __AUFS_INODE_H__ */
 diff --git a/fs/aufs/ioctl.c b/fs/aufs/ioctl.c
 new file mode 100644
-index 000000000000..b244842eb039
+index 000000000000..279bd7498c55
 --- /dev/null
 +++ b/fs/aufs/ioctl.c
 @@ -0,0 +1,220 @@
@@ -23227,7 +23210,7 @@ index 000000000000..b244842eb039
 +	if (IS_ERR(h_file))
 +		goto out_fd;
 +
-+	au_br_put(br); /* cf. au_h_open() */
++	au_lcnt_dec(&br->br_nfiles); /* cf. au_h_open() */
 +	fd_install(fd, h_file);
 +	err = fd;
 +	goto out; /* success */
@@ -31948,7 +31931,7 @@ index 000000000000..f83ca0689d7f
 +}
 diff --git a/fs/aufs/vfsub.c b/fs/aufs/vfsub.c
 new file mode 100644
-index 000000000000..b4751a889010
+index 000000000000..bc5d7905fcb4
 --- /dev/null
 +++ b/fs/aufs/vfsub.c
 @@ -0,0 +1,903 @@
@@ -32080,13 +32063,13 @@ index 000000000000..b4751a889010
 +	if (unlikely(err))
 +		goto out;
 +
-+	au_br_get(br);
++	au_lcnt_inc(&br->br_nfiles);
 +	file->f_path.dentry = DENTRY_NOT_SET;
 +	file->f_path.mnt = au_br_mnt(br);
 +	err = dir->i_op->atomic_open(dir, dentry, file, args->open_flag,
 +				     args->create_mode, args->opened);
 +	if (unlikely(err < 0)) {
-+		au_br_put(br);
++		au_lcnt_dec(&br->br_nfiles);
 +		goto out;
 +	}
 +
@@ -32098,7 +32081,7 @@ index 000000000000..b4751a889010
 +	if (*args->opened & FILE_CREATED)
 +		fsnotify_create(dir, dentry);
 +	if (!(*args->opened & FILE_OPENED)) {
-+		au_br_put(br);
++		au_lcnt_dec(&br->br_nfiles);
 +		goto out;
 +	}
 +
@@ -32110,7 +32093,7 @@ index 000000000000..b4751a889010
 +	if (!err)
 +		fsnotify_open(file);
 +	else
-+		au_br_put(br);
++		au_lcnt_dec(&br->br_nfiles);
 +	/* note that the file is created and still opened */
 +
 +out:
@@ -34055,7 +34038,7 @@ index 000000000000..6e97c806a1e7
 +};
 diff --git a/fs/aufs/whout.c b/fs/aufs/whout.c
 new file mode 100644
-index 000000000000..5244085acf08
+index 000000000000..2f80bc08dae7
 --- /dev/null
 +++ b/fs/aufs/whout.c
 @@ -0,0 +1,1062 @@
@@ -34661,7 +34644,7 @@ index 000000000000..5244085acf08
 +out:
 +	if (wbr)
 +		atomic_dec(&wbr->wbr_wh_running);
-+	au_br_put(a->br);
++	au_lcnt_dec(&a->br->br_count);
 +	si_write_unlock(a->sb);
 +	au_nwt_done(&au_sbi(a->sb)->si_nowait);
 +	kfree(arg);
@@ -34687,11 +34670,11 @@ index 000000000000..5244085acf08
 +		 */
 +		arg->sb = sb;
 +		arg->br = br;
-+		au_br_get(br);
++		au_lcnt_inc(&br->br_count);
 +		wkq_err = au_wkq_nowait(reinit_br_wh, arg, sb, /*flags*/0);
 +		if (unlikely(wkq_err)) {
 +			atomic_dec(&br->br_wbr->wbr_wh_running);
-+			au_br_put(br);
++			au_lcnt_dec(&br->br_count);
 +			kfree(arg);
 +		}
 +		do_dec = 0;
@@ -34980,7 +34963,7 @@ index 000000000000..5244085acf08
 +void au_whtmp_rmdir_free(struct au_whtmp_rmdir *whtmp)
 +{
 +	if (whtmp->br)
-+		au_br_put(whtmp->br);
++		au_lcnt_dec(&whtmp->br->br_count);
 +	dput(whtmp->wh_dentry);
 +	iput(whtmp->dir);
 +	au_nhash_wh_free(&whtmp->whlist);
@@ -35113,7 +35096,7 @@ index 000000000000..5244085acf08
 +	sb = dir->i_sb;
 +	args->dir = au_igrab(dir);
 +	args->br = au_sbr(sb, bindex);
-+	au_br_get(args->br);
++	au_lcnt_inc(&args->br->br_count);
 +	args->wh_dentry = dget(wh_dentry);
 +	wkq_err = au_wkq_nowait(call_rmdir_whtmp, args, sb, /*flags*/0);
 +	if (unlikely(wkq_err)) {
@@ -36070,7 +36053,7 @@ index 000000000000..70b891716e49
 +}
 diff --git a/fs/aufs/xino.c b/fs/aufs/xino.c
 new file mode 100644
-index 000000000000..cb3c847bde49
+index 000000000000..0e1dc9ec04ef
 --- /dev/null
 +++ b/fs/aufs/xino.c
 @@ -0,0 +1,1890 @@
@@ -36582,7 +36565,7 @@ index 000000000000..cb3c847bde49
 +	if (unlikely(err))
 +		pr_warn("err b%d, (%d)\n", bindex, err);
 +	atomic_dec(&br->br_xino->xi_truncating);
-+	au_br_put(br);
++	au_lcnt_dec(&br->br_count);
 +	si_write_unlock(sb);
 +	au_nwt_done(&au_sbi(sb)->si_nowait);
 +	kfree(args);
@@ -36647,7 +36630,7 @@ index 000000000000..cb3c847bde49
 +		goto out;
 +	}
 +
-+	au_br_get(br);
++	au_lcnt_inc(&br->br_count);
 +	args->sb = sb;
 +	args->br = br;
 +	args->idx = idx;
@@ -36656,7 +36639,7 @@ index 000000000000..cb3c847bde49
 +		return; /* success */
 +
 +	pr_err("wkq %d\n", wkq_err);
-+	au_br_put(br);
++	au_lcnt_dec(&br->br_count);
 +	kfree(args);
 +
 +out:
@@ -36752,7 +36735,7 @@ index 000000000000..cb3c847bde49
 +			AuIOErr("err %d\n", err);
 +	} else
 +		AuIOErr("err %d\n", err);
-+	au_br_put(br);
++	au_lcnt_dec(&br->br_count);
 +	ii_read_unlock(root);
 +	si_read_unlock(sb);
 +	au_nwt_done(&sbi->si_nowait);
@@ -36777,11 +36760,11 @@ index 000000000000..cb3c847bde49
 +	arg->br = br;
 +	arg->calc = *calc;
 +	arg->ino = ino;
-+	au_br_get(br);
++	au_lcnt_inc(&br->br_count);
 +	err = au_wkq_nowait(au_xino_call_do_new_async, arg, sb, AuWkq_NEST);
 +	if (unlikely(err)) {
 +		pr_err("wkq %d\n", err);
-+		au_br_put(br);
++		au_lcnt_dec(&br->br_count);
 +		kfree(arg);
 +	}
 +
@@ -37966,7 +37949,7 @@ index 000000000000..cb3c847bde49
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..87519a3bb8fd
+index 000000000000..6bceb10add62
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,448 @@
@@ -38012,7 +37995,7 @@ index 000000000000..87519a3bb8fd
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.18-20180917"
++#define AUFS_VERSION	"4.18-20181001"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
