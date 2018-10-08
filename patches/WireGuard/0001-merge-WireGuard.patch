@@ -1,6 +1,6 @@
-From 867133db2bc6d2b1ca10a6110f18a5e65b952009 Mon Sep 17 00:00:00 2001
+From f43312188f179a3d06310e242d1f5bf756612c8c Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 7 Oct 2018 18:19:52 -0500
+Date: Mon, 8 Oct 2018 09:28:50 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -9,12 +9,12 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/Makefile                                  |    1 +
  net/wireguard/Kconfig                         |   32 +
  net/wireguard/Makefile                        |   14 +
- net/wireguard/allowedips.c                    |  405 +
- net/wireguard/allowedips.h                    |   56 +
+ net/wireguard/allowedips.c                    |  407 +
+ net/wireguard/allowedips.h                    |   54 +
  net/wireguard/compat/Makefile.include         |   82 +
  .../compat/checksum/checksum_partial_compat.h |  208 +
  net/wireguard/compat/compat-asm.h             |   43 +
- net/wireguard/compat/compat.h                 |  802 ++
+ net/wireguard/compat/compat.h                 |  808 ++
  net/wireguard/compat/dst_cache/dst_cache.c    |  175 +
  .../compat/dst_cache/include/net/dst_cache.h  |   97 +
  .../compat/fpu-x86/include/asm/fpu/api.h      |    1 +
@@ -81,28 +81,28 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/hashtables.h                    |   64 +
  net/wireguard/main.c                          |   70 +
  net/wireguard/messages.h                      |  128 +
- net/wireguard/netlink.c                       |  616 ++
+ net/wireguard/netlink.c                       |  609 ++
  net/wireguard/netlink.h                       |   12 +
  net/wireguard/noise.c                         |  786 ++
- net/wireguard/noise.h                         |  130 +
- net/wireguard/peer.c                          |  194 +
- net/wireguard/peer.h                          |   87 +
+ net/wireguard/noise.h                         |  131 +
+ net/wireguard/peer.c                          |  193 +
+ net/wireguard/peer.h                          |   82 +
  net/wireguard/queueing.c                      |   52 +
- net/wireguard/queueing.h                      |  193 +
+ net/wireguard/queueing.h                      |  196 +
  net/wireguard/ratelimiter.c                   |  220 +
  net/wireguard/ratelimiter.h                   |   19 +
- net/wireguard/receive.c                       |  596 ++
- net/wireguard/selftest/allowedips.c           |  688 ++
+ net/wireguard/receive.c                       |  594 ++
+ net/wireguard/selftest/allowedips.c           |  691 ++
  net/wireguard/selftest/counter.c              |  103 +
- net/wireguard/selftest/ratelimiter.c          |  178 +
+ net/wireguard/selftest/ratelimiter.c          |  229 +
  net/wireguard/send.c                          |  422 +
- net/wireguard/socket.c                        |  432 +
+ net/wireguard/socket.c                        |  431 +
  net/wireguard/socket.h                        |   44 +
  net/wireguard/timers.c                        |  255 +
  net/wireguard/timers.h                        |   31 +
  net/wireguard/uapi/wireguard.h                |  190 +
  net/wireguard/version.h                       |    1 +
- 97 files changed, 48753 insertions(+)
+ 97 files changed, 48801 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -283,10 +283,10 @@ index 000000000000..c17728218dab
 +obj-$(if $(KBUILD_EXTMOD),m,$(CONFIG_WIREGUARD)) := wireguard.o
 diff --git a/net/wireguard/allowedips.c b/net/wireguard/allowedips.c
 new file mode 100644
-index 000000000000..60c7723ef5be
+index 000000000000..be0fbab94d21
 --- /dev/null
 +++ b/net/wireguard/allowedips.c
-@@ -0,0 +1,405 @@
+@@ -0,0 +1,407 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -296,7 +296,7 @@ index 000000000000..60c7723ef5be
 +#include "peer.h"
 +
 +struct allowedips_node {
-+	struct wireguard_peer __rcu *peer;
++	struct wg_peer __rcu *peer;
 +	struct rcu_head rcu;
 +	struct allowedips_node __rcu *bit[2];
 +	/* While it may seem scandalous that we waste space for v4,
@@ -358,7 +358,7 @@ index 000000000000..60c7723ef5be
 +
 +static int
 +walk_by_peer(struct allowedips_node __rcu *top, u8 bits,
-+	     struct allowedips_cursor *cursor, struct wireguard_peer *peer,
++	     struct allowedips_cursor *cursor, struct wg_peer *peer,
 +	     int (*func)(void *ctx, const u8 *ip, u8 cidr, int family),
 +	     void *ctx, struct mutex *lock)
 +{
@@ -402,7 +402,7 @@ index 000000000000..60c7723ef5be
 +		stack[len++] = p;                                              \
 +	})
 +static void walk_remove_by_peer(struct allowedips_node __rcu **top,
-+				struct wireguard_peer *peer, struct mutex *lock)
++				struct wg_peer *peer, struct mutex *lock)
 +{
 +	struct allowedips_node __rcu **stack[128], **nptr;
 +	struct allowedips_node *node, *prev;
@@ -488,12 +488,12 @@ index 000000000000..60c7723ef5be
 +}
 +
 +/* Returns a strong reference to a peer */
-+static __always_inline struct wireguard_peer *
++static __always_inline struct wg_peer *
 +lookup(struct allowedips_node __rcu *root, u8 bits, const void *be_ip)
 +{
 +	u8 ip[16] __aligned(__alignof(u64));
-+	struct wireguard_peer *peer = NULL;
 +	struct allowedips_node *node;
++	struct wg_peer *peer = NULL;
 +
 +	swap_endian(ip, be_ip, bits);
 +
@@ -532,7 +532,7 @@ index 000000000000..60c7723ef5be
 +}
 +
 +static int add(struct allowedips_node __rcu **trie, u8 bits, const u8 *be_key,
-+	       u8 cidr, struct wireguard_peer *peer, struct mutex *lock)
++	       u8 cidr, struct wg_peer *peer, struct mutex *lock)
 +{
 +	struct allowedips_node *node, *parent, *down, *newnode;
 +	u8 key[16] __aligned(__alignof(u64));
@@ -622,7 +622,7 @@ index 000000000000..60c7723ef5be
 +}
 +
 +int wg_allowedips_insert_v4(struct allowedips *table, const struct in_addr *ip,
-+			    u8 cidr, struct wireguard_peer *peer,
++			    u8 cidr, struct wg_peer *peer,
 +			    struct mutex *lock)
 +{
 +	++table->seq;
@@ -630,7 +630,7 @@ index 000000000000..60c7723ef5be
 +}
 +
 +int wg_allowedips_insert_v6(struct allowedips *table, const struct in6_addr *ip,
-+			    u8 cidr, struct wireguard_peer *peer,
++			    u8 cidr, struct wg_peer *peer,
 +			    struct mutex *lock)
 +{
 +	++table->seq;
@@ -638,7 +638,7 @@ index 000000000000..60c7723ef5be
 +}
 +
 +void wg_allowedips_remove_by_peer(struct allowedips *table,
-+				  struct wireguard_peer *peer,
++				  struct wg_peer *peer,
 +				  struct mutex *lock)
 +{
 +	++table->seq;
@@ -648,8 +648,9 @@ index 000000000000..60c7723ef5be
 +
 +int wg_allowedips_walk_by_peer(struct allowedips *table,
 +			       struct allowedips_cursor *cursor,
-+			       struct wireguard_peer *peer,
-+			       int (*func)(void *ctx, const u8 *ip, u8 cidr, int family),
++			       struct wg_peer *peer,
++			       int (*func)(void *ctx, const u8 *ip, u8 cidr,
++					   int family),
 +			       void *ctx, struct mutex *lock)
 +{
 +	int ret;
@@ -660,7 +661,8 @@ index 000000000000..60c7723ef5be
 +		return 0;
 +
 +	if (!cursor->second_half) {
-+		ret = walk_by_peer(table->root4, 32, cursor, peer, func, ctx, lock);
++		ret = walk_by_peer(table->root4, 32, cursor, peer, func, ctx,
++				   lock);
 +		if (ret)
 +			return ret;
 +		cursor->len = 0;
@@ -670,8 +672,8 @@ index 000000000000..60c7723ef5be
 +}
 +
 +/* Returns a strong reference to a peer */
-+struct wireguard_peer *wg_allowedips_lookup_dst(struct allowedips *table,
-+						struct sk_buff *skb)
++struct wg_peer *wg_allowedips_lookup_dst(struct allowedips *table,
++					 struct sk_buff *skb)
 +{
 +	if (skb->protocol == htons(ETH_P_IP))
 +		return lookup(table->root4, 32, &ip_hdr(skb)->daddr);
@@ -681,8 +683,8 @@ index 000000000000..60c7723ef5be
 +}
 +
 +/* Returns a strong reference to a peer */
-+struct wireguard_peer *wg_allowedips_lookup_src(struct allowedips *table,
-+						struct sk_buff *skb)
++struct wg_peer *wg_allowedips_lookup_src(struct allowedips *table,
++					 struct sk_buff *skb)
 +{
 +	if (skb->protocol == htons(ETH_P_IP))
 +		return lookup(table->root4, 32, &ip_hdr(skb)->saddr);
@@ -694,10 +696,10 @@ index 000000000000..60c7723ef5be
 +#include "selftest/allowedips.c"
 diff --git a/net/wireguard/allowedips.h b/net/wireguard/allowedips.h
 new file mode 100644
-index 000000000000..c34e2165fc65
+index 000000000000..d920dc22235b
 --- /dev/null
 +++ b/net/wireguard/allowedips.h
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,54 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -710,7 +712,7 @@ index 000000000000..c34e2165fc65
 +#include <linux/ip.h>
 +#include <linux/ipv6.h>
 +
-+struct wireguard_peer;
++struct wg_peer;
 +struct allowedips_node;
 +
 +struct allowedips {
@@ -729,24 +731,22 @@ index 000000000000..c34e2165fc65
 +void wg_allowedips_init(struct allowedips *table);
 +void wg_allowedips_free(struct allowedips *table, struct mutex *mutex);
 +int wg_allowedips_insert_v4(struct allowedips *table, const struct in_addr *ip,
-+			    u8 cidr, struct wireguard_peer *peer,
-+			    struct mutex *lock);
++			    u8 cidr, struct wg_peer *peer, struct mutex *lock);
 +int wg_allowedips_insert_v6(struct allowedips *table, const struct in6_addr *ip,
-+			    u8 cidr, struct wireguard_peer *peer,
-+			    struct mutex *lock);
++			    u8 cidr, struct wg_peer *peer, struct mutex *lock);
 +void wg_allowedips_remove_by_peer(struct allowedips *table,
-+				  struct wireguard_peer *peer,
-+				  struct mutex *lock);
++				  struct wg_peer *peer, struct mutex *lock);
 +int wg_allowedips_walk_by_peer(struct allowedips *table,
 +			       struct allowedips_cursor *cursor,
-+			       struct wireguard_peer *peer,
-+			       int (*func)(void *ctx, const u8 *ip, u8 cidr, int family),
++			       struct wg_peer *peer,
++			       int (*func)(void *ctx, const u8 *ip, u8 cidr,
++					   int family),
 +			       void *ctx, struct mutex *lock);
 +
 +/* These return a strong reference to a peer: */
-+struct wireguard_peer *wg_allowedips_lookup_dst(struct allowedips *table,
++struct wg_peer *wg_allowedips_lookup_dst(struct allowedips *table,
 +						struct sk_buff *skb);
-+struct wireguard_peer *wg_allowedips_lookup_src(struct allowedips *table,
++struct wg_peer *wg_allowedips_lookup_src(struct allowedips *table,
 +						struct sk_buff *skb);
 +
 +#ifdef DEBUG
@@ -1107,10 +1107,10 @@ index 000000000000..8ce3045693fb
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..58636daa7007
+index 000000000000..6223f9d00cd6
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
-@@ -0,0 +1,802 @@
+@@ -0,0 +1,808 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1615,7 +1615,7 @@ index 000000000000..58636daa7007
 +#endif
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0) && !defined(ISOPENSUSE15)
-+#define newlink(a,b,c,d,e) newlink(a,b,c,d)
++#define wg_newlink(a,b,c,d,e) wg_newlink(a,b,c,d)
 +#endif
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
@@ -1660,30 +1660,36 @@ index 000000000000..58636daa7007
 +#endif
 +
 +#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 2) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 16) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 65) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 101) && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)) || LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 84)
-+#define ___COMPAT_NETLINK_DUMP_BLOCK { int ret; skb->end -= nlmsg_total_size(sizeof(int)); ret = get_device_dump_real(skb, cb); skb->end += nlmsg_total_size(sizeof(int)); return ret; }
++#define ___COMPAT_NETLINK_DUMP_BLOCK { \
++	int ret; \
++	skb->end -= nlmsg_total_size(sizeof(int)); \
++	ret = wg_get_device_dump_real(skb, cb); \
++	skb->end += nlmsg_total_size(sizeof(int)); \
++	return ret; \
++}
 +#define ___COMPAT_NETLINK_DUMP_OVERRIDE
 +#else
-+#define ___COMPAT_NETLINK_DUMP_BLOCK return get_device_dump_real(skb, cb);
++#define ___COMPAT_NETLINK_DUMP_BLOCK return wg_get_device_dump_real(skb, cb);
 +#endif
 +#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 8) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 25) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)) || LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 87)
-+#define get_device_dump(a, b) get_device_dump_real(a, b); \
-+static int get_device_dump(a, b) { \
-+	struct wireguard_device *wg = (struct wireguard_device *)cb->args[0]; \
++#define wg_get_device_dump(a, b) wg_get_device_dump_real(a, b); \
++static int wg_get_device_dump(a, b) { \
++	struct wg_device *wg = (struct wg_device *)cb->args[0]; \
 +	if (!wg) { \
-+		int ret = get_device_start(cb); \
++		int ret = wg_get_device_start(cb); \
 +		if (ret) \
 +			return ret; \
 +	} \
 +	___COMPAT_NETLINK_DUMP_BLOCK \
 +} \
-+static int get_device_dump_real(a, b)
++static int wg_get_device_dump_real(a, b)
 +#define COMPAT_CANNOT_USE_NETLINK_START
 +#elif defined(___COMPAT_NETLINK_DUMP_OVERRIDE)
-+#define get_device_dump(a, b) get_device_dump_real(a, b); \
-+static int get_device_dump(a, b) { \
++#define wg_get_device_dump(a, b) wg_get_device_dump_real(a, b); \
++static int wg_get_device_dump(a, b) { \
 +	___COMPAT_NETLINK_DUMP_BLOCK \
 +} \
-+static int get_device_dump_real(a, b)
++static int wg_get_device_dump_real(a, b)
 +#endif
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
@@ -1901,11 +1907,11 @@ index 000000000000..58636daa7007
 +#endif
 +#if defined(RAP_PLUGIN) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 +#include <linux/timer.h>
-+#define expired_retransmit_handshake(a) expired_retransmit_handshake(unsigned long timer)
-+#define expired_send_keepalive(a) expired_send_keepalive(unsigned long timer)
-+#define expired_new_handshake(a) expired_new_handshake(unsigned long timer)
-+#define expired_zero_key_material(a) expired_zero_key_material(unsigned long timer)
-+#define expired_send_persistent_keepalive(a) expired_send_persistent_keepalive(unsigned long timer)
++#define wg_expired_retransmit_handshake(a) wg_expired_retransmit_handshake(unsigned long timer)
++#define wg_expired_send_keepalive(a) wg_expired_send_keepalive(unsigned long timer)
++#define wg_expired_new_handshake(a) wg_expired_new_handshake(unsigned long timer)
++#define wg_expired_zero_key_material(a) wg_expired_zero_key_material(unsigned long timer)
++#define wg_expired_send_persistent_keepalive(a) wg_expired_send_persistent_keepalive(unsigned long timer)
 +#undef timer_setup
 +#define timer_setup(a, b, c) setup_timer(a, ((void (*)(unsigned long))b), ((unsigned long)a))
 +#undef from_timer
@@ -4648,7 +4654,7 @@ index 000000000000..83327d8dfff9
 +#endif
 diff --git a/net/wireguard/cookie.c b/net/wireguard/cookie.c
 new file mode 100644
-index 000000000000..3ac05e60d085
+index 000000000000..2aa4cae71ff7
 --- /dev/null
 +++ b/net/wireguard/cookie.c
 @@ -0,0 +1,235 @@
@@ -4671,7 +4677,7 @@ index 000000000000..3ac05e60d085
 +#include <crypto/algapi.h>
 +
 +void wg_cookie_checker_init(struct cookie_checker *checker,
-+			    struct wireguard_device *wg)
++			    struct wg_device *wg)
 +{
 +	init_rwsem(&checker->secret_lock);
 +	checker->secret_birthdate = ktime_get_boot_fast_ns();
@@ -4712,7 +4718,7 @@ index 000000000000..3ac05e60d085
 +	}
 +}
 +
-+void wg_cookie_checker_precompute_peer_keys(struct wireguard_peer *peer)
++void wg_cookie_checker_precompute_peer_keys(struct wg_peer *peer)
 +{
 +	precompute_key(peer->latest_cookie.cookie_decryption_key,
 +		       peer->handshake.remote_static, cookie_key_label);
@@ -4808,7 +4814,7 @@ index 000000000000..3ac05e60d085
 +}
 +
 +void wg_cookie_add_mac_to_packet(void *message, size_t len,
-+				 struct wireguard_peer *peer)
++				 struct wg_peer *peer)
 +{
 +	struct message_macs *macs = (struct message_macs *)
 +		((u8 *)message + len - sizeof(*macs));
@@ -4850,9 +4856,9 @@ index 000000000000..3ac05e60d085
 +}
 +
 +void wg_cookie_message_consume(struct message_handshake_cookie *src,
-+			       struct wireguard_device *wg)
++			       struct wg_device *wg)
 +{
-+	struct wireguard_peer *peer = NULL;
++	struct wg_peer *peer = NULL;
 +	u8 cookie[COOKIE_LEN];
 +	bool ret;
 +
@@ -4889,7 +4895,7 @@ index 000000000000..3ac05e60d085
 +}
 diff --git a/net/wireguard/cookie.h b/net/wireguard/cookie.h
 new file mode 100644
-index 000000000000..409093ff2522
+index 000000000000..856ede8ff426
 --- /dev/null
 +++ b/net/wireguard/cookie.h
 @@ -0,0 +1,59 @@
@@ -4904,7 +4910,7 @@ index 000000000000..409093ff2522
 +#include "messages.h"
 +#include <linux/rwsem.h>
 +
-+struct wireguard_peer;
++struct wg_peer;
 +
 +struct cookie_checker {
 +	u8 secret[NOISE_HASH_LEN];
@@ -4912,7 +4918,7 @@ index 000000000000..409093ff2522
 +	u8 message_mac1_key[NOISE_SYMMETRIC_KEY_LEN];
 +	u64 secret_birthdate;
 +	struct rw_semaphore secret_lock;
-+	struct wireguard_device *device;
++	struct wg_device *device;
 +};
 +
 +struct cookie {
@@ -4934,22 +4940,22 @@ index 000000000000..409093ff2522
 +};
 +
 +void wg_cookie_checker_init(struct cookie_checker *checker,
-+			    struct wireguard_device *wg);
++			    struct wg_device *wg);
 +void wg_cookie_checker_precompute_device_keys(struct cookie_checker *checker);
-+void wg_cookie_checker_precompute_peer_keys(struct wireguard_peer *peer);
++void wg_cookie_checker_precompute_peer_keys(struct wg_peer *peer);
 +void wg_cookie_init(struct cookie *cookie);
 +
 +enum cookie_mac_state wg_cookie_validate_packet(struct cookie_checker *checker,
 +						struct sk_buff *skb,
 +						bool check_cookie);
 +void wg_cookie_add_mac_to_packet(void *message, size_t len,
-+				 struct wireguard_peer *peer);
++				 struct wg_peer *peer);
 +
 +void wg_cookie_message_create(struct message_handshake_cookie *src,
 +			   struct sk_buff *skb, __le32 index,
 +			   struct cookie_checker *checker);
 +void wg_cookie_message_consume(struct message_handshake_cookie *src,
-+			       struct wireguard_device *wg);
++			       struct wg_device *wg);
 +
 +#endif /* _WG_COOKIE_H */
 diff --git a/net/wireguard/crypto/Makefile.include b/net/wireguard/crypto/Makefile.include
@@ -43148,7 +43154,7 @@ index 000000000000..74f607a8e0e2
 +#endif
 diff --git a/net/wireguard/device.c b/net/wireguard/device.c
 new file mode 100644
-index 000000000000..0916ed6c2a45
+index 000000000000..3a98c86441c6
 --- /dev/null
 +++ b/net/wireguard/device.c
 @@ -0,0 +1,451 @@
@@ -43183,11 +43189,11 @@ index 000000000000..0916ed6c2a45
 +static int wg_open(struct net_device *dev)
 +{
 +	struct in_device *dev_v4 = __in_dev_get_rtnl(dev);
-+	struct wireguard_device *wg = netdev_priv(dev);
 +#ifndef COMPAT_CANNOT_USE_IN6_DEV_GET
 +	struct inet6_dev *dev_v6 = __in6_dev_get(dev);
 +#endif
-+	struct wireguard_peer *peer;
++	struct wg_device *wg = netdev_priv(dev);
++	struct wg_peer *peer;
 +	int ret;
 +
 +	if (dev_v4) {
@@ -43224,8 +43230,8 @@ index 000000000000..0916ed6c2a45
 +static int wg_pm_notification(struct notifier_block *nb, unsigned long action,
 +			      void *data)
 +{
-+	struct wireguard_device *wg;
-+	struct wireguard_peer *peer;
++	struct wg_device *wg;
++	struct wg_peer *peer;
 +
 +	if (action != PM_HIBERNATION_PREPARE && action != PM_SUSPEND_PREPARE)
 +		return 0;
@@ -43250,8 +43256,8 @@ index 000000000000..0916ed6c2a45
 +
 +static int wg_stop(struct net_device *dev)
 +{
-+	struct wireguard_device *wg = netdev_priv(dev);
-+	struct wireguard_peer *peer;
++	struct wg_device *wg = netdev_priv(dev);
++	struct wg_peer *peer;
 +
 +	mutex_lock(&wg->device_update_lock);
 +	list_for_each_entry (peer, &wg->peer_list, peer_list) {
@@ -43271,10 +43277,10 @@ index 000000000000..0916ed6c2a45
 +
 +static netdev_tx_t wg_xmit(struct sk_buff *skb, struct net_device *dev)
 +{
-+	struct wireguard_device *wg = netdev_priv(dev);
-+	struct wireguard_peer *peer;
-+	struct sk_buff *next;
++	struct wg_device *wg = netdev_priv(dev);
 +	struct sk_buff_head packets;
++	struct wg_peer *peer;
++	struct sk_buff *next;
 +	sa_family_t family;
 +	u32 mtu;
 +	int ret;
@@ -43374,7 +43380,7 @@ index 000000000000..0916ed6c2a45
 +
 +static void wg_destruct(struct net_device *dev)
 +{
-+	struct wireguard_device *wg = netdev_priv(dev);
++	struct wg_device *wg = netdev_priv(dev);
 +
 +	rtnl_lock();
 +	list_del(&wg->device_list);
@@ -43408,7 +43414,7 @@ index 000000000000..0916ed6c2a45
 +
 +static void wg_setup(struct net_device *dev)
 +{
-+	struct wireguard_device *wg = netdev_priv(dev);
++	struct wg_device *wg = netdev_priv(dev);
 +	enum { WG_NETDEV_FEATURES = NETIF_F_HW_CSUM | NETIF_F_RXCSUM |
 +				    NETIF_F_SG | NETIF_F_GSO |
 +				    NETIF_F_GSO_SOFTWARE | NETIF_F_HIGHDMA };
@@ -43446,8 +43452,8 @@ index 000000000000..0916ed6c2a45
 +		      struct nlattr *tb[], struct nlattr *data[],
 +		      struct netlink_ext_ack *extack)
 +{
++	struct wg_device *wg = netdev_priv(dev);
 +	int ret = -ENOMEM;
-+	struct wireguard_device *wg = netdev_priv(dev);
 +
 +	wg->creating_net = src_net;
 +	init_rwsem(&wg->static_identity.lock);
@@ -43534,7 +43540,7 @@ index 000000000000..0916ed6c2a45
 +
 +static struct rtnl_link_ops link_ops __read_mostly = {
 +	.kind			= KBUILD_MODNAME,
-+	.priv_size		= sizeof(struct wireguard_device),
++	.priv_size		= sizeof(struct wg_device),
 +	.setup			= wg_setup,
 +	.newlink		= wg_newlink,
 +};
@@ -43543,7 +43549,7 @@ index 000000000000..0916ed6c2a45
 +				     unsigned long action, void *data)
 +{
 +	struct net_device *dev = ((struct netdev_notifier_info *)data)->dev;
-+	struct wireguard_device *wg = netdev_priv(dev);
++	struct wg_device *wg = netdev_priv(dev);
 +
 +	ASSERT_RTNL();
 +
@@ -43605,7 +43611,7 @@ index 000000000000..0916ed6c2a45
 +}
 diff --git a/net/wireguard/device.h b/net/wireguard/device.h
 new file mode 100644
-index 000000000000..2bd1429b5831
+index 000000000000..b0cbc783dc2b
 --- /dev/null
 +++ b/net/wireguard/device.h
 @@ -0,0 +1,65 @@
@@ -43629,7 +43635,7 @@ index 000000000000..2bd1429b5831
 +#include <linux/net.h>
 +#include <linux/ptr_ring.h>
 +
-+struct wireguard_device;
++struct wg_device;
 +
 +struct multicore_worker {
 +	void *ptr;
@@ -43647,7 +43653,7 @@ index 000000000000..2bd1429b5831
 +	};
 +};
 +
-+struct wireguard_device {
++struct wg_device {
 +	struct net_device *dev;
 +	struct crypt_queue encrypt_queue, decrypt_queue;
 +	struct sock __rcu *sock4, *sock6;
@@ -43676,7 +43682,7 @@ index 000000000000..2bd1429b5831
 +#endif /* _WG_DEVICE_H */
 diff --git a/net/wireguard/hashtables.c b/net/wireguard/hashtables.c
 new file mode 100644
-index 000000000000..6e5518bfbd23
+index 000000000000..86b15a0d3fb0
 --- /dev/null
 +++ b/net/wireguard/hashtables.c
 @@ -0,0 +1,209 @@
@@ -43709,7 +43715,7 @@ index 000000000000..6e5518bfbd23
 +}
 +
 +void wg_pubkey_hashtable_add(struct pubkey_hashtable *table,
-+			     struct wireguard_peer *peer)
++			     struct wg_peer *peer)
 +{
 +	mutex_lock(&table->lock);
 +	hlist_add_head_rcu(&peer->pubkey_hash,
@@ -43718,7 +43724,7 @@ index 000000000000..6e5518bfbd23
 +}
 +
 +void wg_pubkey_hashtable_remove(struct pubkey_hashtable *table,
-+				struct wireguard_peer *peer)
++				struct wg_peer *peer)
 +{
 +	mutex_lock(&table->lock);
 +	hlist_del_init_rcu(&peer->pubkey_hash);
@@ -43726,11 +43732,11 @@ index 000000000000..6e5518bfbd23
 +}
 +
 +/* Returns a strong reference to a peer */
-+struct wireguard_peer *
++struct wg_peer *
 +wg_pubkey_hashtable_lookup(struct pubkey_hashtable *table,
 +			   const u8 pubkey[NOISE_PUBLIC_KEY_LEN])
 +{
-+	struct wireguard_peer *iter_peer, *peer = NULL;
++	struct wg_peer *iter_peer, *peer = NULL;
 +
 +	rcu_read_lock_bh();
 +	hlist_for_each_entry_rcu_bh (iter_peer, pubkey_bucket(table, pubkey),
@@ -43866,7 +43872,7 @@ index 000000000000..6e5518bfbd23
 +struct index_hashtable_entry *
 +wg_index_hashtable_lookup(struct index_hashtable *table,
 +			  const enum index_hashtable_type type_mask,
-+			  const __le32 index, struct wireguard_peer **peer)
++			  const __le32 index, struct wg_peer **peer)
 +{
 +	struct index_hashtable_entry *iter_entry, *entry = NULL;
 +
@@ -43891,7 +43897,7 @@ index 000000000000..6e5518bfbd23
 +}
 diff --git a/net/wireguard/hashtables.h b/net/wireguard/hashtables.h
 new file mode 100644
-index 000000000000..8b855d79ec70
+index 000000000000..9e7638cbfe56
 --- /dev/null
 +++ b/net/wireguard/hashtables.h
 @@ -0,0 +1,64 @@
@@ -43909,7 +43915,7 @@ index 000000000000..8b855d79ec70
 +#include <linux/mutex.h>
 +#include <linux/siphash.h>
 +
-+struct wireguard_peer;
++struct wg_peer;
 +
 +struct pubkey_hashtable {
 +	/* TODO: move to rhashtable */
@@ -43920,10 +43926,10 @@ index 000000000000..8b855d79ec70
 +
 +void wg_pubkey_hashtable_init(struct pubkey_hashtable *table);
 +void wg_pubkey_hashtable_add(struct pubkey_hashtable *table,
-+			     struct wireguard_peer *peer);
++			     struct wg_peer *peer);
 +void wg_pubkey_hashtable_remove(struct pubkey_hashtable *table,
-+				struct wireguard_peer *peer);
-+struct wireguard_peer *
++				struct wg_peer *peer);
++struct wg_peer *
 +wg_pubkey_hashtable_lookup(struct pubkey_hashtable *table,
 +			   const u8 pubkey[NOISE_PUBLIC_KEY_LEN]);
 +
@@ -43939,7 +43945,7 @@ index 000000000000..8b855d79ec70
 +};
 +
 +struct index_hashtable_entry {
-+	struct wireguard_peer *peer;
++	struct wg_peer *peer;
 +	struct hlist_node index_hash;
 +	enum index_hashtable_type type;
 +	__le32 index;
@@ -43956,7 +43962,7 @@ index 000000000000..8b855d79ec70
 +struct index_hashtable_entry *
 +wg_index_hashtable_lookup(struct index_hashtable *table,
 +			  const enum index_hashtable_type type_mask,
-+			  const __le32 index, struct wireguard_peer **peer);
++			  const __le32 index, struct wg_peer **peer);
 +
 +#endif /* _WG_HASHTABLES_H */
 diff --git a/net/wireguard/main.c b/net/wireguard/main.c
@@ -44171,10 +44177,10 @@ index 000000000000..090e6f09c7df
 +#endif /* _WG_MESSAGES_H */
 diff --git a/net/wireguard/netlink.c b/net/wireguard/netlink.c
 new file mode 100644
-index 000000000000..17aa5758d4c2
+index 000000000000..63526ab64f2b
 --- /dev/null
 +++ b/net/wireguard/netlink.c
-@@ -0,0 +1,616 @@
+@@ -0,0 +1,609 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -44223,8 +44229,8 @@ index 000000000000..17aa5758d4c2
 +	[WGALLOWEDIP_A_CIDR_MASK]	= { .type = NLA_U8 }
 +};
 +
-+static struct wireguard_device *lookup_interface(struct nlattr **attrs,
-+						 struct sk_buff *skb)
++static struct wg_device *lookup_interface(struct nlattr **attrs,
++					  struct sk_buff *skb)
 +{
 +	struct net_device *dev = NULL;
 +
@@ -44246,37 +44252,31 @@ index 000000000000..17aa5758d4c2
 +	return netdev_priv(dev);
 +}
 +
-+struct allowedips_ctx {
-+	struct sk_buff *skb;
-+	unsigned int i;
-+};
-+
 +static int get_allowedips(void *ctx, const u8 *ip, u8 cidr, int family)
 +{
-+	struct allowedips_ctx *actx = ctx;
++	struct sk_buff *skb = ctx;
 +	struct nlattr *allowedip_nest;
 +
-+	allowedip_nest = nla_nest_start(actx->skb, actx->i++);
++	allowedip_nest = nla_nest_start(skb, 0);
 +	if (!allowedip_nest)
 +		return -EMSGSIZE;
 +
-+	if (nla_put_u8(actx->skb, WGALLOWEDIP_A_CIDR_MASK, cidr) ||
-+	    nla_put_u16(actx->skb, WGALLOWEDIP_A_FAMILY, family) ||
-+	    nla_put(actx->skb, WGALLOWEDIP_A_IPADDR, family == AF_INET6 ?
++	if (nla_put_u8(skb, WGALLOWEDIP_A_CIDR_MASK, cidr) ||
++	    nla_put_u16(skb, WGALLOWEDIP_A_FAMILY, family) ||
++	    nla_put(skb, WGALLOWEDIP_A_IPADDR, family == AF_INET6 ?
 +		    sizeof(struct in6_addr) : sizeof(struct in_addr), ip)) {
-+		nla_nest_cancel(actx->skb, allowedip_nest);
++		nla_nest_cancel(skb, allowedip_nest);
 +		return -EMSGSIZE;
 +	}
 +
-+	nla_nest_end(actx->skb, allowedip_nest);
++	nla_nest_end(skb, allowedip_nest);
 +	return 0;
 +}
 +
-+static int get_peer(struct wireguard_peer *peer, unsigned int index,
-+		    struct allowedips_cursor *rt_cursor, struct sk_buff *skb)
++static int get_peer(struct wg_peer *peer, struct allowedips_cursor *rt_cursor,
++		    struct sk_buff *skb)
 +{
-+	struct nlattr *allowedips_nest, *peer_nest = nla_nest_start(skb, index);
-+	struct allowedips_ctx ctx = { .skb = skb };
++	struct nlattr *allowedips_nest, *peer_nest = nla_nest_start(skb, 0);
 +	bool fail;
 +
 +	if (!peer_nest)
@@ -44328,7 +44328,7 @@ index 000000000000..17aa5758d4c2
 +	if (!allowedips_nest)
 +		goto err;
 +	if (wg_allowedips_walk_by_peer(&peer->device->peer_allowedips,
-+				       rt_cursor, peer, get_allowedips, &ctx,
++				       rt_cursor, peer, get_allowedips, skb,
 +				       &peer->device->device_update_lock)) {
 +		nla_nest_end(skb, allowedips_nest);
 +		nla_nest_end(skb, peer_nest);
@@ -44346,7 +44346,7 @@ index 000000000000..17aa5758d4c2
 +static int wg_get_device_start(struct netlink_callback *cb)
 +{
 +	struct nlattr **attrs = genl_family_attrbuf(&genl_family);
-+	struct wireguard_device *wg;
++	struct wg_device *wg;
 +	int ret;
 +
 +	ret = nlmsg_parse(cb->nlh, GENL_HDRLEN + genl_family.hdrsize, attrs,
@@ -44369,18 +44369,17 @@ index 000000000000..17aa5758d4c2
 +
 +static int wg_get_device_dump(struct sk_buff *skb, struct netlink_callback *cb)
 +{
-+	struct wireguard_peer *peer, *next_peer_cursor, *last_peer_cursor;
++	struct wg_peer *peer, *next_peer_cursor, *last_peer_cursor;
 +	struct allowedips_cursor *rt_cursor;
-+	struct wireguard_device *wg;
-+	unsigned int peer_idx = 0;
 +	struct nlattr *peers_nest;
++	struct wg_device *wg;
 +	int ret = -EMSGSIZE;
 +	bool done = true;
 +	void *hdr;
 +
-+	wg = (struct wireguard_device *)cb->args[0];
-+	next_peer_cursor = (struct wireguard_peer *)cb->args[1];
-+	last_peer_cursor = (struct wireguard_peer *)cb->args[1];
++	wg = (struct wg_device *)cb->args[0];
++	next_peer_cursor = (struct wg_peer *)cb->args[1];
++	last_peer_cursor = (struct wg_peer *)cb->args[1];
 +	rt_cursor = (struct allowedips_cursor *)cb->args[2];
 +
 +	rtnl_lock();
@@ -44433,7 +44432,7 @@ index 000000000000..17aa5758d4c2
 +	lockdep_assert_held(&wg->device_update_lock);
 +	peer = list_prepare_entry(last_peer_cursor, &wg->peer_list, peer_list);
 +	list_for_each_entry_continue (peer, &wg->peer_list, peer_list) {
-+		if (get_peer(peer, peer_idx++, rt_cursor, skb)) {
++		if (get_peer(peer, rt_cursor, skb)) {
 +			done = false;
 +			break;
 +		}
@@ -44468,8 +44467,8 @@ index 000000000000..17aa5758d4c2
 +
 +static int wg_get_device_done(struct netlink_callback *cb)
 +{
-+	struct wireguard_device *wg = (struct wireguard_device *)cb->args[0];
-+	struct wireguard_peer *peer = (struct wireguard_peer *)cb->args[1];
++	struct wg_device *wg = (struct wg_device *)cb->args[0];
++	struct wg_peer *peer = (struct wg_peer *)cb->args[1];
 +	struct allowedips_cursor *rt_cursor =
 +		(struct allowedips_cursor *)cb->args[2];
 +
@@ -44480,9 +44479,9 @@ index 000000000000..17aa5758d4c2
 +	return 0;
 +}
 +
-+static int set_port(struct wireguard_device *wg, u16 port)
++static int set_port(struct wg_device *wg, u16 port)
 +{
-+	struct wireguard_peer *peer;
++	struct wg_peer *peer;
 +
 +	if (wg->incoming_port == port)
 +		return 0;
@@ -44495,7 +44494,7 @@ index 000000000000..17aa5758d4c2
 +	return wg_socket_init(wg, port);
 +}
 +
-+static int set_allowedip(struct wireguard_peer *peer, struct nlattr **attrs)
++static int set_allowedip(struct wg_peer *peer, struct nlattr **attrs)
 +{
 +	int ret = -EINVAL;
 +	u16 family;
@@ -44523,10 +44522,10 @@ index 000000000000..17aa5758d4c2
 +	return ret;
 +}
 +
-+static int set_peer(struct wireguard_device *wg, struct nlattr **attrs)
++static int set_peer(struct wg_device *wg, struct nlattr **attrs)
 +{
 +	u8 *public_key = NULL, *preshared_key = NULL;
-+	struct wireguard_peer *peer = NULL;
++	struct wg_peer *peer = NULL;
 +	u32 flags = 0;
 +	int ret;
 +
@@ -44654,7 +44653,7 @@ index 000000000000..17aa5758d4c2
 +
 +static int wg_set_device(struct sk_buff *skb, struct genl_info *info)
 +{
-+	struct wireguard_device *wg = lookup_interface(info->attrs, skb);
++	struct wg_device *wg = lookup_interface(info->attrs, skb);
 +	int ret;
 +
 +	if (IS_ERR(wg)) {
@@ -44667,7 +44666,7 @@ index 000000000000..17aa5758d4c2
 +	++wg->device_update_gen;
 +
 +	if (info->attrs[WGDEVICE_A_FWMARK]) {
-+		struct wireguard_peer *peer;
++		struct wg_peer *peer;
 +
 +		wg->fwmark = nla_get_u32(info->attrs[WGDEVICE_A_FWMARK]);
 +		list_for_each_entry (peer, &wg->peer_list, peer_list)
@@ -44691,7 +44690,7 @@ index 000000000000..17aa5758d4c2
 +		    NOISE_PUBLIC_KEY_LEN) {
 +		u8 *private_key = nla_data(info->attrs[WGDEVICE_A_PRIVATE_KEY]);
 +		u8 public_key[NOISE_PUBLIC_KEY_LEN];
-+		struct wireguard_peer *peer, *temp;
++		struct wg_peer *peer, *temp;
 +
 +		/* We remove before setting, to prevent race, which means doing
 +		 * two 25519-genpub ops.
@@ -44811,7 +44810,7 @@ index 000000000000..1dc6a67bc719
 +#endif /* _WG_NETLINK_H */
 diff --git a/net/wireguard/noise.c b/net/wireguard/noise.c
 new file mode 100644
-index 000000000000..830858cb7e76
+index 000000000000..ce1abba8c1c9
 --- /dev/null
 +++ b/net/wireguard/noise.c
 @@ -0,0 +1,786 @@
@@ -44861,7 +44860,7 @@ index 000000000000..830858cb7e76
 +}
 +
 +/* Must hold peer->handshake.static_identity->lock */
-+bool wg_noise_precompute_static_static(struct wireguard_peer *peer)
++bool wg_noise_precompute_static_static(struct wg_peer *peer)
 +{
 +	bool ret = true;
 +
@@ -44882,7 +44881,7 @@ index 000000000000..830858cb7e76
 +			   struct noise_static_identity *static_identity,
 +			   const u8 peer_public_key[NOISE_PUBLIC_KEY_LEN],
 +			   const u8 peer_preshared_key[NOISE_SYMMETRIC_KEY_LEN],
-+			   struct wireguard_peer *peer)
++			   struct wg_peer *peer)
 +{
 +	memset(handshake, 0, sizeof(*handshake));
 +	init_rwsem(&handshake->lock);
@@ -44920,7 +44919,7 @@ index 000000000000..830858cb7e76
 +			&handshake->entry);
 +}
 +
-+static struct noise_keypair *keypair_create(struct wireguard_peer *peer)
++static struct noise_keypair *keypair_create(struct wg_peer *peer)
 +{
 +	struct noise_keypair *keypair = kzalloc(sizeof(*keypair), GFP_KERNEL);
 +
@@ -45023,8 +45022,8 @@ index 000000000000..830858cb7e76
 +					   next_keypair);
 +			wg_noise_keypair_put(current_keypair, true);
 +		} else /* If there wasn't an existing next keypair, we replace
-+			 * the previous with the current one.
-+			 */
++			* the previous with the current one.
++			*/
 +			rcu_assign_pointer(keypairs->previous_keypair,
 +					   current_keypair);
 +		/* At this point we can get rid of the old previous keypair, and
@@ -45331,11 +45330,11 @@ index 000000000000..830858cb7e76
 +	return ret;
 +}
 +
-+struct wireguard_peer *
++struct wg_peer *
 +wg_noise_handshake_consume_initiation(struct message_handshake_initiation *src,
-+				      struct wireguard_device *wg)
++				      struct wg_device *wg)
 +{
-+	struct wireguard_peer *peer = NULL, *ret_peer = NULL;
++	struct wg_peer *peer = NULL, *ret_peer = NULL;
 +	struct noise_handshake *handshake;
 +	bool replay_attack, flood_attack;
 +	u8 key[NOISE_SYMMETRIC_KEY_LEN];
@@ -45414,8 +45413,8 @@ index 000000000000..830858cb7e76
 +bool wg_noise_handshake_create_response(struct message_handshake_response *dst,
 +					struct noise_handshake *handshake)
 +{
-+	bool ret = false;
 +	u8 key[NOISE_SYMMETRIC_KEY_LEN];
++	bool ret = false;
 +
 +	/* We need to wait for crng _before_ taking any locks, since
 +	 * curve25519_generate_secret uses get_random_bytes_wait.
@@ -45471,19 +45470,19 @@ index 000000000000..830858cb7e76
 +	return ret;
 +}
 +
-+struct wireguard_peer *
++struct wg_peer *
 +wg_noise_handshake_consume_response(struct message_handshake_response *src,
-+				    struct wireguard_device *wg)
++				    struct wg_device *wg)
 +{
++	enum noise_handshake_state state = HANDSHAKE_ZEROED;
++	struct wg_peer *peer = NULL, *ret_peer = NULL;
 +	struct noise_handshake *handshake;
-+	struct wireguard_peer *peer = NULL, *ret_peer = NULL;
 +	u8 key[NOISE_SYMMETRIC_KEY_LEN];
 +	u8 hash[NOISE_HASH_LEN];
 +	u8 chaining_key[NOISE_HASH_LEN];
 +	u8 e[NOISE_PUBLIC_KEY_LEN];
 +	u8 ephemeral_private[NOISE_PUBLIC_KEY_LEN];
 +	u8 static_private[NOISE_PUBLIC_KEY_LEN];
-+	enum noise_handshake_state state = HANDSHAKE_ZEROED;
 +
 +	down_read(&wg->static_identity.lock);
 +
@@ -45583,7 +45582,7 @@ index 000000000000..830858cb7e76
 +
 +	handshake_zero(handshake);
 +	rcu_read_lock_bh();
-+	if (likely(!container_of(handshake, struct wireguard_peer,
++	if (likely(!container_of(handshake, struct wg_peer,
 +				 handshake)->is_dead)) {
 +		add_new_keypair(keypairs, new_keypair);
 +		net_dbg_ratelimited("%s: Keypair %llu created for peer %llu\n",
@@ -45603,10 +45602,10 @@ index 000000000000..830858cb7e76
 +}
 diff --git a/net/wireguard/noise.h b/net/wireguard/noise.h
 new file mode 100644
-index 000000000000..7fe2c62f070a
+index 000000000000..48fb3fcd76e3
 --- /dev/null
 +++ b/net/wireguard/noise.h
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,131 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -45696,18 +45695,19 @@ index 000000000000..7fe2c62f070a
 +	__le32 remote_index;
 +
 +	/* Protects all members except the immutable (after noise_handshake_
-+	 * init): remote_static, precomputed_static_static, static_identity. */
++	 * init): remote_static, precomputed_static_static, static_identity.
++	 */
 +	struct rw_semaphore lock;
 +};
 +
-+struct wireguard_device;
++struct wg_device;
 +
 +void wg_noise_init(void);
 +bool wg_noise_handshake_init(struct noise_handshake *handshake,
 +			   struct noise_static_identity *static_identity,
 +			   const u8 peer_public_key[NOISE_PUBLIC_KEY_LEN],
 +			   const u8 peer_preshared_key[NOISE_SYMMETRIC_KEY_LEN],
-+			   struct wireguard_peer *peer);
++			   struct wg_peer *peer);
 +void wg_noise_handshake_clear(struct noise_handshake *handshake);
 +void wg_noise_keypair_put(struct noise_keypair *keypair, bool unreference_now);
 +struct noise_keypair *wg_noise_keypair_get(struct noise_keypair *keypair);
@@ -45718,20 +45718,20 @@ index 000000000000..7fe2c62f070a
 +void wg_noise_set_static_identity_private_key(
 +	struct noise_static_identity *static_identity,
 +	const u8 private_key[NOISE_PUBLIC_KEY_LEN]);
-+bool wg_noise_precompute_static_static(struct wireguard_peer *peer);
++bool wg_noise_precompute_static_static(struct wg_peer *peer);
 +
 +bool
 +wg_noise_handshake_create_initiation(struct message_handshake_initiation *dst,
 +				     struct noise_handshake *handshake);
-+struct wireguard_peer *
++struct wg_peer *
 +wg_noise_handshake_consume_initiation(struct message_handshake_initiation *src,
-+				      struct wireguard_device *wg);
++				      struct wg_device *wg);
 +
 +bool wg_noise_handshake_create_response(struct message_handshake_response *dst,
 +					struct noise_handshake *handshake);
-+struct wireguard_peer *
++struct wg_peer *
 +wg_noise_handshake_consume_response(struct message_handshake_response *src,
-+				    struct wireguard_device *wg);
++				    struct wg_device *wg);
 +
 +bool wg_noise_handshake_begin_session(struct noise_handshake *handshake,
 +				      struct noise_keypairs *keypairs);
@@ -45739,10 +45739,10 @@ index 000000000000..7fe2c62f070a
 +#endif /* _WG_NOISE_H */
 diff --git a/net/wireguard/peer.c b/net/wireguard/peer.c
 new file mode 100644
-index 000000000000..c4737ae2ff53
+index 000000000000..f40beb141a69
 --- /dev/null
 +++ b/net/wireguard/peer.c
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,193 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -45762,12 +45762,11 @@ index 000000000000..c4737ae2ff53
 +
 +static atomic64_t peer_counter = ATOMIC64_INIT(0);
 +
-+struct wireguard_peer *
-+wg_peer_create(struct wireguard_device *wg,
-+	       const u8 public_key[NOISE_PUBLIC_KEY_LEN],
-+	       const u8 preshared_key[NOISE_SYMMETRIC_KEY_LEN])
++struct wg_peer *wg_peer_create(struct wg_device *wg,
++			       const u8 public_key[NOISE_PUBLIC_KEY_LEN],
++			       const u8 preshared_key[NOISE_SYMMETRIC_KEY_LEN])
 +{
-+	struct wireguard_peer *peer;
++	struct wg_peer *peer;
 +
 +	lockdep_assert_held(&wg->device_update_lock);
 +
@@ -45824,7 +45823,7 @@ index 000000000000..c4737ae2ff53
 +	return NULL;
 +}
 +
-+struct wireguard_peer *wg_peer_get_maybe_zero(struct wireguard_peer *peer)
++struct wg_peer *wg_peer_get_maybe_zero(struct wg_peer *peer)
 +{
 +	RCU_LOCKDEP_WARN(!rcu_read_lock_bh_held(),
 +			 "Taking peer reference without holding the RCU read lock");
@@ -45837,7 +45836,7 @@ index 000000000000..c4737ae2ff53
 + * because peer_list, clearing handshakes, and flushing all require mutexes
 + * which requires sleeping, which must only be done from certain contexts.
 + */
-+void wg_peer_remove(struct wireguard_peer *peer)
++void wg_peer_remove(struct wg_peer *peer)
 +{
 +	if (unlikely(!peer))
 +		return;
@@ -45894,8 +45893,8 @@ index 000000000000..c4737ae2ff53
 +
 +static void rcu_release(struct rcu_head *rcu)
 +{
-+	struct wireguard_peer *peer =
-+		container_of(rcu, struct wireguard_peer, rcu);
++	struct wg_peer *peer = container_of(rcu, struct wg_peer, rcu);
++
 +	dst_cache_destroy(&peer->endpoint_cache);
 +	wg_packet_queue_free(&peer->rx_queue, false);
 +	wg_packet_queue_free(&peer->tx_queue, false);
@@ -45904,8 +45903,8 @@ index 000000000000..c4737ae2ff53
 +
 +static void kref_release(struct kref *refcount)
 +{
-+	struct wireguard_peer *peer =
-+		container_of(refcount, struct wireguard_peer, refcount);
++	struct wg_peer *peer = container_of(refcount, struct wg_peer, refcount);
++
 +	pr_debug("%s: Peer %llu (%pISpfsc) destroyed\n",
 +		 peer->device->dev->name, peer->internal_id,
 +		 &peer->endpoint.addr);
@@ -45922,16 +45921,16 @@ index 000000000000..c4737ae2ff53
 +	call_rcu_bh(&peer->rcu, rcu_release);
 +}
 +
-+void wg_peer_put(struct wireguard_peer *peer)
++void wg_peer_put(struct wg_peer *peer)
 +{
 +	if (unlikely(!peer))
 +		return;
 +	kref_put(&peer->refcount, kref_release);
 +}
 +
-+void wg_peer_remove_all(struct wireguard_device *wg)
++void wg_peer_remove_all(struct wg_device *wg)
 +{
-+	struct wireguard_peer *peer, *temp;
++	struct wg_peer *peer, *temp;
 +
 +	lockdep_assert_held(&wg->device_update_lock);
 +	list_for_each_entry_safe (peer, temp, &wg->peer_list, peer_list)
@@ -45939,10 +45938,10 @@ index 000000000000..c4737ae2ff53
 +}
 diff --git a/net/wireguard/peer.h b/net/wireguard/peer.h
 new file mode 100644
-index 000000000000..2811b615475d
+index 000000000000..10de4b6ff1e1
 --- /dev/null
 +++ b/net/wireguard/peer.h
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,82 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -45961,7 +45960,7 @@ index 000000000000..2811b615475d
 +#include <linux/kref.h>
 +#include <net/dst_cache.h>
 +
-+struct wireguard_device;
++struct wg_device;
 +
 +struct endpoint {
 +	union {
@@ -45979,8 +45978,8 @@ index 000000000000..2811b615475d
 +	};
 +};
 +
-+struct wireguard_peer {
-+	struct wireguard_device *device;
++struct wg_peer {
++	struct wg_device *device;
 +	struct crypt_queue tx_queue, rx_queue;
 +	struct sk_buff_head staged_packet_queue;
 +	int serial_work_cpu;
@@ -46010,24 +46009,19 @@ index 000000000000..2811b615475d
 +	bool is_dead;
 +};
 +
-+struct wireguard_peer *
-+wg_peer_create(struct wireguard_device *wg,
-+	       const u8 public_key[NOISE_PUBLIC_KEY_LEN],
-+	       const u8 preshared_key[NOISE_SYMMETRIC_KEY_LEN]);
++struct wg_peer *wg_peer_create(struct wg_device *wg,
++			       const u8 public_key[NOISE_PUBLIC_KEY_LEN],
++			       const u8 preshared_key[NOISE_SYMMETRIC_KEY_LEN]);
 +
-+struct wireguard_peer *__must_check
-+wg_peer_get_maybe_zero(struct wireguard_peer *peer);
-+static inline struct wireguard_peer *wg_peer_get(struct wireguard_peer *peer)
++struct wg_peer *__must_check wg_peer_get_maybe_zero(struct wg_peer *peer);
++static inline struct wg_peer *wg_peer_get(struct wg_peer *peer)
 +{
 +	kref_get(&peer->refcount);
 +	return peer;
 +}
-+void wg_peer_put(struct wireguard_peer *peer);
-+void wg_peer_remove(struct wireguard_peer *peer);
-+void wg_peer_remove_all(struct wireguard_device *wg);
-+
-+struct wireguard_peer *wg_peer_lookup_by_index(struct wireguard_device *wg,
-+					       u32 index);
++void wg_peer_put(struct wg_peer *peer);
++void wg_peer_remove(struct wg_peer *peer);
++void wg_peer_remove_all(struct wg_device *wg);
 +
 +#endif /* _WG_PEER_H */
 diff --git a/net/wireguard/queueing.c b/net/wireguard/queueing.c
@@ -46090,10 +46084,10 @@ index 000000000000..939aac997d22
 +}
 diff --git a/net/wireguard/queueing.h b/net/wireguard/queueing.h
 new file mode 100644
-index 000000000000..9a089caced09
+index 000000000000..36fa08dcb73b
 --- /dev/null
 +++ b/net/wireguard/queueing.h
-@@ -0,0 +1,193 @@
+@@ -0,0 +1,196 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -46108,8 +46102,8 @@ index 000000000000..9a089caced09
 +#include <linux/ip.h>
 +#include <linux/ipv6.h>
 +
-+struct wireguard_device;
-+struct wireguard_peer;
++struct wg_device;
++struct wg_peer;
 +struct multicore_worker;
 +struct crypt_queue;
 +struct sk_buff;
@@ -46122,7 +46116,7 @@ index 000000000000..9a089caced09
 +wg_packet_alloc_percpu_multicore_worker(work_func_t function, void *ptr);
 +
 +/* receive.c APIs: */
-+void wg_packet_receive(struct wireguard_device *wg, struct sk_buff *skb);
++void wg_packet_receive(struct wg_device *wg, struct sk_buff *skb);
 +void wg_packet_handshake_receive_worker(struct work_struct *work);
 +/* NAPI poll function: */
 +int wg_packet_rx_poll(struct napi_struct *napi, int budget);
@@ -46130,14 +46124,14 @@ index 000000000000..9a089caced09
 +void wg_packet_decrypt_worker(struct work_struct *work);
 +
 +/* send.c APIs: */
-+void wg_packet_send_queued_handshake_initiation(struct wireguard_peer *peer,
++void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
 +						bool is_retry);
-+void wg_packet_send_handshake_response(struct wireguard_peer *peer);
-+void wg_packet_send_handshake_cookie(struct wireguard_device *wg,
++void wg_packet_send_handshake_response(struct wg_peer *peer);
++void wg_packet_send_handshake_cookie(struct wg_device *wg,
 +				     struct sk_buff *initiating_skb,
 +				     __le32 sender_index);
-+void wg_packet_send_keepalive(struct wireguard_peer *peer);
-+void wg_packet_send_staged_packets(struct wireguard_peer *peer);
++void wg_packet_send_keepalive(struct wg_peer *peer);
++void wg_packet_send_staged_packets(struct wg_peer *peer);
 +/* Workqueue workers: */
 +void wg_packet_handshake_send_worker(struct work_struct *work);
 +void wg_packet_tx_worker(struct work_struct *work);
@@ -46179,6 +46173,7 @@ index 000000000000..9a089caced09
 +static inline void wg_reset_packet(struct sk_buff *skb)
 +{
 +	const int pfmemalloc = skb->pfmemalloc;
++
 +	skb_scrub_packet(skb, true);
 +	memset(&skb->headers_start, 0,
 +	       offsetof(struct sk_buff, headers_end) -
@@ -46261,7 +46256,8 @@ index 000000000000..9a089caced09
 +	/* We take a reference, because as soon as we call atomic_set, the
 +	 * peer can be freed from below us.
 +	 */
-+	struct wireguard_peer *peer = wg_peer_get(PACKET_PEER(skb));
++	struct wg_peer *peer = wg_peer_get(PACKET_PEER(skb));
++
 +	atomic_set_release(&PACKET_CB(skb)->state, state);
 +	queue_work_on(wg_cpumask_choose_online(&peer->serial_work_cpu,
 +					       peer->internal_id),
@@ -46276,7 +46272,8 @@ index 000000000000..9a089caced09
 +	/* We take a reference, because as soon as we call atomic_set, the
 +	 * peer can be freed from below us.
 +	 */
-+	struct wireguard_peer *peer = wg_peer_get(PACKET_PEER(skb));
++	struct wg_peer *peer = wg_peer_get(PACKET_PEER(skb));
++
 +	atomic_set_release(&PACKET_CB(skb)->state, state);
 +	napi_schedule(&peer->napi);
 +	wg_peer_put(peer);
@@ -46540,10 +46537,10 @@ index 000000000000..0325d10b1f76
 +#endif /* _WG_RATELIMITER_H */
 diff --git a/net/wireguard/receive.c b/net/wireguard/receive.c
 new file mode 100644
-index 000000000000..9170e6aed3ea
+index 000000000000..f3d0c404c434
 --- /dev/null
 +++ b/net/wireguard/receive.c
-@@ -0,0 +1,596 @@
+@@ -0,0 +1,594 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -46564,7 +46561,7 @@ index 000000000000..9170e6aed3ea
 +#include <net/ip_tunnels.h>
 +
 +/* Must be called with bh disabled. */
-+static void update_rx_stats(struct wireguard_peer *peer, size_t len)
++static void update_rx_stats(struct wg_peer *peer, size_t len)
 +{
 +	struct pcpu_sw_netstats *tstats =
 +		get_cpu_ptr(peer->device->dev->tstats);
@@ -46598,7 +46595,7 @@ index 000000000000..9170e6aed3ea
 +	return 0;
 +}
 +
-+static int prepare_skb_header(struct sk_buff *skb, struct wireguard_device *wg)
++static int prepare_skb_header(struct sk_buff *skb, struct wg_device *wg)
 +{
 +	size_t data_offset, data_len, header_len;
 +	struct udphdr *udp;
@@ -46643,13 +46640,13 @@ index 000000000000..9170e6aed3ea
 +	return 0;
 +}
 +
-+static void wg_receive_handshake_packet(struct wireguard_device *wg,
++static void wg_receive_handshake_packet(struct wg_device *wg,
 +					struct sk_buff *skb)
 +{
-+	struct wireguard_peer *peer = NULL;
 +	enum cookie_mac_state mac_state;
-+	/* This is global, so that our load calculation applies to
-+	 * the whole system.
++	struct wg_peer *peer = NULL;
++	/* This is global, so that our load calculation applies to the whole
++	 * system. We don't care about races with it at all.
 +	 */
 +	static u64 last_under_load;
 +	bool packet_needs_cookie;
@@ -46756,8 +46753,8 @@ index 000000000000..9170e6aed3ea
 +
 +void wg_packet_handshake_receive_worker(struct work_struct *work)
 +{
-+	struct wireguard_device *wg =
-+		container_of(work, struct multicore_worker, work)->ptr;
++	struct wg_device *wg = container_of(work, struct multicore_worker,
++					    work)->ptr;
 +	struct sk_buff *skb;
 +
 +	while ((skb = skb_dequeue(&wg->incoming_handshakes)) != NULL) {
@@ -46767,7 +46764,7 @@ index 000000000000..9170e6aed3ea
 +	}
 +}
 +
-+static void keep_key_fresh(struct wireguard_peer *peer)
++static void keep_key_fresh(struct wg_peer *peer)
 +{
 +	struct noise_keypair *keypair;
 +	bool send = false;
@@ -46883,13 +46880,13 @@ index 000000000000..9170e6aed3ea
 +}
 +#include "selftest/counter.c"
 +
-+static void wg_packet_consume_data_done(struct wireguard_peer *peer,
++static void wg_packet_consume_data_done(struct wg_peer *peer,
 +					struct sk_buff *skb,
 +					struct endpoint *endpoint)
 +{
 +	struct net_device *dev = peer->device->dev;
-+	struct wireguard_peer *routed_peer;
 +	unsigned int len, len_before_trim;
++	struct wg_peer *routed_peer;
 +
 +	wg_socket_set_peer_endpoint(peer, endpoint);
 +
@@ -46987,8 +46984,7 @@ index 000000000000..9170e6aed3ea
 +
 +int wg_packet_rx_poll(struct napi_struct *napi, int budget)
 +{
-+	struct wireguard_peer *peer =
-+		container_of(napi, struct wireguard_peer, napi);
++	struct wg_peer *peer = container_of(napi, struct wg_peer, napi);
 +	struct crypt_queue *queue = &peer->rx_queue;
 +	struct noise_keypair *keypair;
 +	struct endpoint endpoint;
@@ -47045,8 +47041,8 @@ index 000000000000..9170e6aed3ea
 +
 +void wg_packet_decrypt_worker(struct work_struct *work)
 +{
-+	struct crypt_queue *queue =
-+		container_of(work, struct multicore_worker, work)->ptr;
++	struct crypt_queue *queue = container_of(work, struct multicore_worker,
++						 work)->ptr;
 +	simd_context_t simd_context;
 +	struct sk_buff *skb;
 +
@@ -47064,11 +47060,10 @@ index 000000000000..9170e6aed3ea
 +	simd_put(&simd_context);
 +}
 +
-+static void wg_packet_consume_data(struct wireguard_device *wg,
-+				   struct sk_buff *skb)
++static void wg_packet_consume_data(struct wg_device *wg, struct sk_buff *skb)
 +{
 +	__le32 idx = ((struct message_data *)skb->data)->key_idx;
-+	struct wireguard_peer *peer = NULL;
++	struct wg_peer *peer = NULL;
 +	int ret;
 +
 +	rcu_read_lock_bh();
@@ -47100,7 +47095,7 @@ index 000000000000..9170e6aed3ea
 +	dev_kfree_skb(skb);
 +}
 +
-+void wg_packet_receive(struct wireguard_device *wg, struct sk_buff *skb)
++void wg_packet_receive(struct wg_device *wg, struct sk_buff *skb)
 +{
 +	if (unlikely(prepare_skb_header(skb, wg) < 0))
 +		goto err;
@@ -47142,10 +47137,10 @@ index 000000000000..9170e6aed3ea
 +}
 diff --git a/net/wireguard/selftest/allowedips.c b/net/wireguard/selftest/allowedips.c
 new file mode 100644
-index 000000000000..335a93fea6ab
+index 000000000000..d15a0a0df793
 --- /dev/null
 +++ b/net/wireguard/selftest/allowedips.c
-@@ -0,0 +1,688 @@
+@@ -0,0 +1,691 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -47196,6 +47191,7 @@ index 000000000000..335a93fea6ab
 +	}
 +	if (node->peer) {
 +		hsiphash_key_t key = { 0 };
++
 +		memcpy(&key, &node->peer, sizeof(node->peer));
 +		color = hsiphash_1u32(0xdeadbeef, &key) % 200 << 16 |
 +			hsiphash_1u32(0xbabecafe, &key) % 200 << 8 |
@@ -47417,7 +47413,7 @@ index 000000000000..335a93fea6ab
 +{
 +	unsigned int i, j, k, mutate_amount, cidr;
 +	u8 ip[16], mutate_mask[16], mutated[16];
-+	struct wireguard_peer **peers, *peer;
++	struct wg_peer **peers, *peer;
 +	struct horrible_allowedips h;
 +	DEFINE_MUTEX(mutex);
 +	struct allowedips t;
@@ -47575,6 +47571,7 @@ index 000000000000..335a93fea6ab
 +static __init inline struct in_addr *ip4(u8 a, u8 b, u8 c, u8 d)
 +{
 +	static struct in_addr ip;
++
 +	u8 *split = (u8 *)&ip;
 +	split[0] = a;
 +	split[1] = b;
@@ -47586,6 +47583,7 @@ index 000000000000..335a93fea6ab
 +static __init inline struct in6_addr *ip6(u32 a, u32 b, u32 c, u32 d)
 +{
 +	static struct in6_addr ip;
++
 +	__be32 *split = (__be32 *)&ip;
 +	split[0] = cpu_to_be32(a);
 +	split[1] = cpu_to_be32(b);
@@ -47666,8 +47664,8 @@ index 000000000000..335a93fea6ab
 +
 +bool __init wg_allowedips_selftest(void)
 +{
-+	struct wireguard_peer *a = NULL, *b = NULL, *c = NULL, *d = NULL,
-+			      *e = NULL, *f = NULL, *g = NULL, *h = NULL;
++	struct wg_peer *a = NULL, *b = NULL, *c = NULL, *d = NULL, *e = NULL,
++		       *f = NULL, *g = NULL, *h = NULL;
 +	struct allowedips_cursor *cursor = NULL;
 +	struct walk_ctx wctx = { 0 };
 +	bool success = false;
@@ -47945,10 +47943,10 @@ index 000000000000..7e14eebbde02
 +#endif
 diff --git a/net/wireguard/selftest/ratelimiter.c b/net/wireguard/selftest/ratelimiter.c
 new file mode 100644
-index 000000000000..724a5719c0c3
+index 000000000000..e409db9dc1cc
 --- /dev/null
 +++ b/net/wireguard/selftest/ratelimiter.c
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,229 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -47981,10 +47979,96 @@ index 000000000000..724a5719c0c3
 +	return msecs_to_jiffies(total_msecs);
 +}
 +
++static __init int timings_test(struct sk_buff *skb4, struct iphdr *hdr4,
++			       struct sk_buff *skb6, struct ipv6hdr *hdr6,
++			       int *test)
++{
++	unsigned long volatile loop_start_time;
++	int i;
++
++	wg_ratelimiter_gc_entries(NULL);
++	rcu_barrier();
++	loop_start_time = jiffies;
++
++	for (i = 0; i < ARRAY_SIZE(expected_results); ++i) {
++		if (expected_results[i].msec_to_sleep_before)
++			msleep(expected_results[i].msec_to_sleep_before);
++
++		if (time_is_before_jiffies(loop_start_time +
++					   maximum_jiffies_at_index(i)))
++			return -ETIMEDOUT;
++		if (wg_ratelimiter_allow(skb4, &init_net) !=
++					expected_results[i].result)
++			return -EXFULL;
++		++(*test);
++
++		hdr4->saddr = htonl(ntohl(hdr4->saddr) + i + 1);
++		if (time_is_before_jiffies(loop_start_time +
++					   maximum_jiffies_at_index(i)))
++			return -ETIMEDOUT;
++		if (!wg_ratelimiter_allow(skb4, &init_net))
++			return-EXFULL;
++		++(*test);
++
++		hdr4->saddr = htonl(ntohl(hdr4->saddr) - i - 1);
++
++#if IS_ENABLED(CONFIG_IPV6)
++		hdr6->saddr.in6_u.u6_addr32[2] = htonl(i);
++		hdr6->saddr.in6_u.u6_addr32[3] = htonl(i);
++		if (time_is_before_jiffies(loop_start_time +
++					   maximum_jiffies_at_index(i)))
++			return -ETIMEDOUT;
++		if (wg_ratelimiter_allow(skb6, &init_net) !=
++					expected_results[i].result)
++			return -EXFULL;
++		++(*test);
++
++		hdr6->saddr.in6_u.u6_addr32[0] =
++			htonl(ntohl(hdr6->saddr.in6_u.u6_addr32[0]) + i + 1);
++		if (time_is_before_jiffies(loop_start_time +
++					   maximum_jiffies_at_index(i)))
++			return ETIMEDOUT;
++		if (!wg_ratelimiter_allow(skb6, &init_net))
++			return -EXFULL;
++		++(*test);
++
++		hdr6->saddr.in6_u.u6_addr32[0] =
++			htonl(ntohl(hdr6->saddr.in6_u.u6_addr32[0]) - i - 1);
++
++		if (time_is_before_jiffies(loop_start_time +
++					   maximum_jiffies_at_index(i)))
++			return -ETIMEDOUT;
++#endif
++	}
++	return 0;
++}
++
++static __init int capacity_test(struct sk_buff *skb4, struct iphdr *hdr4,
++				int *test)
++{
++	int i;
++
++	wg_ratelimiter_gc_entries(NULL);
++	rcu_barrier();
++
++	if (atomic_read(&total_entries))
++		return -EXFULL;
++	++(*test);
++
++	for (i = 0; i <= max_entries; ++i) {
++		hdr4->saddr = htonl(i);
++		if (wg_ratelimiter_allow(skb4, &init_net) != (i != max_entries))
++			return -EXFULL;
++		++(*test);
++	}
++	return 0;
++}
++
 +bool __init wg_ratelimiter_selftest(void)
 +{
-+	int i, test = 0, tries = 0, ret = false;
-+	unsigned long loop_start_time;
++	enum { TRIALS_BEFORE_GIVING_UP = 5000 };
++	bool success = false;
++	int test = 0, trials;
 +#if IS_ENABLED(CONFIG_IPV6)
 +	struct sk_buff *skb6;
 +	struct ipv6hdr *hdr6;
@@ -48035,77 +48119,42 @@ index 000000000000..724a5719c0c3
 +	++test;
 +#endif
 +
-+restart:
-+	loop_start_time = jiffies;
-+	for (i = 0; i < ARRAY_SIZE(expected_results); ++i) {
-+#define ensure_time do {                                                   \
-+		if (time_is_before_jiffies(loop_start_time +               \
-+					   maximum_jiffies_at_index(i))) { \
-+			if (++tries >= 5000)                               \
-+				goto err;                                  \
-+			wg_ratelimiter_gc_entries(NULL);                   \
-+			rcu_barrier();                                     \
-+			msleep(500);                                       \
-+			goto restart;                                      \
-+		}                                                          \
-+	} while (0)
++	for (trials = TRIALS_BEFORE_GIVING_UP;;) {
++		int test_count = 0, ret;
 +
-+		if (expected_results[i].msec_to_sleep_before)
-+			msleep(expected_results[i].msec_to_sleep_before);
-+
-+		ensure_time;
-+		if (wg_ratelimiter_allow(skb4, &init_net) !=
-+		    expected_results[i].result)
++		ret = timings_test(skb4, hdr4, skb6, hdr6, &test_count);
++		if (ret == -ETIMEDOUT) {
++			if (!trials--) {
++				test += test_count;
++				goto err;
++			}
++			msleep(500);
++			continue;
++		} else if (ret < 0) {
++			test += test_count;
 +			goto err;
-+		++test;
-+		hdr4->saddr = htonl(ntohl(hdr4->saddr) + i + 1);
-+		ensure_time;
-+		if (!wg_ratelimiter_allow(skb4, &init_net))
-+			goto err;
-+		++test;
-+		hdr4->saddr = htonl(ntohl(hdr4->saddr) - i - 1);
-+
-+#if IS_ENABLED(CONFIG_IPV6)
-+		hdr6->saddr.in6_u.u6_addr32[2] =
-+			hdr6->saddr.in6_u.u6_addr32[3] = htonl(i);
-+		ensure_time;
-+		if (wg_ratelimiter_allow(skb6, &init_net) !=
-+		    expected_results[i].result)
-+			goto err;
-+		++test;
-+		hdr6->saddr.in6_u.u6_addr32[0] =
-+			htonl(ntohl(hdr6->saddr.in6_u.u6_addr32[0]) + i + 1);
-+		ensure_time;
-+		if (!wg_ratelimiter_allow(skb6, &init_net))
-+			goto err;
-+		++test;
-+		hdr6->saddr.in6_u.u6_addr32[0] =
-+			htonl(ntohl(hdr6->saddr.in6_u.u6_addr32[0]) - i - 1);
-+		ensure_time;
-+#endif
-+	}
-+
-+	tries = 0;
-+restart2:
-+	wg_ratelimiter_gc_entries(NULL);
-+	rcu_barrier();
-+
-+	if (atomic_read(&total_entries))
-+		goto err;
-+	++test;
-+
-+	for (i = 0; i <= max_entries; ++i) {
-+		hdr4->saddr = htonl(i);
-+		if (wg_ratelimiter_allow(skb4, &init_net) !=
-+							(i != max_entries)) {
-+			if (++tries < 5000)
-+				goto restart2;
-+			goto err;
++		} else {
++			test += test_count;
++			break;
 +		}
-+		++test;
 +	}
 +
-+	ret = true;
++	for (trials = TRIALS_BEFORE_GIVING_UP;;) {
++		int test_count = 0;
++
++		if (capacity_test(skb4, hdr4, &test_count) < 0) {
++			if (!trials--) {
++				test += test_count;
++				goto err;
++			}
++			msleep(50);
++			continue;
++		}
++		test += test_count;
++		break;
++	}
++
++	success = true;
 +
 +err:
 +	kfree_skb(skb4);
@@ -48119,17 +48168,17 @@ index 000000000000..724a5719c0c3
 +	/* Uninit one extra time to check underflow detection. */
 +	wg_ratelimiter_uninit();
 +out:
-+	if (ret)
++	if (success)
 +		pr_info("ratelimiter self-tests: pass\n");
 +	else
 +		pr_err("ratelimiter self-test %d: FAIL\n", test);
 +
-+	return ret;
++	return success;
 +}
 +#endif
 diff --git a/net/wireguard/send.c b/net/wireguard/send.c
 new file mode 100644
-index 000000000000..e099282c8cd1
+index 000000000000..81a77e043775
 --- /dev/null
 +++ b/net/wireguard/send.c
 @@ -0,0 +1,422 @@
@@ -48154,7 +48203,7 @@ index 000000000000..e099282c8cd1
 +#include <net/udp.h>
 +#include <net/sock.h>
 +
-+static void wg_packet_send_handshake_initiation(struct wireguard_peer *peer)
++static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
 +{
 +	struct message_handshake_initiation packet;
 +
@@ -48181,14 +48230,14 @@ index 000000000000..e099282c8cd1
 +
 +void wg_packet_handshake_send_worker(struct work_struct *work)
 +{
-+	struct wireguard_peer *peer = container_of(work, struct wireguard_peer,
-+						   transmit_handshake_work);
++	struct wg_peer *peer = container_of(work, struct wg_peer,
++					    transmit_handshake_work);
 +
 +	wg_packet_send_handshake_initiation(peer);
 +	wg_peer_put(peer);
 +}
 +
-+void wg_packet_send_queued_handshake_initiation(struct wireguard_peer *peer,
++void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
 +						bool is_retry)
 +{
 +	if (!is_retry)
@@ -48217,7 +48266,7 @@ index 000000000000..e099282c8cd1
 +	rcu_read_unlock_bh();
 +}
 +
-+void wg_packet_send_handshake_response(struct wireguard_peer *peer)
++void wg_packet_send_handshake_response(struct wg_peer *peer)
 +{
 +	struct message_handshake_response packet;
 +
@@ -48242,7 +48291,7 @@ index 000000000000..e099282c8cd1
 +	}
 +}
 +
-+void wg_packet_send_handshake_cookie(struct wireguard_device *wg,
++void wg_packet_send_handshake_cookie(struct wg_device *wg,
 +				     struct sk_buff *initiating_skb,
 +				     __le32 sender_index)
 +{
@@ -48256,7 +48305,7 @@ index 000000000000..e099282c8cd1
 +					      sizeof(packet));
 +}
 +
-+static void keep_key_fresh(struct wireguard_peer *peer)
++static void keep_key_fresh(struct wg_peer *peer)
 +{
 +	struct noise_keypair *keypair;
 +	bool send = false;
@@ -48347,7 +48396,7 @@ index 000000000000..e099282c8cd1
 +					   keypair->sending.key, simd_context);
 +}
 +
-+void wg_packet_send_keepalive(struct wireguard_peer *peer)
++void wg_packet_send_keepalive(struct wg_peer *peer)
 +{
 +	struct sk_buff *skb;
 +
@@ -48380,7 +48429,7 @@ index 000000000000..e099282c8cd1
 +}
 +
 +static void wg_packet_create_data_done(struct sk_buff *first,
-+				       struct wireguard_peer *peer)
++				       struct wg_peer *peer)
 +{
 +	struct sk_buff *skb, *next;
 +	bool is_keepalive, data_sent = false;
@@ -48402,12 +48451,12 @@ index 000000000000..e099282c8cd1
 +
 +void wg_packet_tx_worker(struct work_struct *work)
 +{
-+	struct crypt_queue *queue =
-+		container_of(work, struct crypt_queue, work);
-+	struct wireguard_peer *peer;
++	struct crypt_queue *queue = container_of(work, struct crypt_queue,
++						 work);
 +	struct noise_keypair *keypair;
-+	struct sk_buff *first;
 +	enum packet_state state;
++	struct sk_buff *first;
++	struct wg_peer *peer;
 +
 +	while ((first = __ptr_ring_peek(&queue->ring)) != NULL &&
 +	       (state = atomic_read_acquire(&PACKET_CB(first)->state)) !=
@@ -48428,8 +48477,8 @@ index 000000000000..e099282c8cd1
 +
 +void wg_packet_encrypt_worker(struct work_struct *work)
 +{
-+	struct crypt_queue *queue =
-+		container_of(work, struct multicore_worker, work)->ptr;
++	struct crypt_queue *queue = container_of(work, struct multicore_worker,
++						 work)->ptr;
 +	struct sk_buff *first, *skb, *next;
 +	simd_context_t simd_context;
 +
@@ -48456,8 +48505,8 @@ index 000000000000..e099282c8cd1
 +
 +static void wg_packet_create_data(struct sk_buff *first)
 +{
-+	struct wireguard_peer *peer = PACKET_PEER(first);
-+	struct wireguard_device *wg = peer->device;
++	struct wg_peer *peer = PACKET_PEER(first);
++	struct wg_device *wg = peer->device;
 +	int ret = -EINVAL;
 +
 +	rcu_read_lock_bh();
@@ -48480,7 +48529,7 @@ index 000000000000..e099282c8cd1
 +	skb_free_null_queue(first);
 +}
 +
-+void wg_packet_send_staged_packets(struct wireguard_peer *peer)
++void wg_packet_send_staged_packets(struct wg_peer *peer)
 +{
 +	struct noise_symmetric_key *key;
 +	struct noise_keypair *keypair;
@@ -48557,10 +48606,10 @@ index 000000000000..e099282c8cd1
 +}
 diff --git a/net/wireguard/socket.c b/net/wireguard/socket.c
 new file mode 100644
-index 000000000000..25752daf678e
+index 000000000000..03dcb652cd39
 --- /dev/null
 +++ b/net/wireguard/socket.c
-@@ -0,0 +1,432 @@
+@@ -0,0 +1,431 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -48580,7 +48629,7 @@ index 000000000000..25752daf678e
 +#include <net/udp_tunnel.h>
 +#include <net/ipv6.h>
 +
-+static int send4(struct wireguard_device *wg, struct sk_buff *skb,
++static int send4(struct wg_device *wg, struct sk_buff *skb,
 +		 struct endpoint *endpoint, u8 ds, struct dst_cache *cache)
 +{
 +	struct flowi4 fl = {
@@ -48661,7 +48710,7 @@ index 000000000000..25752daf678e
 +	return ret;
 +}
 +
-+static int send6(struct wireguard_device *wg, struct sk_buff *skb,
++static int send6(struct wg_device *wg, struct sk_buff *skb,
 +		 struct endpoint *endpoint, u8 ds, struct dst_cache *cache)
 +{
 +#if IS_ENABLED(CONFIG_IPV6)
@@ -48735,8 +48784,7 @@ index 000000000000..25752daf678e
 +#endif
 +}
 +
-+int wg_socket_send_skb_to_peer(struct wireguard_peer *peer, struct sk_buff *skb,
-+			       u8 ds)
++int wg_socket_send_skb_to_peer(struct wg_peer *peer, struct sk_buff *skb, u8 ds)
 +{
 +	size_t skb_len = skb->len;
 +	int ret = -EAFNOSUPPORT;
@@ -48757,7 +48805,7 @@ index 000000000000..25752daf678e
 +	return ret;
 +}
 +
-+int wg_socket_send_buffer_to_peer(struct wireguard_peer *peer, void *buffer,
++int wg_socket_send_buffer_to_peer(struct wg_peer *peer, void *buffer,
 +				  size_t len, u8 ds)
 +{
 +	struct sk_buff *skb = alloc_skb(len + SKB_HEADER_LEN, GFP_ATOMIC);
@@ -48771,7 +48819,7 @@ index 000000000000..25752daf678e
 +	return wg_socket_send_skb_to_peer(peer, skb, ds);
 +}
 +
-+int wg_socket_send_buffer_as_reply_to_skb(struct wireguard_device *wg,
++int wg_socket_send_buffer_as_reply_to_skb(struct wg_device *wg,
 +					  struct sk_buff *in_skb, void *buffer,
 +					  size_t len)
 +{
@@ -48840,7 +48888,7 @@ index 000000000000..25752daf678e
 +	       unlikely(!a->addr.sa_family && !b->addr.sa_family);
 +}
 +
-+void wg_socket_set_peer_endpoint(struct wireguard_peer *peer,
++void wg_socket_set_peer_endpoint(struct wg_peer *peer,
 +				 const struct endpoint *endpoint)
 +{
 +	/* First we check unlocked, in order to optimize, since it's pretty rare
@@ -48865,7 +48913,7 @@ index 000000000000..25752daf678e
 +	write_unlock_bh(&peer->endpoint_lock);
 +}
 +
-+void wg_socket_set_peer_endpoint_from_skb(struct wireguard_peer *peer,
++void wg_socket_set_peer_endpoint_from_skb(struct wg_peer *peer,
 +					  const struct sk_buff *skb)
 +{
 +	struct endpoint endpoint;
@@ -48874,7 +48922,7 @@ index 000000000000..25752daf678e
 +		wg_socket_set_peer_endpoint(peer, &endpoint);
 +}
 +
-+void wg_socket_clear_peer_endpoint_src(struct wireguard_peer *peer)
++void wg_socket_clear_peer_endpoint_src(struct wg_peer *peer)
 +{
 +	write_lock_bh(&peer->endpoint_lock);
 +	memset(&peer->endpoint.src6, 0, sizeof(peer->endpoint.src6));
@@ -48884,7 +48932,7 @@ index 000000000000..25752daf678e
 +
 +static int wg_receive(struct sock *sk, struct sk_buff *skb)
 +{
-+	struct wireguard_device *wg;
++	struct wg_device *wg;
 +
 +	if (unlikely(!sk))
 +		goto err;
@@ -48914,7 +48962,7 @@ index 000000000000..25752daf678e
 +	sk_set_memalloc(sock->sk);
 +}
 +
-+int wg_socket_init(struct wireguard_device *wg, u16 port)
++int wg_socket_init(struct wg_device *wg, u16 port)
 +{
 +	int ret;
 +	struct udp_tunnel_sock_cfg cfg = {
@@ -48973,7 +49021,7 @@ index 000000000000..25752daf678e
 +	return 0;
 +}
 +
-+void wg_socket_reinit(struct wireguard_device *wg, struct sock *new4,
++void wg_socket_reinit(struct wg_device *wg, struct sock *new4,
 +		      struct sock *new6)
 +{
 +	struct sock *old4, *old6;
@@ -48995,7 +49043,7 @@ index 000000000000..25752daf678e
 +}
 diff --git a/net/wireguard/socket.h b/net/wireguard/socket.h
 new file mode 100644
-index 000000000000..ee5eb157c073
+index 000000000000..9d3e8e1e87e0
 --- /dev/null
 +++ b/net/wireguard/socket.h
 @@ -0,0 +1,44 @@
@@ -49012,24 +49060,24 @@ index 000000000000..ee5eb157c073
 +#include <linux/if_vlan.h>
 +#include <linux/if_ether.h>
 +
-+int wg_socket_init(struct wireguard_device *wg, u16 port);
-+void wg_socket_reinit(struct wireguard_device *wg, struct sock *new4,
++int wg_socket_init(struct wg_device *wg, u16 port);
++void wg_socket_reinit(struct wg_device *wg, struct sock *new4,
 +		      struct sock *new6);
-+int wg_socket_send_buffer_to_peer(struct wireguard_peer *peer, void *data,
++int wg_socket_send_buffer_to_peer(struct wg_peer *peer, void *data,
 +				  size_t len, u8 ds);
-+int wg_socket_send_skb_to_peer(struct wireguard_peer *peer, struct sk_buff *skb,
++int wg_socket_send_skb_to_peer(struct wg_peer *peer, struct sk_buff *skb,
 +			       u8 ds);
-+int wg_socket_send_buffer_as_reply_to_skb(struct wireguard_device *wg,
++int wg_socket_send_buffer_as_reply_to_skb(struct wg_device *wg,
 +					  struct sk_buff *in_skb,
 +					  void *out_buffer, size_t len);
 +
 +int wg_socket_endpoint_from_skb(struct endpoint *endpoint,
 +				const struct sk_buff *skb);
-+void wg_socket_set_peer_endpoint(struct wireguard_peer *peer,
++void wg_socket_set_peer_endpoint(struct wg_peer *peer,
 +				 const struct endpoint *endpoint);
-+void wg_socket_set_peer_endpoint_from_skb(struct wireguard_peer *peer,
++void wg_socket_set_peer_endpoint_from_skb(struct wg_peer *peer,
 +					  const struct sk_buff *skb);
-+void wg_socket_clear_peer_endpoint_src(struct wireguard_peer *peer);
++void wg_socket_clear_peer_endpoint_src(struct wg_peer *peer);
 +
 +#if defined(CONFIG_DYNAMIC_DEBUG) || defined(DEBUG)
 +#define net_dbg_skb_ratelimited(fmt, dev, skb, ...) do {                       \
@@ -49045,7 +49093,7 @@ index 000000000000..ee5eb157c073
 +#endif /* _WG_SOCKET_H */
 diff --git a/net/wireguard/timers.c b/net/wireguard/timers.c
 new file mode 100644
-index 000000000000..5127485a93d0
+index 000000000000..563f03b7c5ce
 --- /dev/null
 +++ b/net/wireguard/timers.c
 @@ -0,0 +1,255 @@
@@ -49078,14 +49126,14 @@ index 000000000000..5127485a93d0
 + */
 +
 +#define peer_get_from_timer(timer_name)                                        \
-+	struct wireguard_peer *peer;                                           \
++	struct wg_peer *peer;                                                  \
 +	rcu_read_lock_bh();                                                    \
 +	peer = wg_peer_get_maybe_zero(from_timer(peer, timer, timer_name));    \
 +	rcu_read_unlock_bh();                                                  \
 +	if (unlikely(!peer))                                                   \
 +		return;
 +
-+static inline void mod_peer_timer(struct wireguard_peer *peer,
++static inline void mod_peer_timer(struct wg_peer *peer,
 +				  struct timer_list *timer,
 +				  unsigned long expires)
 +{
@@ -49095,7 +49143,7 @@ index 000000000000..5127485a93d0
 +	rcu_read_unlock_bh();
 +}
 +
-+static inline void del_peer_timer(struct wireguard_peer *peer,
++static inline void del_peer_timer(struct wg_peer *peer,
 +				  struct timer_list *timer)
 +{
 +	rcu_read_lock_bh();
@@ -49186,8 +49234,8 @@ index 000000000000..5127485a93d0
 +}
 +static void wg_queued_expired_zero_key_material(struct work_struct *work)
 +{
-+	struct wireguard_peer *peer =
-+		container_of(work, struct wireguard_peer, clear_peer_work);
++	struct wg_peer *peer = container_of(work, struct wg_peer,
++					    clear_peer_work);
 +
 +	pr_debug("%s: Zeroing out all keys for peer %llu (%pISpfsc), since we haven't received a new one in %d seconds\n",
 +		 peer->device->dev->name, peer->internal_id,
@@ -49207,7 +49255,7 @@ index 000000000000..5127485a93d0
 +}
 +
 +/* Should be called after an authenticated data packet is sent. */
-+void wg_timers_data_sent(struct wireguard_peer *peer)
++void wg_timers_data_sent(struct wg_peer *peer)
 +{
 +	if (!timer_pending(&peer->timer_new_handshake))
 +		mod_peer_timer(peer, &peer->timer_new_handshake,
@@ -49215,7 +49263,7 @@ index 000000000000..5127485a93d0
 +}
 +
 +/* Should be called after an authenticated data packet is received. */
-+void wg_timers_data_received(struct wireguard_peer *peer)
++void wg_timers_data_received(struct wg_peer *peer)
 +{
 +	if (likely(netif_running(peer->device->dev))) {
 +		if (!timer_pending(&peer->timer_send_keepalive))
@@ -49229,7 +49277,7 @@ index 000000000000..5127485a93d0
 +/* Should be called after any type of authenticated packet is sent, whether
 + * keepalive, data, or handshake.
 + */
-+void wg_timers_any_authenticated_packet_sent(struct wireguard_peer *peer)
++void wg_timers_any_authenticated_packet_sent(struct wg_peer *peer)
 +{
 +	del_peer_timer(peer, &peer->timer_send_keepalive);
 +}
@@ -49237,13 +49285,13 @@ index 000000000000..5127485a93d0
 +/* Should be called after any type of authenticated packet is received, whether
 + * keepalive, data, or handshake.
 + */
-+void wg_timers_any_authenticated_packet_received(struct wireguard_peer *peer)
++void wg_timers_any_authenticated_packet_received(struct wg_peer *peer)
 +{
 +	del_peer_timer(peer, &peer->timer_new_handshake);
 +}
 +
 +/* Should be called after a handshake initiation message is sent. */
-+void wg_timers_handshake_initiated(struct wireguard_peer *peer)
++void wg_timers_handshake_initiated(struct wg_peer *peer)
 +{
 +	mod_peer_timer(peer, &peer->timer_retransmit_handshake,
 +		       jiffies + REKEY_TIMEOUT * HZ +
@@ -49253,7 +49301,7 @@ index 000000000000..5127485a93d0
 +/* Should be called after a handshake response message is received and processed
 + * or when getting key confirmation via the first data message.
 + */
-+void wg_timers_handshake_complete(struct wireguard_peer *peer)
++void wg_timers_handshake_complete(struct wg_peer *peer)
 +{
 +	del_peer_timer(peer, &peer->timer_retransmit_handshake);
 +	peer->timer_handshake_attempts = 0;
@@ -49264,7 +49312,7 @@ index 000000000000..5127485a93d0
 +/* Should be called after an ephemeral key is created, which is before sending a
 + * handshake response or after receiving a handshake response.
 + */
-+void wg_timers_session_derived(struct wireguard_peer *peer)
++void wg_timers_session_derived(struct wg_peer *peer)
 +{
 +	mod_peer_timer(peer, &peer->timer_zero_key_material,
 +		       jiffies + REJECT_AFTER_TIME * 3 * HZ);
@@ -49273,14 +49321,14 @@ index 000000000000..5127485a93d0
 +/* Should be called before a packet with authentication, whether
 + * keepalive, data, or handshakem is sent, or after one is received.
 + */
-+void wg_timers_any_authenticated_packet_traversal(struct wireguard_peer *peer)
++void wg_timers_any_authenticated_packet_traversal(struct wg_peer *peer)
 +{
 +	if (peer->persistent_keepalive_interval)
 +		mod_peer_timer(peer, &peer->timer_persistent_keepalive,
 +			jiffies + peer->persistent_keepalive_interval * HZ);
 +}
 +
-+void wg_timers_init(struct wireguard_peer *peer)
++void wg_timers_init(struct wg_peer *peer)
 +{
 +	timer_setup(&peer->timer_retransmit_handshake,
 +		    wg_expired_retransmit_handshake, 0);
@@ -49295,7 +49343,7 @@ index 000000000000..5127485a93d0
 +	peer->timer_need_another_keepalive = false;
 +}
 +
-+void wg_timers_stop(struct wireguard_peer *peer)
++void wg_timers_stop(struct wg_peer *peer)
 +{
 +	del_timer_sync(&peer->timer_retransmit_handshake);
 +	del_timer_sync(&peer->timer_send_keepalive);
@@ -49306,7 +49354,7 @@ index 000000000000..5127485a93d0
 +}
 diff --git a/net/wireguard/timers.h b/net/wireguard/timers.h
 new file mode 100644
-index 000000000000..eef4248d759c
+index 000000000000..5f294612df23
 --- /dev/null
 +++ b/net/wireguard/timers.h
 @@ -0,0 +1,31 @@
@@ -49320,18 +49368,18 @@ index 000000000000..eef4248d759c
 +
 +#include <linux/ktime.h>
 +
-+struct wireguard_peer;
++struct wg_peer;
 +
-+void wg_timers_init(struct wireguard_peer *peer);
-+void wg_timers_stop(struct wireguard_peer *peer);
-+void wg_timers_data_sent(struct wireguard_peer *peer);
-+void wg_timers_data_received(struct wireguard_peer *peer);
-+void wg_timers_any_authenticated_packet_sent(struct wireguard_peer *peer);
-+void wg_timers_any_authenticated_packet_received(struct wireguard_peer *peer);
-+void wg_timers_handshake_initiated(struct wireguard_peer *peer);
-+void wg_timers_handshake_complete(struct wireguard_peer *peer);
-+void wg_timers_session_derived(struct wireguard_peer *peer);
-+void wg_timers_any_authenticated_packet_traversal(struct wireguard_peer *peer);
++void wg_timers_init(struct wg_peer *peer);
++void wg_timers_stop(struct wg_peer *peer);
++void wg_timers_data_sent(struct wg_peer *peer);
++void wg_timers_data_received(struct wg_peer *peer);
++void wg_timers_any_authenticated_packet_sent(struct wg_peer *peer);
++void wg_timers_any_authenticated_packet_received(struct wg_peer *peer);
++void wg_timers_handshake_initiated(struct wg_peer *peer);
++void wg_timers_handshake_complete(struct wg_peer *peer);
++void wg_timers_session_derived(struct wg_peer *peer);
++void wg_timers_any_authenticated_packet_traversal(struct wg_peer *peer);
 +
 +static inline bool wg_birthdate_has_expired(u64 birthday_nanoseconds,
 +					    u64 expiration_seconds)
@@ -49343,7 +49391,7 @@ index 000000000000..eef4248d759c
 +#endif /* _WG_TIMERS_H */
 diff --git a/net/wireguard/uapi/wireguard.h b/net/wireguard/uapi/wireguard.h
 new file mode 100644
-index 000000000000..ab72766a07ff
+index 000000000000..0203f2c30260
 --- /dev/null
 +++ b/net/wireguard/uapi/wireguard.h
 @@ -0,0 +1,190 @@
@@ -49392,13 +49440,13 @@ index 000000000000..ab72766a07ff
 + *                    WGALLOWEDIP_A_FAMILY: NLA_U16
 + *                    WGALLOWEDIP_A_IPADDR: struct in_addr or struct in6_addr
 + *                    WGALLOWEDIP_A_CIDR_MASK: NLA_U8
-+ *                1: NLA_NESTED
++ *                0: NLA_NESTED
 + *                    ...
-+ *                2: NLA_NESTED
++ *                0: NLA_NESTED
 + *                    ...
 + *                ...
 + *            WGPEER_A_PROTOCOL_VERSION: NLA_U32
-+ *        1: NLA_NESTED
++ *        0: NLA_NESTED
 + *            ...
 + *        ...
 + *
@@ -49448,9 +49496,9 @@ index 000000000000..ab72766a07ff
 + *                    WGALLOWEDIP_A_FAMILY: NLA_U16
 + *                    WGALLOWEDIP_A_IPADDR: struct in_addr or struct in6_addr
 + *                    WGALLOWEDIP_A_CIDR_MASK: NLA_U8
-+ *                1: NLA_NESTED
++ *                0: NLA_NESTED
 + *                    ...
-+ *                2: NLA_NESTED
++ *                0: NLA_NESTED
 + *                    ...
 + *                ...
 + *            WGPEER_A_PROTOCOL_VERSION: NLA_U32, should not be set or used at
@@ -49458,7 +49506,7 @@ index 000000000000..ab72766a07ff
 + *                                       most recent protocol will be used when
 + *                                       this is unset. Otherwise, must be set
 + *                                       to 1.
-+ *        1: NLA_NESTED
++ *        0: NLA_NESTED
 + *            ...
 + *        ...
 + *
@@ -49545,5 +49593,5 @@ index 000000000000..6e0da0dd454e
 @@ -0,0 +1 @@
 +#define WIREGUARD_VERSION "0.0.20181007"
 -- 
-2.19.0
+2.19.1
 
