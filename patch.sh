@@ -292,7 +292,7 @@ local_patch () {
 }
 
 #external_git
-aufs4
+#aufs4
 #rt
 wireguard
 ti_pm_firmware
@@ -372,11 +372,11 @@ drivers () {
 #	dir 'drivers/android'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/btrfs'
-	dir 'drivers/pwm'
+#	dir 'drivers/pwm'
 	dir 'drivers/spi'
 	dir 'drivers/ssd1306'
 	dir 'drivers/tps65217'
-	dir 'drivers/opp'
+#	dir 'drivers/opp'
 	dir 'drivers/wiznet'
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
