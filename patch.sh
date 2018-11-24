@@ -191,7 +191,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+	#v4.19.1
+	${git_bin} revert --no-edit 3252b60cf810aec6460f4777a7730bfc70448729
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -378,6 +379,11 @@ drivers () {
 	dir 'drivers/tps65217'
 	dir 'drivers/opp'
 	dir 'drivers/wiznet'
+
+	#https://lkml.org/lkml/2018/11/22/948
+	#[PATCH 00/17] Add support for TI PRU ICSS
+	dir 'drivers/ti/pruss/'
+
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/etnaviv'
@@ -386,8 +392,9 @@ drivers () {
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/spi'
 	dir 'drivers/ti/tsc'
-	dir 'drivers/ti/uio'
 	dir 'drivers/ti/gpio'
+	#[PATCH v3 1/4] mfd: stmpe: Move ADC related defines to header of mfd
+	dir 'drivers/iio/stmpe'
 }
 
 soc () {
