@@ -333,15 +333,15 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.x-y"
+	backport_tag="v4.20-rc4"
 
-	subsystem="xyz"
+	subsystem="remoteproc"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		mkdir -p ./x/
-		cp -v ~/linux-src/x/* ./x/
+		cp -rv ~/linux-src/drivers/remoteproc/* ./drivers/remoteproc/
+		cp -v ~/linux-src/include/linux/remoteproc.h ./include/linux/remoteproc.h
 
 		post_backports
 		exit 2
@@ -383,6 +383,10 @@ drivers () {
 	#https://lkml.org/lkml/2018/11/22/948
 	#[PATCH 00/17] Add support for TI PRU ICSS
 	dir 'drivers/ti/pruss/'
+
+	#https://lkml.org/lkml/2018/11/26/319
+	#[PATCH 00/16] remoteproc: Add support for TI PRU
+	dir 'drivers/ti/remoteproc/'
 
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
@@ -475,7 +479,7 @@ beaglebone () {
 }
 
 ###
-#backports
+backports
 #reverts
 drivers
 soc
