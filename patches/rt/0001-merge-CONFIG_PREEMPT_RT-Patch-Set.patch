@@ -1,6 +1,6 @@
-From a7866a75ac7bc53e6486b144c1a4173c34f4daa5 Mon Sep 17 00:00:00 2001
+From 40219006e455aafba0df4c321f6c43b819d0cb72 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 27 Nov 2018 15:34:18 -0600
+Date: Sat, 1 Dec 2018 20:28:05 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -33,7 +33,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm/mm/highmem.c                         |  58 +-
  arch/arm/plat-versatile/platsmp.c             |  10 +-
  arch/arm64/Kconfig                            |   1 +
- arch/arm64/crypto/Kconfig                     |  30 +-
+ arch/arm64/crypto/Kconfig                     |  28 +-
  arch/arm64/crypto/crc32-ce-glue.c             |   3 +-
  arch/arm64/include/asm/alternative.h          |   6 +
  arch/arm64/include/asm/spinlock_types.h       |   4 -
@@ -384,7 +384,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/include/path.h              |  19 +-
  security/apparmor/lsm.c                       |   2 +-
  virt/kvm/arm/arm.c                            |   6 +-
- 379 files changed, 9453 insertions(+), 1995 deletions(-)
+ 379 files changed, 9452 insertions(+), 1994 deletions(-)
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -1410,7 +1410,7 @@ index 1b1a0e95c751..418a75d30f5c 100644
  	select HAVE_RCU_TABLE_FREE
  	select HAVE_RSEQ
 diff --git a/arch/arm64/crypto/Kconfig b/arch/arm64/crypto/Kconfig
-index e3fdb0fd6f70..c4b5646d328e 100644
+index d51944ff9f91..0d4b3f0cfba6 100644
 --- a/arch/arm64/crypto/Kconfig
 +++ b/arch/arm64/crypto/Kconfig
 @@ -19,43 +19,43 @@ config CRYPTO_SHA512_ARM64
@@ -1523,15 +1523,6 @@ index e3fdb0fd6f70..c4b5646d328e 100644
  	select CRYPTO_BLKCIPHER
  	select CRYPTO_AES_ARM64_NEON_BLK
  	select CRYPTO_AES_ARM64
-@@ -121,7 +121,7 @@ config CRYPTO_AES_ARM64_BS
- 
- config CRYPTO_SPECK_NEON
- 	tristate "NEON accelerated Speck cipher algorithms"
--	depends on KERNEL_MODE_NEON
-+	depends on KERNEL_MODE_NEON && !PREEMPT_RT_BASE
- 	select CRYPTO_BLKCIPHER
- 	select CRYPTO_SPECK
- 
 diff --git a/arch/arm64/crypto/crc32-ce-glue.c b/arch/arm64/crypto/crc32-ce-glue.c
 index 34b4e3d46aab..ae055cdad8cf 100644
 --- a/arch/arm64/crypto/crc32-ce-glue.c
@@ -6802,7 +6793,7 @@ index d6eca814d9fc..dfc5caf1a49f 100644
  	 * After the slowpath clears MNT_WRITE_HOLD, mnt_is_readonly will
  	 * be set to match its requirements. So we must not load that until
 diff --git a/fs/nfs/delegation.c b/fs/nfs/delegation.c
-index f033f3a69a3b..38c9c760d099 100644
+index 75fe92eaa681..e8d05393443f 100644
 --- a/fs/nfs/delegation.c
 +++ b/fs/nfs/delegation.c
 @@ -152,11 +152,11 @@ static int nfs_delegation_claim_opens(struct inode *inode,
@@ -12098,10 +12089,10 @@ index 0097acec1c71..961cf1cb896d 100644
  	irq_unlock_sparse();
  
 diff --git a/kernel/debug/kdb/kdb_io.c b/kernel/debug/kdb/kdb_io.c
-index ed5d34925ad0..c0d4c24fc241 100644
+index 6a4b41484afe..197cb422f6e1 100644
 --- a/kernel/debug/kdb/kdb_io.c
 +++ b/kernel/debug/kdb/kdb_io.c
-@@ -854,9 +854,11 @@ int kdb_printf(const char *fmt, ...)
+@@ -857,9 +857,11 @@ int kdb_printf(const char *fmt, ...)
  	va_list ap;
  	int r;
  
@@ -16079,7 +16070,7 @@ index 6c9866a854b1..3a74a4b4ae83 100644
  		srcu_funnel_gp_start(sp, sdp, s, do_norm);
  	else if (needexp)
 diff --git a/kernel/rcu/tree.c b/kernel/rcu/tree.c
-index 0b760c1369f7..5244646eb6a4 100644
+index 15301ed19da6..d2f0c72b0b23 100644
 --- a/kernel/rcu/tree.c
 +++ b/kernel/rcu/tree.c
 @@ -61,6 +61,13 @@
@@ -16182,7 +16173,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  			rdp->rcu_iw_pending = true;
  			rdp->rcu_iw_gp_seq = rnp->gp_seq;
  			irq_work_queue_on(&rdp->rcu_iw, rdp->cpu);
-@@ -2853,18 +2887,17 @@ __rcu_process_callbacks(struct rcu_state *rsp)
+@@ -2862,18 +2896,17 @@ __rcu_process_callbacks(struct rcu_state *rsp)
  /*
   * Do RCU core processing for the current CPU.
   */
@@ -16203,7 +16194,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  /*
   * Schedule RCU callback invocation.  If the specified type of RCU
   * does not support RCU priority boosting, just do a direct call,
-@@ -2876,19 +2909,106 @@ static void invoke_rcu_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
+@@ -2885,19 +2918,106 @@ static void invoke_rcu_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
  {
  	if (unlikely(!READ_ONCE(rcu_scheduler_fully_active)))
  		return;
@@ -16317,7 +16308,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  /*
   * Handle any core-RCU processing required by a call_rcu() invocation.
   */
-@@ -3040,6 +3160,7 @@ void call_rcu_sched(struct rcu_head *head, rcu_callback_t func)
+@@ -3049,6 +3169,7 @@ void call_rcu_sched(struct rcu_head *head, rcu_callback_t func)
  }
  EXPORT_SYMBOL_GPL(call_rcu_sched);
  
@@ -16325,7 +16316,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  /**
   * call_rcu_bh() - Queue an RCU for invocation after a quicker grace period.
   * @head: structure to be used for queueing the RCU updates.
-@@ -3067,6 +3188,7 @@ void call_rcu_bh(struct rcu_head *head, rcu_callback_t func)
+@@ -3076,6 +3197,7 @@ void call_rcu_bh(struct rcu_head *head, rcu_callback_t func)
  	__call_rcu(head, func, &rcu_bh_state, -1, 0);
  }
  EXPORT_SYMBOL_GPL(call_rcu_bh);
@@ -16333,7 +16324,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  
  /*
   * Queue an RCU callback for lazy invocation after a grace period.
-@@ -3152,6 +3274,7 @@ void synchronize_sched(void)
+@@ -3161,6 +3283,7 @@ void synchronize_sched(void)
  }
  EXPORT_SYMBOL_GPL(synchronize_sched);
  
@@ -16341,7 +16332,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  /**
   * synchronize_rcu_bh - wait until an rcu_bh grace period has elapsed.
   *
-@@ -3178,6 +3301,7 @@ void synchronize_rcu_bh(void)
+@@ -3187,6 +3310,7 @@ void synchronize_rcu_bh(void)
  		wait_rcu_gp(call_rcu_bh);
  }
  EXPORT_SYMBOL_GPL(synchronize_rcu_bh);
@@ -16349,7 +16340,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  
  /**
   * get_state_synchronize_rcu - Snapshot current RCU state
-@@ -3485,6 +3609,7 @@ static void _rcu_barrier(struct rcu_state *rsp)
+@@ -3494,6 +3618,7 @@ static void _rcu_barrier(struct rcu_state *rsp)
  	mutex_unlock(&rsp->barrier_mutex);
  }
  
@@ -16357,7 +16348,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  /**
   * rcu_barrier_bh - Wait until all in-flight call_rcu_bh() callbacks complete.
   */
-@@ -3493,6 +3618,7 @@ void rcu_barrier_bh(void)
+@@ -3502,6 +3627,7 @@ void rcu_barrier_bh(void)
  	_rcu_barrier(&rcu_bh_state);
  }
  EXPORT_SYMBOL_GPL(rcu_barrier_bh);
@@ -16365,7 +16356,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  
  /**
   * rcu_barrier_sched - Wait for in-flight call_rcu_sched() callbacks.
-@@ -3642,8 +3768,6 @@ int rcutree_online_cpu(unsigned int cpu)
+@@ -3651,8 +3777,6 @@ int rcutree_online_cpu(unsigned int cpu)
  		rnp->ffmask |= rdp->grpmask;
  		raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
  	}
@@ -16374,7 +16365,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  	if (rcu_scheduler_active == RCU_SCHEDULER_INACTIVE)
  		return 0; /* Too early in boot for scheduler work. */
  	sync_sched_exp_online_cleanup(cpu);
-@@ -3671,8 +3795,6 @@ int rcutree_offline_cpu(unsigned int cpu)
+@@ -3680,8 +3804,6 @@ int rcutree_offline_cpu(unsigned int cpu)
  	}
  
  	rcutree_affinity_setting(cpu, cpu);
@@ -16383,7 +16374,7 @@ index 0b760c1369f7..5244646eb6a4 100644
  	return 0;
  }
  
-@@ -4140,12 +4262,13 @@ void __init rcu_init(void)
+@@ -4149,12 +4271,13 @@ void __init rcu_init(void)
  
  	rcu_bootup_announce();
  	rcu_init_geometry();
@@ -17909,7 +17900,7 @@ index 6383aa6a60ca..429078602ed7 100644
  #undef PN
  #undef __PN
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index 908c9cdae2f0..047d1118772c 100644
+index 1162552dc3cc..ca96f58edee2 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
 @@ -1631,7 +1631,7 @@ static void task_numa_compare(struct task_numa_env *env,
@@ -18050,7 +18041,7 @@ index 908c9cdae2f0..047d1118772c 100644
  		/*
  		 * Replace recent_used_cpu with prev as it is a potential
  		 * candidate for the next wake:
-@@ -6317,7 +6317,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
+@@ -6351,7 +6351,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
  	if (sd_flag & SD_BALANCE_WAKE) {
  		record_wakee(p);
  		want_affine = !wake_wide(p) && !wake_cap(p, cpu, prev_cpu)
@@ -18059,7 +18050,7 @@ index 908c9cdae2f0..047d1118772c 100644
  	}
  
  	rcu_read_lock();
-@@ -6578,7 +6578,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
+@@ -6612,7 +6612,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
  	return;
  
  preempt:
@@ -18068,7 +18059,7 @@ index 908c9cdae2f0..047d1118772c 100644
  	/*
  	 * Only set the backward buddy when the current task is still
  	 * on the rq. This can happen when a wakeup gets interleaved
-@@ -7056,14 +7056,14 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
+@@ -7090,14 +7090,14 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
  	/*
  	 * We do not migrate tasks that are:
  	 * 1) throttled_lb_pair, or
@@ -18085,7 +18076,7 @@ index 908c9cdae2f0..047d1118772c 100644
  		int cpu;
  
  		schedstat_inc(p->se.statistics.nr_failed_migrations_affine);
-@@ -7083,7 +7083,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
+@@ -7117,7 +7117,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
  
  		/* Prevent to re-select dst_cpu via env's CPUs: */
  		for_each_cpu_and(cpu, env->dst_grpmask, env->cpus) {
@@ -18094,7 +18085,7 @@ index 908c9cdae2f0..047d1118772c 100644
  				env->flags |= LBF_DST_PINNED;
  				env->new_dst_cpu = cpu;
  				break;
-@@ -7704,7 +7704,7 @@ check_cpu_capacity(struct rq *rq, struct sched_domain *sd)
+@@ -7738,7 +7738,7 @@ check_cpu_capacity(struct rq *rq, struct sched_domain *sd)
  
  /*
   * Group imbalance indicates (and tries to solve) the problem where balancing
@@ -18103,7 +18094,7 @@ index 908c9cdae2f0..047d1118772c 100644
   *
   * Imagine a situation of two groups of 4 CPUs each and 4 tasks each with a
   * cpumask covering 1 CPU of the first group and 3 CPUs of the second group.
-@@ -8319,7 +8319,7 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
+@@ -8353,7 +8353,7 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
  	/*
  	 * If the busiest group is imbalanced the below checks don't
  	 * work because they assume all things are equal, which typically
@@ -18112,7 +18103,7 @@ index 908c9cdae2f0..047d1118772c 100644
  	 */
  	if (busiest->group_type == group_imbalanced)
  		goto force_balance;
-@@ -8715,7 +8715,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
+@@ -8749,7 +8749,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
  			 * if the curr task on busiest CPU can't be
  			 * moved to this_cpu:
  			 */
@@ -18121,7 +18112,7 @@ index 908c9cdae2f0..047d1118772c 100644
  				raw_spin_unlock_irqrestore(&busiest->lock,
  							    flags);
  				env.flags |= LBF_ALL_PINNED;
-@@ -9689,7 +9689,7 @@ static void task_fork_fair(struct task_struct *p)
+@@ -9723,7 +9723,7 @@ static void task_fork_fair(struct task_struct *p)
  		 * 'current' within the tree based on its new key value.
  		 */
  		swap(curr->vruntime, se->vruntime);
@@ -18130,7 +18121,7 @@ index 908c9cdae2f0..047d1118772c 100644
  	}
  
  	se->vruntime -= cfs_rq->min_vruntime;
-@@ -9713,7 +9713,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
+@@ -9747,7 +9747,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
  	 */
  	if (rq->curr == p) {
  		if (p->prio > oldprio)
@@ -22046,7 +22037,7 @@ index 3e612ae748e9..d0ccc070979f 100644
  #ifdef finish_arch_post_lock_switch
  	finish_arch_post_lock_switch();
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index e2ef1c17942f..ba2a0e07b38a 100644
+index b721631d78ab..e03c6ca2f337 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
 @@ -60,6 +60,7 @@
@@ -22430,7 +22421,7 @@ index e2ef1c17942f..ba2a0e07b38a 100644
  	return NULL;
  }
  
-@@ -7099,8 +7184,9 @@ void __init free_area_init(unsigned long *zones_size)
+@@ -7097,8 +7182,9 @@ void __init free_area_init(unsigned long *zones_size)
  
  static int page_alloc_cpu_dead(unsigned int cpu)
  {
@@ -22441,7 +22432,7 @@ index e2ef1c17942f..ba2a0e07b38a 100644
  	drain_pages(cpu);
  
  	/*
-@@ -8000,7 +8086,7 @@ void zone_pcp_reset(struct zone *zone)
+@@ -8006,7 +8092,7 @@ void zone_pcp_reset(struct zone *zone)
  	struct per_cpu_pageset *pset;
  
  	/* avoid races with drain_pages()  */
@@ -22450,7 +22441,7 @@ index e2ef1c17942f..ba2a0e07b38a 100644
  	if (zone->pageset != &boot_pageset) {
  		for_each_online_cpu(cpu) {
  			pset = per_cpu_ptr(zone->pageset, cpu);
-@@ -8009,7 +8095,7 @@ void zone_pcp_reset(struct zone *zone)
+@@ -8015,7 +8101,7 @@ void zone_pcp_reset(struct zone *zone)
  		free_percpu(zone->pageset);
  		zone->pageset = &boot_pageset;
  	}
@@ -22460,7 +22451,7 @@ index e2ef1c17942f..ba2a0e07b38a 100644
  
  #ifdef CONFIG_MEMORY_HOTREMOVE
 diff --git a/mm/slab.c b/mm/slab.c
-index aa76a70e087e..925f97f12a70 100644
+index d73c7a4820a4..19f6bb643d5a 100644
 --- a/mm/slab.c
 +++ b/mm/slab.c
 @@ -233,7 +233,7 @@ static void kmem_cache_node_init(struct kmem_cache_node *parent)
@@ -22768,7 +22759,7 @@ index aa76a70e087e..925f97f12a70 100644
  	slabs_destroy(cachep, &list);
  	ac->avail -= batchcount;
  	memmove(ac->entry, &(ac->entry[batchcount]), sizeof(void *)*ac->avail);
-@@ -3887,9 +3887,9 @@ static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
+@@ -3891,9 +3891,9 @@ static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
  
  		node = cpu_to_mem(cpu);
  		n = get_node(cachep, node);
@@ -22780,7 +22771,7 @@ index aa76a70e087e..925f97f12a70 100644
  		slabs_destroy(cachep, &list);
  	}
  	free_percpu(prev);
-@@ -4014,9 +4014,9 @@ static void drain_array(struct kmem_cache *cachep, struct kmem_cache_node *n,
+@@ -4018,9 +4018,9 @@ static void drain_array(struct kmem_cache *cachep, struct kmem_cache_node *n,
  		return;
  	}
  
@@ -22792,7 +22783,7 @@ index aa76a70e087e..925f97f12a70 100644
  
  	slabs_destroy(cachep, &list);
  }
-@@ -4100,7 +4100,7 @@ void get_slabinfo(struct kmem_cache *cachep, struct slabinfo *sinfo)
+@@ -4104,7 +4104,7 @@ void get_slabinfo(struct kmem_cache *cachep, struct slabinfo *sinfo)
  
  	for_each_kmem_cache_node(cachep, node, n) {
  		check_irq_on();
@@ -22801,7 +22792,7 @@ index aa76a70e087e..925f97f12a70 100644
  
  		total_slabs += n->total_slabs;
  		free_slabs += n->free_slabs;
-@@ -4109,7 +4109,7 @@ void get_slabinfo(struct kmem_cache *cachep, struct slabinfo *sinfo)
+@@ -4113,7 +4113,7 @@ void get_slabinfo(struct kmem_cache *cachep, struct slabinfo *sinfo)
  		if (n->shared)
  			shared_avail += n->shared->avail;
  
@@ -22810,7 +22801,7 @@ index aa76a70e087e..925f97f12a70 100644
  	}
  	num_objs = total_slabs * cachep->num;
  	active_slabs = total_slabs - free_slabs;
-@@ -4324,13 +4324,13 @@ static int leaks_show(struct seq_file *m, void *p)
+@@ -4328,13 +4328,13 @@ static int leaks_show(struct seq_file *m, void *p)
  		for_each_kmem_cache_node(cachep, node, n) {
  
  			check_irq_on();
