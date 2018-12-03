@@ -369,19 +369,24 @@ reverts () {
 }
 
 drivers () {
-#	dir 'drivers/android'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/btrfs'
-#	dir 'drivers/pwm'
+	dir 'drivers/pwm'
 	dir 'drivers/spi'
 	dir 'drivers/ssd1306'
 	dir 'drivers/tps65217'
-#	dir 'drivers/opp'
 	dir 'drivers/wiznet'
 
 	#https://lkml.org/lkml/2018/11/22/948
 	#[PATCH 00/17] Add support for TI PRU ICSS
-	dir 'drivers/ti/pruss/'
+	dir 'drivers/ti/pruss'
+
+	#https://lkml.org/lkml/2018/11/26/319
+	#[PATCH 00/16] remoteproc: Add support for TI PRU
+	dir 'drivers/ti/remoteproc'
+
+	#https://lkml.org/lkml/2018/12/2/361
+	dir 'drivers/ti/pruss-from-v4.14.x-ti'
 
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
@@ -397,19 +402,20 @@ drivers () {
 }
 
 soc () {
-#	dir 'soc/exynos'
 #	dir 'soc/imx/udoo'
 #	dir 'soc/imx/wandboard'
-#	dir 'soc/imx'
-	dir 'soc/ti'
-	dir 'soc/ti/bone_common'
-	dir 'soc/ti/uboot'
+#	dir 'soc/imx/imx6'
+
+	dir 'soc/ti/omap3'
+	dir 'soc/ti/omap4'
+	dir 'soc/ti/am335x'
+
 	dir 'soc/ti/blue'
 	dir 'soc/ti/abbbi'
 	dir 'soc/ti/am335x_olimex_som'
-	dir 'soc/ti/beaglebone_capes'
 	dir 'soc/ti/pocketbeagle'
-	dir 'soc/ti/uboot_univ'
+	dir 'soc/ti/beaglebone_capes'
+	dir 'soc/ti/uboot'
 }
 
 dtb_makefile_append () {
