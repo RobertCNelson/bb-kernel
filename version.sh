@@ -28,13 +28,14 @@ toolchain="gcc_arm_gnueabihf_8"
 #toolchain="gcc_linaro_aarch64_gnu_5"
 #toolchain="gcc_linaro_aarch64_gnu_6"
 #toolchain="gcc_linaro_aarch64_gnu_7"
+#toolchain="gcc_arm_aarch64_gnu_8"
 
 #Kernel
 KERNEL_REL=4.19
-KERNEL_TAG=${KERNEL_REL}.6
+KERNEL_TAG=${KERNEL_REL}.8
 kernel_rt=".5-rt4"
 #Kernel Build
-BUILD=${build_prefix}10
+BUILD=${build_prefix}11
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
