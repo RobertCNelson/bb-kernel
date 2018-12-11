@@ -325,13 +325,14 @@ gcc_toolchain () {
 	gcc_arm_gnueabihf_8)
 		#
 		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.08/gcc-arm-8.2-2018.08-x86_64-arm-linux-gnueabihf.tar.xz
+		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.11/gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf.tar.xz
 		#
 		site="https://developer.arm.com/-/media/Files/downloads/gnu-a"
 		archive_site="https://developer.arm.com/-/media/Files/downloads/gnu-a"
 
 		gcc_version="8.2"
 		gcc_minor=""
-		release="18.08"
+		release="18.11"
 		target="arm-linux-gnueabihf"
 
 		version="${gcc_version}-20${release}"
@@ -399,6 +400,26 @@ gcc_toolchain () {
 		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
 		filename="gcc-linaro-${gcc_version}${gcc_minor}-20${release}-x86_64_${target}.tar.xz"
 		directory="gcc-linaro-${gcc_version}${gcc_minor}-20${release}-x86_64_${target}"
+
+		datestamp="${gcc_version}-20${release}-${target}"
+
+		binary="bin/${target}-"
+		;;
+	gcc_arm_aarch64_gnu_8)
+		#
+		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.11/gcc-arm-8.2-2018.11-x86_64-aarch64-linux-gnu.tar.xz
+		#
+		site="https://developer.arm.com/-/media/Files/downloads/gnu-a"
+		archive_site="https://developer.arm.com/-/media/Files/downloads/gnu-a"
+
+		gcc_version="8.2"
+		gcc_minor=""
+		release="18.11"
+		target="aarch64-linux-gnu"
+
+		version="${gcc_version}-20${release}"
+		filename="gcc-arm-${gcc_version}${gcc_minor}-20${release}-x86_64-${target}.tar.xz"
+		directory="gcc-arm-${gcc_version}${gcc_minor}-20${release}-x86_64-${target}"
 
 		datestamp="${gcc_version}-20${release}-${target}"
 
