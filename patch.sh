@@ -347,20 +347,6 @@ backports () {
 	else
 		patch_backports
 	fi
-
-	subsystem="am335xdts"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/arch/arm/boot/dts/am335x-* ./arch/arm/boot/dts/
-		rm -rf ./arch/arm/boot/dts/am335x-moxa-uc-2100-common.dtsi || true
-		rm -rf ./arch/arm/boot/dts/am335x-moxa-uc-2101.dts || true
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
 }
 
 reverts () {
