@@ -191,19 +191,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.19.7
-	${git_bin} revert --no-edit 9f3baacee183853cfb5b9d5f62ae3ece1305494e
-	${git_bin} revert --no-edit d1ec2354787a948a2a2670181e461278edce40e3
-	${git_bin} revert --no-edit 7b62ef142c11d5c120105e3409a2a03245c4c1ac
-	${git_bin} revert --no-edit 238ba6e75855c48b4175a5a6590a716e4563e578
-	${git_bin} revert --no-edit f67fafb88c466427a4cc0d637786f466b7e32c8f
-	${git_bin} revert --no-edit e841240174501cd7a1b61d02850591d00a02dc7f
-	${git_bin} revert --no-edit 59028be133859d7973910b5cf6f2a5934329319e
-	${git_bin} revert --no-edit aecb99692a4dceaa7802de383da44e3f50df8d68
-	${git_bin} revert --no-edit a17888154cf202ccf05d2efb71ed0f632f2d8897
-	${git_bin} revert --no-edit dd73e15ea21307f54d253bb0f914096115db868e
-	${git_bin} revert --no-edit a87c81f0de3dd61290f0e5216961e349be32af87
-	${git_bin} revert --no-edit 69985a2cae82ebca281da7e7275bba7ef2b3dca8
+	#v4.19.x
+	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -515,8 +504,7 @@ packaging () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cp -v "${DIR}/3rdparty/packaging/Makefile" "${DIR}/KERNEL/scripts/package"
 		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
-		#Needed for v4.11.x and less
-		#patch -p1 < "${DIR}/patches/packaging/0002-Revert-deb-pkg-Remove-the-KBUILD_IMAGE-workaround.patch"
+		cp -v "${DIR}/3rdparty/packaging/mkdebian" "${DIR}/KERNEL/scripts/package"
 		${git_bin} commit -a -m 'packaging: sync builddeb changes' -s
 		${git_bin} format-patch -1 -o "${DIR}/patches/packaging"
 		exit 2

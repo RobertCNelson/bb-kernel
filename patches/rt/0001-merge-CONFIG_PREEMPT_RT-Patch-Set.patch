@@ -1,6 +1,6 @@
-From a3fa5db48c337193102ef2c3668946a721e5e9e5 Mon Sep 17 00:00:00 2001
+From a2df500dd8e51eb447728408696bd566b4c06f47 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 10 Dec 2018 10:06:34 -0600
+Date: Thu, 13 Dec 2018 14:56:01 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -2950,7 +2950,7 @@ index 8ec97a62c245..7bc85841fc56 100644
  	canary += tsc + (tsc << 32UL);
  	canary &= CANARY_MASK;
 diff --git a/arch/x86/include/asm/thread_info.h b/arch/x86/include/asm/thread_info.h
-index 523c69efc38a..86e08fdf7199 100644
+index 82b73b75d67c..dc267291f131 100644
 --- a/arch/x86/include/asm/thread_info.h
 +++ b/arch/x86/include/asm/thread_info.h
 @@ -56,17 +56,24 @@ struct task_struct;
@@ -2978,23 +2978,23 @@ index 523c69efc38a..86e08fdf7199 100644
  #endif
  
  /*
-@@ -83,6 +90,7 @@ struct thread_info {
- #define TIF_SYSCALL_EMU		6	/* syscall emulation active */
- #define TIF_SYSCALL_AUDIT	7	/* syscall auditing active */
- #define TIF_SECCOMP		8	/* secure computing */
-+#define TIF_NEED_RESCHED_LAZY	9	/* lazy rescheduling necessary */
- #define TIF_USER_RETURN_NOTIFY	11	/* notify kernel of userspace return */
- #define TIF_UPROBE		12	/* breakpointed or singlestepping */
- #define TIF_PATCH_PENDING	13	/* pending live patching update */
-@@ -110,6 +118,7 @@ struct thread_info {
- #define _TIF_SYSCALL_EMU	(1 << TIF_SYSCALL_EMU)
- #define _TIF_SYSCALL_AUDIT	(1 << TIF_SYSCALL_AUDIT)
- #define _TIF_SECCOMP		(1 << TIF_SECCOMP)
+@@ -91,6 +98,7 @@ struct thread_info {
+ #define TIF_NOCPUID		15	/* CPUID is not accessible in userland */
+ #define TIF_NOTSC		16	/* TSC is not accessible in userland */
+ #define TIF_IA32		17	/* IA32 compatibility process */
++#define TIF_NEED_RESCHED_LAZY	18	/* lazy rescheduling necessary */
+ #define TIF_NOHZ		19	/* in adaptive nohz mode */
+ #define TIF_MEMDIE		20	/* is terminating due to OOM killer */
+ #define TIF_POLLING_NRFLAG	21	/* idle is polling for TIF_NEED_RESCHED */
+@@ -120,6 +128,7 @@ struct thread_info {
+ #define _TIF_NOCPUID		(1 << TIF_NOCPUID)
+ #define _TIF_NOTSC		(1 << TIF_NOTSC)
+ #define _TIF_IA32		(1 << TIF_IA32)
 +#define _TIF_NEED_RESCHED_LAZY	(1 << TIF_NEED_RESCHED_LAZY)
- #define _TIF_USER_RETURN_NOTIFY	(1 << TIF_USER_RETURN_NOTIFY)
- #define _TIF_UPROBE		(1 << TIF_UPROBE)
- #define _TIF_PATCH_PENDING	(1 << TIF_PATCH_PENDING)
-@@ -151,6 +160,8 @@ struct thread_info {
+ #define _TIF_NOHZ		(1 << TIF_NOHZ)
+ #define _TIF_POLLING_NRFLAG	(1 << TIF_POLLING_NRFLAG)
+ #define _TIF_IO_BITMAP		(1 << TIF_IO_BITMAP)
+@@ -165,6 +174,8 @@ struct thread_info {
  #define _TIF_WORK_CTXSW_PREV (_TIF_WORK_CTXSW|_TIF_USER_RETURN_NOTIFY)
  #define _TIF_WORK_CTXSW_NEXT (_TIF_WORK_CTXSW)
  
@@ -3153,7 +3153,7 @@ index 95600a99ae93..9192d76085ba 100644
  bool handle_irq(struct irq_desc *desc, struct pt_regs *regs)
  {
 diff --git a/arch/x86/kernel/process_32.c b/arch/x86/kernel/process_32.c
-index 5046a3c9dec2..c386a31e5e5f 100644
+index d3e593eb189f..84afe55625f8 100644
 --- a/arch/x86/kernel/process_32.c
 +++ b/arch/x86/kernel/process_32.c
 @@ -38,6 +38,7 @@
@@ -3164,7 +3164,7 @@ index 5046a3c9dec2..c386a31e5e5f 100644
  
  #include <asm/pgtable.h>
  #include <asm/ldt.h>
-@@ -196,6 +197,35 @@ start_thread(struct pt_regs *regs, unsigned long new_ip, unsigned long new_sp)
+@@ -198,6 +199,35 @@ start_thread(struct pt_regs *regs, unsigned long new_ip, unsigned long new_sp)
  }
  EXPORT_SYMBOL_GPL(start_thread);
  
@@ -3200,9 +3200,9 @@ index 5046a3c9dec2..c386a31e5e5f 100644
  
  /*
   *	switch_to(x,y) should switch tasks from x to y.
-@@ -271,6 +301,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
- 		     task_thread_info(next_p)->flags & _TIF_WORK_CTXSW_NEXT))
- 		__switch_to_xtra(prev_p, next_p, tss);
+@@ -267,6 +297,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
+ 
+ 	switch_to_extra(prev_p, next_p);
  
 +	switch_kmaps(prev_p, next_p);
 +
@@ -5126,7 +5126,7 @@ index 748a1c4172a6..4258244fa314 100644
  
  static int hv_ce_set_next_event(unsigned long delta,
 diff --git a/drivers/hv/hyperv_vmbus.h b/drivers/hv/hyperv_vmbus.h
-index 72eaba3d50fc..797f07918197 100644
+index 87d3d7da78f8..1d2d8a4b837d 100644
 --- a/drivers/hv/hyperv_vmbus.h
 +++ b/drivers/hv/hyperv_vmbus.h
 @@ -31,6 +31,7 @@
@@ -6094,10 +6094,10 @@ index 1c21955fe7c0..7863dec34f0b 100644
  	usb_anchor_resume_wakeups(anchor);
  	atomic_dec(&urb->use_count);
 diff --git a/drivers/usb/gadget/function/f_fs.c b/drivers/usb/gadget/function/f_fs.c
-index 3ada83d81bda..feb94c81e1c0 100644
+index 31e8bf3578c8..4d6741a54dd0 100644
 --- a/drivers/usb/gadget/function/f_fs.c
 +++ b/drivers/usb/gadget/function/f_fs.c
-@@ -1633,7 +1633,7 @@ static void ffs_data_put(struct ffs_data *ffs)
+@@ -1623,7 +1623,7 @@ static void ffs_data_put(struct ffs_data *ffs)
  		pr_info("%s(): freeing\n", __func__);
  		ffs_data_clear(ffs);
  		BUG_ON(waitqueue_active(&ffs->ev.waitq) ||
@@ -6873,10 +6873,10 @@ index b65aee481d13..110ee6f78c31 100644
  	nfs4_init_once(nfsi);
  }
 diff --git a/fs/nfs/nfs4_fs.h b/fs/nfs/nfs4_fs.h
-index 3a6904173214..4bbb4f3a2197 100644
+index 63287d911c08..2ae55eaa4a1e 100644
 --- a/fs/nfs/nfs4_fs.h
 +++ b/fs/nfs/nfs4_fs.h
-@@ -112,7 +112,7 @@ struct nfs4_state_owner {
+@@ -114,7 +114,7 @@ struct nfs4_state_owner {
  	unsigned long	     so_flags;
  	struct list_head     so_states;
  	struct nfs_seqid_counter so_seqid;
@@ -6908,7 +6908,7 @@ index 8220a168282e..77f0a23dc3e4 100644
  	}
  
 diff --git a/fs/nfs/nfs4state.c b/fs/nfs/nfs4state.c
-index 18920152da14..9eece4b68890 100644
+index d2f645d34eb1..1698dd2ca20b 100644
 --- a/fs/nfs/nfs4state.c
 +++ b/fs/nfs/nfs4state.c
 @@ -511,7 +511,7 @@ nfs4_alloc_state_owner(struct nfs_server *server,
@@ -6920,7 +6920,7 @@ index 18920152da14..9eece4b68890 100644
  	mutex_init(&sp->so_delegreturn_mutex);
  	return sp;
  }
-@@ -1563,8 +1563,12 @@ static int nfs4_reclaim_open_state(struct nfs4_state_owner *sp, const struct nfs
+@@ -1564,8 +1564,12 @@ static int nfs4_reclaim_open_state(struct nfs4_state_owner *sp, const struct nfs
  	 * recovering after a network partition or a reboot from a
  	 * server that doesn't support a grace period.
  	 */
@@ -6934,7 +6934,7 @@ index 18920152da14..9eece4b68890 100644
  restart:
  	list_for_each_entry(state, &sp->so_states, open_states) {
  		if (!test_and_clear_bit(ops->state_flag_bit, &state->flags))
-@@ -1651,14 +1655,20 @@ static int nfs4_reclaim_open_state(struct nfs4_state_owner *sp, const struct nfs
+@@ -1652,14 +1656,20 @@ static int nfs4_reclaim_open_state(struct nfs4_state_owner *sp, const struct nfs
  		spin_lock(&sp->so_lock);
  		goto restart;
  	}
@@ -9908,7 +9908,7 @@ index 000000000000..2018ff77904a
 +
 +#endif
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index 1db4de0578a4..1859cedaa191 100644
+index 4abb5bd74b04..f61e536c5eb9 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
 @@ -28,6 +28,7 @@
@@ -10072,7 +10072,7 @@ index 1db4de0578a4..1859cedaa191 100644
  #define PF_MCE_EARLY		0x08000000      /* Early kill for mce process policy */
  #define PF_MUTEX_TESTER		0x20000000	/* Thread belongs to the rt mutex tester */
  #define PF_FREEZER_SKIP		0x40000000	/* Freezer should not count it as freezable */
-@@ -1586,6 +1635,7 @@ extern struct task_struct *find_get_task_by_vpid(pid_t nr);
+@@ -1595,6 +1644,7 @@ extern struct task_struct *find_get_task_by_vpid(pid_t nr);
  
  extern int wake_up_state(struct task_struct *tsk, unsigned int state);
  extern int wake_up_process(struct task_struct *tsk);
@@ -10080,7 +10080,7 @@ index 1db4de0578a4..1859cedaa191 100644
  extern void wake_up_new_task(struct task_struct *tsk);
  
  #ifdef CONFIG_SMP
-@@ -1668,6 +1718,89 @@ static inline int test_tsk_need_resched(struct task_struct *tsk)
+@@ -1677,6 +1727,89 @@ static inline int test_tsk_need_resched(struct task_struct *tsk)
  	return unlikely(test_tsk_thread_flag(tsk,TIF_NEED_RESCHED));
  }
  
@@ -10170,7 +10170,7 @@ index 1db4de0578a4..1859cedaa191 100644
  /*
   * cond_resched() and cond_resched_lock(): latency reduction via
   * explicit rescheduling in places that are safe. The return
-@@ -1720,6 +1853,23 @@ static __always_inline bool need_resched(void)
+@@ -1729,6 +1862,23 @@ static __always_inline bool need_resched(void)
  	return unlikely(tif_need_resched());
  }
  
@@ -15873,7 +15873,7 @@ index 06045abd1887..a43d07d4e043 100644
  	 * console_unblank can no longer be called in interrupt context unless
  	 * oops_in_progress is set to 1..
 diff --git a/kernel/ptrace.c b/kernel/ptrace.c
-index 99cfddde6a55..81342eeb7f87 100644
+index 21fec73d45d4..9c8d6f9f3a3a 100644
 --- a/kernel/ptrace.c
 +++ b/kernel/ptrace.c
 @@ -175,7 +175,14 @@ static bool ptrace_freeze_traced(struct task_struct *task)
