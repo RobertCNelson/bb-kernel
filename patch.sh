@@ -333,7 +333,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.20-rc6"
+	backport_tag="v4.20-rc7"
 
 	subsystem="remoteproc"
 	#regenerate="enable"
@@ -404,8 +404,8 @@ soc () {
 #	dir 'soc/imx/wandboard'
 #	dir 'soc/imx/imx6'
 
-	dir 'soc/ti/omap3'
-	dir 'soc/ti/omap4'
+#	dir 'soc/ti/omap3'
+#	dir 'soc/ti/omap4'
 	dir 'soc/ti/am335x'
 
 	dir 'soc/ti/blue'
