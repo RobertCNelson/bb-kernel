@@ -193,8 +193,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.18.x
-	#${git_bin} revert --no-edit xyz
+	#v4.18.19
+	${git_bin} revert --no-edit 2016e63b769222b66b9de83edf345348c0d2f2d1
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -253,6 +253,7 @@ wireguard () {
 }
 
 ti_pm_firmware () {
+	#http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y-next
 	echo "dir: drivers/ti/firmware"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -484,8 +485,7 @@ packaging () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cp -v "${DIR}/3rdparty/packaging/Makefile" "${DIR}/KERNEL/scripts/package"
 		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
-		#Needed for v4.11.x and less
-		#patch -p1 < "${DIR}/patches/packaging/0002-Revert-deb-pkg-Remove-the-KBUILD_IMAGE-workaround.patch"
+		cp -v "${DIR}/3rdparty/packaging/mkdebian" "${DIR}/KERNEL/scripts/package"
 		${git_bin} commit -a -m 'packaging: sync builddeb changes' -s
 		${git_bin} format-patch -1 -o "${DIR}/patches/packaging"
 		exit 2
