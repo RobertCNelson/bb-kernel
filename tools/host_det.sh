@@ -153,6 +153,12 @@ debian_regs () {
 	#v4.18-rc0
 	pkg="pkg-config"
 	check_dpkg
+	#GCC_PLUGINS
+	pkg="libmpc-dev"
+	check_dpkg
+	#"mkimage" command not found - U-Boot images will not be built
+	pkg="u-boot-tools"
+	check_dpkg
 
 	unset warn_dpkg_ia32
 	unset stop_pkg_search
@@ -368,6 +374,11 @@ debian_regs () {
 			#http://blog.linuxmint.com/?p=2975
 			deb_distro="bionic"
 			;;
+		tessa)
+			#19.1
+			#https://blog.linuxmint.com/?p=3671
+			deb_distro="bionic"
+			;;
 		esac
 
 		#Future Debian Code names:
@@ -558,6 +569,9 @@ if [ "x${ARCH}" = "xx86_64" ] ; then
 		ignore_32bit="true"
 		;;
 	gcc_linaro_eabi_7|gcc_linaro_gnueabihf_7|gcc_linaro_aarch64_gnu_7)
+		ignore_32bit="true"
+		;;
+	gcc_arm_eabi_8|gcc_arm_gnueabihf_8|gcc_arm_aarch64_gnu_8)
 		ignore_32bit="true"
 		;;
 	*)
