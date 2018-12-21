@@ -195,10 +195,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.9.120 needs to revert around: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/log/kernel/cpu.c?h=v4.9.120
-
-	#v4.9.117
-	${git_bin} revert --no-edit 7d044d940faeb6a7e65a1d215415e425822f365c
+	#v4.9.x
+	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -401,7 +399,6 @@ drivers () {
 	dir 'drivers/pm_opp'
 
 	dir 'drivers/spi'
-	dir 'drivers/tsl2550'
 	dir 'drivers/tps65217'
 
 	dir 'drivers/ti/iodelay'
