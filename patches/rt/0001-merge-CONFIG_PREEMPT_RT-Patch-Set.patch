@@ -1,6 +1,6 @@
-From 78a9a833d74346604f47dff53f194b7c572706ee Mon Sep 17 00:00:00 2001
+From 83013f4e65efa5ac019099bc9151a614572d45a9 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 21 Dec 2018 09:58:57 -0600
+Date: Wed, 2 Jan 2019 09:37:03 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -75,6 +75,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/x86/entry/common.c                       |  11 +-
  arch/x86/entry/entry_32.S                     |  17 +
  arch/x86/entry/entry_64.S                     |  18 +
+ arch/x86/events/intel/core.c                  |  10 +-
  arch/x86/include/asm/fpu/api.h                |   1 +
  arch/x86/include/asm/preempt.h                |  31 +-
  arch/x86/include/asm/signal.h                 |  13 +
@@ -117,7 +118,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/crypto/caam/qi.h                      |   2 +-
  drivers/firmware/efi/efi.c                    |   5 +-
  drivers/gpu/drm/i915/i915_irq.c               |   2 +
- drivers/gpu/drm/i915/i915_trace.h             |   4 +
+ drivers/gpu/drm/i915/i915_trace.h             |   6 +-
  drivers/gpu/drm/i915/intel_sprite.c           |  13 +-
  drivers/gpu/drm/radeon/radeon_display.c       |   2 +
  drivers/hv/hv.c                               |   4 +-
@@ -357,6 +358,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/compaction.c                               |   6 +-
  mm/highmem.c                                  |   6 +-
  mm/kasan/quarantine.c                         |  18 +-
+ mm/kmemleak.c                                 |  20 +-
  mm/memcontrol.c                               |  28 +-
  mm/mmu_context.c                              |   2 +
  mm/page_alloc.c                               | 196 ++--
@@ -387,7 +389,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/include/path.h              |  19 +-
  security/apparmor/lsm.c                       |   2 +-
  virt/kvm/arm/arm.c                            |   6 +-
- 382 files changed, 9467 insertions(+), 1995 deletions(-)
+ 384 files changed, 9486 insertions(+), 2008 deletions(-)
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -2836,6 +2838,48 @@ index f95dcb209fdf..826262a5868e 100644
  
  #ifdef CONFIG_XEN
  idtentry hypervisor_callback xen_do_hypervisor_callback has_error_code=0
+diff --git a/arch/x86/events/intel/core.c b/arch/x86/events/intel/core.c
+index 155fa4b53c56..d0b186264941 100644
+--- a/arch/x86/events/intel/core.c
++++ b/arch/x86/events/intel/core.c
+@@ -3439,6 +3439,11 @@ static void free_excl_cntrs(int cpu)
+ }
+ 
+ static void intel_pmu_cpu_dying(int cpu)
++{
++	fini_debug_store_on_cpu(cpu);
++}
++
++static void intel_pmu_cpu_dead(int cpu)
+ {
+ 	struct cpu_hw_events *cpuc = &per_cpu(cpu_hw_events, cpu);
+ 	struct intel_shared_regs *pc;
+@@ -3451,8 +3456,6 @@ static void intel_pmu_cpu_dying(int cpu)
+ 	}
+ 
+ 	free_excl_cntrs(cpu);
+-
+-	fini_debug_store_on_cpu(cpu);
+ }
+ 
+ static void intel_pmu_sched_task(struct perf_event_context *ctx,
+@@ -3541,6 +3544,7 @@ static __initconst const struct x86_pmu core_pmu = {
+ 	.cpu_prepare		= intel_pmu_cpu_prepare,
+ 	.cpu_starting		= intel_pmu_cpu_starting,
+ 	.cpu_dying		= intel_pmu_cpu_dying,
++	.cpu_dead		= intel_pmu_cpu_dead,
+ };
+ 
+ static struct attribute *intel_pmu_attrs[];
+@@ -3581,6 +3585,8 @@ static __initconst const struct x86_pmu intel_pmu = {
+ 	.cpu_prepare		= intel_pmu_cpu_prepare,
+ 	.cpu_starting		= intel_pmu_cpu_starting,
+ 	.cpu_dying		= intel_pmu_cpu_dying,
++	.cpu_dead		= intel_pmu_cpu_dead,
++
+ 	.guest_get_msrs		= intel_guest_get_msrs,
+ 	.sched_task		= intel_pmu_sched_task,
+ };
 diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
 index a9caac9d4a72..18b31f22ca5d 100644
 --- a/arch/x86/include/asm/fpu/api.h
@@ -3243,10 +3287,10 @@ index 3692de84c420..e3c95654b0d1 100644
  
  	/*
 diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
-index 68b53f05a420..2eb04234365f 100644
+index 956eecd227f8..e853dfad8f71 100644
 --- a/arch/x86/kvm/x86.c
 +++ b/arch/x86/kvm/x86.c
-@@ -6690,6 +6690,13 @@ int kvm_arch_init(void *opaque)
+@@ -6692,6 +6692,13 @@ int kvm_arch_init(void *opaque)
  		goto out;
  	}
  
@@ -5085,7 +5129,7 @@ index 29877969310d..f65817c51c2a 100644
  	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
  
 diff --git a/drivers/gpu/drm/i915/i915_trace.h b/drivers/gpu/drm/i915/i915_trace.h
-index b50c6b829715..cc54ec0ef75c 100644
+index b50c6b829715..33028d8f470e 100644
 --- a/drivers/gpu/drm/i915/i915_trace.h
 +++ b/drivers/gpu/drm/i915/i915_trace.h
 @@ -2,6 +2,10 @@
@@ -5099,6 +5143,15 @@ index b50c6b829715..cc54ec0ef75c 100644
  #include <linux/stringify.h>
  #include <linux/types.h>
  #include <linux/tracepoint.h>
+@@ -679,7 +683,7 @@ DEFINE_EVENT(i915_request, i915_request_add,
+ 	    TP_ARGS(rq)
+ );
+ 
+-#if defined(CONFIG_DRM_I915_LOW_LEVEL_TRACEPOINTS)
++#if defined(CONFIG_DRM_I915_LOW_LEVEL_TRACEPOINTS) && !defined(NOTRACE)
+ DEFINE_EVENT(i915_request, i915_request_submit,
+ 	     TP_PROTO(struct i915_request *rq),
+ 	     TP_ARGS(rq)
 diff --git a/drivers/gpu/drm/i915/intel_sprite.c b/drivers/gpu/drm/i915/intel_sprite.c
 index f7026e887fa9..07e4ddebdd80 100644
 --- a/drivers/gpu/drm/i915/intel_sprite.c
@@ -5212,10 +5265,10 @@ index 87d3d7da78f8..1d2d8a4b837d 100644
  #include "hv_trace.h"
  
 diff --git a/drivers/hv/vmbus_drv.c b/drivers/hv/vmbus_drv.c
-index c71cc857b649..6e58b03565cf 100644
+index 2c6d5c7a4445..591563b813af 100644
 --- a/drivers/hv/vmbus_drv.c
 +++ b/drivers/hv/vmbus_drv.c
-@@ -991,6 +991,8 @@ static void vmbus_isr(void)
+@@ -1011,6 +1011,8 @@ static void vmbus_isr(void)
  	void *page_addr = hv_cpu->synic_event_page;
  	struct hv_message *msg;
  	union hv_synic_event_flags *event;
@@ -5224,7 +5277,7 @@ index c71cc857b649..6e58b03565cf 100644
  	bool handled = false;
  
  	if (unlikely(page_addr == NULL))
-@@ -1034,7 +1036,7 @@ static void vmbus_isr(void)
+@@ -1054,7 +1056,7 @@ static void vmbus_isr(void)
  			tasklet_schedule(&hv_cpu->msg_dpc);
  	}
  
@@ -6819,7 +6872,7 @@ index 2ecb4db8c840..8259b7c7b5d2 100644
  	locks_dispose_list(&dispose);
  }
 diff --git a/fs/namei.c b/fs/namei.c
-index 0cab6494978c..d3ae2a84a271 100644
+index 914178cdbe94..2a8c41bc227f 100644
 --- a/fs/namei.c
 +++ b/fs/namei.c
 @@ -1645,7 +1645,7 @@ static struct dentry *__lookup_slow(const struct qstr *name,
@@ -7181,10 +7234,10 @@ index 3ab59011067e..fdda425d05e6 100644
  		if (IS_ERR(child))
  			goto end_instantiate;
 diff --git a/fs/proc/proc_sysctl.c b/fs/proc/proc_sysctl.c
-index 89921a0d2ebb..5ec2105487a0 100644
+index 4d598a399bbf..2d8c5cd1a8c3 100644
 --- a/fs/proc/proc_sysctl.c
 +++ b/fs/proc/proc_sysctl.c
-@@ -678,7 +678,7 @@ static bool proc_sys_fill_cache(struct file *file,
+@@ -677,7 +677,7 @@ static bool proc_sys_fill_cache(struct file *file,
  
  	child = d_lookup(dir, &qname);
  	if (!child) {
@@ -12326,7 +12379,7 @@ index fa562c364d02..90d5e09b92b7 100644
  	p->utime = p->stime = p->gtime = 0;
  #ifdef CONFIG_ARCH_HAS_SCALED_CPUTIME
 diff --git a/kernel/futex.c b/kernel/futex.c
-index 11fc3bb456d6..131ec771e42f 100644
+index f89abca89513..03a03aa82652 100644
 --- a/kernel/futex.c
 +++ b/kernel/futex.c
 @@ -918,7 +918,9 @@ void exit_pi_state_list(struct task_struct *curr)
@@ -12339,7 +12392,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  			put_pi_state(pi_state);
  			continue;
  		}
-@@ -1412,6 +1414,7 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_pi_state *pi_
+@@ -1469,6 +1471,7 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_pi_state *pi_
  	struct task_struct *new_owner;
  	bool postunlock = false;
  	DEFINE_WAKE_Q(wake_q);
@@ -12347,7 +12400,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  	int ret = 0;
  
  	new_owner = rt_mutex_next_owner(&pi_state->pi_mutex);
-@@ -1473,13 +1476,13 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_pi_state *pi_
+@@ -1530,13 +1533,13 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_pi_state *pi_
  	pi_state->owner = new_owner;
  	raw_spin_unlock(&new_owner->pi_lock);
  
@@ -12364,7 +12417,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  
  	return ret;
  }
-@@ -2086,6 +2089,16 @@ static int futex_requeue(u32 __user *uaddr1, unsigned int flags,
+@@ -2143,6 +2146,16 @@ static int futex_requeue(u32 __user *uaddr1, unsigned int flags,
  				requeue_pi_wake_futex(this, &key2, hb2);
  				drop_count++;
  				continue;
@@ -12381,7 +12434,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  			} else if (ret) {
  				/*
  				 * rt_mutex_start_proxy_lock() detected a
-@@ -2624,10 +2637,9 @@ static int futex_wait(u32 __user *uaddr, unsigned int flags, u32 val,
+@@ -2681,10 +2694,9 @@ static int futex_wait(u32 __user *uaddr, unsigned int flags, u32 val,
  	if (abs_time) {
  		to = &timeout;
  
@@ -12395,7 +12448,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  		hrtimer_set_expires_range_ns(&to->timer, *abs_time,
  					     current->timer_slack_ns);
  	}
-@@ -2726,9 +2738,8 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2783,9 +2795,8 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
  
  	if (time) {
  		to = &timeout;
@@ -12407,7 +12460,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  		hrtimer_set_expires(&to->timer, *time);
  	}
  
-@@ -2783,7 +2794,7 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2840,7 +2851,7 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
  		goto no_block;
  	}
  
@@ -12416,7 +12469,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  
  	/*
  	 * On PREEMPT_RT_FULL, when hb->lock becomes an rt_mutex, we must not
-@@ -2798,9 +2809,18 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
+@@ -2855,9 +2866,18 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
  	 * lock handoff sequence.
  	 */
  	raw_spin_lock_irq(&q.pi_state->pi_mutex.wait_lock);
@@ -12435,7 +12488,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  
  	if (ret) {
  		if (ret == 1)
-@@ -2947,11 +2967,21 @@ static int futex_unlock_pi(u32 __user *uaddr, unsigned int flags)
+@@ -3004,11 +3024,21 @@ static int futex_unlock_pi(u32 __user *uaddr, unsigned int flags)
  		 * observed.
  		 */
  		raw_spin_lock_irq(&pi_state->pi_mutex.wait_lock);
@@ -12457,7 +12510,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  		put_pi_state(pi_state);
  
  		/*
-@@ -3109,7 +3139,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3166,7 +3196,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	struct hrtimer_sleeper timeout, *to = NULL;
  	struct futex_pi_state *pi_state = NULL;
  	struct rt_mutex_waiter rt_waiter;
@@ -12466,7 +12519,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  	union futex_key key2 = FUTEX_KEY_INIT;
  	struct futex_q q = futex_q_init;
  	int res, ret;
-@@ -3125,10 +3155,9 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3182,10 +3212,9 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  
  	if (abs_time) {
  		to = &timeout;
@@ -12480,7 +12533,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  		hrtimer_set_expires_range_ns(&to->timer, *abs_time,
  					     current->timer_slack_ns);
  	}
-@@ -3137,7 +3166,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3194,7 +3223,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	 * The waiter is allocated on our stack, manipulated by the requeue
  	 * code while we sleep on uaddr.
  	 */
@@ -12489,7 +12542,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  
  	ret = get_futex_key(uaddr2, flags & FLAGS_SHARED, &key2, VERIFY_WRITE);
  	if (unlikely(ret != 0))
-@@ -3168,20 +3197,55 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3225,20 +3254,55 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	/* Queue the futex_q, drop the hb lock, wait for wakeup. */
  	futex_wait_queue_me(hb, &q, to);
  
@@ -12556,7 +12609,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  
  	/* Check if the requeue code acquired the second futex for us. */
  	if (!q.rt_waiter) {
-@@ -3190,7 +3254,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3247,7 +3311,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  		 * did a lock-steal - fix up the PI-state in that case.
  		 */
  		if (q.pi_state && (q.pi_state->owner != current)) {
@@ -12566,7 +12619,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  			ret = fixup_pi_state_owner(uaddr2, &q, current);
  			if (ret && rt_mutex_owner(&q.pi_state->pi_mutex) == current) {
  				pi_state = q.pi_state;
-@@ -3201,7 +3266,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3258,7 +3323,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  			 * the requeue_pi() code acquired for us.
  			 */
  			put_pi_state(q.pi_state);
@@ -12575,7 +12628,7 @@ index 11fc3bb456d6..131ec771e42f 100644
  		}
  	} else {
  		struct rt_mutex *pi_mutex;
-@@ -3215,7 +3280,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3272,7 +3337,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  		pi_mutex = &q.pi_state->pi_mutex;
  		ret = rt_mutex_wait_proxy_lock(pi_mutex, to, &rt_waiter);
  
@@ -15587,10 +15640,10 @@ index 9aa0fccd5d43..76d0b40d9193 100644
 +
 +#endif
 diff --git a/kernel/panic.c b/kernel/panic.c
-index 8b2e002d52eb..9ad91149d0dc 100644
+index 6a6df23acd1a..8f0a896e8428 100644
 --- a/kernel/panic.c
 +++ b/kernel/panic.c
-@@ -475,9 +475,11 @@ static u64 oops_id;
+@@ -479,9 +479,11 @@ static u64 oops_id;
  
  static int init_oops_id(void)
  {
@@ -20128,10 +20181,10 @@ index ce32cf741b25..d6d4a5248354 100644
   * Set one of the process-wide special case CPU timers or RLIMIT_CPU.
   * The tsk->sighand->siglock must be held by the caller.
 diff --git a/kernel/time/posix-timers.c b/kernel/time/posix-timers.c
-index 4b9127e95430..8cb187bdc4de 100644
+index 5a01c4fdbfef..a5ec421e3437 100644
 --- a/kernel/time/posix-timers.c
 +++ b/kernel/time/posix-timers.c
-@@ -466,7 +466,7 @@ static struct k_itimer * alloc_posix_timer(void)
+@@ -463,7 +463,7 @@ static struct k_itimer * alloc_posix_timer(void)
  
  static void k_itimer_rcu_free(struct rcu_head *head)
  {
@@ -20140,7 +20193,7 @@ index 4b9127e95430..8cb187bdc4de 100644
  
  	kmem_cache_free(posix_timers_cache, tmr);
  }
-@@ -483,7 +483,7 @@ static void release_posix_timer(struct k_itimer *tmr, int it_id_set)
+@@ -480,7 +480,7 @@ static void release_posix_timer(struct k_itimer *tmr, int it_id_set)
  	}
  	put_pid(tmr->it_pid);
  	sigqueue_free(tmr->sigq);
@@ -20149,7 +20202,7 @@ index 4b9127e95430..8cb187bdc4de 100644
  }
  
  static int common_timer_create(struct k_itimer *new_timer)
-@@ -824,6 +824,22 @@ static void common_hrtimer_arm(struct k_itimer *timr, ktime_t expires,
+@@ -821,6 +821,22 @@ static void common_hrtimer_arm(struct k_itimer *timr, ktime_t expires,
  		hrtimer_start_expires(timer, HRTIMER_MODE_ABS);
  }
  
@@ -20172,7 +20225,7 @@ index 4b9127e95430..8cb187bdc4de 100644
  static int common_hrtimer_try_to_cancel(struct k_itimer *timr)
  {
  	return hrtimer_try_to_cancel(&timr->it.real.timer);
-@@ -888,6 +904,7 @@ static int do_timer_settime(timer_t timer_id, int flags,
+@@ -885,6 +901,7 @@ static int do_timer_settime(timer_t timer_id, int flags,
  	if (!timr)
  		return -EINVAL;
  
@@ -20180,7 +20233,7 @@ index 4b9127e95430..8cb187bdc4de 100644
  	kc = timr->kclock;
  	if (WARN_ON_ONCE(!kc || !kc->timer_set))
  		error = -EINVAL;
-@@ -896,9 +913,12 @@ static int do_timer_settime(timer_t timer_id, int flags,
+@@ -893,9 +910,12 @@ static int do_timer_settime(timer_t timer_id, int flags,
  
  	unlock_timer(timr, flag);
  	if (error == TIMER_RETRY) {
@@ -20193,7 +20246,7 @@ index 4b9127e95430..8cb187bdc4de 100644
  
  	return error;
  }
-@@ -980,10 +1000,15 @@ SYSCALL_DEFINE1(timer_delete, timer_t, timer_id)
+@@ -977,10 +997,15 @@ SYSCALL_DEFINE1(timer_delete, timer_t, timer_id)
  	if (!timer)
  		return -EINVAL;
  
@@ -20209,7 +20262,7 @@ index 4b9127e95430..8cb187bdc4de 100644
  
  	spin_lock(&current->sighand->siglock);
  	list_del(&timer->list);
-@@ -1009,8 +1034,18 @@ static void itimer_delete(struct k_itimer *timer)
+@@ -1006,8 +1031,18 @@ static void itimer_delete(struct k_itimer *timer)
  retry_delete:
  	spin_lock_irqsave(&timer->it_lock, flags);
  
@@ -21980,6 +22033,92 @@ index 3a8ddf8baf7d..b209dbaefde8 100644
  
  	qlist_free_all(&to_free, cache);
  
+diff --git a/mm/kmemleak.c b/mm/kmemleak.c
+index 17dd883198ae..b68a3d0d075f 100644
+--- a/mm/kmemleak.c
++++ b/mm/kmemleak.c
+@@ -26,7 +26,7 @@
+  *
+  * The following locks and mutexes are used by kmemleak:
+  *
+- * - kmemleak_lock (rwlock): protects the object_list modifications and
++ * - kmemleak_lock (raw spinlock): protects the object_list modifications and
+  *   accesses to the object_tree_root. The object_list is the main list
+  *   holding the metadata (struct kmemleak_object) for the allocated memory
+  *   blocks. The object_tree_root is a red black tree used to look-up
+@@ -197,7 +197,7 @@ static LIST_HEAD(gray_list);
+ /* search tree for object boundaries */
+ static struct rb_root object_tree_root = RB_ROOT;
+ /* rw_lock protecting the access to object_list and object_tree_root */
+-static DEFINE_RWLOCK(kmemleak_lock);
++static DEFINE_RAW_SPINLOCK(kmemleak_lock);
+ 
+ /* allocation caches for kmemleak internal data */
+ static struct kmem_cache *object_cache;
+@@ -491,9 +491,9 @@ static struct kmemleak_object *find_and_get_object(unsigned long ptr, int alias)
+ 	struct kmemleak_object *object;
+ 
+ 	rcu_read_lock();
+-	read_lock_irqsave(&kmemleak_lock, flags);
++	raw_spin_lock_irqsave(&kmemleak_lock, flags);
+ 	object = lookup_object(ptr, alias);
+-	read_unlock_irqrestore(&kmemleak_lock, flags);
++	raw_spin_unlock_irqrestore(&kmemleak_lock, flags);
+ 
+ 	/* check whether the object is still available */
+ 	if (object && !get_object(object))
+@@ -513,13 +513,13 @@ static struct kmemleak_object *find_and_remove_object(unsigned long ptr, int ali
+ 	unsigned long flags;
+ 	struct kmemleak_object *object;
+ 
+-	write_lock_irqsave(&kmemleak_lock, flags);
++	raw_spin_lock_irqsave(&kmemleak_lock, flags);
+ 	object = lookup_object(ptr, alias);
+ 	if (object) {
+ 		rb_erase(&object->rb_node, &object_tree_root);
+ 		list_del_rcu(&object->object_list);
+ 	}
+-	write_unlock_irqrestore(&kmemleak_lock, flags);
++	raw_spin_unlock_irqrestore(&kmemleak_lock, flags);
+ 
+ 	return object;
+ }
+@@ -593,7 +593,7 @@ static struct kmemleak_object *create_object(unsigned long ptr, size_t size,
+ 	/* kernel backtrace */
+ 	object->trace_len = __save_stack_trace(object->trace);
+ 
+-	write_lock_irqsave(&kmemleak_lock, flags);
++	raw_spin_lock_irqsave(&kmemleak_lock, flags);
+ 
+ 	min_addr = min(min_addr, ptr);
+ 	max_addr = max(max_addr, ptr + size);
+@@ -624,7 +624,7 @@ static struct kmemleak_object *create_object(unsigned long ptr, size_t size,
+ 
+ 	list_add_tail_rcu(&object->object_list, &object_list);
+ out:
+-	write_unlock_irqrestore(&kmemleak_lock, flags);
++	raw_spin_unlock_irqrestore(&kmemleak_lock, flags);
+ 	return object;
+ }
+ 
+@@ -1310,7 +1310,7 @@ static void scan_block(void *_start, void *_end,
+ 	unsigned long *end = _end - (BYTES_PER_POINTER - 1);
+ 	unsigned long flags;
+ 
+-	read_lock_irqsave(&kmemleak_lock, flags);
++	raw_spin_lock_irqsave(&kmemleak_lock, flags);
+ 	for (ptr = start; ptr < end; ptr++) {
+ 		struct kmemleak_object *object;
+ 		unsigned long pointer;
+@@ -1367,7 +1367,7 @@ static void scan_block(void *_start, void *_end,
+ 			spin_unlock(&object->lock);
+ 		}
+ 	}
+-	read_unlock_irqrestore(&kmemleak_lock, flags);
++	raw_spin_unlock_irqrestore(&kmemleak_lock, flags);
+ }
+ 
+ /*
 diff --git a/mm/memcontrol.c b/mm/memcontrol.c
 index e79cb59552d9..808a780d6500 100644
 --- a/mm/memcontrol.c
@@ -22125,7 +22264,7 @@ index 3e612ae748e9..d0ccc070979f 100644
  #ifdef finish_arch_post_lock_switch
  	finish_arch_post_lock_switch();
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index 6a62b2421cdf..004020752217 100644
+index 93e73ccb4dec..9ce7a60f14bb 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
 @@ -60,6 +60,7 @@
@@ -22509,7 +22648,7 @@ index 6a62b2421cdf..004020752217 100644
  	return NULL;
  }
  
-@@ -7099,8 +7184,9 @@ void __init free_area_init(unsigned long *zones_size)
+@@ -7111,8 +7196,9 @@ void __init free_area_init(unsigned long *zones_size)
  
  static int page_alloc_cpu_dead(unsigned int cpu)
  {
@@ -22520,7 +22659,7 @@ index 6a62b2421cdf..004020752217 100644
  	drain_pages(cpu);
  
  	/*
-@@ -8008,7 +8094,7 @@ void zone_pcp_reset(struct zone *zone)
+@@ -8023,7 +8109,7 @@ void zone_pcp_reset(struct zone *zone)
  	struct per_cpu_pageset *pset;
  
  	/* avoid races with drain_pages()  */
@@ -22529,7 +22668,7 @@ index 6a62b2421cdf..004020752217 100644
  	if (zone->pageset != &boot_pageset) {
  		for_each_online_cpu(cpu) {
  			pset = per_cpu_ptr(zone->pageset, cpu);
-@@ -8017,7 +8103,7 @@ void zone_pcp_reset(struct zone *zone)
+@@ -8032,7 +8118,7 @@ void zone_pcp_reset(struct zone *zone)
  		free_percpu(zone->pageset);
  		zone->pageset = &boot_pageset;
  	}
