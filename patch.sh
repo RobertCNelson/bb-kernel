@@ -333,7 +333,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.20-rc7"
+	backport_tag="v4.20.1"
 
 	subsystem="remoteproc"
 	#regenerate="enable"
@@ -386,6 +386,9 @@ drivers () {
 	#[PATCH 00/16] remoteproc: Add support for TI PRU
 	dir 'drivers/ti/remoteproc'
 
+	#https://lkml.org/lkml/2018/12/2/361
+	dir 'drivers/ti/pruss-from-v4.14.x-ti'
+
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/etnaviv'
@@ -403,6 +406,7 @@ soc () {
 #	dir 'soc/imx/udoo'
 #	dir 'soc/imx/wandboard'
 #	dir 'soc/imx/imx6'
+#	dir 'soc/imx/imx7'
 
 #	dir 'soc/ti/omap3'
 #	dir 'soc/ti/omap4'
@@ -410,7 +414,6 @@ soc () {
 
 	dir 'soc/ti/blue'
 	dir 'soc/ti/abbbi'
-	dir 'soc/ti/am335x_olimex_som'
 	dir 'soc/ti/pocketbeagle'
 	dir 'soc/ti/beaglebone_capes'
 	dir 'soc/ti/uboot'
@@ -453,8 +456,6 @@ beaglebone () {
 #		device="am335x-boneblack-wireless-roboticscape.dtb" ; dtb_makefile_append
 
 		device="am335x-abbbi.dtb" ; dtb_makefile_append
-
-		device="am335x-olimex-som.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
 
