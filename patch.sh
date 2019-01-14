@@ -333,7 +333,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.20.1"
+	backport_tag="v4.20.2"
 
 	subsystem="remoteproc"
 	#regenerate="enable"
@@ -344,6 +344,7 @@ backports () {
 		cp -v ~/linux-src/include/linux/remoteproc.h ./include/linux/remoteproc.h
 
 		post_backports
+		exit 2
 	else
 		patch_backports
 	fi

@@ -1,6 +1,6 @@
-From 028b1677256b9c933387a5144b71cb670c4a0e0a Mon Sep 17 00:00:00 2001
+From cc7284099f5b8a9c8e5b8b37b91adf57ae133f30 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 10 Jan 2019 16:10:38 -0600
+Date: Mon, 14 Jan 2019 10:03:14 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -135,7 +135,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/md/raid5.h                            |   1 +
  drivers/misc/Kconfig                          |  12 +-
  .../wireless/intersil/orinoco/orinoco_usb.c   |   4 +-
- drivers/of/base.c                             |  22 +-
+ drivers/of/base.c                             |  19 +-
  drivers/pci/switch/switchtec.c                |  22 +-
  drivers/pinctrl/bcm/pinctrl-bcm2835.c         |  16 +-
  drivers/scsi/fcoe/fcoe.c                      |  16 +-
@@ -389,7 +389,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/include/path.h              |  19 +-
  security/apparmor/lsm.c                       |   2 +-
  virt/kvm/arm/arm.c                            |   6 +-
- 384 files changed, 9509 insertions(+), 2020 deletions(-)
+ 384 files changed, 9508 insertions(+), 2018 deletions(-)
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -3846,7 +3846,7 @@ index 41c1002a7d7d..d424eafcbf8e 100644
  
  /* dynamic per-device compression frontend */
 diff --git a/drivers/block/zram/zram_drv.c b/drivers/block/zram/zram_drv.c
-index 66921427d109..7bc9240be628 100644
+index e19bf0a750cf..d66401884ce8 100644
 --- a/drivers/block/zram/zram_drv.c
 +++ b/drivers/block/zram/zram_drv.c
 @@ -53,6 +53,30 @@ static size_t huge_class_size;
@@ -3888,7 +3888,7 @@ index 66921427d109..7bc9240be628 100644
  
  static inline bool init_done(struct zram *zram)
  {
-@@ -898,6 +923,8 @@ static DEVICE_ATTR_RO(io_stat);
+@@ -900,6 +925,8 @@ static DEVICE_ATTR_RO(io_stat);
  static DEVICE_ATTR_RO(mm_stat);
  static DEVICE_ATTR_RO(debug_stat);
  
@@ -3897,7 +3897,7 @@ index 66921427d109..7bc9240be628 100644
  static void zram_meta_free(struct zram *zram, u64 disksize)
  {
  	size_t num_pages = disksize >> PAGE_SHIFT;
-@@ -928,6 +955,7 @@ static bool zram_meta_alloc(struct zram *zram, u64 disksize)
+@@ -930,6 +957,7 @@ static bool zram_meta_alloc(struct zram *zram, u64 disksize)
  
  	if (!huge_class_size)
  		huge_class_size = zs_huge_class_size(zram->mem_pool);
@@ -3905,7 +3905,7 @@ index 66921427d109..7bc9240be628 100644
  	return true;
  }
  
-@@ -986,6 +1014,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
+@@ -988,6 +1016,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
  	unsigned long handle;
  	unsigned int size;
  	void *src, *dst;
@@ -3913,7 +3913,7 @@ index 66921427d109..7bc9240be628 100644
  
  	if (zram_wb_enabled(zram)) {
  		zram_slot_lock(zram, index);
-@@ -1020,6 +1049,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
+@@ -1022,6 +1051,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
  
  	size = zram_get_obj_size(zram, index);
  
@@ -3921,7 +3921,7 @@ index 66921427d109..7bc9240be628 100644
  	src = zs_map_object(zram->mem_pool, handle, ZS_MM_RO);
  	if (size == PAGE_SIZE) {
  		dst = kmap_atomic(page);
-@@ -1027,14 +1057,13 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
+@@ -1029,14 +1059,13 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
  		kunmap_atomic(dst);
  		ret = 0;
  	} else {
@@ -5639,51 +5639,31 @@ index 94ad6fe29e69..52a49f0bbc19 100644
  		break;
  	default:
 diff --git a/drivers/of/base.c b/drivers/of/base.c
-index 70f5fd08891b..185c7941a8a3 100644
+index 3f21ea6a90dc..2c7cf83b200c 100644
 --- a/drivers/of/base.c
 +++ b/drivers/of/base.c
-@@ -132,46 +132,52 @@ void of_populate_phandle_cache(void)
- 	u32 cache_entries;
- 	struct device_node *np;
- 	u32 phandles = 0;
+@@ -130,31 +130,34 @@ static u32 phandle_cache_mask;
+ /*
+  * Caller must hold devtree_lock.
+  */
+-static void __of_free_phandle_cache(void)
++static struct device_node** __of_free_phandle_cache(void)
+ {
+ 	u32 cache_entries = phandle_cache_mask + 1;
+ 	u32 k;
 +	struct device_node **shadow;
  
- 	raw_spin_lock_irqsave(&devtree_lock, flags);
+ 	if (!phandle_cache)
+-		return;
++		return NULL;
+ 
+ 	for (k = 0; k < cache_entries; k++)
+ 		of_node_put(phandle_cache[k]);
  
 -	kfree(phandle_cache);
 +	shadow = phandle_cache;
  	phandle_cache = NULL;
- 
- 	for_each_of_allnodes(np)
- 		if (np->phandle && np->phandle != OF_PHANDLE_ILLEGAL)
- 			phandles++;
-+	raw_spin_unlock_irqrestore(&devtree_lock, flags);
-+	kfree(shadow);
- 
- 	if (!phandles)
--		goto out;
-+		return;
- 
- 	cache_entries = roundup_pow_of_two(phandles);
- 	phandle_cache_mask = cache_entries - 1;
- 
--	phandle_cache = kcalloc(cache_entries, sizeof(*phandle_cache),
--				GFP_ATOMIC);
--	if (!phandle_cache)
--		goto out;
-+	shadow = kcalloc(cache_entries, sizeof(*phandle_cache), GFP_KERNEL);
-+	if (!shadow)
-+		return;
-+
-+	raw_spin_lock_irqsave(&devtree_lock, flags);
-+	phandle_cache = shadow;
- 
- 	for_each_of_allnodes(np)
- 		if (np->phandle && np->phandle != OF_PHANDLE_ILLEGAL)
- 			phandle_cache[np->phandle & phandle_cache_mask] = np;
- 
--out:
- 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
++	return shadow;
  }
  
  int of_free_phandle_cache(void)
@@ -5693,16 +5673,51 @@ index 70f5fd08891b..185c7941a8a3 100644
  
  	raw_spin_lock_irqsave(&devtree_lock, flags);
  
--	kfree(phandle_cache);
-+	shadow = phandle_cache;
- 	phandle_cache = NULL;
+-	__of_free_phandle_cache();
++	shadow = __of_free_phandle_cache();
  
  	raw_spin_unlock_irqrestore(&devtree_lock, flags);
- 
+-
 +	kfree(shadow);
  	return 0;
  }
  #if !defined(CONFIG_MODULES)
+@@ -189,10 +192,11 @@ void of_populate_phandle_cache(void)
+ 	u32 cache_entries;
+ 	struct device_node *np;
+ 	u32 phandles = 0;
++	struct device_node **shadow;
+ 
+ 	raw_spin_lock_irqsave(&devtree_lock, flags);
+ 
+-	__of_free_phandle_cache();
++	shadow = __of_free_phandle_cache();
+ 
+ 	for_each_of_allnodes(np)
+ 		if (np->phandle && np->phandle != OF_PHANDLE_ILLEGAL)
+@@ -200,12 +204,14 @@ void of_populate_phandle_cache(void)
+ 
+ 	if (!phandles)
+ 		goto out;
++	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+ 
+ 	cache_entries = roundup_pow_of_two(phandles);
+ 	phandle_cache_mask = cache_entries - 1;
+ 
+ 	phandle_cache = kcalloc(cache_entries, sizeof(*phandle_cache),
+ 				GFP_ATOMIC);
++	raw_spin_lock_irqsave(&devtree_lock, flags);
+ 	if (!phandle_cache)
+ 		goto out;
+ 
+@@ -217,6 +223,7 @@ void of_populate_phandle_cache(void)
+ 
+ out:
+ 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
++	kfree(shadow);
+ }
+ 
+ void __init of_core_init(void)
 diff --git a/drivers/pci/switch/switchtec.c b/drivers/pci/switch/switchtec.c
 index 54a8b30dda38..a8114a9e8839 100644
 --- a/drivers/pci/switch/switchtec.c
@@ -12267,7 +12282,7 @@ index 0e21e6d21f35..7cbf5a66d07f 100644
  	spin_unlock(&sighand->siglock);
  
 diff --git a/kernel/fork.c b/kernel/fork.c
-index fa562c364d02..90d5e09b92b7 100644
+index fc0937ca9ddf..443a517698a3 100644
 --- a/kernel/fork.c
 +++ b/kernel/fork.c
 @@ -40,6 +40,7 @@
@@ -14890,7 +14905,7 @@ index d1d62f942be2..546aaf058b9e 100644
  # include "rtmutex-debug.h"
 diff --git a/kernel/locking/rwlock-rt.c b/kernel/locking/rwlock-rt.c
 new file mode 100644
-index 000000000000..f2e155b2c4a8
+index 000000000000..c3b91205161c
 --- /dev/null
 +++ b/kernel/locking/rwlock-rt.c
 @@ -0,0 +1,378 @@
@@ -15024,7 +15039,7 @@ index 000000000000..f2e155b2c4a8
 +	 * That would put Reader1 behind the writer waiting on
 +	 * Reader2 to call read_unlock() which might be unbound.
 +	 */
-+	rt_mutex_init_waiter(&waiter, false);
++	rt_mutex_init_waiter(&waiter, true);
 +	rt_spin_lock_slowlock_locked(m, &waiter, flags);
 +	/*
 +	 * The slowlock() above is guaranteed to return with the rtmutex is
@@ -16110,7 +16125,7 @@ index c596c6f1e457..7d2a615601e7 100644
   * Don't even think about trying any of these in real life!!!
   * The names includes "busted", and they really means it!
 diff --git a/kernel/rcu/srcutree.c b/kernel/rcu/srcutree.c
-index 6c9866a854b1..3a74a4b4ae83 100644
+index 1ff17e297f0c..0f09a1a9e17c 100644
 --- a/kernel/rcu/srcutree.c
 +++ b/kernel/rcu/srcutree.c
 @@ -38,6 +38,8 @@
@@ -16122,7 +16137,7 @@ index 6c9866a854b1..3a74a4b4ae83 100644
  
  #include "rcu.h"
  #include "rcu_segcblist.h"
-@@ -458,21 +460,6 @@ static void srcu_gp_start(struct srcu_struct *sp)
+@@ -460,21 +462,6 @@ static void srcu_gp_start(struct srcu_struct *sp)
  	WARN_ON_ONCE(state != SRCU_STATE_SCAN1);
  }
  
@@ -16144,7 +16159,7 @@ index 6c9866a854b1..3a74a4b4ae83 100644
  /*
   * Place the workqueue handler on the specified CPU if online, otherwise
   * just run it whereever.  This is useful for placing workqueue handlers
-@@ -484,12 +471,12 @@ static bool srcu_queue_delayed_work_on(int cpu, struct workqueue_struct *wq,
+@@ -486,12 +473,12 @@ static bool srcu_queue_delayed_work_on(int cpu, struct workqueue_struct *wq,
  {
  	bool ret;
  
@@ -16160,7 +16175,7 @@ index 6c9866a854b1..3a74a4b4ae83 100644
  	return ret;
  }
  
-@@ -772,6 +759,8 @@ static void srcu_flip(struct srcu_struct *sp)
+@@ -774,6 +761,8 @@ static void srcu_flip(struct srcu_struct *sp)
   * negligible when amoritized over that time period, and the extra latency
   * of a needlessly non-expedited grace period is similarly negligible.
   */
@@ -16169,7 +16184,7 @@ index 6c9866a854b1..3a74a4b4ae83 100644
  static bool srcu_might_be_idle(struct srcu_struct *sp)
  {
  	unsigned long curseq;
-@@ -780,13 +769,13 @@ static bool srcu_might_be_idle(struct srcu_struct *sp)
+@@ -782,13 +771,13 @@ static bool srcu_might_be_idle(struct srcu_struct *sp)
  	unsigned long t;
  
  	/* If the local srcu_data structure has callbacks, not idle.  */
@@ -16186,7 +16201,7 @@ index 6c9866a854b1..3a74a4b4ae83 100644
  
  	/*
  	 * No local callbacks, so probabalistically probe global state.
-@@ -864,7 +853,7 @@ void __call_srcu(struct srcu_struct *sp, struct rcu_head *rhp,
+@@ -866,7 +855,7 @@ void __call_srcu(struct srcu_struct *sp, struct rcu_head *rhp,
  		return;
  	}
  	rhp->func = func;
@@ -16195,7 +16210,7 @@ index 6c9866a854b1..3a74a4b4ae83 100644
  	sdp = this_cpu_ptr(sp->sda);
  	spin_lock_rcu_node(sdp);
  	rcu_segcblist_enqueue(&sdp->srcu_cblist, rhp, false);
-@@ -880,7 +869,8 @@ void __call_srcu(struct srcu_struct *sp, struct rcu_head *rhp,
+@@ -882,7 +871,8 @@ void __call_srcu(struct srcu_struct *sp, struct rcu_head *rhp,
  		sdp->srcu_gp_seq_needed_exp = s;
  		needexp = true;
  	}
@@ -18036,10 +18051,10 @@ index 6383aa6a60ca..429078602ed7 100644
  #undef PN
  #undef __PN
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index eabbf6b10b44..049ff794c74e 100644
+index 7137bc343b4a..f208e08a4549 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -1631,7 +1631,7 @@ static void task_numa_compare(struct task_numa_env *env,
+@@ -1630,7 +1630,7 @@ static void task_numa_compare(struct task_numa_env *env,
  	 * be incurred if the tasks were swapped.
  	 */
  	/* Skip this swap candidate if cannot move to the source cpu */
@@ -18048,7 +18063,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		goto unlock;
  
  	/*
-@@ -1728,7 +1728,7 @@ static void task_numa_find_cpu(struct task_numa_env *env,
+@@ -1727,7 +1727,7 @@ static void task_numa_find_cpu(struct task_numa_env *env,
  
  	for_each_cpu(cpu, cpumask_of_node(env->dst_nid)) {
  		/* Skip this CPU if the source task cannot migrate */
@@ -18057,7 +18072,7 @@ index eabbf6b10b44..049ff794c74e 100644
  			continue;
  
  		env->dst_cpu = cpu;
-@@ -4018,7 +4018,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
+@@ -4017,7 +4017,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
  	ideal_runtime = sched_slice(cfs_rq, curr);
  	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
  	if (delta_exec > ideal_runtime) {
@@ -18066,7 +18081,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		/*
  		 * The current task ran long enough, ensure it doesn't get
  		 * re-elected due to buddy favours.
-@@ -4042,7 +4042,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
+@@ -4041,7 +4041,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
  		return;
  
  	if (delta > ideal_runtime)
@@ -18075,7 +18090,7 @@ index eabbf6b10b44..049ff794c74e 100644
  }
  
  static void
-@@ -4184,7 +4184,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
+@@ -4183,7 +4183,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
  	 * validating it and just reschedule.
  	 */
  	if (queued) {
@@ -18084,7 +18099,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		return;
  	}
  	/*
-@@ -4368,7 +4368,7 @@ static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec)
+@@ -4367,7 +4367,7 @@ static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec)
  	 * hierarchy can be throttled
  	 */
  	if (!assign_cfs_rq_runtime(cfs_rq) && likely(cfs_rq->curr))
@@ -18093,7 +18108,7 @@ index eabbf6b10b44..049ff794c74e 100644
  }
  
  static __always_inline
-@@ -4554,7 +4554,7 @@ static u64 distribute_cfs_runtime(struct cfs_bandwidth *cfs_b,
+@@ -4553,7 +4553,7 @@ static u64 distribute_cfs_runtime(struct cfs_bandwidth *cfs_b,
  		struct rq *rq = rq_of(cfs_rq);
  		struct rq_flags rf;
  
@@ -18102,7 +18117,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		if (!cfs_rq_throttled(cfs_rq))
  			goto next;
  
-@@ -4571,7 +4571,7 @@ static u64 distribute_cfs_runtime(struct cfs_bandwidth *cfs_b,
+@@ -4570,7 +4570,7 @@ static u64 distribute_cfs_runtime(struct cfs_bandwidth *cfs_b,
  			unthrottle_cfs_rq(cfs_rq);
  
  next:
@@ -18111,7 +18126,7 @@ index eabbf6b10b44..049ff794c74e 100644
  
  		if (!remaining)
  			break;
-@@ -4587,7 +4587,7 @@ static u64 distribute_cfs_runtime(struct cfs_bandwidth *cfs_b,
+@@ -4586,7 +4586,7 @@ static u64 distribute_cfs_runtime(struct cfs_bandwidth *cfs_b,
   * period the timer is deactivated until scheduling resumes; cfs_b->idle is
   * used to track this state.
   */
@@ -18120,7 +18135,7 @@ index eabbf6b10b44..049ff794c74e 100644
  {
  	u64 runtime, runtime_expires;
  	int throttled;
-@@ -4629,11 +4629,11 @@ static int do_sched_cfs_period_timer(struct cfs_bandwidth *cfs_b, int overrun)
+@@ -4628,11 +4628,11 @@ static int do_sched_cfs_period_timer(struct cfs_bandwidth *cfs_b, int overrun)
  	while (throttled && cfs_b->runtime > 0 && !cfs_b->distribute_running) {
  		runtime = cfs_b->runtime;
  		cfs_b->distribute_running = 1;
@@ -18134,7 +18149,7 @@ index eabbf6b10b44..049ff794c74e 100644
  
  		cfs_b->distribute_running = 0;
  		throttled = !list_empty(&cfs_b->throttled_cfs_rq);
-@@ -4742,17 +4742,18 @@ static __always_inline void return_cfs_rq_runtime(struct cfs_rq *cfs_rq)
+@@ -4741,17 +4741,18 @@ static __always_inline void return_cfs_rq_runtime(struct cfs_rq *cfs_rq)
  static void do_sched_cfs_slack_timer(struct cfs_bandwidth *cfs_b)
  {
  	u64 runtime = 0, slice = sched_cfs_bandwidth_slice();
@@ -18156,7 +18171,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		return;
  	}
  
-@@ -4763,18 +4764,18 @@ static void do_sched_cfs_slack_timer(struct cfs_bandwidth *cfs_b)
+@@ -4762,18 +4763,18 @@ static void do_sched_cfs_slack_timer(struct cfs_bandwidth *cfs_b)
  	if (runtime)
  		cfs_b->distribute_running = 1;
  
@@ -18178,7 +18193,7 @@ index eabbf6b10b44..049ff794c74e 100644
  }
  
  /*
-@@ -4852,20 +4853,21 @@ static enum hrtimer_restart sched_cfs_period_timer(struct hrtimer *timer)
+@@ -4851,20 +4852,21 @@ static enum hrtimer_restart sched_cfs_period_timer(struct hrtimer *timer)
  {
  	struct cfs_bandwidth *cfs_b =
  		container_of(timer, struct cfs_bandwidth, period_timer);
@@ -18203,7 +18218,7 @@ index eabbf6b10b44..049ff794c74e 100644
  
  	return idle ? HRTIMER_NORESTART : HRTIMER_RESTART;
  }
-@@ -5037,7 +5039,7 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
+@@ -5036,7 +5038,7 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
  
  		if (delta < 0) {
  			if (rq->curr == p)
@@ -18212,7 +18227,7 @@ index eabbf6b10b44..049ff794c74e 100644
  			return;
  		}
  		hrtick_start(rq, delta);
-@@ -5711,7 +5713,7 @@ find_idlest_group(struct sched_domain *sd, struct task_struct *p,
+@@ -5710,7 +5712,7 @@ find_idlest_group(struct sched_domain *sd, struct task_struct *p,
  
  		/* Skip over this group if it has no CPUs allowed */
  		if (!cpumask_intersects(sched_group_span(group),
@@ -18221,7 +18236,7 @@ index eabbf6b10b44..049ff794c74e 100644
  			continue;
  
  		local_group = cpumask_test_cpu(this_cpu,
-@@ -5843,7 +5845,7 @@ find_idlest_group_cpu(struct sched_group *group, struct task_struct *p, int this
+@@ -5842,7 +5844,7 @@ find_idlest_group_cpu(struct sched_group *group, struct task_struct *p, int this
  		return cpumask_first(sched_group_span(group));
  
  	/* Traverse only the allowed CPUs */
@@ -18230,7 +18245,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		if (available_idle_cpu(i)) {
  			struct rq *rq = cpu_rq(i);
  			struct cpuidle_state *idle = idle_get_state(rq);
-@@ -5883,7 +5885,7 @@ static inline int find_idlest_cpu(struct sched_domain *sd, struct task_struct *p
+@@ -5882,7 +5884,7 @@ static inline int find_idlest_cpu(struct sched_domain *sd, struct task_struct *p
  {
  	int new_cpu = cpu;
  
@@ -18239,7 +18254,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		return prev_cpu;
  
  	/*
-@@ -5999,7 +6001,7 @@ static int select_idle_core(struct task_struct *p, struct sched_domain *sd, int
+@@ -5998,7 +6000,7 @@ static int select_idle_core(struct task_struct *p, struct sched_domain *sd, int
  	if (!test_idle_cores(target, false))
  		return -1;
  
@@ -18248,7 +18263,7 @@ index eabbf6b10b44..049ff794c74e 100644
  
  	for_each_cpu_wrap(core, cpus, target) {
  		bool idle = true;
-@@ -6033,7 +6035,7 @@ static int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int t
+@@ -6032,7 +6034,7 @@ static int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int t
  		return -1;
  
  	for_each_cpu(cpu, cpu_smt_mask(target)) {
@@ -18257,7 +18272,7 @@ index eabbf6b10b44..049ff794c74e 100644
  			continue;
  		if (available_idle_cpu(cpu))
  			return cpu;
-@@ -6096,7 +6098,7 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, int t
+@@ -6095,7 +6097,7 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, int t
  	for_each_cpu_wrap(cpu, sched_domain_span(sd), target) {
  		if (!--nr)
  			return -1;
@@ -18266,7 +18281,7 @@ index eabbf6b10b44..049ff794c74e 100644
  			continue;
  		if (available_idle_cpu(cpu))
  			break;
-@@ -6133,7 +6135,7 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
+@@ -6132,7 +6134,7 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
  	    recent_used_cpu != target &&
  	    cpus_share_cache(recent_used_cpu, target) &&
  	    available_idle_cpu(recent_used_cpu) &&
@@ -18275,7 +18290,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		/*
  		 * Replace recent_used_cpu with prev as it is a potential
  		 * candidate for the next wake:
-@@ -6351,7 +6353,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
+@@ -6350,7 +6352,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
  	if (sd_flag & SD_BALANCE_WAKE) {
  		record_wakee(p);
  		want_affine = !wake_wide(p) && !wake_cap(p, cpu, prev_cpu)
@@ -18284,7 +18299,7 @@ index eabbf6b10b44..049ff794c74e 100644
  	}
  
  	rcu_read_lock();
-@@ -6612,7 +6614,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
+@@ -6611,7 +6613,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
  	return;
  
  preempt:
@@ -18293,7 +18308,7 @@ index eabbf6b10b44..049ff794c74e 100644
  	/*
  	 * Only set the backward buddy when the current task is still
  	 * on the rq. This can happen when a wakeup gets interleaved
-@@ -7090,14 +7092,14 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
+@@ -7089,14 +7091,14 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
  	/*
  	 * We do not migrate tasks that are:
  	 * 1) throttled_lb_pair, or
@@ -18310,7 +18325,7 @@ index eabbf6b10b44..049ff794c74e 100644
  		int cpu;
  
  		schedstat_inc(p->se.statistics.nr_failed_migrations_affine);
-@@ -7117,7 +7119,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
+@@ -7116,7 +7118,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
  
  		/* Prevent to re-select dst_cpu via env's CPUs: */
  		for_each_cpu_and(cpu, env->dst_grpmask, env->cpus) {
@@ -18319,7 +18334,7 @@ index eabbf6b10b44..049ff794c74e 100644
  				env->flags |= LBF_DST_PINNED;
  				env->new_dst_cpu = cpu;
  				break;
-@@ -7738,7 +7740,7 @@ check_cpu_capacity(struct rq *rq, struct sched_domain *sd)
+@@ -7713,7 +7715,7 @@ check_cpu_capacity(struct rq *rq, struct sched_domain *sd)
  
  /*
   * Group imbalance indicates (and tries to solve) the problem where balancing
@@ -18328,7 +18343,7 @@ index eabbf6b10b44..049ff794c74e 100644
   *
   * Imagine a situation of two groups of 4 CPUs each and 4 tasks each with a
   * cpumask covering 1 CPU of the first group and 3 CPUs of the second group.
-@@ -8353,7 +8355,7 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
+@@ -8328,7 +8330,7 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
  	/*
  	 * If the busiest group is imbalanced the below checks don't
  	 * work because they assume all things are equal, which typically
@@ -18337,7 +18352,7 @@ index eabbf6b10b44..049ff794c74e 100644
  	 */
  	if (busiest->group_type == group_imbalanced)
  		goto force_balance;
-@@ -8749,7 +8751,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
+@@ -8724,7 +8726,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
  			 * if the curr task on busiest CPU can't be
  			 * moved to this_cpu:
  			 */
@@ -18346,7 +18361,7 @@ index eabbf6b10b44..049ff794c74e 100644
  				raw_spin_unlock_irqrestore(&busiest->lock,
  							    flags);
  				env.flags |= LBF_ALL_PINNED;
-@@ -9723,7 +9725,7 @@ static void task_fork_fair(struct task_struct *p)
+@@ -9698,7 +9700,7 @@ static void task_fork_fair(struct task_struct *p)
  		 * 'current' within the tree based on its new key value.
  		 */
  		swap(curr->vruntime, se->vruntime);
@@ -18355,7 +18370,7 @@ index eabbf6b10b44..049ff794c74e 100644
  	}
  
  	se->vruntime -= cfs_rq->min_vruntime;
-@@ -9747,7 +9749,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
+@@ -9722,7 +9724,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
  	 */
  	if (rq->curr == p) {
  		if (p->prio > oldprio)
@@ -22227,7 +22242,7 @@ index 17dd883198ae..b68a3d0d075f 100644
  
  /*
 diff --git a/mm/memcontrol.c b/mm/memcontrol.c
-index e79cb59552d9..808a780d6500 100644
+index 9518aefd8cbb..d0ea4e74d6fc 100644
 --- a/mm/memcontrol.c
 +++ b/mm/memcontrol.c
 @@ -69,6 +69,7 @@
@@ -22247,7 +22262,7 @@ index e79cb59552d9..808a780d6500 100644
  /* Whether legacy memory+swap accounting is active */
  static bool do_memsw_account(void)
  {
-@@ -2036,7 +2039,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
+@@ -2052,7 +2055,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
  	 * as well as workers from this path always operate on the local
  	 * per-cpu data. CPU up doesn't touch memcg_stock at all.
  	 */
@@ -22256,7 +22271,7 @@ index e79cb59552d9..808a780d6500 100644
  	for_each_online_cpu(cpu) {
  		struct memcg_stock_pcp *stock = &per_cpu(memcg_stock, cpu);
  		struct mem_cgroup *memcg;
-@@ -2056,7 +2059,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
+@@ -2072,7 +2075,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
  		}
  		css_put(&memcg->css);
  	}
@@ -22265,7 +22280,7 @@ index e79cb59552d9..808a780d6500 100644
  	mutex_unlock(&percpu_charge_mutex);
  }
  
-@@ -4843,12 +4846,12 @@ static int mem_cgroup_move_account(struct page *page,
+@@ -4859,12 +4862,12 @@ static int mem_cgroup_move_account(struct page *page,
  
  	ret = 0;
  
@@ -22280,7 +22295,7 @@ index e79cb59552d9..808a780d6500 100644
  out_unlock:
  	unlock_page(page);
  out:
-@@ -5967,10 +5970,10 @@ void mem_cgroup_commit_charge(struct page *page, struct mem_cgroup *memcg,
+@@ -5983,10 +5986,10 @@ void mem_cgroup_commit_charge(struct page *page, struct mem_cgroup *memcg,
  
  	commit_charge(page, memcg, lrucare);
  
@@ -22293,7 +22308,7 @@ index e79cb59552d9..808a780d6500 100644
  
  	if (do_memsw_account() && PageSwapCache(page)) {
  		swp_entry_t entry = { .val = page_private(page) };
-@@ -6039,7 +6042,7 @@ static void uncharge_batch(const struct uncharge_gather *ug)
+@@ -6055,7 +6058,7 @@ static void uncharge_batch(const struct uncharge_gather *ug)
  		memcg_oom_recover(ug->memcg);
  	}
  
@@ -22302,7 +22317,7 @@ index e79cb59552d9..808a780d6500 100644
  	__mod_memcg_state(ug->memcg, MEMCG_RSS, -ug->nr_anon);
  	__mod_memcg_state(ug->memcg, MEMCG_CACHE, -ug->nr_file);
  	__mod_memcg_state(ug->memcg, MEMCG_RSS_HUGE, -ug->nr_huge);
-@@ -6047,7 +6050,7 @@ static void uncharge_batch(const struct uncharge_gather *ug)
+@@ -6063,7 +6066,7 @@ static void uncharge_batch(const struct uncharge_gather *ug)
  	__count_memcg_events(ug->memcg, PGPGOUT, ug->pgpgout);
  	__this_cpu_add(ug->memcg->stat_cpu->nr_page_events, nr_pages);
  	memcg_check_events(ug->memcg, ug->dummy_page);
@@ -22311,7 +22326,7 @@ index e79cb59552d9..808a780d6500 100644
  
  	if (!mem_cgroup_is_root(ug->memcg))
  		css_put_many(&ug->memcg->css, nr_pages);
-@@ -6210,10 +6213,10 @@ void mem_cgroup_migrate(struct page *oldpage, struct page *newpage)
+@@ -6226,10 +6229,10 @@ void mem_cgroup_migrate(struct page *oldpage, struct page *newpage)
  
  	commit_charge(newpage, memcg, false);
  
@@ -22324,7 +22339,7 @@ index e79cb59552d9..808a780d6500 100644
  }
  
  DEFINE_STATIC_KEY_FALSE(memcg_sockets_enabled_key);
-@@ -6405,6 +6408,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
+@@ -6421,6 +6424,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
  	struct mem_cgroup *memcg, *swap_memcg;
  	unsigned int nr_entries;
  	unsigned short oldid;
@@ -22332,7 +22347,7 @@ index e79cb59552d9..808a780d6500 100644
  
  	VM_BUG_ON_PAGE(PageLRU(page), page);
  	VM_BUG_ON_PAGE(page_count(page), page);
-@@ -6450,13 +6454,17 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
+@@ -6466,13 +6470,17 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
  	 * important here to have the interrupts disabled because it is the
  	 * only synchronisation we have for updating the per-CPU variables.
  	 */
