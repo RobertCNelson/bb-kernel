@@ -372,6 +372,7 @@ drivers () {
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/btrfs'
 	dir 'drivers/pwm'
+	dir 'drivers/rtl8188eu'
 	dir 'drivers/spi'
 	dir 'drivers/ssd1306'
 	dir 'drivers/tps65217'
