@@ -112,6 +112,7 @@ aufs4 () {
 	echo "dir: aufs4"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
+		KERNEL_REL=4.20.4+
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-kbuild.patch
 		patch -p1 < aufs4-kbuild.patch || aufs_fail
 		rm -rf aufs4-kbuild.patch
@@ -146,6 +147,7 @@ aufs4 () {
 			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs4-standalone --depth=1
 		fi
 		cd ./KERNEL/
+		KERNEL_REL=4.20
 
 		cp -v ../aufs4-standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -292,7 +294,7 @@ local_patch () {
 }
 
 #external_git
-#aufs4
+aufs4
 #rt
 wireguard
 ti_pm_firmware
@@ -372,7 +374,6 @@ drivers () {
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/btrfs'
 	dir 'drivers/pwm'
-	dir 'drivers/rtl8188eu'
 	dir 'drivers/spi'
 	dir 'drivers/ssd1306'
 	dir 'drivers/tps65217'
