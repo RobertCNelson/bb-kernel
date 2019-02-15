@@ -193,8 +193,10 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.19.x
-	#${git_bin} revert --no-edit xyz
+	#v4.19.21
+	${git_bin} revert --no-edit 8b71aa1a3bb85562561baf5651ebb88def3e2525
+	${git_bin} revert --no-edit 9d9fcc11b860039d2e28497c27e4418e0a9eaadd
+	${git_bin} revert --no-edit ee73954d9a21791d496befcdd004be00415bceda
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -335,7 +337,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.20.6"
+	backport_tag="v4.20.10"
 
 	subsystem="remoteproc"
 	#regenerate="enable"
@@ -381,17 +383,6 @@ drivers () {
 	dir 'drivers/opp'
 	dir 'drivers/wiznet'
 
-	#https://lkml.org/lkml/2018/11/22/948
-	#[PATCH 00/17] Add support for TI PRU ICSS
-	dir 'drivers/ti/pruss'
-
-	#https://lkml.org/lkml/2018/11/26/319
-	#[PATCH 00/16] remoteproc: Add support for TI PRU
-	dir 'drivers/ti/remoteproc'
-
-	#https://lkml.org/lkml/2018/12/2/361
-	dir 'drivers/ti/pruss-from-v4.14.x-ti'
-
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/etnaviv'
@@ -401,6 +392,10 @@ drivers () {
 	dir 'drivers/ti/spi'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
+
+	${git} "${DIR}/patches/drivers/ti/uio_pruss/0001-uio-pruss-cleanups-and-pruss-v2-pru-icss-support.patch"
+	${git} "${DIR}/patches/drivers/ti/uio_pruss/0003-ARM-omap2-support-deasserting-reset-from-dts.patch"
+
 	#[PATCH v3 1/4] mfd: stmpe: Move ADC related defines to header of mfd
 	dir 'drivers/iio/stmpe'
 }
