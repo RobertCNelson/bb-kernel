@@ -193,10 +193,8 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v4.19.21
-	${git_bin} revert --no-edit 8b71aa1a3bb85562561baf5651ebb88def3e2525
-	${git_bin} revert --no-edit 9d9fcc11b860039d2e28497c27e4418e0a9eaadd
-	${git_bin} revert --no-edit ee73954d9a21791d496befcdd004be00415bceda
+	#v4.19.x
+	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -337,7 +335,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.20.10"
+	backport_tag="v4.20.11"
 
 	subsystem="remoteproc"
 	#regenerate="enable"

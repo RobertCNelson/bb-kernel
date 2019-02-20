@@ -1,6 +1,6 @@
-From 1e23061ff7f866c9cf74877cda349a7c1607db6f Mon Sep 17 00:00:00 2001
+From bb41f8a61e506dd629a69680792d905c8e62579f Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 15 Feb 2019 14:26:43 -0600
+Date: Wed, 20 Feb 2019 13:38:28 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -75,7 +75,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/x86/entry/common.c                       |  11 +-
  arch/x86/entry/entry_32.S                     |  17 +
  arch/x86/entry/entry_64.S                     |  18 +
- arch/x86/events/intel/core.c                  |  10 +-
  arch/x86/include/asm/fpu/api.h                |   1 +
  arch/x86/include/asm/preempt.h                |  31 +-
  arch/x86/include/asm/signal.h                 |  13 +
@@ -104,7 +103,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  crypto/scompress.c                            |   6 +-
  drivers/block/zram/zcomp.c                    |  13 +-
  drivers/block/zram/zcomp.h                    |   1 +
- drivers/block/zram/zram_drv.c                 |  33 +-
+ drivers/block/zram/zram_drv.c                 |  43 +-
  drivers/block/zram/zram_drv.h                 |   3 +
  drivers/char/random.c                         |  22 +-
  drivers/char/tpm/tpm_tis.c                    |  29 +-
@@ -137,7 +136,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../wireless/intersil/orinoco/orinoco_usb.c   |   4 +-
  drivers/of/base.c                             |  19 +-
  drivers/pci/switch/switchtec.c                |  22 +-
- drivers/pinctrl/bcm/pinctrl-bcm2835.c         |  16 +-
  drivers/scsi/fcoe/fcoe.c                      |  16 +-
  drivers/scsi/fcoe/fcoe_ctlr.c                 |   4 +-
  drivers/scsi/libfc/fc_exch.c                  |   4 +-
@@ -389,7 +387,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/include/path.h              |  19 +-
  security/apparmor/lsm.c                       |   2 +-
  virt/kvm/arm/arm.c                            |   6 +-
- 384 files changed, 9508 insertions(+), 2018 deletions(-)
+ 382 files changed, 9502 insertions(+), 2008 deletions(-)
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -561,7 +559,7 @@ index d3e937dcee4d..6ab96a2ce1f8 100644
  } while (0)
  
 diff --git a/arch/arm/include/asm/thread_info.h b/arch/arm/include/asm/thread_info.h
-index 9b37b6ab27fe..c1b29d2838e3 100644
+index 8f55dc520a3e..4f834bfca470 100644
 --- a/arch/arm/include/asm/thread_info.h
 +++ b/arch/arm/include/asm/thread_info.h
 @@ -49,6 +49,7 @@ struct cpu_context_save {
@@ -748,10 +746,10 @@ index 82ab015bf42b..8d3c7ce34c24 100644
  /*
   * The vectors page is always readable from user space for the
 diff --git a/arch/arm/kernel/signal.c b/arch/arm/kernel/signal.c
-index b8f766cf3a90..af63c463f2ba 100644
+index b908382b69ff..339fbc281cf1 100644
 --- a/arch/arm/kernel/signal.c
 +++ b/arch/arm/kernel/signal.c
-@@ -644,7 +644,8 @@ do_work_pending(struct pt_regs *regs, unsigned int thread_flags, int syscall)
+@@ -652,7 +652,8 @@ do_work_pending(struct pt_regs *regs, unsigned int thread_flags, int syscall)
  	 */
  	trace_hardirqs_off();
  	do {
@@ -2838,48 +2836,6 @@ index f95dcb209fdf..826262a5868e 100644
  
  #ifdef CONFIG_XEN
  idtentry hypervisor_callback xen_do_hypervisor_callback has_error_code=0
-diff --git a/arch/x86/events/intel/core.c b/arch/x86/events/intel/core.c
-index 155fa4b53c56..d0b186264941 100644
---- a/arch/x86/events/intel/core.c
-+++ b/arch/x86/events/intel/core.c
-@@ -3439,6 +3439,11 @@ static void free_excl_cntrs(int cpu)
- }
- 
- static void intel_pmu_cpu_dying(int cpu)
-+{
-+	fini_debug_store_on_cpu(cpu);
-+}
-+
-+static void intel_pmu_cpu_dead(int cpu)
- {
- 	struct cpu_hw_events *cpuc = &per_cpu(cpu_hw_events, cpu);
- 	struct intel_shared_regs *pc;
-@@ -3451,8 +3456,6 @@ static void intel_pmu_cpu_dying(int cpu)
- 	}
- 
- 	free_excl_cntrs(cpu);
--
--	fini_debug_store_on_cpu(cpu);
- }
- 
- static void intel_pmu_sched_task(struct perf_event_context *ctx,
-@@ -3541,6 +3544,7 @@ static __initconst const struct x86_pmu core_pmu = {
- 	.cpu_prepare		= intel_pmu_cpu_prepare,
- 	.cpu_starting		= intel_pmu_cpu_starting,
- 	.cpu_dying		= intel_pmu_cpu_dying,
-+	.cpu_dead		= intel_pmu_cpu_dead,
- };
- 
- static struct attribute *intel_pmu_attrs[];
-@@ -3581,6 +3585,8 @@ static __initconst const struct x86_pmu intel_pmu = {
- 	.cpu_prepare		= intel_pmu_cpu_prepare,
- 	.cpu_starting		= intel_pmu_cpu_starting,
- 	.cpu_dying		= intel_pmu_cpu_dying,
-+	.cpu_dead		= intel_pmu_cpu_dead,
-+
- 	.guest_get_msrs		= intel_guest_get_msrs,
- 	.sched_task		= intel_pmu_sched_task,
- };
 diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
 index a9caac9d4a72..18b31f22ca5d 100644
 --- a/arch/x86/include/asm/fpu/api.h
@@ -3846,12 +3802,12 @@ index 41c1002a7d7d..d424eafcbf8e 100644
  
  /* dynamic per-device compression frontend */
 diff --git a/drivers/block/zram/zram_drv.c b/drivers/block/zram/zram_drv.c
-index a65505db09e5..bc2bb96b525f 100644
+index a65505db09e5..b2a347b8b517 100644
 --- a/drivers/block/zram/zram_drv.c
 +++ b/drivers/block/zram/zram_drv.c
-@@ -58,6 +58,30 @@ static int zram_slot_trylock(struct zram *zram, u32 index)
- 	return bit_spin_trylock(ZRAM_LOCK, &zram->table[index].value);
- }
+@@ -53,6 +53,40 @@ static size_t huge_class_size;
+ 
+ static void zram_free_page(struct zram *zram, size_t index);
  
 +#ifdef CONFIG_PREEMPT_RT_BASE
 +static void zram_meta_init_table_locks(struct zram *zram, size_t num_pages)
@@ -3860,6 +3816,16 @@ index a65505db09e5..bc2bb96b525f 100644
 +
 +	for (index = 0; index < num_pages; index++)
 +		spin_lock_init(&zram->table[index].lock);
++}
++
++static int zram_slot_trylock(struct zram *zram, u32 index)
++{
++	int ret;
++
++	ret = spin_trylock(&zram->table[index].lock);
++	if (ret)
++		__set_bit(ZRAM_LOCK, &zram->table[index].value);
++	return ret;
 +}
 +
 +static void zram_slot_lock(struct zram *zram, u32 index)
@@ -3877,10 +3843,10 @@ index a65505db09e5..bc2bb96b525f 100644
 +#else
 +static void zram_meta_init_table_locks(struct zram *zram, size_t num_pages) { }
 +
- static void zram_slot_lock(struct zram *zram, u32 index)
+ static int zram_slot_trylock(struct zram *zram, u32 index)
  {
- 	bit_spin_lock(ZRAM_LOCK, &zram->table[index].value);
-@@ -67,6 +91,7 @@ static void zram_slot_unlock(struct zram *zram, u32 index)
+ 	return bit_spin_trylock(ZRAM_LOCK, &zram->table[index].value);
+@@ -67,6 +101,7 @@ static void zram_slot_unlock(struct zram *zram, u32 index)
  {
  	bit_spin_unlock(ZRAM_LOCK, &zram->table[index].value);
  }
@@ -3888,7 +3854,7 @@ index a65505db09e5..bc2bb96b525f 100644
  
  static inline bool init_done(struct zram *zram)
  {
-@@ -900,6 +925,8 @@ static DEVICE_ATTR_RO(io_stat);
+@@ -900,6 +935,8 @@ static DEVICE_ATTR_RO(io_stat);
  static DEVICE_ATTR_RO(mm_stat);
  static DEVICE_ATTR_RO(debug_stat);
  
@@ -3897,7 +3863,7 @@ index a65505db09e5..bc2bb96b525f 100644
  static void zram_meta_free(struct zram *zram, u64 disksize)
  {
  	size_t num_pages = disksize >> PAGE_SHIFT;
-@@ -930,6 +957,7 @@ static bool zram_meta_alloc(struct zram *zram, u64 disksize)
+@@ -930,6 +967,7 @@ static bool zram_meta_alloc(struct zram *zram, u64 disksize)
  
  	if (!huge_class_size)
  		huge_class_size = zs_huge_class_size(zram->mem_pool);
@@ -3905,7 +3871,7 @@ index a65505db09e5..bc2bb96b525f 100644
  	return true;
  }
  
-@@ -988,6 +1016,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
+@@ -988,6 +1026,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
  	unsigned long handle;
  	unsigned int size;
  	void *src, *dst;
@@ -3913,7 +3879,7 @@ index a65505db09e5..bc2bb96b525f 100644
  
  	if (zram_wb_enabled(zram)) {
  		zram_slot_lock(zram, index);
-@@ -1022,6 +1051,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
+@@ -1022,6 +1061,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
  
  	size = zram_get_obj_size(zram, index);
  
@@ -3921,7 +3887,7 @@ index a65505db09e5..bc2bb96b525f 100644
  	src = zs_map_object(zram->mem_pool, handle, ZS_MM_RO);
  	if (size == PAGE_SIZE) {
  		dst = kmap_atomic(page);
-@@ -1029,14 +1059,13 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
+@@ -1029,14 +1069,13 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
  		kunmap_atomic(dst);
  		ret = 0;
  	} else {
@@ -5805,74 +5771,6 @@ index 37d0c15c9eeb..c396f3ef1852 100644
  		list_del_init(&stuser->list);
  		stuser_put(stuser);
  	}
-diff --git a/drivers/pinctrl/bcm/pinctrl-bcm2835.c b/drivers/pinctrl/bcm/pinctrl-bcm2835.c
-index fa530913a2c8..08925d24180b 100644
---- a/drivers/pinctrl/bcm/pinctrl-bcm2835.c
-+++ b/drivers/pinctrl/bcm/pinctrl-bcm2835.c
-@@ -90,7 +90,7 @@ struct bcm2835_pinctrl {
- 	struct gpio_chip gpio_chip;
- 	struct pinctrl_gpio_range gpio_range;
- 
--	spinlock_t irq_lock[BCM2835_NUM_BANKS];
-+	raw_spinlock_t irq_lock[BCM2835_NUM_BANKS];
- };
- 
- /* pins are just named GPIO0..GPIO53 */
-@@ -461,10 +461,10 @@ static void bcm2835_gpio_irq_enable(struct irq_data *data)
- 	unsigned bank = GPIO_REG_OFFSET(gpio);
- 	unsigned long flags;
- 
--	spin_lock_irqsave(&pc->irq_lock[bank], flags);
-+	raw_spin_lock_irqsave(&pc->irq_lock[bank], flags);
- 	set_bit(offset, &pc->enabled_irq_map[bank]);
- 	bcm2835_gpio_irq_config(pc, gpio, true);
--	spin_unlock_irqrestore(&pc->irq_lock[bank], flags);
-+	raw_spin_unlock_irqrestore(&pc->irq_lock[bank], flags);
- }
- 
- static void bcm2835_gpio_irq_disable(struct irq_data *data)
-@@ -476,12 +476,12 @@ static void bcm2835_gpio_irq_disable(struct irq_data *data)
- 	unsigned bank = GPIO_REG_OFFSET(gpio);
- 	unsigned long flags;
- 
--	spin_lock_irqsave(&pc->irq_lock[bank], flags);
-+	raw_spin_lock_irqsave(&pc->irq_lock[bank], flags);
- 	bcm2835_gpio_irq_config(pc, gpio, false);
- 	/* Clear events that were latched prior to clearing event sources */
- 	bcm2835_gpio_set_bit(pc, GPEDS0, gpio);
- 	clear_bit(offset, &pc->enabled_irq_map[bank]);
--	spin_unlock_irqrestore(&pc->irq_lock[bank], flags);
-+	raw_spin_unlock_irqrestore(&pc->irq_lock[bank], flags);
- }
- 
- static int __bcm2835_gpio_irq_set_type_disabled(struct bcm2835_pinctrl *pc,
-@@ -584,7 +584,7 @@ static int bcm2835_gpio_irq_set_type(struct irq_data *data, unsigned int type)
- 	unsigned long flags;
- 	int ret;
- 
--	spin_lock_irqsave(&pc->irq_lock[bank], flags);
-+	raw_spin_lock_irqsave(&pc->irq_lock[bank], flags);
- 
- 	if (test_bit(offset, &pc->enabled_irq_map[bank]))
- 		ret = __bcm2835_gpio_irq_set_type_enabled(pc, gpio, type);
-@@ -596,7 +596,7 @@ static int bcm2835_gpio_irq_set_type(struct irq_data *data, unsigned int type)
- 	else
- 		irq_set_handler_locked(data, handle_level_irq);
- 
--	spin_unlock_irqrestore(&pc->irq_lock[bank], flags);
-+	raw_spin_unlock_irqrestore(&pc->irq_lock[bank], flags);
- 
- 	return ret;
- }
-@@ -1047,7 +1047,7 @@ static int bcm2835_pinctrl_probe(struct platform_device *pdev)
- 		for_each_set_bit(offset, &events, 32)
- 			bcm2835_gpio_wr(pc, GPEDS0 + i * 4, BIT(offset));
- 
--		spin_lock_init(&pc->irq_lock[i]);
-+		raw_spin_lock_init(&pc->irq_lock[i]);
- 	}
- 
- 	err = gpiochip_add_data(&pc->gpio_chip, pc);
 diff --git a/drivers/scsi/fcoe/fcoe.c b/drivers/scsi/fcoe/fcoe.c
 index f46b312d04bc..adbdb38eced2 100644
 --- a/drivers/scsi/fcoe/fcoe.c
@@ -6698,7 +6596,7 @@ index 82a13221775e..58324a93e3c0 100644
  	if (!o->nodeid) {
  		/*
 diff --git a/fs/inode.c b/fs/inode.c
-index 799ec25cd212..ac4555ae7728 100644
+index 69d4a6cded14..c454be2edfc7 100644
 --- a/fs/inode.c
 +++ b/fs/inode.c
 @@ -155,7 +155,7 @@ int inode_init_always(struct super_block *sb, struct inode *inode)
@@ -12247,7 +12145,7 @@ index 6a4b41484afe..197cb422f6e1 100644
  	return r;
  }
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index 5a97f34bc14c..f9c9e6593fac 100644
+index 4fb9d5054618..f0d7845abab4 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
 @@ -1102,7 +1102,7 @@ static void __perf_mux_hrtimer_init(struct perf_cpu_context *cpuctx, int cpu)
@@ -12259,7 +12157,7 @@ index 5a97f34bc14c..f9c9e6593fac 100644
  	timer->function = perf_mux_hrtimer_handler;
  }
  
-@@ -9173,7 +9173,7 @@ static void perf_swevent_init_hrtimer(struct perf_event *event)
+@@ -9181,7 +9181,7 @@ static void perf_swevent_init_hrtimer(struct perf_event *event)
  	if (!is_sampling_event(event))
  		return;
  
@@ -12394,7 +12292,7 @@ index fc0937ca9ddf..443a517698a3 100644
  	p->utime = p->stime = p->gtime = 0;
  #ifdef CONFIG_ARCH_HAS_SCALED_CPUTIME
 diff --git a/kernel/futex.c b/kernel/futex.c
-index f89abca89513..03a03aa82652 100644
+index d7c465fd687c..6eae32088a93 100644
 --- a/kernel/futex.c
 +++ b/kernel/futex.c
 @@ -918,7 +918,9 @@ void exit_pi_state_list(struct task_struct *curr)
@@ -12484,8 +12382,8 @@ index f89abca89513..03a03aa82652 100644
  
  	/*
  	 * On PREEMPT_RT_FULL, when hb->lock becomes an rt_mutex, we must not
-@@ -2855,9 +2866,18 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
- 	 * lock handoff sequence.
+@@ -2856,6 +2867,14 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
+ 	 * before __rt_mutex_start_proxy_lock() is done.
  	 */
  	raw_spin_lock_irq(&q.pi_state->pi_mutex.wait_lock);
 +	/*
@@ -12497,14 +12395,18 @@ index f89abca89513..03a03aa82652 100644
 +	migrate_disable();
 +
  	spin_unlock(q.lock_ptr);
+ 	/*
+ 	 * __rt_mutex_start_proxy_lock() unconditionally enqueues the @rt_waiter
+@@ -2864,6 +2883,7 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
+ 	 */
  	ret = __rt_mutex_start_proxy_lock(&q.pi_state->pi_mutex, &rt_waiter, current);
  	raw_spin_unlock_irq(&q.pi_state->pi_mutex.wait_lock);
 +	migrate_enable();
  
  	if (ret) {
  		if (ret == 1)
-@@ -3004,11 +3024,21 @@ static int futex_unlock_pi(u32 __user *uaddr, unsigned int flags)
- 		 * observed.
+@@ -3012,11 +3032,21 @@ static int futex_unlock_pi(u32 __user *uaddr, unsigned int flags)
+ 		 * rt_waiter. Also see the WARN in wake_futex_pi().
  		 */
  		raw_spin_lock_irq(&pi_state->pi_mutex.wait_lock);
 +		/*
@@ -12525,7 +12427,7 @@ index f89abca89513..03a03aa82652 100644
  		put_pi_state(pi_state);
  
  		/*
-@@ -3166,7 +3196,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3174,7 +3204,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	struct hrtimer_sleeper timeout, *to = NULL;
  	struct futex_pi_state *pi_state = NULL;
  	struct rt_mutex_waiter rt_waiter;
@@ -12534,7 +12436,7 @@ index f89abca89513..03a03aa82652 100644
  	union futex_key key2 = FUTEX_KEY_INIT;
  	struct futex_q q = futex_q_init;
  	int res, ret;
-@@ -3182,10 +3212,9 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3190,10 +3220,9 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  
  	if (abs_time) {
  		to = &timeout;
@@ -12548,7 +12450,7 @@ index f89abca89513..03a03aa82652 100644
  		hrtimer_set_expires_range_ns(&to->timer, *abs_time,
  					     current->timer_slack_ns);
  	}
-@@ -3194,7 +3223,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3202,7 +3231,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	 * The waiter is allocated on our stack, manipulated by the requeue
  	 * code while we sleep on uaddr.
  	 */
@@ -12557,7 +12459,7 @@ index f89abca89513..03a03aa82652 100644
  
  	ret = get_futex_key(uaddr2, flags & FLAGS_SHARED, &key2, VERIFY_WRITE);
  	if (unlikely(ret != 0))
-@@ -3225,20 +3254,55 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3233,20 +3262,55 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  	/* Queue the futex_q, drop the hb lock, wait for wakeup. */
  	futex_wait_queue_me(hb, &q, to);
  
@@ -12624,7 +12526,7 @@ index f89abca89513..03a03aa82652 100644
  
  	/* Check if the requeue code acquired the second futex for us. */
  	if (!q.rt_waiter) {
-@@ -3247,7 +3311,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3255,7 +3319,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  		 * did a lock-steal - fix up the PI-state in that case.
  		 */
  		if (q.pi_state && (q.pi_state->owner != current)) {
@@ -12634,7 +12536,7 @@ index f89abca89513..03a03aa82652 100644
  			ret = fixup_pi_state_owner(uaddr2, &q, current);
  			if (ret && rt_mutex_owner(&q.pi_state->pi_mutex) == current) {
  				pi_state = q.pi_state;
-@@ -3258,7 +3323,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3266,7 +3331,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  			 * the requeue_pi() code acquired for us.
  			 */
  			put_pi_state(q.pi_state);
@@ -12643,7 +12545,7 @@ index f89abca89513..03a03aa82652 100644
  		}
  	} else {
  		struct rt_mutex *pi_mutex;
-@@ -3272,7 +3337,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
+@@ -3280,7 +3345,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
  		pi_mutex = &q.pi_state->pi_mutex;
  		ret = rt_mutex_wait_proxy_lock(pi_mutex, to, &rt_waiter);
  
@@ -13503,7 +13405,7 @@ index 000000000000..4f81595c0f52
 +}
 +EXPORT_SYMBOL(atomic_dec_and_mutex_lock);
 diff --git a/kernel/locking/rtmutex.c b/kernel/locking/rtmutex.c
-index 2823d4163a37..bbac843464de 100644
+index 9562aaa2afdc..2a9bf2443acc 100644
 --- a/kernel/locking/rtmutex.c
 +++ b/kernel/locking/rtmutex.c
 @@ -7,6 +7,11 @@
@@ -14662,7 +14564,7 @@ index 2823d4163a37..bbac843464de 100644
  	debug_rt_mutex_proxy_lock(lock, proxy_owner);
  	rt_mutex_set_owner(lock, proxy_owner);
  }
-@@ -1735,6 +2329,34 @@ int __rt_mutex_start_proxy_lock(struct rt_mutex *lock,
+@@ -1756,6 +2350,34 @@ int __rt_mutex_start_proxy_lock(struct rt_mutex *lock,
  	if (try_to_take_rt_mutex(lock, task, NULL))
  		return 1;
  
@@ -14697,7 +14599,7 @@ index 2823d4163a37..bbac843464de 100644
  	/* We enforce deadlock detection for futexes */
  	ret = task_blocks_on_rt_mutex(lock, waiter, task,
  				      RT_MUTEX_FULL_CHAINWALK);
-@@ -1824,17 +2446,36 @@ int rt_mutex_wait_proxy_lock(struct rt_mutex *lock,
+@@ -1850,17 +2472,36 @@ int rt_mutex_wait_proxy_lock(struct rt_mutex *lock,
  			       struct hrtimer_sleeper *to,
  			       struct rt_mutex_waiter *waiter)
  {
@@ -14735,7 +14637,7 @@ index 2823d4163a37..bbac843464de 100644
  	raw_spin_unlock_irq(&lock->wait_lock);
  
  	return ret;
-@@ -1895,3 +2536,99 @@ bool rt_mutex_cleanup_proxy_lock(struct rt_mutex *lock,
+@@ -1922,3 +2563,99 @@ bool rt_mutex_cleanup_proxy_lock(struct rt_mutex *lock,
  
  	return cleanup;
  }
@@ -18703,7 +18605,7 @@ index 505a41c42b96..a32943de5dbc 100644
  
  	init_dl_bw(&rd->dl_bw);
 diff --git a/kernel/signal.c b/kernel/signal.c
-index c187def3dba6..05e726ae463d 100644
+index 9102d60fc5c6..367e10c919d1 100644
 --- a/kernel/signal.c
 +++ b/kernel/signal.c
 @@ -19,6 +19,7 @@
