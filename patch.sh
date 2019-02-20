@@ -379,17 +379,6 @@ drivers () {
 	dir 'drivers/tps65217'
 	dir 'drivers/wiznet'
 
-	#https://lkml.org/lkml/2018/11/22/948
-	#[PATCH 00/17] Add support for TI PRU ICSS
-	dir 'drivers/ti/pruss'
-
-	#https://lkml.org/lkml/2018/11/26/319
-	#[PATCH 00/16] remoteproc: Add support for TI PRU
-	dir 'drivers/ti/remoteproc'
-
-	#https://lkml.org/lkml/2018/12/2/361
-	dir 'drivers/ti/pruss-from-v4.14.x-ti'
-
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/etnaviv'
@@ -399,6 +388,10 @@ drivers () {
 	dir 'drivers/ti/spi'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
+
+	${git} "${DIR}/patches/drivers/ti/uio_pruss/0001-uio-pruss-cleanups-and-pruss-v2-pru-icss-support.patch"
+	${git} "${DIR}/patches/drivers/ti/uio_pruss/0003-ARM-omap2-support-deasserting-reset-from-dts.patch"
+
 	#[PATCH v3 1/4] mfd: stmpe: Move ADC related defines to header of mfd
 	dir 'drivers/iio/stmpe'
 }
