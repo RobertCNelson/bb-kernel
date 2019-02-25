@@ -1,6 +1,6 @@
-From bb41f8a61e506dd629a69680792d905c8e62579f Mon Sep 17 00:00:00 2001
+From 858f86bda88c6718f32bed2634838213ef0c7f24 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 20 Feb 2019 13:38:28 -0600
+Date: Mon, 25 Feb 2019 09:20:30 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -322,9 +322,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/sched/swork.c                          | 173 ++++
  kernel/sched/topology.c                       |   1 +
  kernel/signal.c                               | 114 ++-
- kernel/softirq.c                              | 706 +++++++++++--
+ kernel/softirq.c                              | 734 ++++++++++++--
  kernel/time/alarmtimer.c                      |   2 +-
- kernel/time/hrtimer.c                         | 147 ++-
+ kernel/time/hrtimer.c                         | 150 ++-
  kernel/time/itimer.c                          |   1 +
  kernel/time/jiffies.c                         |   7 +-
  kernel/time/posix-cpu-timers.c                | 154 ++-
@@ -387,7 +387,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/include/path.h              |  19 +-
  security/apparmor/lsm.c                       |   2 +-
  virt/kvm/arm/arm.c                            |   6 +-
- 382 files changed, 9502 insertions(+), 2008 deletions(-)
+ 382 files changed, 9533 insertions(+), 2008 deletions(-)
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -2849,7 +2849,7 @@ index a9caac9d4a72..18b31f22ca5d 100644
  
  /*
 diff --git a/arch/x86/include/asm/preempt.h b/arch/x86/include/asm/preempt.h
-index 7f2dbd91fc74..22992c837795 100644
+index 7f2dbd91fc74..f66708779274 100644
 --- a/arch/x86/include/asm/preempt.h
 +++ b/arch/x86/include/asm/preempt.h
 @@ -86,17 +86,46 @@ static __always_inline void __preempt_count_sub(int val)
@@ -2889,7 +2889,7 @@ index 7f2dbd91fc74..22992c837795 100644
 +
 +	/* preempt count == 0 ? */
 +	tmp &= ~PREEMPT_NEED_RESCHED;
-+	if (tmp)
++	if (tmp != preempt_offset)
 +		return false;
 +	if (current_thread_info()->preempt_lazy_count)
 +		return false;
@@ -18814,7 +18814,7 @@ index 9102d60fc5c6..367e10c919d1 100644
  	} else {
  		/*
 diff --git a/kernel/softirq.c b/kernel/softirq.c
-index 6f584861d329..c15583162a55 100644
+index 6f584861d329..25bcf2f2714b 100644
 --- a/kernel/softirq.c
 +++ b/kernel/softirq.c
 @@ -21,11 +21,14 @@
@@ -18832,7 +18832,7 @@ index 6f584861d329..c15583162a55 100644
  
  #define CREATE_TRACE_POINTS
  #include <trace/events/irq.h>
-@@ -56,12 +59,108 @@ EXPORT_PER_CPU_SYMBOL(irq_stat);
+@@ -56,12 +59,136 @@ EXPORT_PER_CPU_SYMBOL(irq_stat);
  static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;
  
  DEFINE_PER_CPU(struct task_struct *, ksoftirqd);
@@ -18869,6 +18869,34 @@ index 6f584861d329..c15583162a55 100644
 +	sr->runner[sirq] = NULL;
 +}
 +
++static bool softirq_check_runner_tsk(struct task_struct *tsk,
++				     unsigned int *pending)
++{
++	bool ret = false;
++
++	if (!tsk)
++		return ret;
++
++	/*
++	 * The wakeup code in rtmutex.c wakes up the task
++	 * _before_ it sets pi_blocked_on to NULL under
++	 * tsk->pi_lock. So we need to check for both: state
++	 * and pi_blocked_on.
++	 * The test against UNINTERRUPTIBLE + ->sleeping_lock is in case the
++	 * task does cpu_chill().
++	 */
++	raw_spin_lock(&tsk->pi_lock);
++	if (tsk->pi_blocked_on || tsk->state == TASK_RUNNING ||
++	    (tsk->state == TASK_UNINTERRUPTIBLE && tsk->sleeping_lock)) {
++		/* Clear all bits pending in that task */
++		*pending &= ~(tsk->softirqs_raised);
++		ret = true;
++	}
++	raw_spin_unlock(&tsk->pi_lock);
++
++	return ret;
++}
++
 +/*
 + * On preempt-rt a softirq running context might be blocked on a
 + * lock. There might be no other runnable task on this CPU because the
@@ -18881,6 +18909,7 @@ index 6f584861d329..c15583162a55 100644
 + */
 +void softirq_check_pending_idle(void)
 +{
++	struct task_struct *tsk;
 +	static int rate_limit;
 +	struct softirq_runner *sr = this_cpu_ptr(&softirq_runners);
 +	u32 warnpending;
@@ -18890,24 +18919,23 @@ index 6f584861d329..c15583162a55 100644
 +		return;
 +
 +	warnpending = local_softirq_pending() & SOFTIRQ_STOP_IDLE_MASK;
++	if (!warnpending)
++		return;
 +	for (i = 0; i < NR_SOFTIRQS; i++) {
-+		struct task_struct *tsk = sr->runner[i];
++		tsk = sr->runner[i];
 +
-+		/*
-+		 * The wakeup code in rtmutex.c wakes up the task
-+		 * _before_ it sets pi_blocked_on to NULL under
-+		 * tsk->pi_lock. So we need to check for both: state
-+		 * and pi_blocked_on.
-+		 */
-+		if (tsk) {
-+			raw_spin_lock(&tsk->pi_lock);
-+			if (tsk->pi_blocked_on || tsk->state == TASK_RUNNING) {
-+				/* Clear all bits pending in that task */
-+				warnpending &= ~(tsk->softirqs_raised);
-+				warnpending &= ~(1 << i);
-+			}
-+			raw_spin_unlock(&tsk->pi_lock);
-+		}
++		if (softirq_check_runner_tsk(tsk, &warnpending))
++			warnpending &= ~(1 << i);
++	}
++
++	if (warnpending) {
++		tsk = __this_cpu_read(ksoftirqd);
++		softirq_check_runner_tsk(tsk, &warnpending);
++	}
++
++	if (warnpending) {
++		tsk = __this_cpu_read(ktimer_softirqd);
++		softirq_check_runner_tsk(tsk, &warnpending);
 +	}
 +
 +	if (warnpending) {
@@ -18941,7 +18969,7 @@ index 6f584861d329..c15583162a55 100644
  /*
   * we cannot loop indefinitely here to avoid userspace starvation,
   * but we also don't want to introduce a worst case 1/HZ latency
-@@ -77,6 +176,38 @@ static void wakeup_softirqd(void)
+@@ -77,6 +204,38 @@ static void wakeup_softirqd(void)
  		wake_up_process(tsk);
  }
  
@@ -18980,7 +19008,7 @@ index 6f584861d329..c15583162a55 100644
  /*
   * If ksoftirqd is scheduled, we do not want to process pending softirqs
   * right now. Let ksoftirqd handle this at its own rate, to get fairness,
-@@ -92,6 +223,47 @@ static bool ksoftirqd_running(unsigned long pending)
+@@ -92,6 +251,47 @@ static bool ksoftirqd_running(unsigned long pending)
  	return tsk && (tsk->state == TASK_RUNNING);
  }
  
@@ -19028,7 +19056,7 @@ index 6f584861d329..c15583162a55 100644
  /*
   * preempt_count and SOFTIRQ_OFFSET usage:
   * - preempt_count is changed by SOFTIRQ_OFFSET on entering or leaving
-@@ -251,10 +423,8 @@ asmlinkage __visible void __softirq_entry __do_softirq(void)
+@@ -251,10 +451,8 @@ asmlinkage __visible void __softirq_entry __do_softirq(void)
  	unsigned long end = jiffies + MAX_SOFTIRQ_TIME;
  	unsigned long old_flags = current->flags;
  	int max_restart = MAX_SOFTIRQ_RESTART;
@@ -19039,7 +19067,7 @@ index 6f584861d329..c15583162a55 100644
  
  	/*
  	 * Mask out PF_MEMALLOC s current task context is borrowed for the
-@@ -273,36 +443,7 @@ asmlinkage __visible void __softirq_entry __do_softirq(void)
+@@ -273,36 +471,7 @@ asmlinkage __visible void __softirq_entry __do_softirq(void)
  	/* Reset the pending bitmask before enabling irqs */
  	set_softirq_pending(0);
  
@@ -19077,7 +19105,7 @@ index 6f584861d329..c15583162a55 100644
  
  	pending = local_softirq_pending();
  	if (pending) {
-@@ -338,6 +479,309 @@ asmlinkage __visible void do_softirq(void)
+@@ -338,6 +507,309 @@ asmlinkage __visible void do_softirq(void)
  	local_irq_restore(flags);
  }
  
@@ -19387,7 +19415,7 @@ index 6f584861d329..c15583162a55 100644
  /*
   * Enter an interrupt context.
   */
-@@ -349,9 +793,9 @@ void irq_enter(void)
+@@ -349,9 +821,9 @@ void irq_enter(void)
  		 * Prevent raise_softirq from needlessly waking up ksoftirqd
  		 * here, as softirq will be serviced on return from interrupt.
  		 */
@@ -19399,7 +19427,7 @@ index 6f584861d329..c15583162a55 100644
  	}
  
  	__irq_enter();
-@@ -359,6 +803,7 @@ void irq_enter(void)
+@@ -359,6 +831,7 @@ void irq_enter(void)
  
  static inline void invoke_softirq(void)
  {
@@ -19407,7 +19435,7 @@ index 6f584861d329..c15583162a55 100644
  	if (ksoftirqd_running(local_softirq_pending()))
  		return;
  
-@@ -381,6 +826,18 @@ static inline void invoke_softirq(void)
+@@ -381,6 +854,18 @@ static inline void invoke_softirq(void)
  	} else {
  		wakeup_softirqd();
  	}
@@ -19426,7 +19454,7 @@ index 6f584861d329..c15583162a55 100644
  }
  
  static inline void tick_irq_exit(void)
-@@ -416,26 +873,6 @@ void irq_exit(void)
+@@ -416,26 +901,6 @@ void irq_exit(void)
  	trace_hardirq_exit(); /* must be last! */
  }
  
@@ -19453,7 +19481,7 @@ index 6f584861d329..c15583162a55 100644
  void raise_softirq(unsigned int nr)
  {
  	unsigned long flags;
-@@ -445,12 +882,6 @@ void raise_softirq(unsigned int nr)
+@@ -445,12 +910,6 @@ void raise_softirq(unsigned int nr)
  	local_irq_restore(flags);
  }
  
@@ -19466,7 +19494,7 @@ index 6f584861d329..c15583162a55 100644
  void open_softirq(int nr, void (*action)(struct softirq_action *))
  {
  	softirq_vec[nr].action = action;
-@@ -475,11 +906,38 @@ static void __tasklet_schedule_common(struct tasklet_struct *t,
+@@ -475,11 +934,38 @@ static void __tasklet_schedule_common(struct tasklet_struct *t,
  	unsigned long flags;
  
  	local_irq_save(flags);
@@ -19509,7 +19537,7 @@ index 6f584861d329..c15583162a55 100644
  	local_irq_restore(flags);
  }
  
-@@ -497,11 +955,21 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
+@@ -497,11 +983,21 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
  }
  EXPORT_SYMBOL(__tasklet_hi_schedule);
  
@@ -19531,7 +19559,7 @@ index 6f584861d329..c15583162a55 100644
  
  	local_irq_disable();
  	list = tl_head->head;
-@@ -513,25 +981,56 @@ static void tasklet_action_common(struct softirq_action *a,
+@@ -513,25 +1009,56 @@ static void tasklet_action_common(struct softirq_action *a,
  		struct tasklet_struct *t = list;
  
  		list = list->next;
@@ -19545,8 +19573,6 @@ index 6f584861d329..c15583162a55 100644
 +			WARN_ON(1);
 +			continue;
 +		}
-+
-+		t->next = NULL;
  
 -		if (tasklet_trylock(t)) {
 -			if (!atomic_read(&t->count)) {
@@ -19554,6 +19580,8 @@ index 6f584861d329..c15583162a55 100644
 -							&t->state))
 -					BUG();
 -				t->func(t->data);
++		t->next = NULL;
++
 +		if (unlikely(atomic_read(&t->count))) {
 +out_disabled:
 +			/* implicit unlock: */
@@ -19603,7 +19631,7 @@ index 6f584861d329..c15583162a55 100644
  	}
  }
  
-@@ -563,7 +1062,7 @@ void tasklet_kill(struct tasklet_struct *t)
+@@ -563,7 +1090,7 @@ void tasklet_kill(struct tasklet_struct *t)
  
  	while (test_and_set_bit(TASKLET_STATE_SCHED, &t->state)) {
  		do {
@@ -19612,19 +19640,19 @@ index 6f584861d329..c15583162a55 100644
  		} while (test_bit(TASKLET_STATE_SCHED, &t->state));
  	}
  	tasklet_unlock_wait(t);
-@@ -637,25 +1136,26 @@ void __init softirq_init(void)
+@@ -637,25 +1164,26 @@ void __init softirq_init(void)
  	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
  }
  
 -static int ksoftirqd_should_run(unsigned int cpu)
--{
++#if defined(CONFIG_SMP) || defined(CONFIG_PREEMPT_RT_FULL)
++void tasklet_unlock_wait(struct tasklet_struct *t)
+ {
 -	return local_softirq_pending();
 -}
 -
 -static void run_ksoftirqd(unsigned int cpu)
-+#if defined(CONFIG_SMP) || defined(CONFIG_PREEMPT_RT_FULL)
-+void tasklet_unlock_wait(struct tasklet_struct *t)
- {
+-{
 -	local_irq_disable();
 -	if (local_softirq_pending()) {
 +	while (test_bit(TASKLET_STATE_RUN, &(t)->state)) {
@@ -19654,7 +19682,7 @@ index 6f584861d329..c15583162a55 100644
  }
  
  #ifdef CONFIG_HOTPLUG_CPU
-@@ -722,17 +1222,31 @@ static int takeover_tasklets(unsigned int cpu)
+@@ -722,17 +1250,31 @@ static int takeover_tasklets(unsigned int cpu)
  
  static struct smp_hotplug_thread softirq_threads = {
  	.store			= &ksoftirqd,
@@ -19701,7 +19729,7 @@ index fa5de5e8de61..6020ee66e517 100644
  }
  EXPORT_SYMBOL_GPL(alarm_cancel);
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index e1a549c9e399..851b2134e77f 100644
+index e1a549c9e399..6f2736ec4b8e 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
 @@ -730,6 +730,29 @@ static void hrtimer_switch_to_hres(void)
@@ -19922,7 +19950,7 @@ index e1a549c9e399..851b2134e77f 100644
  	hrtimer_set_expires_range_ns(&t.timer, timespec64_to_ktime(*rqtp), slack);
  	ret = do_nanosleep(&t, mode);
  	if (ret != -ERESTART_RESTARTBLOCK)
-@@ -1797,6 +1894,27 @@ COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
+@@ -1797,6 +1894,30 @@ COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
  }
  #endif
  
@@ -19934,15 +19962,18 @@ index e1a549c9e399..851b2134e77f 100644
 +{
 +	ktime_t chill_time;
 +	unsigned int freeze_flag = current->flags & PF_NOFREEZE;
++	long saved_state;
 +
++	saved_state = current->state;
 +	chill_time = ktime_set(0, NSEC_PER_MSEC);
-+	set_current_state(TASK_UNINTERRUPTIBLE);
++	__set_current_state_no_track(TASK_UNINTERRUPTIBLE);
 +	current->flags |= PF_NOFREEZE;
 +	sleeping_lock_inc();
 +	schedule_hrtimeout(&chill_time, HRTIMER_MODE_REL_HARD);
 +	sleeping_lock_dec();
 +	if (!freeze_flag)
 +		current->flags &= ~PF_NOFREEZE;
++	__set_current_state_no_track(saved_state);
 +}
 +EXPORT_SYMBOL(cpu_chill);
 +#endif
@@ -19950,7 +19981,7 @@ index e1a549c9e399..851b2134e77f 100644
  /*
   * Functions related to boot-time initialization:
   */
-@@ -1818,6 +1936,9 @@ int hrtimers_prepare_cpu(unsigned int cpu)
+@@ -1818,6 +1939,9 @@ int hrtimers_prepare_cpu(unsigned int cpu)
  	cpu_base->softirq_next_timer = NULL;
  	cpu_base->expires_next = KTIME_MAX;
  	cpu_base->softirq_expires_next = KTIME_MAX;
@@ -19960,7 +19991,7 @@ index e1a549c9e399..851b2134e77f 100644
  	return 0;
  }
  
-@@ -1936,11 +2057,9 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
+@@ -1936,11 +2060,9 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
  		return -EINTR;
  	}
  
@@ -24088,7 +24119,7 @@ index 228dfa382eec..bc8d01996f22 100644
  config BQL
  	bool
 diff --git a/net/core/dev.c b/net/core/dev.c
-index af097ca9cb4f..7990d76d6c0b 100644
+index 5c8c0a572ee9..5e42a8640e98 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -195,6 +195,7 @@ static unsigned int napi_gen_id = NR_CPUS;
@@ -24580,7 +24611,7 @@ index 7f6938405fa1..b71d9eef334e 100644
  			set_current_state(TASK_INTERRUPTIBLE);
  			hrtimer_start_expires(&t.timer, HRTIMER_MODE_ABS);
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 589ec5b9ec5f..26dc2d1aaa7b 100644
+index 8656b1e20d35..bc27edb6a316 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
 @@ -63,6 +63,7 @@
@@ -24613,7 +24644,7 @@ index 589ec5b9ec5f..26dc2d1aaa7b 100644
  	return data;
  }
  
-@@ -359,9 +362,13 @@ EXPORT_SYMBOL(netdev_alloc_frag);
+@@ -361,9 +364,13 @@ EXPORT_SYMBOL(netdev_alloc_frag);
  
  static void *__napi_alloc_frag(unsigned int fragsz, gfp_t gfp_mask)
  {
@@ -24629,7 +24660,7 @@ index 589ec5b9ec5f..26dc2d1aaa7b 100644
  }
  
  void *napi_alloc_frag(unsigned int fragsz)
-@@ -408,13 +415,13 @@ struct sk_buff *__netdev_alloc_skb(struct net_device *dev, unsigned int len,
+@@ -412,13 +419,13 @@ struct sk_buff *__netdev_alloc_skb(struct net_device *dev, unsigned int len,
  	if (sk_memalloc_socks())
  		gfp_mask |= __GFP_MEMALLOC;
  
@@ -24645,7 +24676,7 @@ index 589ec5b9ec5f..26dc2d1aaa7b 100644
  
  	if (unlikely(!data))
  		return NULL;
-@@ -455,9 +462,10 @@ EXPORT_SYMBOL(__netdev_alloc_skb);
+@@ -459,9 +466,10 @@ EXPORT_SYMBOL(__netdev_alloc_skb);
  struct sk_buff *__napi_alloc_skb(struct napi_struct *napi, unsigned int len,
  				 gfp_t gfp_mask)
  {
@@ -24657,7 +24688,7 @@ index 589ec5b9ec5f..26dc2d1aaa7b 100644
  
  	len += NET_SKB_PAD + NET_IP_ALIGN;
  
-@@ -475,7 +483,10 @@ struct sk_buff *__napi_alloc_skb(struct napi_struct *napi, unsigned int len,
+@@ -479,7 +487,10 @@ struct sk_buff *__napi_alloc_skb(struct napi_struct *napi, unsigned int len,
  	if (sk_memalloc_socks())
  		gfp_mask |= __GFP_MEMALLOC;
  
@@ -24668,7 +24699,7 @@ index 589ec5b9ec5f..26dc2d1aaa7b 100644
  	if (unlikely(!data))
  		return NULL;
  
-@@ -486,7 +497,7 @@ struct sk_buff *__napi_alloc_skb(struct napi_struct *napi, unsigned int len,
+@@ -490,7 +501,7 @@ struct sk_buff *__napi_alloc_skb(struct napi_struct *napi, unsigned int len,
  	}
  
  	/* use OR instead of assignment to avoid clearing of bits in mask */
@@ -24677,7 +24708,7 @@ index 589ec5b9ec5f..26dc2d1aaa7b 100644
  		skb->pfmemalloc = 1;
  	skb->head_frag = 1;
  
-@@ -718,23 +729,26 @@ void __consume_stateless_skb(struct sk_buff *skb)
+@@ -722,23 +733,26 @@ void __consume_stateless_skb(struct sk_buff *skb)
  
  void __kfree_skb_flush(void)
  {
@@ -24706,7 +24737,7 @@ index 589ec5b9ec5f..26dc2d1aaa7b 100644
  	/* record skb to CPU local list */
  	nc->skb_cache[nc->skb_count++] = skb;
  
-@@ -749,6 +763,7 @@ static inline void _kfree_skb_defer(struct sk_buff *skb)
+@@ -753,6 +767,7 @@ static inline void _kfree_skb_defer(struct sk_buff *skb)
  				     nc->skb_cache);
  		nc->skb_count = 0;
  	}
@@ -24761,7 +24792,7 @@ index 695979b7ef6d..4fe69e685569 100644
  
  int sysctl_icmp_msgs_per_sec __read_mostly = 1000;
 diff --git a/net/ipv4/tcp_ipv4.c b/net/ipv4/tcp_ipv4.c
-index cd426313a298..c78c22ea0be1 100644
+index 3b83b157b0a1..6890e77d4270 100644
 --- a/net/ipv4/tcp_ipv4.c
 +++ b/net/ipv4/tcp_ipv4.c
 @@ -62,6 +62,7 @@
@@ -24772,7 +24803,7 @@ index cd426313a298..c78c22ea0be1 100644
  
  #include <net/net_namespace.h>
  #include <net/icmp.h>
-@@ -633,6 +634,7 @@ void tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
+@@ -634,6 +635,7 @@ void tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
  }
  EXPORT_SYMBOL(tcp_v4_send_check);
  
@@ -24780,7 +24811,7 @@ index cd426313a298..c78c22ea0be1 100644
  /*
   *	This routine will send an RST to the other tcp.
   *
-@@ -767,6 +769,7 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
+@@ -768,6 +770,7 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
  	arg.tos = ip_hdr(skb)->tos;
  	arg.uid = sock_net_uid(net, sk && sk_fullsock(sk) ? sk : NULL);
  	local_bh_disable();
@@ -24788,7 +24819,7 @@ index cd426313a298..c78c22ea0be1 100644
  	ctl_sk = *this_cpu_ptr(net->ipv4.tcp_sk);
  	if (sk)
  		ctl_sk->sk_mark = (sk->sk_state == TCP_TIME_WAIT) ?
-@@ -779,6 +782,7 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
+@@ -780,6 +783,7 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
  	ctl_sk->sk_mark = 0;
  	__TCP_INC_STATS(net, TCP_MIB_OUTSEGS);
  	__TCP_INC_STATS(net, TCP_MIB_OUTRSTS);
@@ -24796,7 +24827,7 @@ index cd426313a298..c78c22ea0be1 100644
  	local_bh_enable();
  
  #ifdef CONFIG_TCP_MD5SIG
-@@ -859,6 +863,7 @@ static void tcp_v4_send_ack(const struct sock *sk,
+@@ -860,6 +864,7 @@ static void tcp_v4_send_ack(const struct sock *sk,
  	arg.tos = tos;
  	arg.uid = sock_net_uid(net, sk_fullsock(sk) ? sk : NULL);
  	local_bh_disable();
@@ -24804,7 +24835,7 @@ index cd426313a298..c78c22ea0be1 100644
  	ctl_sk = *this_cpu_ptr(net->ipv4.tcp_sk);
  	if (sk)
  		ctl_sk->sk_mark = (sk->sk_state == TCP_TIME_WAIT) ?
-@@ -870,6 +875,7 @@ static void tcp_v4_send_ack(const struct sock *sk,
+@@ -871,6 +876,7 @@ static void tcp_v4_send_ack(const struct sock *sk,
  
  	ctl_sk->sk_mark = 0;
  	__TCP_INC_STATS(net, TCP_MIB_OUTSEGS);
@@ -24837,7 +24868,7 @@ index dc240cb47ddf..9bd8f062ebc1 100644
  EXPORT_SYMBOL_GPL(nf_ipv6_ops);
  
 diff --git a/net/packet/af_packet.c b/net/packet/af_packet.c
-index b6ea0fadb34f..34732b33cb03 100644
+index c76c21604ffd..b98b9bd20402 100644
 --- a/net/packet/af_packet.c
 +++ b/net/packet/af_packet.c
 @@ -63,6 +63,7 @@
