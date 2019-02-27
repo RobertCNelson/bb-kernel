@@ -1,6 +1,6 @@
-From 858f86bda88c6718f32bed2634838213ef0c7f24 Mon Sep 17 00:00:00 2001
+From 8a9175f3a9c73165476b024e150bcb1a1f705f87 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 25 Feb 2019 09:20:30 -0600
+Date: Wed, 27 Feb 2019 10:07:24 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -324,7 +324,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/signal.c                               | 114 ++-
  kernel/softirq.c                              | 734 ++++++++++++--
  kernel/time/alarmtimer.c                      |   2 +-
- kernel/time/hrtimer.c                         | 150 ++-
+ kernel/time/hrtimer.c                         | 158 ++-
  kernel/time/itimer.c                          |   1 +
  kernel/time/jiffies.c                         |   7 +-
  kernel/time/posix-cpu-timers.c                | 154 ++-
@@ -387,7 +387,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/include/path.h              |  19 +-
  security/apparmor/lsm.c                       |   2 +-
  virt/kvm/arm/arm.c                            |   6 +-
- 382 files changed, 9533 insertions(+), 2008 deletions(-)
+ 382 files changed, 9541 insertions(+), 2008 deletions(-)
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -2763,7 +2763,7 @@ index 3b2490b81918..fbb14008bd43 100644
  			uprobe_notify_resume(regs);
  
 diff --git a/arch/x86/entry/entry_32.S b/arch/x86/entry/entry_32.S
-index fbbf1ba57ec6..0169c257cfff 100644
+index fbbf1ba57ec6..e6f61c813baf 100644
 --- a/arch/x86/entry/entry_32.S
 +++ b/arch/x86/entry/entry_32.S
 @@ -764,8 +764,25 @@ END(ret_from_exception)
@@ -2779,15 +2779,15 @@ index fbbf1ba57ec6..0169c257cfff 100644
 +
 +	# atleast preempt count == 0 ?
 +	cmpl $_PREEMPT_ENABLED,PER_CPU_VAR(__preempt_count)
-+	jne restore_all
++	jne	restore_all_kernel
 +
 +	movl	PER_CPU_VAR(current_task), %ebp
 +	cmpl	$0,TASK_TI_preempt_lazy_count(%ebp)	# non-zero preempt_lazy_count ?
-+	jnz	restore_all
++	jnz	restore_all_kernel
 +
 +	testl	$_TIF_NEED_RESCHED_LAZY, TASK_TI_flags(%ebp)
-+	jz	restore_all
-+	test_int_off:
++	jz	restore_all_kernel
++test_int_off:
 +#endif
  	testl	$X86_EFLAGS_IF, PT_EFLAGS(%esp)	# interrupts off (exception path) ?
  	jz	restore_all_kernel
@@ -7134,10 +7134,10 @@ index 0ceb3b6b37e7..ccfef702c771 100644
  
  static inline void task_core_dumping(struct seq_file *m, struct mm_struct *mm)
 diff --git a/fs/proc/base.c b/fs/proc/base.c
-index 3ab59011067e..fdda425d05e6 100644
+index 1d6b85c2b3eb..6a14a8f874eb 100644
 --- a/fs/proc/base.c
 +++ b/fs/proc/base.c
-@@ -1876,7 +1876,7 @@ bool proc_fill_cache(struct file *file, struct dir_context *ctx,
+@@ -1872,7 +1872,7 @@ bool proc_fill_cache(struct file *file, struct dir_context *ctx,
  
  	child = d_hash_and_lookup(dir, &qname);
  	if (!child) {
@@ -10478,7 +10478,7 @@ index e4d01469ed60..746dd5d28c54 100644
  /* Test if 'sig' is valid signal. Use this instead of testing _NSIG directly */
  static inline int valid_signal(unsigned long sig)
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index 5d69e208e8d9..f233f5319322 100644
+index a404d475acee..2d5c7d56c8cc 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -287,6 +287,7 @@ struct sk_buff_head {
@@ -19729,7 +19729,7 @@ index fa5de5e8de61..6020ee66e517 100644
  }
  EXPORT_SYMBOL_GPL(alarm_cancel);
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index e1a549c9e399..6f2736ec4b8e 100644
+index e1a549c9e399..e1040b80362c 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
 @@ -730,6 +730,29 @@ static void hrtimer_switch_to_hres(void)
@@ -19950,7 +19950,7 @@ index e1a549c9e399..6f2736ec4b8e 100644
  	hrtimer_set_expires_range_ns(&t.timer, timespec64_to_ktime(*rqtp), slack);
  	ret = do_nanosleep(&t, mode);
  	if (ret != -ERESTART_RESTARTBLOCK)
-@@ -1797,6 +1894,30 @@ COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
+@@ -1797,6 +1894,38 @@ COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
  }
  #endif
  
@@ -19960,20 +19960,28 @@ index e1a549c9e399..6f2736ec4b8e 100644
 + */
 +void cpu_chill(void)
 +{
-+	ktime_t chill_time;
 +	unsigned int freeze_flag = current->flags & PF_NOFREEZE;
-+	long saved_state;
++	struct task_struct *self = current;
++	ktime_t chill_time;
 +
-+	saved_state = current->state;
-+	chill_time = ktime_set(0, NSEC_PER_MSEC);
++	raw_spin_lock_irq(&self->pi_lock);
++	self->saved_state = self->state;
 +	__set_current_state_no_track(TASK_UNINTERRUPTIBLE);
++	raw_spin_unlock_irq(&self->pi_lock);
++
++	chill_time = ktime_set(0, NSEC_PER_MSEC);
++
 +	current->flags |= PF_NOFREEZE;
 +	sleeping_lock_inc();
 +	schedule_hrtimeout(&chill_time, HRTIMER_MODE_REL_HARD);
 +	sleeping_lock_dec();
 +	if (!freeze_flag)
 +		current->flags &= ~PF_NOFREEZE;
-+	__set_current_state_no_track(saved_state);
++
++	raw_spin_lock_irq(&self->pi_lock);
++	__set_current_state_no_track(self->saved_state);
++	self->saved_state = TASK_RUNNING;
++	raw_spin_unlock_irq(&self->pi_lock);
 +}
 +EXPORT_SYMBOL(cpu_chill);
 +#endif
@@ -19981,7 +19989,7 @@ index e1a549c9e399..6f2736ec4b8e 100644
  /*
   * Functions related to boot-time initialization:
   */
-@@ -1818,6 +1939,9 @@ int hrtimers_prepare_cpu(unsigned int cpu)
+@@ -1818,6 +1947,9 @@ int hrtimers_prepare_cpu(unsigned int cpu)
  	cpu_base->softirq_next_timer = NULL;
  	cpu_base->expires_next = KTIME_MAX;
  	cpu_base->softirq_expires_next = KTIME_MAX;
@@ -19991,7 +19999,7 @@ index e1a549c9e399..6f2736ec4b8e 100644
  	return 0;
  }
  
-@@ -1936,11 +2060,9 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
+@@ -1936,11 +2068,9 @@ schedule_hrtimeout_range_clock(ktime_t *expires, u64 delta,
  		return -EINTR;
  	}
  
@@ -20665,7 +20673,7 @@ index fa49cd753dea..781483c76b17 100644
  }
  
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index bf6f1d70484d..4d617ef8c3a0 100644
+index 17bd0c0dfa98..dd5a3fb37015 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
 @@ -2134,6 +2134,7 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned long flags,
@@ -20715,7 +20723,7 @@ index bf6f1d70484d..4d617ef8c3a0 100644
  }
  
  static void print_event_info(struct trace_buffer *buf, struct seq_file *m)
-@@ -3387,15 +3394,17 @@ static void print_func_help_header_irq(struct trace_buffer *buf, struct seq_file
+@@ -3389,15 +3396,17 @@ static void print_func_help_header_irq(struct trace_buffer *buf, struct seq_file
  		   tgid ? tgid_space : space);
  	seq_printf(m, "#                          %s / _----=> need-resched\n",
  		   tgid ? tgid_space : space);
@@ -24498,7 +24506,7 @@ index 5c8c0a572ee9..5e42a8640e98 100644
  		skb_queue_head_init(&sd->xfrm_backlog);
  #endif
 diff --git a/net/core/filter.c b/net/core/filter.c
-index 8c2411fb2509..a8c0df2d8e06 100644
+index fb0080e84bd4..17a3325ebfcc 100644
 --- a/net/core/filter.c
 +++ b/net/core/filter.c
 @@ -2000,7 +2000,7 @@ static inline int __bpf_tx_skb(struct net_device *dev, struct sk_buff *skb)
@@ -24868,7 +24876,7 @@ index dc240cb47ddf..9bd8f062ebc1 100644
  EXPORT_SYMBOL_GPL(nf_ipv6_ops);
  
 diff --git a/net/packet/af_packet.c b/net/packet/af_packet.c
-index c76c21604ffd..b98b9bd20402 100644
+index fd16fb836df2..52b97a25a979 100644
 --- a/net/packet/af_packet.c
 +++ b/net/packet/af_packet.c
 @@ -63,6 +63,7 @@
