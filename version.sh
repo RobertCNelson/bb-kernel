@@ -37,7 +37,7 @@ kernel_rt=".X-rtY"
 #Kernel Build
 BUILD=${build_prefix}3
 
-#v4.X-rcX + upto SHA
+#v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
