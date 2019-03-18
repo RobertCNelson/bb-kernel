@@ -293,7 +293,7 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 #rt
 wireguard
 ti_pm_firmware
@@ -352,7 +352,6 @@ backports () {
 
 ti_rogerq_pruss () {
 	#https://github.com/rogerq/linux/commits/for-v5.1/pruss-2.0
-	echo "dir: drivers/ti/rogerq_pruss"
 	#regenerate="enable"
 	branch="for-v5.1/pruss-2.0"
 	git_depth="30"
@@ -429,8 +428,6 @@ drivers () {
 	dir 'drivers/ti/spi'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
-	#[PATCH v3 1/4] mfd: stmpe: Move ADC related defines to header of mfd
-	dir 'drivers/iio/stmpe'
 }
 
 soc () {
@@ -511,7 +508,7 @@ beaglebone () {
 
 ###
 #backports
-ti_rogerq_pruss
+#ti_rogerq_pruss
 #reverts
 drivers
 soc
