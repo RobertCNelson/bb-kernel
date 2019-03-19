@@ -564,6 +564,7 @@ reverts
 drivers
 soc
 beaglebone
+dir 'fixes'
 sgx
 
 packaging () {
