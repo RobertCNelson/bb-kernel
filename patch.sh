@@ -192,6 +192,7 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	#v5.0.x
 	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
