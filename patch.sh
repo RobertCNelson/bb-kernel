@@ -192,6 +192,7 @@ rt () {
 	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
+	#v5.0.x
 	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
@@ -294,8 +295,8 @@ local_patch () {
 
 #external_git
 aufs
-#rt
-wireguard
+rt
+#wireguard
 ti_pm_firmware
 #local_patch
 
