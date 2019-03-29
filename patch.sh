@@ -336,7 +336,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.20.16"
+	backport_tag="v4.20.17"
 
 	subsystem="remoteproc"
 	#regenerate="enable"
