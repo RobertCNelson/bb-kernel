@@ -1,6 +1,6 @@
-From 22871e3808770ac012675e61571c7d5b2ca7d315 Mon Sep 17 00:00:00 2001
+From b7101b2e2a94cfe5f60cbbab3afbe8ebbb18ac99 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 25 Mar 2019 09:48:59 -0500
+Date: Fri, 29 Mar 2019 11:12:57 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -48,16 +48,20 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/mips/kernel/traps.c                      |    6 +-
  arch/powerpc/Kconfig                          |    6 +-
  arch/powerpc/include/asm/spinlock_types.h     |    4 -
- arch/powerpc/include/asm/thread_info.h        |    9 +-
+ arch/powerpc/include/asm/stackprotector.h     |    4 +
+ arch/powerpc/include/asm/thread_info.h        |   16 +-
  arch/powerpc/kernel/asm-offsets.c             |    1 +
- arch/powerpc/kernel/entry_32.S                |   17 +-
- arch/powerpc/kernel/entry_64.S                |   14 +-
+ arch/powerpc/kernel/entry_32.S                |   29 +-
+ arch/powerpc/kernel/entry_64.S                |   26 +-
  arch/powerpc/kernel/irq.c                     |    2 +
  arch/powerpc/kernel/misc_32.S                 |    2 +
  arch/powerpc/kernel/misc_64.S                 |    2 +
+ arch/powerpc/kernel/traps.c                   |    1 -
+ arch/powerpc/kernel/watchdog.c                |    5 -
  arch/powerpc/kvm/Kconfig                      |    1 +
  arch/powerpc/platforms/cell/spufs/sched.c     |    2 +-
  arch/powerpc/platforms/ps3/device-init.c      |    4 +-
+ arch/powerpc/platforms/pseries/iommu.c        |   16 +-
  arch/s390/include/asm/spinlock_types.h        |    4 -
  arch/sh/include/asm/spinlock_types.h          |    4 -
  arch/sh/kernel/irq.c                          |    2 +
@@ -160,6 +164,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/8250/8250_port.c           |  145 +-
  drivers/tty/serial/amba-pl011.c               |   17 +-
  drivers/tty/serial/omap-serial.c              |   12 +-
+ drivers/tty/sysrq.c                           |    6 +-
  drivers/usb/gadget/function/f_fs.c            |    2 +-
  drivers/usb/gadget/legacy/inode.c             |    4 +-
  drivers/watchdog/watchdog_dev.c               |    8 +-
@@ -318,7 +323,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/power/suspend.c                        |    4 +
  kernel/printk/Makefile                        |    1 -
  kernel/printk/internal.h                      |   79 -
- kernel/printk/printk.c                        | 1903 ++++++++---------
+ kernel/printk/printk.c                        | 1897 ++++++++---------
  kernel/printk/printk_safe.c                   |  427 ----
  kernel/ptrace.c                               |    9 +-
  kernel/rcu/Kconfig                            |    6 +-
@@ -371,7 +376,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  lib/irq_poll.c                                |    5 +
  lib/locking-selftest.c                        |   50 +
  lib/nmi_backtrace.c                           |    6 -
- lib/printk_ringbuffer.c                       |  583 +++++
+ lib/printk_ringbuffer.c                       |  589 +++++
  lib/radix-tree.c                              |   28 +-
  lib/scatterlist.c                             |    2 +-
  lib/smp_processor_id.c                        |    2 +-
@@ -410,7 +415,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/include/path.h              |   19 +-
  security/apparmor/lsm.c                       |    2 +-
  virt/kvm/arm/arm.c                            |    6 +-
- 405 files changed, 11576 insertions(+), 3925 deletions(-)
+ 410 files changed, 11621 insertions(+), 3943 deletions(-)
  create mode 100644 Documentation/printk-ringbuffer.txt
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/kthread-cgroup.h
@@ -2097,8 +2102,24 @@ index 87adaf13b7e8..7305cb6a53e4 100644
  typedef struct {
  	volatile unsigned int slock;
  } arch_spinlock_t;
+diff --git a/arch/powerpc/include/asm/stackprotector.h b/arch/powerpc/include/asm/stackprotector.h
+index 1c8460e23583..e764eb4b6c28 100644
+--- a/arch/powerpc/include/asm/stackprotector.h
++++ b/arch/powerpc/include/asm/stackprotector.h
+@@ -24,7 +24,11 @@ static __always_inline void boot_init_stack_canary(void)
+ 	unsigned long canary;
+ 
+ 	/* Try to get a semi random initial value. */
++#ifdef CONFIG_PREEMPT_RT_FULL
++	canary = (unsigned long)&canary;
++#else
+ 	canary = get_random_canary();
++#endif
+ 	canary ^= mftb();
+ 	canary ^= LINUX_VERSION_CODE;
+ 	canary &= CANARY_MASK;
 diff --git a/arch/powerpc/include/asm/thread_info.h b/arch/powerpc/include/asm/thread_info.h
-index 544cac0474cb..7e542e729f13 100644
+index 544cac0474cb..f9132398566d 100644
 --- a/arch/powerpc/include/asm/thread_info.h
 +++ b/arch/powerpc/include/asm/thread_info.h
 @@ -38,6 +38,8 @@ struct thread_info {
@@ -2110,24 +2131,33 @@ index 544cac0474cb..7e542e729f13 100644
  	unsigned long	local_flags;		/* private flags for thread */
  #ifdef CONFIG_LIVEPATCH
  	unsigned long *livepatch_sp;
-@@ -88,7 +90,7 @@ void arch_setup_new_exec(void);
- /*
-  * thread information flag bit numbers
-  */
--#define TIF_SYSCALL_TRACE	0	/* syscall trace active */
-+#define TIF_NEED_RESCHED_LAZY	0	/* lazy rescheduling necessary */
- #define TIF_SIGPENDING		1	/* signal pending */
- #define TIF_NEED_RESCHED	2	/* rescheduling necessary */
- #define TIF_FSCHECK		3	/* Check FS is USER_DS on return */
-@@ -112,6 +114,7 @@ void arch_setup_new_exec(void);
+@@ -99,11 +101,12 @@ void arch_setup_new_exec(void);
+ #define TIF_SINGLESTEP		8	/* singlestepping active */
+ #define TIF_NOHZ		9	/* in adaptive nohz mode */
+ #define TIF_SECCOMP		10	/* secure computing */
+-#define TIF_RESTOREALL		11	/* Restore all regs (implies NOERROR) */
+-#define TIF_NOERROR		12	/* Force successful syscall return */
++
++#define TIF_NEED_RESCHED_LAZY	11	/* lazy rescheduling necessary */
++#define TIF_SYSCALL_TRACEPOINT	12	/* syscall tracepoint instrumentation */
++
+ #define TIF_NOTIFY_RESUME	13	/* callback before returning to user */
+ #define TIF_UPROBE		14	/* breakpointed or single-stepping */
+-#define TIF_SYSCALL_TRACEPOINT	15	/* syscall tracepoint instrumentation */
+ #define TIF_EMULATE_STACK_STORE	16	/* Is an instruction emulation
+ 						for stack store? */
+ #define TIF_MEMDIE		17	/* is terminating due to OOM killer */
+@@ -112,6 +115,9 @@ void arch_setup_new_exec(void);
  #endif
  #define TIF_POLLING_NRFLAG	19	/* true if poll_idle() is polling TIF_NEED_RESCHED */
  #define TIF_32BIT		20	/* 32 bit binary */
-+#define TIF_SYSCALL_TRACE	21	/* syscall trace active */
++#define TIF_RESTOREALL		21	/* Restore all regs (implies NOERROR) */
++#define TIF_NOERROR		22	/* Force successful syscall return */
++
  
  /* as above, but as bit values */
  #define _TIF_SYSCALL_TRACE	(1<<TIF_SYSCALL_TRACE)
-@@ -131,6 +134,7 @@ void arch_setup_new_exec(void);
+@@ -131,6 +137,7 @@ void arch_setup_new_exec(void);
  #define _TIF_SYSCALL_TRACEPOINT	(1<<TIF_SYSCALL_TRACEPOINT)
  #define _TIF_EMULATE_STACK_STORE	(1<<TIF_EMULATE_STACK_STORE)
  #define _TIF_NOHZ		(1<<TIF_NOHZ)
@@ -2135,7 +2165,7 @@ index 544cac0474cb..7e542e729f13 100644
  #define _TIF_FSCHECK		(1<<TIF_FSCHECK)
  #define _TIF_SYSCALL_EMU	(1<<TIF_SYSCALL_EMU)
  #define _TIF_SYSCALL_DOTRACE	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | \
-@@ -140,8 +144,9 @@ void arch_setup_new_exec(void);
+@@ -140,8 +147,9 @@ void arch_setup_new_exec(void);
  #define _TIF_USER_WORK_MASK	(_TIF_SIGPENDING | _TIF_NEED_RESCHED | \
  				 _TIF_NOTIFY_RESUME | _TIF_UPROBE | \
  				 _TIF_RESTORE_TM | _TIF_PATCH_PENDING | \
@@ -2159,10 +2189,52 @@ index 9ffc72ded73a..f23224826a84 100644
  	OFFSET(TI_CPU, thread_info, cpu);
  
 diff --git a/arch/powerpc/kernel/entry_32.S b/arch/powerpc/kernel/entry_32.S
-index fdd528cdb2ee..553e1ad981c3 100644
+index fdd528cdb2ee..1b6c95d49cd2 100644
 --- a/arch/powerpc/kernel/entry_32.S
 +++ b/arch/powerpc/kernel/entry_32.S
-@@ -888,7 +888,14 @@ resume_kernel:
+@@ -393,7 +393,9 @@ ret_from_syscall:
+ 	MTMSRD(r10)
+ 	lwz	r9,TI_FLAGS(r12)
+ 	li	r8,-MAX_ERRNO
+-	andi.	r0,r9,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)
++	lis	r0,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)@h
++	ori	r0,r0, (_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)@l
++	and.	r0,r9,r0
+ 	bne-	syscall_exit_work
+ 	cmplw	0,r3,r8
+ 	blt+	syscall_exit_cont
+@@ -511,13 +513,13 @@ syscall_dotrace:
+ 	b	syscall_dotrace_cont
+ 
+ syscall_exit_work:
+-	andi.	r0,r9,_TIF_RESTOREALL
++	andis.	r0,r9,_TIF_RESTOREALL@h
+ 	beq+	0f
+ 	REST_NVGPRS(r1)
+ 	b	2f
+ 0:	cmplw	0,r3,r8
+ 	blt+	1f
+-	andi.	r0,r9,_TIF_NOERROR
++	andis.	r0,r9,_TIF_NOERROR@h
+ 	bne-	1f
+ 	lwz	r11,_CCR(r1)			/* Load CR */
+ 	neg	r3,r3
+@@ -526,12 +528,12 @@ syscall_exit_work:
+ 
+ 1:	stw	r6,RESULT(r1)	/* Save result */
+ 	stw	r3,GPR3(r1)	/* Update return value */
+-2:	andi.	r0,r9,(_TIF_PERSYSCALL_MASK)
++2:	andis.	r0,r9,(_TIF_PERSYSCALL_MASK)@h
+ 	beq	4f
+ 
+ 	/* Clear per-syscall TIF flags if any are set.  */
+ 
+-	li	r11,_TIF_PERSYSCALL_MASK
++	lis	r11,_TIF_PERSYSCALL_MASK@h
+ 	addi	r12,r12,TI_FLAGS
+ 3:	lwarx	r8,0,r12
+ 	andc	r8,r8,r11
+@@ -888,7 +890,14 @@ resume_kernel:
  	cmpwi	0,r0,0		/* if non-zero, just restore regs and return */
  	bne	restore
  	andi.	r8,r8,_TIF_NEED_RESCHED
@@ -2177,7 +2249,7 @@ index fdd528cdb2ee..553e1ad981c3 100644
  	lwz	r3,_MSR(r1)
  	andi.	r0,r3,MSR_EE	/* interrupts off? */
  	beq	restore		/* don't schedule if so */
-@@ -899,11 +906,11 @@ resume_kernel:
+@@ -899,11 +908,11 @@ resume_kernel:
  	 */
  	bl	trace_hardirqs_off
  #endif
@@ -2192,7 +2264,7 @@ index fdd528cdb2ee..553e1ad981c3 100644
  #ifdef CONFIG_TRACE_IRQFLAGS
  	/* And now, to properly rebalance the above, we tell lockdep they
  	 * are being turned back on, which will happen when we return
-@@ -1232,7 +1239,7 @@ global_dbcr0:
+@@ -1232,7 +1241,7 @@ global_dbcr0:
  #endif /* !(CONFIG_4xx || CONFIG_BOOKE) */
  
  do_work:			/* r10 contains MSR_KERNEL here */
@@ -2201,7 +2273,7 @@ index fdd528cdb2ee..553e1ad981c3 100644
  	beq	do_user_signal
  
  do_resched:			/* r10 contains MSR_KERNEL here */
-@@ -1253,7 +1260,7 @@ recheck:
+@@ -1253,7 +1262,7 @@ recheck:
  	MTMSRD(r10)		/* disable interrupts */
  	CURRENT_THREAD_INFO(r9, r1)
  	lwz	r9,TI_FLAGS(r9)
@@ -2211,10 +2283,51 @@ index fdd528cdb2ee..553e1ad981c3 100644
  	andi.	r0,r9,_TIF_USER_WORK_MASK
  	beq	restore_user
 diff --git a/arch/powerpc/kernel/entry_64.S b/arch/powerpc/kernel/entry_64.S
-index 435927f549c4..fcf8fe69beb5 100644
+index 435927f549c4..d857823e25b2 100644
 --- a/arch/powerpc/kernel/entry_64.S
 +++ b/arch/powerpc/kernel/entry_64.S
-@@ -780,7 +780,7 @@ _GLOBAL(ret_from_except_lite)
+@@ -253,7 +253,9 @@ system_call_exit:
+ 
+ 	ld	r9,TI_FLAGS(r12)
+ 	li	r11,-MAX_ERRNO
+-	andi.	r0,r9,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)
++	lis	r0,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)@h
++	ori	r0,r0,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)@l
++	and.	r0,r9,r0
+ 	bne-	.Lsyscall_exit_work
+ 
+ 	andi.	r0,r8,MSR_FP
+@@ -370,25 +372,25 @@ END_FTR_SECTION_IFSET(CPU_FTR_HAS_PPR)
+ 	/* If TIF_RESTOREALL is set, don't scribble on either r3 or ccr.
+ 	 If TIF_NOERROR is set, just save r3 as it is. */
+ 
+-	andi.	r0,r9,_TIF_RESTOREALL
++	andis.	r0,r9,_TIF_RESTOREALL@h
+ 	beq+	0f
+ 	REST_NVGPRS(r1)
+ 	b	2f
+ 0:	cmpld	r3,r11		/* r11 is -MAX_ERRNO */
+ 	blt+	1f
+-	andi.	r0,r9,_TIF_NOERROR
++	andis.	r0,r9,_TIF_NOERROR@h
+ 	bne-	1f
+ 	ld	r5,_CCR(r1)
+ 	neg	r3,r3
+ 	oris	r5,r5,0x1000	/* Set SO bit in CR */
+ 	std	r5,_CCR(r1)
+ 1:	std	r3,GPR3(r1)
+-2:	andi.	r0,r9,(_TIF_PERSYSCALL_MASK)
++2:	andis.	r0,r9,(_TIF_PERSYSCALL_MASK)@h
+ 	beq	4f
+ 
+ 	/* Clear per-syscall TIF flags if any are set.  */
+ 
+-	li	r11,_TIF_PERSYSCALL_MASK
++	lis	r11,(_TIF_PERSYSCALL_MASK)@h
+ 	addi	r12,r12,TI_FLAGS
+ 3:	ldarx	r10,0,r12
+ 	andc	r10,r10,r11
+@@ -780,7 +782,7 @@ _GLOBAL(ret_from_except_lite)
  	bl	restore_math
  	b	restore
  #endif
@@ -2223,7 +2336,7 @@ index 435927f549c4..fcf8fe69beb5 100644
  	beq	2f
  	bl	restore_interrupts
  	SCHEDULE_USER
-@@ -842,10 +842,18 @@ resume_kernel:
+@@ -842,10 +844,18 @@ resume_kernel:
  
  #ifdef CONFIG_PREEMPT
  	/* Check if we need to preempt */
@@ -2243,7 +2356,7 @@ index 435927f549c4..fcf8fe69beb5 100644
  	cmpwi	cr0,r8,0
  	bne	restore
  	ld	r0,SOFTE(r1)
-@@ -862,7 +870,7 @@ resume_kernel:
+@@ -862,7 +872,7 @@ resume_kernel:
  	/* Re-test flags and eventually loop */
  	CURRENT_THREAD_INFO(r9, r1)
  	ld	r4,TI_FLAGS(r9)
@@ -2312,6 +2425,34 @@ index 262ba9481781..4935ef9a142e 100644
  
  _GLOBAL(call_do_irq)
  	mflr	r0
+diff --git a/arch/powerpc/kernel/traps.c b/arch/powerpc/kernel/traps.c
+index 7a1de34f38c8..314be8e39d1f 100644
+--- a/arch/powerpc/kernel/traps.c
++++ b/arch/powerpc/kernel/traps.c
+@@ -174,7 +174,6 @@ extern void panic_flush_kmsg_start(void)
+ 
+ extern void panic_flush_kmsg_end(void)
+ {
+-	printk_safe_flush_on_panic();
+ 	kmsg_dump(KMSG_DUMP_PANIC);
+ 	bust_spinlocks(0);
+ 	debug_locks_off();
+diff --git a/arch/powerpc/kernel/watchdog.c b/arch/powerpc/kernel/watchdog.c
+index 3c6ab22a0c4e..bf98181c5b30 100644
+--- a/arch/powerpc/kernel/watchdog.c
++++ b/arch/powerpc/kernel/watchdog.c
+@@ -181,11 +181,6 @@ static void watchdog_smp_panic(int cpu, u64 tb)
+ 
+ 	wd_smp_unlock(&flags);
+ 
+-	printk_safe_flush();
+-	/*
+-	 * printk_safe_flush() seems to require another print
+-	 * before anything actually goes out to console.
+-	 */
+ 	if (sysctl_hardlockup_all_cpu_backtrace)
+ 		trigger_allbutself_cpu_backtrace();
+ 
 diff --git a/arch/powerpc/kvm/Kconfig b/arch/powerpc/kvm/Kconfig
 index bfdde04e4905..0bebb00698e8 100644
 --- a/arch/powerpc/kvm/Kconfig
@@ -2352,6 +2493,80 @@ index e7075aaff1bb..1580464a9d5b 100644
  	if (kthread_should_stop())
  		res = -EINTR;
  	if (res) {
+diff --git a/arch/powerpc/platforms/pseries/iommu.c b/arch/powerpc/platforms/pseries/iommu.c
+index 8fc8fe0b9848..14ecedbd8ff1 100644
+--- a/arch/powerpc/platforms/pseries/iommu.c
++++ b/arch/powerpc/platforms/pseries/iommu.c
+@@ -38,6 +38,7 @@
+ #include <linux/of.h>
+ #include <linux/iommu.h>
+ #include <linux/rculist.h>
++#include <linux/locallock.h>
+ #include <asm/io.h>
+ #include <asm/prom.h>
+ #include <asm/rtas.h>
+@@ -191,6 +192,7 @@ static int tce_build_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ }
+ 
+ static DEFINE_PER_CPU(__be64 *, tce_page);
++static DEFINE_LOCAL_IRQ_LOCK(tcp_page_lock);
+ 
+ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ 				     long npages, unsigned long uaddr,
+@@ -211,7 +213,8 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ 		                           direction, attrs);
+ 	}
+ 
+-	local_irq_save(flags);	/* to protect tcep and the page behind it */
++	/* to protect tcep and the page behind it */
++	local_lock_irqsave(tcp_page_lock, flags);
+ 
+ 	tcep = __this_cpu_read(tce_page);
+ 
+@@ -222,7 +225,7 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ 		tcep = (__be64 *)__get_free_page(GFP_ATOMIC);
+ 		/* If allocation fails, fall back to the loop implementation */
+ 		if (!tcep) {
+-			local_irq_restore(flags);
++			local_unlock_irqrestore(tcp_page_lock, flags);
+ 			return tce_build_pSeriesLP(tbl, tcenum, npages, uaddr,
+ 					    direction, attrs);
+ 		}
+@@ -256,7 +259,7 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ 		tcenum += limit;
+ 	} while (npages > 0 && !rc);
+ 
+-	local_irq_restore(flags);
++	local_unlock_irqrestore(tcp_page_lock, flags);
+ 
+ 	if (unlikely(rc == H_NOT_ENOUGH_RESOURCES)) {
+ 		ret = (int)rc;
+@@ -414,13 +417,14 @@ static int tce_setrange_multi_pSeriesLP(unsigned long start_pfn,
+ 	u64 rc = 0;
+ 	long l, limit;
+ 
+-	local_irq_disable();	/* to protect tcep and the page behind it */
++	/* to protect tcep and the page behind it */
++	local_lock_irq(tcp_page_lock);
+ 	tcep = __this_cpu_read(tce_page);
+ 
+ 	if (!tcep) {
+ 		tcep = (__be64 *)__get_free_page(GFP_ATOMIC);
+ 		if (!tcep) {
+-			local_irq_enable();
++			local_unlock_irq(tcp_page_lock);
+ 			return -ENOMEM;
+ 		}
+ 		__this_cpu_write(tce_page, tcep);
+@@ -466,7 +470,7 @@ static int tce_setrange_multi_pSeriesLP(unsigned long start_pfn,
+ 
+ 	/* error cleanup: caller will clear whole range */
+ 
+-	local_irq_enable();
++	local_unlock_irq(tcp_page_lock);
+ 	return rc;
+ }
+ 
 diff --git a/arch/s390/include/asm/spinlock_types.h b/arch/s390/include/asm/spinlock_types.h
 index cfed272e4fd5..8e28e8176ec8 100644
 --- a/arch/s390/include/asm/spinlock_types.h
@@ -5340,7 +5555,7 @@ index 6f8305f8c300..62e59007b941 100644
  }
  
 diff --git a/drivers/block/loop.c b/drivers/block/loop.c
-index a271e17e4b10..55f92b0ffafc 100644
+index f1ce8140ee21..15b484ea0e55 100644
 --- a/drivers/block/loop.c
 +++ b/drivers/block/loop.c
 @@ -70,7 +70,7 @@
@@ -7806,6 +8021,32 @@ index 6420ae581a80..0f4f41ed9ffa 100644
  }
  
  static int __init
+diff --git a/drivers/tty/sysrq.c b/drivers/tty/sysrq.c
+index 1f03078ec352..8473557c7ab2 100644
+--- a/drivers/tty/sysrq.c
++++ b/drivers/tty/sysrq.c
+@@ -208,7 +208,7 @@ static struct sysrq_key_op sysrq_showlocks_op = {
+ #endif
+ 
+ #ifdef CONFIG_SMP
+-static DEFINE_SPINLOCK(show_lock);
++static DEFINE_RAW_SPINLOCK(show_lock);
+ 
+ static void showacpu(void *dummy)
+ {
+@@ -218,10 +218,10 @@ static void showacpu(void *dummy)
+ 	if (idle_cpu(smp_processor_id()))
+ 		return;
+ 
+-	spin_lock_irqsave(&show_lock, flags);
++	raw_spin_lock_irqsave(&show_lock, flags);
+ 	pr_info("CPU%d:\n", smp_processor_id());
+ 	show_stack(NULL, NULL);
+-	spin_unlock_irqrestore(&show_lock, flags);
++	raw_spin_unlock_irqrestore(&show_lock, flags);
+ }
+ 
+ static void sysrq_showregs_othercpus(struct work_struct *dummy)
 diff --git a/drivers/usb/gadget/function/f_fs.c b/drivers/usb/gadget/function/f_fs.c
 index 1e5430438703..2aba5dbc6679 100644
 --- a/drivers/usb/gadget/function/f_fs.c
@@ -7882,7 +8123,7 @@ index f6c24b22b37c..ff19f9503c23 100644
  			pr_info("watchdog%d running and kernel based pre-userspace handler disabled\n",
  				wdd->id);
 diff --git a/fs/aio.c b/fs/aio.c
-index 528d03680526..ad30096ac6b8 100644
+index 3d9669d011b9..9ee82d346383 100644
 --- a/fs/aio.c
 +++ b/fs/aio.c
 @@ -127,6 +127,7 @@ struct kioctx {
@@ -7893,7 +8134,7 @@ index 528d03680526..ad30096ac6b8 100644
  
  	/*
  	 * signals when all in-flight requests are done
-@@ -602,9 +603,9 @@ static void free_ioctx_reqs(struct percpu_ref *ref)
+@@ -613,9 +614,9 @@ static void free_ioctx_reqs(struct percpu_ref *ref)
   * and ctx->users has dropped to 0, so we know no more kiocbs can be submitted -
   * now it's safe to cancel any that need to be.
   */
@@ -7905,7 +8146,7 @@ index 528d03680526..ad30096ac6b8 100644
  	struct aio_kiocb *req;
  
  	spin_lock_irq(&ctx->ctx_lock);
-@@ -622,6 +623,14 @@ static void free_ioctx_users(struct percpu_ref *ref)
+@@ -633,6 +634,14 @@ static void free_ioctx_users(struct percpu_ref *ref)
  	percpu_ref_put(&ctx->reqs);
  }
  
@@ -9188,10 +9429,10 @@ index b78bab4395d8..7c4bc414a504 100644
 +
  #endif /* defined(_LINUX_DELAY_H) */
 diff --git a/include/linux/fs.h b/include/linux/fs.h
-index 5db265e7d35a..735f535b7fa3 100644
+index 8673e424bab1..d1595bef5861 100644
 --- a/include/linux/fs.h
 +++ b/include/linux/fs.h
-@@ -688,7 +688,7 @@ struct inode {
+@@ -694,7 +694,7 @@ struct inode {
  		struct block_device	*i_bdev;
  		struct cdev		*i_cdev;
  		char			*i_link;
@@ -9213,25 +9454,25 @@ index 84b90a79d75a..87a9330eafa2 100644
  /**
   * fscache_register_netfs - Register a filesystem as desiring caching services
 diff --git a/include/linux/hardirq.h b/include/linux/hardirq.h
-index 0fbbcdf0c178..c1effa24a71d 100644
+index da0af631ded5..8d7bb3c0ff06 100644
 --- a/include/linux/hardirq.h
 +++ b/include/linux/hardirq.h
-@@ -62,7 +62,6 @@ extern void irq_exit(void);
- 
+@@ -68,7 +68,6 @@ extern void irq_exit(void);
  #define nmi_enter()						\
  	do {							\
+ 		arch_nmi_enter();				\
 -		printk_nmi_enter();				\
  		lockdep_off();					\
  		ftrace_nmi_enter();				\
  		BUG_ON(in_nmi());				\
-@@ -79,7 +78,6 @@ extern void irq_exit(void);
+@@ -85,7 +84,6 @@ extern void irq_exit(void);
  		preempt_count_sub(NMI_OFFSET + HARDIRQ_OFFSET);	\
  		ftrace_nmi_exit();				\
  		lockdep_on();					\
 -		printk_nmi_exit();				\
+ 		arch_nmi_exit();				\
  	} while (0)
  
- #endif /* LINUX_HARDIRQ_H */
 diff --git a/include/linux/highmem.h b/include/linux/highmem.h
 index ea5cdbd8c2c3..17f868f1f412 100644
 --- a/include/linux/highmem.h
@@ -14243,7 +14484,7 @@ index 099b89978dd3..db47588499fe 100644
  	p->utime = p->stime = p->gtime = 0;
  #ifdef CONFIG_ARCH_HAS_SCALED_CPUTIME
 diff --git a/kernel/futex.c b/kernel/futex.c
-index a0514e01c3eb..a52779be7aff 100644
+index 52668d44e07b..1e1a931edd46 100644
 --- a/kernel/futex.c
 +++ b/kernel/futex.c
 @@ -926,7 +926,9 @@ void exit_pi_state_list(struct task_struct *curr)
@@ -15130,10 +15371,10 @@ index 392c7f23af76..c0bf04b6b965 100644
  obj-$(CONFIG_LOCK_TORTURE_TEST) += locktorture.o
  obj-$(CONFIG_WW_MUTEX_SELFTEST) += test-ww_mutex.o
 diff --git a/kernel/locking/lockdep.c b/kernel/locking/lockdep.c
-index c4f72e461d28..86bb6a846e26 100644
+index 10a2cf88add3..e90de6603803 100644
 --- a/kernel/locking/lockdep.c
 +++ b/kernel/locking/lockdep.c
-@@ -3766,6 +3766,7 @@ static void check_flags(unsigned long flags)
+@@ -3769,6 +3769,7 @@ static void check_flags(unsigned long flags)
  		}
  	}
  
@@ -15141,7 +15382,7 @@ index c4f72e461d28..86bb6a846e26 100644
  	/*
  	 * We dont accurately track softirq state in e.g.
  	 * hardirq contexts (such as on 4KSTACKS), so only
-@@ -3780,6 +3781,7 @@ static void check_flags(unsigned long flags)
+@@ -3783,6 +3784,7 @@ static void check_flags(unsigned long flags)
  			DEBUG_LOCKS_WARN_ON(!current->softirqs_enabled);
  		}
  	}
@@ -17739,7 +17980,7 @@ index 0f1898820cba..000000000000
 -
 -#endif /* CONFIG_PRINTK */
 diff --git a/kernel/printk/printk.c b/kernel/printk/printk.c
-index d3d170374ceb..5cfd8ea44536 100644
+index d3d170374ceb..997d07b6bf97 100644
 --- a/kernel/printk/printk.c
 +++ b/kernel/printk/printk.c
 @@ -44,6 +44,9 @@
@@ -17899,7 +18140,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  #define PREFIX_MAX		32
  #define LOG_LINE_MAX		(1024 - PREFIX_MAX)
-@@ -428,26 +370,6 @@ static u32 clear_idx;
+@@ -428,24 +370,16 @@ static u32 clear_idx;
  #define LOG_LEVEL(v)		((v) & 0x07)
  #define LOG_FACILITY(v)		((v) >> 3 & 0xff)
  
@@ -17911,22 +18152,22 @@ index d3d170374ceb..5cfd8ea44536 100644
 -static char *log_buf = __log_buf;
 -static u32 log_buf_len = __LOG_BUF_LEN;
 -
--/* Return log buffer address */
--char *log_buf_addr_get(void)
--{
--	return log_buf;
--}
--
--/* Return log buffer size */
--u32 log_buf_len_get(void)
--{
--	return log_buf_len;
--}
--
- /* human readable text of the record */
- static char *log_text(const struct printk_log *msg)
+ /* Return log buffer address */
+ char *log_buf_addr_get(void)
  {
-@@ -460,177 +382,47 @@ static char *log_dict(const struct printk_log *msg)
+-	return log_buf;
++	return printk_rb.buffer;
+ }
+ 
+ /* Return log buffer size */
+ u32 log_buf_len_get(void)
+ {
+-	return log_buf_len;
++	return (1 << printk_rb.size_bits);
+ }
+ 
+ /* human readable text of the record */
+@@ -460,177 +394,47 @@ static char *log_dict(const struct printk_log *msg)
  	return (char *)msg + sizeof(struct printk_log) + msg->text_len;
  }
  
@@ -18122,7 +18363,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  	return msg->text_len;
  }
-@@ -691,9 +483,9 @@ static ssize_t msg_print_ext_header(char *buf, size_t size,
+@@ -691,9 +495,9 @@ static ssize_t msg_print_ext_header(char *buf, size_t size,
  
  	do_div(ts_usec, 1000);
  
@@ -18134,7 +18375,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  
  static ssize_t msg_print_ext_body(char *buf, size_t size,
-@@ -744,13 +536,18 @@ static ssize_t msg_print_ext_body(char *buf, size_t size,
+@@ -744,13 +548,18 @@ static ssize_t msg_print_ext_body(char *buf, size_t size,
  	return p - buf;
  }
  
@@ -18154,7 +18395,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  };
  
  static __printf(3, 4) __cold
-@@ -833,9 +630,11 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
+@@ -833,9 +642,11 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
  			    size_t count, loff_t *ppos)
  {
  	struct devkmsg_user *user = file->private_data;
@@ -18167,7 +18408,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  	if (!user)
  		return -EBADF;
-@@ -844,52 +643,67 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
+@@ -844,52 +655,67 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
  	if (ret)
  		return ret;
  
@@ -18261,7 +18502,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  out:
  	mutex_unlock(&user->lock);
  	return ret;
-@@ -898,19 +712,22 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
+@@ -898,19 +724,22 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
  static loff_t devkmsg_llseek(struct file *file, loff_t offset, int whence)
  {
  	struct devkmsg_user *user = file->private_data;
@@ -18288,7 +18529,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  		break;
  	case SEEK_DATA:
  		/*
-@@ -918,40 +735,87 @@ static loff_t devkmsg_llseek(struct file *file, loff_t offset, int whence)
+@@ -918,40 +747,87 @@ static loff_t devkmsg_llseek(struct file *file, loff_t offset, int whence)
  		 * like issued by 'dmesg -c'. Reading /dev/kmsg itself
  		 * changes no global state, and does not clear anything.
  		 */
@@ -18391,7 +18632,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  	return ret;
  }
-@@ -981,10 +845,7 @@ static int devkmsg_open(struct inode *inode, struct file *file)
+@@ -981,10 +857,7 @@ static int devkmsg_open(struct inode *inode, struct file *file)
  
  	mutex_init(&user->lock);
  
@@ -18403,7 +18644,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  	file->private_data = user;
  	return 0;
-@@ -1024,11 +885,6 @@ const struct file_operations kmsg_fops = {
+@@ -1024,11 +897,6 @@ const struct file_operations kmsg_fops = {
   */
  void log_buf_vmcoreinfo_setup(void)
  {
@@ -18415,7 +18656,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  	/*
  	 * Export struct printk_log size and field offsets. User space tools can
  	 * parse it and detect any changes to structure down the line.
-@@ -1041,6 +897,8 @@ void log_buf_vmcoreinfo_setup(void)
+@@ -1041,6 +909,8 @@ void log_buf_vmcoreinfo_setup(void)
  }
  #endif
  
@@ -18424,7 +18665,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  /* requested log_buf_len from kernel cmdline */
  static unsigned long __initdata new_log_buf_len;
  
-@@ -1106,9 +964,12 @@ static void __init log_buf_add_cpu(void)
+@@ -1106,9 +976,12 @@ static void __init log_buf_add_cpu(void)
  #else /* !CONFIG_SMP */
  static inline void log_buf_add_cpu(void) {}
  #endif /* CONFIG_SMP */
@@ -18437,7 +18678,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  	unsigned long flags;
  	char *new_log_buf;
  	unsigned int free;
-@@ -1147,6 +1008,7 @@ void __init setup_log_buf(int early)
+@@ -1147,6 +1020,7 @@ void __init setup_log_buf(int early)
  	pr_info("log_buf_len: %u bytes\n", log_buf_len);
  	pr_info("early log buf free: %u(%u%%)\n",
  		free, (free * 100) / __LOG_BUF_LEN);
@@ -18445,7 +18686,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  
  static bool __read_mostly ignore_loglevel;
-@@ -1227,6 +1089,11 @@ static inline void boot_delay_msec(int level)
+@@ -1227,6 +1101,11 @@ static inline void boot_delay_msec(int level)
  static bool printk_time = IS_ENABLED(CONFIG_PRINTK_TIME);
  module_param_named(time, printk_time, bool, S_IRUGO | S_IWUSR);
  
@@ -18457,7 +18698,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  static size_t print_syslog(unsigned int level, char *buf)
  {
  	return sprintf(buf, "<%u>", level);
-@@ -1249,6 +1116,7 @@ static size_t print_prefix(const struct printk_log *msg, bool syslog,
+@@ -1249,6 +1128,7 @@ static size_t print_prefix(const struct printk_log *msg, bool syslog,
  		len = print_syslog((msg->facility << 3) | msg->level, buf);
  	if (time)
  		len += print_time(msg->ts_nsec, buf + len);
@@ -18465,7 +18706,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  	return len;
  }
  
-@@ -1293,30 +1161,42 @@ static size_t msg_print_text(const struct printk_log *msg, bool syslog,
+@@ -1293,30 +1173,42 @@ static size_t msg_print_text(const struct printk_log *msg, bool syslog,
  	return len;
  }
  
@@ -18522,7 +18763,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  		}
  
  		/*
-@@ -1326,131 +1206,212 @@ static int syslog_print(char __user *buf, int size)
+@@ -1326,131 +1218,212 @@ static int syslog_print(char __user *buf, int size)
  		if (!syslog_partial)
  			syslog_time = printk_time;
  
@@ -18798,7 +19039,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  	error = check_syslog_permissions(type, source);
  	if (error)
-@@ -1468,11 +1429,49 @@ int do_syslog(int type, char __user *buf, int len, int source)
+@@ -1468,11 +1441,49 @@ int do_syslog(int type, char __user *buf, int len, int source)
  			return 0;
  		if (!access_ok(buf, len))
  			return -EFAULT;
@@ -18852,7 +19093,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  		break;
  	/* Read/clear last kernel messages */
  	case SYSLOG_ACTION_READ_CLEAR:
-@@ -1517,47 +1516,45 @@ int do_syslog(int type, char __user *buf, int len, int source)
+@@ -1517,47 +1528,45 @@ int do_syslog(int type, char __user *buf, int len, int source)
  		break;
  	/* Number of chars in the log buffer */
  	case SYSLOG_ACTION_SIZE_UNREAD:
@@ -18922,7 +19163,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  	return error;
  }
  
-@@ -1566,144 +1563,128 @@ SYSCALL_DEFINE3(syslog, int, type, char __user *, buf, int, len)
+@@ -1566,144 +1575,128 @@ SYSCALL_DEFINE3(syslog, int, type, char __user *, buf, int, len)
  	return do_syslog(type, buf, len, SYSLOG_FROM_READER);
  }
  
@@ -19168,7 +19409,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  
  /*
-@@ -1711,8 +1692,9 @@ static int console_trylock_spinning(void)
+@@ -1711,8 +1704,9 @@ static int console_trylock_spinning(void)
   * log_buf[start] to log_buf[end - 1].
   * The console_lock must be held.
   */
@@ -19180,7 +19421,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  {
  	struct console *con;
  
-@@ -1722,15 +1704,47 @@ static void call_console_drivers(const char *ext_text, size_t ext_len,
+@@ -1722,15 +1716,47 @@ static void call_console_drivers(const char *ext_text, size_t ext_len,
  		return;
  
  	for_each_console(con) {
@@ -19231,7 +19472,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  		if (con->flags & CON_EXTENDED)
  			con->write(con, ext_text, ext_len);
  		else
-@@ -1738,20 +1752,6 @@ static void call_console_drivers(const char *ext_text, size_t ext_len,
+@@ -1738,20 +1764,6 @@ static void call_console_drivers(const char *ext_text, size_t ext_len,
  	}
  }
  
@@ -19252,7 +19493,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  /*
   * Continuation lines are buffered, and not committed to the record buffer
   * until the line is complete, or a race forces it. The line fragments
-@@ -1761,98 +1761,95 @@ static inline void printk_delay(void)
+@@ -1761,98 +1773,95 @@ static inline void printk_delay(void)
  static struct cont {
  	char buf[LOG_LINE_MAX];
  	size_t len;			/* length == 0 means unused buffer */
@@ -19411,7 +19652,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  	if (text_len && text[text_len-1] == '\n') {
  		text_len--;
  		lflags |= LOG_NEWLINE;
-@@ -1886,58 +1883,38 @@ int vprintk_store(int facility, int level,
+@@ -1886,58 +1895,38 @@ int vprintk_store(int facility, int level,
  	if (dict)
  		lflags |= LOG_PREFIX|LOG_NEWLINE;
  
@@ -19486,7 +19727,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  EXPORT_SYMBOL(vprintk_emit);
  
-+__printf(1, 0) int vprintk_func(const char *fmt, va_list args)
++static __printf(1, 0) int vprintk_func(const char *fmt, va_list args)
 +{
 +	return vprintk_emit(0, LOGLEVEL_DEFAULT, NULL, 0, fmt, args);
 +}
@@ -19494,7 +19735,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  asmlinkage int vprintk(const char *fmt, va_list args)
  {
  	return vprintk_func(fmt, args);
-@@ -1994,39 +1971,6 @@ asmlinkage __visible int printk(const char *fmt, ...)
+@@ -1994,39 +1983,6 @@ asmlinkage __visible int printk(const char *fmt, ...)
  	return r;
  }
  EXPORT_SYMBOL(printk);
@@ -19534,7 +19775,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  #endif /* CONFIG_PRINTK */
  
  #ifdef CONFIG_EARLY_PRINTK
-@@ -2257,187 +2201,23 @@ int is_console_locked(void)
+@@ -2257,187 +2213,23 @@ int is_console_locked(void)
  }
  EXPORT_SYMBOL(is_console_locked);
  
@@ -19722,7 +19963,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  EXPORT_SYMBOL(console_unlock);
  
-@@ -2487,15 +2267,10 @@ void console_unblank(void)
+@@ -2487,15 +2279,10 @@ void console_unblank(void)
  void console_flush_on_panic(void)
  {
  	/*
@@ -19741,7 +19982,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  
  /*
-@@ -2573,7 +2348,6 @@ early_param("keep_bootcon", keep_bootcon_setup);
+@@ -2573,7 +2360,6 @@ early_param("keep_bootcon", keep_bootcon_setup);
  void register_console(struct console *newcon)
  {
  	int i;
@@ -19749,7 +19990,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  	struct console *bcon = NULL;
  	struct console_cmdline *c;
  	static bool has_preferred;
-@@ -2689,27 +2463,6 @@ void register_console(struct console *newcon)
+@@ -2689,27 +2475,6 @@ void register_console(struct console *newcon)
  	if (newcon->flags & CON_EXTENDED)
  		nr_ext_console_drivers++;
  
@@ -19777,7 +20018,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  	console_unlock();
  	console_sysfs_notify();
  
-@@ -2719,6 +2472,10 @@ void register_console(struct console *newcon)
+@@ -2719,6 +2484,10 @@ void register_console(struct console *newcon)
  	 * boot consoles, real consoles, etc - this is to ensure that end
  	 * users know there might be something in the kernel's log buffer that
  	 * went to the bootconsole (that they do not see on the real console)
@@ -19788,7 +20029,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  	 */
  	pr_info("%sconsole [%s%d] enabled\n",
  		(newcon->flags & CON_BOOT) ? "boot" : "" ,
-@@ -2862,59 +2619,74 @@ static int __init printk_late_init(void)
+@@ -2862,59 +2631,74 @@ static int __init printk_late_init(void)
  late_initcall(printk_late_init);
  
  #if defined CONFIG_PRINTK
@@ -19890,7 +20131,8 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
 +late_initcall(init_printk_kthread);
  
- int vprintk_deferred(const char *fmt, va_list args)
+-int vprintk_deferred(const char *fmt, va_list args)
++static int vprintk_deferred(const char *fmt, va_list args)
  {
 -	int r;
 -
@@ -19902,7 +20144,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  
  int printk_deferred(const char *fmt, ...)
-@@ -3037,7 +2809,6 @@ module_param_named(always_kmsg_dump, always_kmsg_dump, bool, S_IRUGO | S_IWUSR);
+@@ -3037,7 +2821,6 @@ module_param_named(always_kmsg_dump, always_kmsg_dump, bool, S_IRUGO | S_IWUSR);
  void kmsg_dump(enum kmsg_dump_reason reason)
  {
  	struct kmsg_dumper *dumper;
@@ -19910,7 +20152,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  	if ((reason > KMSG_DUMP_OOPS) && !always_kmsg_dump)
  		return;
-@@ -3050,12 +2821,7 @@ void kmsg_dump(enum kmsg_dump_reason reason)
+@@ -3050,12 +2833,7 @@ void kmsg_dump(enum kmsg_dump_reason reason)
  		/* initialize iterator with data about the stored records */
  		dumper->active = true;
  
@@ -19924,7 +20166,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  		/* invoke dumper which will iterate over records */
  		dumper->dump(dumper, reason);
-@@ -3088,33 +2854,67 @@ void kmsg_dump(enum kmsg_dump_reason reason)
+@@ -3088,33 +2866,67 @@ void kmsg_dump(enum kmsg_dump_reason reason)
  bool kmsg_dump_get_line_nolock(struct kmsg_dumper *dumper, bool syslog,
  			       char *line, size_t size, size_t *len)
  {
@@ -20007,7 +20249,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  
  /**
-@@ -3137,12 +2937,11 @@ bool kmsg_dump_get_line_nolock(struct kmsg_dumper *dumper, bool syslog,
+@@ -3137,12 +2949,11 @@ bool kmsg_dump_get_line_nolock(struct kmsg_dumper *dumper, bool syslog,
  bool kmsg_dump_get_line(struct kmsg_dumper *dumper, bool syslog,
  			char *line, size_t size, size_t *len)
  {
@@ -20022,7 +20264,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  
  	return ret;
  }
-@@ -3170,74 +2969,101 @@ EXPORT_SYMBOL_GPL(kmsg_dump_get_line);
+@@ -3170,74 +2981,101 @@ EXPORT_SYMBOL_GPL(kmsg_dump_get_line);
  bool kmsg_dump_get_buffer(struct kmsg_dumper *dumper, bool syslog,
  			  char *buf, size_t size, size_t *len)
  {
@@ -20176,7 +20418,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  EXPORT_SYMBOL_GPL(kmsg_dump_get_buffer);
  
-@@ -3253,10 +3079,8 @@ EXPORT_SYMBOL_GPL(kmsg_dump_get_buffer);
+@@ -3253,10 +3091,8 @@ EXPORT_SYMBOL_GPL(kmsg_dump_get_buffer);
   */
  void kmsg_dump_rewind_nolock(struct kmsg_dumper *dumper)
  {
@@ -20189,7 +20431,7 @@ index d3d170374ceb..5cfd8ea44536 100644
  }
  
  /**
-@@ -3269,12 +3093,91 @@ void kmsg_dump_rewind_nolock(struct kmsg_dumper *dumper)
+@@ -3269,12 +3105,91 @@ void kmsg_dump_rewind_nolock(struct kmsg_dumper *dumper)
   */
  void kmsg_dump_rewind(struct kmsg_dumper *dumper)
  {
@@ -26361,10 +26603,10 @@ index 15ca78e1c7d4..77bf84987cda 100644
  }
 diff --git a/lib/printk_ringbuffer.c b/lib/printk_ringbuffer.c
 new file mode 100644
-index 000000000000..ce33b5add5a1
+index 000000000000..9a31d7dbdc00
 --- /dev/null
 +++ b/lib/printk_ringbuffer.c
-@@ -0,0 +1,583 @@
+@@ -0,0 +1,589 @@
 +// SPDX-License-Identifier: GPL-2.0
 +#include <linux/sched.h>
 +#include <linux/smp.h>
@@ -26563,8 +26805,14 @@ index 000000000000..ce33b5add5a1
 +
 +	if (changed) {
 +		atomic_long_inc(&rb->wq_counter);
-+		if (wq_has_sleeper(rb->wq))
++		if (wq_has_sleeper(rb->wq)) {
++#ifdef CONFIG_IRQ_WORK
 +			irq_work_queue(rb->wq_work);
++#else
++			if (!in_nmi())
++				wake_up_interruptible_all(rb->wq);
++#endif
++		}
 +	}
 +}
 +
