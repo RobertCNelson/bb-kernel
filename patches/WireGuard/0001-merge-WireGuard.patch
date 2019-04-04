@@ -1,6 +1,6 @@
-From 426b037c920d33c4e27906953dba89ab21581e9d Mon Sep 17 00:00:00 2001
+From 13058b293004e038470db7aa973ad95c33b11eb9 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 25 Mar 2019 19:51:09 -0500
+Date: Thu, 4 Apr 2019 13:41:31 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -14,7 +14,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/compat/Makefile.include         |   78 +
  .../compat/checksum/checksum_partial_compat.h |  208 +
  net/wireguard/compat/compat-asm.h             |   43 +
- net/wireguard/compat/compat.h                 |  874 ++
+ net/wireguard/compat/compat.h                 |  881 ++
  net/wireguard/compat/dst_cache/dst_cache.c    |  175 +
  .../compat/dst_cache/include/net/dst_cache.h  |   97 +
  .../compat/fpu-x86/include/asm/fpu/api.h      |    1 +
@@ -41,7 +41,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/zinc.h                   |   15 +
  .../crypto/zinc/blake2s/blake2s-x86_64-glue.c |   73 +
  .../crypto/zinc/blake2s/blake2s-x86_64.S      |  685 ++
- net/wireguard/crypto/zinc/blake2s/blake2s.c   |  305 +
+ net/wireguard/crypto/zinc/blake2s/blake2s.c   |  276 +
  .../crypto/zinc/chacha20/chacha20-arm-glue.c  |   98 +
  .../crypto/zinc/chacha20/chacha20-arm.pl      | 1227 +++
  .../crypto/zinc/chacha20/chacha20-arm64.pl    | 1163 +++
@@ -103,7 +103,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/timers.h                        |   31 +
  net/wireguard/uapi/wireguard.h                |  190 +
  net/wireguard/version.h                       |    1 +
- 98 files changed, 51387 insertions(+)
+ 98 files changed, 51365 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -1080,10 +1080,10 @@ index 000000000000..f5c5bc29db26
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..396a2934f74f
+index 000000000000..6ee3ac8bcdd8
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
-@@ -0,0 +1,874 @@
+@@ -0,0 +1,881 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1895,6 +1895,13 @@ index 000000000000..396a2934f74f
 +#define call_rcu call_rcu_bh
 +#define rcu_barrier rcu_barrier_bh
 +#define COMPAT_CANNOT_DEPRECIATE_BH_RCU
++#endif
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 10)
++static inline void skb_mark_not_on_list(struct sk_buff *skb)
++{
++	skb->next = NULL;
++}
 +#endif
 +
 +/* https://github.com/ClangBuiltLinux/linux/issues/7 */
@@ -4693,7 +4700,7 @@ index 000000000000..a4b5a1493a10
 +#endif
 diff --git a/net/wireguard/cookie.c b/net/wireguard/cookie.c
 new file mode 100644
-index 000000000000..bd23a14ff87f
+index 000000000000..a2ddbcd25dfb
 --- /dev/null
 +++ b/net/wireguard/cookie.c
 @@ -0,0 +1,236 @@
@@ -4737,7 +4744,7 @@ index 000000000000..bd23a14ff87f
 +	blake2s_init(&blake, NOISE_SYMMETRIC_KEY_LEN);
 +	blake2s_update(&blake, label, COOKIE_KEY_LABEL_LEN);
 +	blake2s_update(&blake, pubkey, NOISE_PUBLIC_KEY_LEN);
-+	blake2s_final(&blake, key, NOISE_SYMMETRIC_KEY_LEN);
++	blake2s_final(&blake, key);
 +}
 +
 +/* Must hold peer->handshake.static_identity->lock */
@@ -4810,7 +4817,7 @@ index 000000000000..bd23a14ff87f
 +		blake2s_update(&state, (u8 *)&ipv6_hdr(skb)->saddr,
 +			       sizeof(struct in6_addr));
 +	blake2s_update(&state, (u8 *)&udp_hdr(skb)->source, sizeof(__be16));
-+	blake2s_final(&state, cookie, COOKIE_LEN);
++	blake2s_final(&state, cookie);
 +
 +	up_read(&checker->secret_lock);
 +}
@@ -5063,7 +5070,7 @@ index 000000000000..460684d845c3
 +ccflags-$(CONFIG_WIREGUARD_DEBUG) += -DCONFIG_ZINC_SELFTEST
 diff --git a/net/wireguard/crypto/include/zinc/blake2s.h b/net/wireguard/crypto/include/zinc/blake2s.h
 new file mode 100644
-index 000000000000..5f1a1aeaf129
+index 000000000000..2ca0bc30750d
 --- /dev/null
 +++ b/net/wireguard/crypto/include/zinc/blake2s.h
 @@ -0,0 +1,56 @@
@@ -5090,15 +5097,15 @@ index 000000000000..5f1a1aeaf129
 +	u32 t[2];
 +	u32 f[2];
 +	u8 buf[BLAKE2S_BLOCK_SIZE];
-+	size_t buflen;
-+	u8 last_node;
++	unsigned int buflen;
++	unsigned int outlen;
 +};
 +
 +void blake2s_init(struct blake2s_state *state, const size_t outlen);
 +void blake2s_init_key(struct blake2s_state *state, const size_t outlen,
 +		      const void *key, const size_t keylen);
 +void blake2s_update(struct blake2s_state *state, const u8 *in, size_t inlen);
-+void blake2s_final(struct blake2s_state *state, u8 *out, const size_t outlen);
++void blake2s_final(struct blake2s_state *state, u8 *out);
 +
 +static inline void blake2s(u8 *out, const u8 *in, const u8 *key,
 +			   const size_t outlen, const size_t inlen,
@@ -5116,7 +5123,7 @@ index 000000000000..5f1a1aeaf129
 +		blake2s_init(&state, outlen);
 +
 +	blake2s_update(&state, in, inlen);
-+	blake2s_final(&state, out, outlen);
++	blake2s_final(&state, out);
 +}
 +
 +void blake2s_hmac(u8 *out, const u8 *in, const u8 *key, const size_t outlen,
@@ -6119,13 +6126,12 @@ index 000000000000..675288fa4cca
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/zinc/blake2s/blake2s.c b/net/wireguard/crypto/zinc/blake2s/blake2s.c
 new file mode 100644
-index 000000000000..b881db03f1f8
+index 000000000000..e9e0bdaffc82
 --- /dev/null
 +++ b/net/wireguard/crypto/zinc/blake2s/blake2s.c
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,276 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
-+ * Copyright (C) 2012 Samuel Neves <sneves@dei.uc.pt>. All Rights Reserved.
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
 + *
 + * This is an implementation of the BLAKE2s hash and PRF functions.
@@ -6144,23 +6150,6 @@ index 000000000000..b881db03f1f8
 +#include <linux/init.h>
 +#include <linux/bug.h>
 +#include <asm/unaligned.h>
-+
-+typedef union {
-+	struct {
-+		u8 digest_length;
-+		u8 key_length;
-+		u8 fanout;
-+		u8 depth;
-+		u32 leaf_length;
-+		u32 node_offset;
-+		u16 xof_length;
-+		u8 node_depth;
-+		u8 inner_length;
-+		u8 salt[8];
-+		u8 personal[8];
-+	};
-+	__le32 words[8];
-+} __packed blake2s_param;
 +
 +static const u32 blake2s_iv[8] = {
 +	0x6A09E667UL, 0xBB67AE85UL, 0x3C6EF372UL, 0xA54FF53AUL,
@@ -6182,8 +6171,6 @@ index 000000000000..b881db03f1f8
 +
 +static inline void blake2s_set_lastblock(struct blake2s_state *state)
 +{
-+	if (state->last_node)
-+		state->f[1] = -1;
 +	state->f[0] = -1;
 +}
 +
@@ -6195,40 +6182,33 @@ index 000000000000..b881db03f1f8
 +}
 +
 +static inline void blake2s_init_param(struct blake2s_state *state,
-+				      const blake2s_param *param)
++				      const u32 param)
 +{
 +	int i;
 +
 +	memset(state, 0, sizeof(*state));
 +	for (i = 0; i < 8; ++i)
-+		state->h[i] = blake2s_iv[i] ^ le32_to_cpu(param->words[i]);
++		state->h[i] = blake2s_iv[i];
++	state->h[0] ^= param;
 +}
 +
 +void blake2s_init(struct blake2s_state *state, const size_t outlen)
 +{
-+	blake2s_param param __aligned(__alignof__(u32)) = {
-+		.digest_length = outlen,
-+		.fanout = 1,
-+		.depth = 1
-+	};
-+
 +	WARN_ON(IS_ENABLED(DEBUG) && (!outlen || outlen > BLAKE2S_HASH_SIZE));
-+	blake2s_init_param(state, &param);
++	blake2s_init_param(state, 0x01010000 | outlen);
++	state->outlen = outlen;
 +}
 +EXPORT_SYMBOL(blake2s_init);
 +
 +void blake2s_init_key(struct blake2s_state *state, const size_t outlen,
 +		      const void *key, const size_t keylen)
 +{
-+	blake2s_param param = { .digest_length = outlen,
-+				.key_length = keylen,
-+				.fanout = 1,
-+				.depth = 1 };
 +	u8 block[BLAKE2S_BLOCK_SIZE] = { 0 };
 +
 +	WARN_ON(IS_ENABLED(DEBUG) && (!outlen || outlen > BLAKE2S_HASH_SIZE ||
 +		!key || !keylen || keylen > BLAKE2S_KEY_SIZE));
-+	blake2s_init_param(state, &param);
++	blake2s_init_param(state, 0x01010000 | keylen << 8 | outlen);
++	state->outlen = outlen;
 +	memcpy(block, key, keylen);
 +	blake2s_update(state, block, BLAKE2S_BLOCK_SIZE);
 +	memzero_explicit(block, BLAKE2S_BLOCK_SIZE);
@@ -6335,8 +6315,7 @@ index 000000000000..b881db03f1f8
 +		inlen -= fill;
 +	}
 +	if (inlen > BLAKE2S_BLOCK_SIZE) {
-+		const size_t nblocks =
-+			(inlen + BLAKE2S_BLOCK_SIZE - 1) / BLAKE2S_BLOCK_SIZE;
++		const size_t nblocks = DIV_ROUND_UP(inlen, BLAKE2S_BLOCK_SIZE);
 +		/* Hash one less (full) block than strictly possible */
 +		blake2s_compress(state, in, nblocks - 1, BLAKE2S_BLOCK_SIZE);
 +		in += BLAKE2S_BLOCK_SIZE * (nblocks - 1);
@@ -6347,16 +6326,15 @@ index 000000000000..b881db03f1f8
 +}
 +EXPORT_SYMBOL(blake2s_update);
 +
-+void blake2s_final(struct blake2s_state *state, u8 *out, const size_t outlen)
++void blake2s_final(struct blake2s_state *state, u8 *out)
 +{
-+	WARN_ON(IS_ENABLED(DEBUG) &&
-+		(!out || !outlen || outlen > BLAKE2S_HASH_SIZE));
++	WARN_ON(IS_ENABLED(DEBUG) && !out);
 +	blake2s_set_lastblock(state);
 +	memset(state->buf + state->buflen, 0,
 +	       BLAKE2S_BLOCK_SIZE - state->buflen); /* Padding */
 +	blake2s_compress(state, state->buf, 1, state->buflen);
 +	cpu_to_le32_array(state->h, ARRAY_SIZE(state->h));
-+	memcpy(out, state->h, outlen);
++	memcpy(out, state->h, state->outlen);
 +	memzero_explicit(state, sizeof(*state));
 +}
 +EXPORT_SYMBOL(blake2s_final);
@@ -6372,7 +6350,7 @@ index 000000000000..b881db03f1f8
 +	if (keylen > BLAKE2S_BLOCK_SIZE) {
 +		blake2s_init(&state, BLAKE2S_HASH_SIZE);
 +		blake2s_update(&state, key, keylen);
-+		blake2s_final(&state, x_key, BLAKE2S_HASH_SIZE);
++		blake2s_final(&state, x_key);
 +	} else
 +		memcpy(x_key, key, keylen);
 +
@@ -6382,7 +6360,7 @@ index 000000000000..b881db03f1f8
 +	blake2s_init(&state, BLAKE2S_HASH_SIZE);
 +	blake2s_update(&state, x_key, BLAKE2S_BLOCK_SIZE);
 +	blake2s_update(&state, in, inlen);
-+	blake2s_final(&state, i_hash, BLAKE2S_HASH_SIZE);
++	blake2s_final(&state, i_hash);
 +
 +	for (i = 0; i < BLAKE2S_BLOCK_SIZE; ++i)
 +		x_key[i] ^= 0x5c ^ 0x36;
@@ -6390,7 +6368,7 @@ index 000000000000..b881db03f1f8
 +	blake2s_init(&state, BLAKE2S_HASH_SIZE);
 +	blake2s_update(&state, x_key, BLAKE2S_BLOCK_SIZE);
 +	blake2s_update(&state, i_hash, BLAKE2S_HASH_SIZE);
-+	blake2s_final(&state, i_hash, BLAKE2S_HASH_SIZE);
++	blake2s_final(&state, i_hash);
 +
 +	memcpy(out, i_hash, outlen);
 +	memzero_explicit(x_key, BLAKE2S_BLOCK_SIZE);
@@ -45609,7 +45587,7 @@ index 000000000000..4ffaf6089eea
 +#endif
 diff --git a/net/wireguard/device.c b/net/wireguard/device.c
 new file mode 100644
-index 000000000000..779c41521ea9
+index 000000000000..8735935012d9
 --- /dev/null
 +++ b/net/wireguard/device.c
 @@ -0,0 +1,472 @@
@@ -45777,7 +45755,7 @@ index 000000000000..779c41521ea9
 +
 +	__skb_queue_head_init(&packets);
 +	if (!skb_is_gso(skb)) {
-+		skb->next = NULL;
++		skb_mark_not_on_list(skb);
 +	} else {
 +		struct sk_buff *segs = skb_gso_segment(skb, 0);
 +
@@ -45790,7 +45768,7 @@ index 000000000000..779c41521ea9
 +	}
 +	do {
 +		next = skb->next;
-+		skb->next = skb->prev = NULL;
++		skb_mark_not_on_list(skb);
 +
 +		skb = skb_share_check(skb, GFP_ATOMIC);
 +		if (unlikely(!skb))
@@ -47023,7 +47001,7 @@ index 000000000000..15100d92e2e3
 +#endif /* _WG_NETLINK_H */
 diff --git a/net/wireguard/noise.c b/net/wireguard/noise.c
 new file mode 100644
-index 000000000000..bf0b8c5ab298
+index 000000000000..5b073bd35e2e
 --- /dev/null
 +++ b/net/wireguard/noise.c
 @@ -0,0 +1,807 @@
@@ -47069,7 +47047,7 @@ index 000000000000..bf0b8c5ab298
 +	blake2s_init(&blake, NOISE_HASH_LEN);
 +	blake2s_update(&blake, handshake_init_chaining_key, NOISE_HASH_LEN);
 +	blake2s_update(&blake, identifier_name, sizeof(identifier_name));
-+	blake2s_final(&blake, handshake_init_hash, NOISE_HASH_LEN);
++	blake2s_final(&blake, handshake_init_hash);
 +}
 +
 +/* Must hold peer->handshake.static_identity->lock */
@@ -47418,7 +47396,7 @@ index 000000000000..bf0b8c5ab298
 +	blake2s_init(&blake, NOISE_HASH_LEN);
 +	blake2s_update(&blake, hash, NOISE_HASH_LEN);
 +	blake2s_update(&blake, src, src_len);
-+	blake2s_final(&blake, hash, NOISE_HASH_LEN);
++	blake2s_final(&blake, hash);
 +}
 +
 +static void mix_psk(u8 chaining_key[NOISE_HASH_LEN], u8 hash[NOISE_HASH_LEN],
