@@ -449,6 +449,7 @@ soc () {
 	dir 'soc/ti/pocketbeagle'
 	dir 'soc/ti/beaglebone_capes'
 	dir 'soc/ti/uboot'
+	dir 'soc/ti/spi_symlink'
 }
 
 dtb_makefile_append () {
