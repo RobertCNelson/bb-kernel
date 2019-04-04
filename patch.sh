@@ -259,15 +259,15 @@ wireguard () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
 		if [ ! -d ./WireGuard ] ; then
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=10
+			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
 		else
 			rm -rf ./WireGuard || true
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=10
+			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
 		fi
 
-		cd ./WireGuard/
-		${git_bin}  revert --no-edit cf8c39531b788cbb95af72fdea78dbaeeb3ce2c1
-		cd ../
+		#cd ./WireGuard/
+		#${git_bin}  revert --no-edit xyz
+		#cd ../
 		cd ./KERNEL/
 
 		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
