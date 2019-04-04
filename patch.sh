@@ -607,6 +607,7 @@ drivers
 soc
 beaglebone
 dir 'fixes'
+dir 'drivers/ti/spi_symlink'
 sgx
 
 packaging () {
