@@ -393,6 +393,11 @@ debian_regs () {
 			#https://blog.linuxmint.com/?p=3671
 			deb_distro="bionic"
 			;;
+		tina)
+			#19.2
+			#https://blog.linuxmint.com/?p=3736
+			deb_distro="bionic"
+			;;
 		esac
 
 		#Future Debian Code names:
@@ -426,7 +431,7 @@ debian_regs () {
 			;;
 		bionic|cosmic)
 			#18.04 bionic: (EOL: April 2023) lts: bionic -> xyz
-			#18.10 cosmic: (EOL: )
+			#18.10 cosmic: (EOL: July 2019)
 			unset warn_eol_distro
 			;;
 		yakkety|zesty|artful)

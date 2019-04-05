@@ -265,10 +265,11 @@ ti_pm_firmware () {
 		fi
 		cd ./KERNEL/
 
+		mkdir -p ./firmware/ || true
 		cp -v ../ti-amx3-cm3-pm-firmware/bin/am* ./firmware/
 
 		${git_bin} add -f ./firmware/am*
-		${git_bin} commit -a -m 'add am33x firmware' -s
+		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -s
 		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
 
 		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
@@ -277,14 +278,14 @@ ti_pm_firmware () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/drivers/ti/firmware/0001-add-am33x-firmware.patch"
+		${git} "${DIR}/patches/drivers/ti/firmware/0001-Add-AM335x-CM3-Power-Managment-Firmware.patch"
 
 		wdir="drivers/ti/firmware"
 		number=1
 		cleanup
 	fi
 
-	${git} "${DIR}/patches/drivers/ti/firmware/0001-add-am33x-firmware.patch"
+	${git} "${DIR}/patches/drivers/ti/firmware/0001-Add-AM335x-CM3-Power-Managment-Firmware.patch"
 }
 
 local_patch () {
@@ -350,48 +351,6 @@ backports () {
 	fi
 }
 
-ti_rogerq_pruss () {
-	#https://github.com/rogerq/linux/commits/for-v5.1/pruss-2.0
-	#regenerate="enable"
-	branch="for-v5.1/pruss-2.0"
-	git_depth="30"
-	patch_depth="25"
-	if [ "x${regenerate}" = "xenable" ] ; then
-
-		cd ../
-		if [ ! -d ./rogerq_pruss/ ] ; then
-			${git_bin} clone -b ${branch} https://github.com/rogerq/linux --depth=${git_depth} ./rogerq_pruss/
-		else
-			rm -rf ./rogerq_pruss || true
-			${git_bin} clone -b ${branch} https://github.com/rogerq/linux --depth=${git_depth} ./rogerq_pruss/
-		fi
-
-		cd ./rogerq_pruss/
-
-		${git_bin} format-patch -${patch_depth} -o ../patches/drivers/ti/rogerq_pruss
-
-		cd ../KERNEL/
-
-		rm -rf ../rogerq_pruss/ || true
-
-		dir 'drivers/ti/rogerq_pruss'
-		exit 2
-	fi
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	dir 'drivers/ti/rogerq_pruss'
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="drivers/ti/rogerq_pruss"
-		number=25
-		cleanup
-	fi
-}
-
 reverts () {
 	echo "dir: reverts"
 	#regenerate="enable"
@@ -425,7 +384,6 @@ drivers () {
 	dir 'drivers/ti/eqep'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
-	dir 'drivers/ti/spi'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
 }
@@ -433,7 +391,6 @@ drivers () {
 soc () {
 #	dir 'soc/imx/udoo'
 #	dir 'soc/imx/wandboard'
-#	dir 'soc/imx/imx6'
 #	dir 'soc/imx/imx7'
 
 	dir 'soc/ti/omap3'
@@ -443,7 +400,6 @@ soc () {
 	dir 'soc/ti/blue'
 	dir 'soc/ti/abbbi'
 	dir 'soc/ti/pocketbeagle'
-	dir 'soc/ti/beaglebone_capes'
 	dir 'soc/ti/uboot'
 }
 
@@ -452,47 +408,15 @@ dtb_makefile_append () {
 }
 
 beaglebone () {
-	#This has to be last...
-	echo "dir: beaglebone/dtbs"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		patch -p1 < "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
-		exit 2
-	fi
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
-		cleanup
-	fi
-
 	####
 	#dtb makefile
 	echo "dir: beaglebone/generated"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-
-#		device="am335x-boneblack-roboticscape.dtb" ; dtb_makefile_append
-#		device="am335x-boneblack-wireless-roboticscape.dtb" ; dtb_makefile_append
-
 		device="am335x-abbbi.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
 		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
@@ -508,7 +432,6 @@ beaglebone () {
 
 ###
 #backports
-#ti_rogerq_pruss
 #reverts
 drivers
 soc
