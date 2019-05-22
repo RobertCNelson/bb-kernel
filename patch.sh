@@ -345,7 +345,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 #rt
 wireguard
 ti_pm_firmware
