@@ -1,6 +1,6 @@
-From 332e6e128de8171ad777d21f2d5c0c0801cb43d5 Mon Sep 17 00:00:00 2001
+From 56d6612ea3ce68b0e9e191c7e6fdb55a43d23010 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 30 Apr 2019 11:01:59 -0500
+Date: Tue, 4 Jun 2019 23:46:06 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -51,16 +51,17 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/mips/kernel/traps.c                      |   6 +-
  arch/powerpc/Kconfig                          |   6 +-
  arch/powerpc/include/asm/spinlock_types.h     |   4 -
- arch/powerpc/include/asm/thread_info.h        |   9 +-
+ arch/powerpc/include/asm/thread_info.h        |  18 +-
  arch/powerpc/kernel/asm-offsets.c             |   1 +
- arch/powerpc/kernel/entry_32.S                |  17 +-
- arch/powerpc/kernel/entry_64.S                |  16 +-
+ arch/powerpc/kernel/entry_32.S                |  29 +-
+ arch/powerpc/kernel/entry_64.S                |  28 +-
  arch/powerpc/kernel/irq.c                     |   2 +
  arch/powerpc/kernel/misc_32.S                 |   2 +
  arch/powerpc/kernel/misc_64.S                 |   2 +
  arch/powerpc/kvm/Kconfig                      |   1 +
  arch/powerpc/platforms/cell/spufs/sched.c     |   2 +-
  arch/powerpc/platforms/ps3/device-init.c      |   4 +-
+ arch/powerpc/platforms/pseries/iommu.c        |  16 +-
  arch/s390/include/asm/spinlock_types.h        |   4 -
  arch/sh/include/asm/spinlock_types.h          |   4 -
  arch/sh/kernel/irq.c                          |   2 +
@@ -115,6 +116,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/crypto/caam/qi.h                      |   2 +-
  drivers/firmware/efi/efi.c                    |   5 +-
  drivers/gpu/drm/i915/i915_irq.c               |   2 +
+ drivers/gpu/drm/i915/i915_request.c           |   8 +-
  drivers/gpu/drm/i915/i915_trace.h             |   6 +-
  drivers/gpu/drm/i915/intel_sprite.c           |  13 +-
  drivers/gpu/drm/radeon/radeon_display.c       |   2 +
@@ -143,6 +145,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/8250/8250_port.c           |   5 +-
  drivers/tty/serial/amba-pl011.c               |  17 +-
  drivers/tty/serial/omap-serial.c              |  12 +-
+ drivers/tty/sysrq.c                           |   6 +-
  drivers/usb/core/hcd.c                        |   3 -
  drivers/usb/gadget/function/f_fs.c            |   2 +-
  drivers/usb/gadget/legacy/inode.c             |   4 +-
@@ -385,7 +388,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/include/path.h              |  19 +-
  security/apparmor/lsm.c                       |   2 +-
  virt/kvm/arm/arm.c                            |   6 +-
- 380 files changed, 9531 insertions(+), 1998 deletions(-)
+ 383 files changed, 9566 insertions(+), 2026 deletions(-)
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -1933,7 +1936,7 @@ index 87adaf13b7e8..7305cb6a53e4 100644
  	volatile unsigned int slock;
  } arch_spinlock_t;
 diff --git a/arch/powerpc/include/asm/thread_info.h b/arch/powerpc/include/asm/thread_info.h
-index 3c0002044bc9..ce316076bc52 100644
+index 3c0002044bc9..64c3d1a720e2 100644
 --- a/arch/powerpc/include/asm/thread_info.h
 +++ b/arch/powerpc/include/asm/thread_info.h
 @@ -37,6 +37,8 @@ struct thread_info {
@@ -1945,24 +1948,41 @@ index 3c0002044bc9..ce316076bc52 100644
  	unsigned long	local_flags;		/* private flags for thread */
  #ifdef CONFIG_LIVEPATCH
  	unsigned long *livepatch_sp;
-@@ -81,7 +83,7 @@ extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src
+@@ -81,18 +83,18 @@ extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src
  #define TIF_SIGPENDING		1	/* signal pending */
  #define TIF_NEED_RESCHED	2	/* rescheduling necessary */
  #define TIF_FSCHECK		3	/* Check FS is USER_DS on return */
 -#define TIF_32BIT		4	/* 32 bit binary */
-+#define TIF_NEED_RESCHED_LAZY	4       /* lazy rescheduling necessary */
  #define TIF_RESTORE_TM		5	/* need to restore TM FP/VEC/VSX */
  #define TIF_PATCH_PENDING	6	/* pending live patching update */
  #define TIF_SYSCALL_AUDIT	7	/* syscall auditing active */
-@@ -100,6 +102,7 @@ extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src
+ #define TIF_SINGLESTEP		8	/* singlestepping active */
+ #define TIF_NOHZ		9	/* in adaptive nohz mode */
+ #define TIF_SECCOMP		10	/* secure computing */
+-#define TIF_RESTOREALL		11	/* Restore all regs (implies NOERROR) */
+-#define TIF_NOERROR		12	/* Force successful syscall return */
++
++#define TIF_NEED_RESCHED_LAZY	11	/* lazy rescheduling necessary */
++#define TIF_SYSCALL_TRACEPOINT	12	/* syscall tracepoint instrumentation */
++
+ #define TIF_NOTIFY_RESUME	13	/* callback before returning to user */
+ #define TIF_UPROBE		14	/* breakpointed or single-stepping */
+-#define TIF_SYSCALL_TRACEPOINT	15	/* syscall tracepoint instrumentation */
+ #define TIF_EMULATE_STACK_STORE	16	/* Is an instruction emulation
+ 						for stack store? */
+ #define TIF_MEMDIE		17	/* is terminating due to OOM killer */
+@@ -100,6 +102,10 @@ extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src
  #define TIF_ELF2ABI		18	/* function descriptors must die! */
  #endif
  #define TIF_POLLING_NRFLAG	19	/* true if poll_idle() is polling TIF_NEED_RESCHED */
 +#define TIF_32BIT		20	/* 32 bit binary */
++#define TIF_RESTOREALL		21	/* Restore all regs (implies NOERROR) */
++#define TIF_NOERROR		22	/* Force successful syscall return */
++
  
  /* as above, but as bit values */
  #define _TIF_SYSCALL_TRACE	(1<<TIF_SYSCALL_TRACE)
-@@ -119,6 +122,7 @@ extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src
+@@ -119,6 +125,7 @@ extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src
  #define _TIF_SYSCALL_TRACEPOINT	(1<<TIF_SYSCALL_TRACEPOINT)
  #define _TIF_EMULATE_STACK_STORE	(1<<TIF_EMULATE_STACK_STORE)
  #define _TIF_NOHZ		(1<<TIF_NOHZ)
@@ -1970,7 +1990,7 @@ index 3c0002044bc9..ce316076bc52 100644
  #define _TIF_FSCHECK		(1<<TIF_FSCHECK)
  #define _TIF_SYSCALL_DOTRACE	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | \
  				 _TIF_SECCOMP | _TIF_SYSCALL_TRACEPOINT | \
-@@ -127,8 +131,9 @@ extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src
+@@ -127,8 +134,9 @@ extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src
  #define _TIF_USER_WORK_MASK	(_TIF_SIGPENDING | _TIF_NEED_RESCHED | \
  				 _TIF_NOTIFY_RESUME | _TIF_UPROBE | \
  				 _TIF_RESTORE_TM | _TIF_PATCH_PENDING | \
@@ -1994,10 +2014,52 @@ index 89cf15566c4e..1870c87fb22a 100644
  	OFFSET(TI_CPU, thread_info, cpu);
  
 diff --git a/arch/powerpc/kernel/entry_32.S b/arch/powerpc/kernel/entry_32.S
-index 26b3f853cbf6..3783f3ef17a4 100644
+index 26b3f853cbf6..44bcf1585bd1 100644
 --- a/arch/powerpc/kernel/entry_32.S
 +++ b/arch/powerpc/kernel/entry_32.S
-@@ -888,7 +888,14 @@ resume_kernel:
+@@ -393,7 +393,9 @@ ret_from_syscall:
+ 	MTMSRD(r10)
+ 	lwz	r9,TI_FLAGS(r12)
+ 	li	r8,-MAX_ERRNO
+-	andi.	r0,r9,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)
++	lis	r0,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)@h
++	ori	r0,r0, (_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)@l
++	and.	r0,r9,r0
+ 	bne-	syscall_exit_work
+ 	cmplw	0,r3,r8
+ 	blt+	syscall_exit_cont
+@@ -511,13 +513,13 @@ syscall_dotrace:
+ 	b	syscall_dotrace_cont
+ 
+ syscall_exit_work:
+-	andi.	r0,r9,_TIF_RESTOREALL
++	andis.	r0,r9,_TIF_RESTOREALL@h
+ 	beq+	0f
+ 	REST_NVGPRS(r1)
+ 	b	2f
+ 0:	cmplw	0,r3,r8
+ 	blt+	1f
+-	andi.	r0,r9,_TIF_NOERROR
++	andis.	r0,r9,_TIF_NOERROR@h
+ 	bne-	1f
+ 	lwz	r11,_CCR(r1)			/* Load CR */
+ 	neg	r3,r3
+@@ -526,12 +528,12 @@ syscall_exit_work:
+ 
+ 1:	stw	r6,RESULT(r1)	/* Save result */
+ 	stw	r3,GPR3(r1)	/* Update return value */
+-2:	andi.	r0,r9,(_TIF_PERSYSCALL_MASK)
++2:	andis.	r0,r9,(_TIF_PERSYSCALL_MASK)@h
+ 	beq	4f
+ 
+ 	/* Clear per-syscall TIF flags if any are set.  */
+ 
+-	li	r11,_TIF_PERSYSCALL_MASK
++	lis	r11,_TIF_PERSYSCALL_MASK@h
+ 	addi	r12,r12,TI_FLAGS
+ 3:	lwarx	r8,0,r12
+ 	andc	r8,r8,r11
+@@ -888,7 +890,14 @@ resume_kernel:
  	cmpwi	0,r0,0		/* if non-zero, just restore regs and return */
  	bne	restore
  	andi.	r8,r8,_TIF_NEED_RESCHED
@@ -2012,7 +2074,7 @@ index 26b3f853cbf6..3783f3ef17a4 100644
  	lwz	r3,_MSR(r1)
  	andi.	r0,r3,MSR_EE	/* interrupts off? */
  	beq	restore		/* don't schedule if so */
-@@ -899,11 +906,11 @@ resume_kernel:
+@@ -899,11 +908,11 @@ resume_kernel:
  	 */
  	bl	trace_hardirqs_off
  #endif
@@ -2027,7 +2089,7 @@ index 26b3f853cbf6..3783f3ef17a4 100644
  #ifdef CONFIG_TRACE_IRQFLAGS
  	/* And now, to properly rebalance the above, we tell lockdep they
  	 * are being turned back on, which will happen when we return
-@@ -1232,7 +1239,7 @@ global_dbcr0:
+@@ -1232,7 +1241,7 @@ global_dbcr0:
  #endif /* !(CONFIG_4xx || CONFIG_BOOKE) */
  
  do_work:			/* r10 contains MSR_KERNEL here */
@@ -2036,7 +2098,7 @@ index 26b3f853cbf6..3783f3ef17a4 100644
  	beq	do_user_signal
  
  do_resched:			/* r10 contains MSR_KERNEL here */
-@@ -1253,7 +1260,7 @@ recheck:
+@@ -1253,7 +1262,7 @@ recheck:
  	MTMSRD(r10)		/* disable interrupts */
  	CURRENT_THREAD_INFO(r9, r1)
  	lwz	r9,TI_FLAGS(r9)
@@ -2046,7 +2108,7 @@ index 26b3f853cbf6..3783f3ef17a4 100644
  	andi.	r0,r9,_TIF_USER_WORK_MASK
  	beq	restore_user
 diff --git a/arch/powerpc/kernel/entry_64.S b/arch/powerpc/kernel/entry_64.S
-index 7a46e0e57a36..7671fa5da9fa 100644
+index 7a46e0e57a36..fe713d014220 100644
 --- a/arch/powerpc/kernel/entry_64.S
 +++ b/arch/powerpc/kernel/entry_64.S
 @@ -176,7 +176,7 @@ system_call:			/* label this so stack traces look sane */
@@ -2058,7 +2120,48 @@ index 7a46e0e57a36..7671fa5da9fa 100644
  	beq	15f
  	addi	r11,r11,8	/* use 32-bit syscall entries */
  	clrldi	r3,r3,32
-@@ -768,7 +768,7 @@ _GLOBAL(ret_from_except_lite)
+@@ -250,7 +250,9 @@ system_call_exit:
+ 
+ 	ld	r9,TI_FLAGS(r12)
+ 	li	r11,-MAX_ERRNO
+-	andi.	r0,r9,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)
++	lis	r0,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)@h
++	ori	r0,r0,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)@l
++	and.	r0,r9,r0
+ 	bne-	.Lsyscall_exit_work
+ 
+ 	andi.	r0,r8,MSR_FP
+@@ -363,25 +365,25 @@ END_FTR_SECTION_IFSET(CPU_FTR_HAS_PPR)
+ 	/* If TIF_RESTOREALL is set, don't scribble on either r3 or ccr.
+ 	 If TIF_NOERROR is set, just save r3 as it is. */
+ 
+-	andi.	r0,r9,_TIF_RESTOREALL
++	andis.	r0,r9,_TIF_RESTOREALL@h
+ 	beq+	0f
+ 	REST_NVGPRS(r1)
+ 	b	2f
+ 0:	cmpld	r3,r11		/* r11 is -MAX_ERRNO */
+ 	blt+	1f
+-	andi.	r0,r9,_TIF_NOERROR
++	andis.	r0,r9,_TIF_NOERROR@h
+ 	bne-	1f
+ 	ld	r5,_CCR(r1)
+ 	neg	r3,r3
+ 	oris	r5,r5,0x1000	/* Set SO bit in CR */
+ 	std	r5,_CCR(r1)
+ 1:	std	r3,GPR3(r1)
+-2:	andi.	r0,r9,(_TIF_PERSYSCALL_MASK)
++2:	andis.	r0,r9,(_TIF_PERSYSCALL_MASK)@h
+ 	beq	4f
+ 
+ 	/* Clear per-syscall TIF flags if any are set.  */
+ 
+-	li	r11,_TIF_PERSYSCALL_MASK
++	lis	r11,(_TIF_PERSYSCALL_MASK)@h
+ 	addi	r12,r12,TI_FLAGS
+ 3:	ldarx	r10,0,r12
+ 	andc	r10,r10,r11
+@@ -768,7 +770,7 @@ _GLOBAL(ret_from_except_lite)
  	bl	restore_math
  	b	restore
  #endif
@@ -2067,7 +2170,7 @@ index 7a46e0e57a36..7671fa5da9fa 100644
  	beq	2f
  	bl	restore_interrupts
  	SCHEDULE_USER
-@@ -830,10 +830,18 @@ resume_kernel:
+@@ -830,10 +832,18 @@ resume_kernel:
  
  #ifdef CONFIG_PREEMPT
  	/* Check if we need to preempt */
@@ -2087,7 +2190,7 @@ index 7a46e0e57a36..7671fa5da9fa 100644
  	cmpwi	cr0,r8,0
  	bne	restore
  	ld	r0,SOFTE(r1)
-@@ -850,7 +858,7 @@ resume_kernel:
+@@ -850,7 +860,7 @@ resume_kernel:
  	/* Re-test flags and eventually loop */
  	CURRENT_THREAD_INFO(r9, r1)
  	ld	r4,TI_FLAGS(r9)
@@ -2196,6 +2299,80 @@ index e7075aaff1bb..1580464a9d5b 100644
  	if (kthread_should_stop())
  		res = -EINTR;
  	if (res) {
+diff --git a/arch/powerpc/platforms/pseries/iommu.c b/arch/powerpc/platforms/pseries/iommu.c
+index 06f02960b439..d80d919c78d3 100644
+--- a/arch/powerpc/platforms/pseries/iommu.c
++++ b/arch/powerpc/platforms/pseries/iommu.c
+@@ -38,6 +38,7 @@
+ #include <linux/of.h>
+ #include <linux/iommu.h>
+ #include <linux/rculist.h>
++#include <linux/locallock.h>
+ #include <asm/io.h>
+ #include <asm/prom.h>
+ #include <asm/rtas.h>
+@@ -212,6 +213,7 @@ static int tce_build_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ }
+ 
+ static DEFINE_PER_CPU(__be64 *, tce_page);
++static DEFINE_LOCAL_IRQ_LOCK(tcp_page_lock);
+ 
+ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ 				     long npages, unsigned long uaddr,
+@@ -232,7 +234,8 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ 		                           direction, attrs);
+ 	}
+ 
+-	local_irq_save(flags);	/* to protect tcep and the page behind it */
++	/* to protect tcep and the page behind it */
++	local_lock_irqsave(tcp_page_lock, flags);
+ 
+ 	tcep = __this_cpu_read(tce_page);
+ 
+@@ -243,7 +246,7 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ 		tcep = (__be64 *)__get_free_page(GFP_ATOMIC);
+ 		/* If allocation fails, fall back to the loop implementation */
+ 		if (!tcep) {
+-			local_irq_restore(flags);
++			local_unlock_irqrestore(tcp_page_lock, flags);
+ 			return tce_build_pSeriesLP(tbl, tcenum, npages, uaddr,
+ 					    direction, attrs);
+ 		}
+@@ -277,7 +280,7 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+ 		tcenum += limit;
+ 	} while (npages > 0 && !rc);
+ 
+-	local_irq_restore(flags);
++	local_unlock_irqrestore(tcp_page_lock, flags);
+ 
+ 	if (unlikely(rc == H_NOT_ENOUGH_RESOURCES)) {
+ 		ret = (int)rc;
+@@ -435,13 +438,14 @@ static int tce_setrange_multi_pSeriesLP(unsigned long start_pfn,
+ 	u64 rc = 0;
+ 	long l, limit;
+ 
+-	local_irq_disable();	/* to protect tcep and the page behind it */
++	/* to protect tcep and the page behind it */
++	local_lock_irq(tcp_page_lock);
+ 	tcep = __this_cpu_read(tce_page);
+ 
+ 	if (!tcep) {
+ 		tcep = (__be64 *)__get_free_page(GFP_ATOMIC);
+ 		if (!tcep) {
+-			local_irq_enable();
++			local_unlock_irq(tcp_page_lock);
+ 			return -ENOMEM;
+ 		}
+ 		__this_cpu_write(tce_page, tcep);
+@@ -487,7 +491,7 @@ static int tce_setrange_multi_pSeriesLP(unsigned long start_pfn,
+ 
+ 	/* error cleanup: caller will clear whole range */
+ 
+-	local_irq_enable();
++	local_unlock_irq(tcp_page_lock);
+ 	return rc;
+ }
+ 
 diff --git a/arch/s390/include/asm/spinlock_types.h b/arch/s390/include/asm/spinlock_types.h
 index cfed272e4fd5..8e28e8176ec8 100644
 --- a/arch/s390/include/asm/spinlock_types.h
@@ -5006,6 +5183,32 @@ index 29877969310d..f65817c51c2a 100644
  
  	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
  
+diff --git a/drivers/gpu/drm/i915/i915_request.c b/drivers/gpu/drm/i915/i915_request.c
+index 5c2c93cbab12..7124510b9131 100644
+--- a/drivers/gpu/drm/i915/i915_request.c
++++ b/drivers/gpu/drm/i915/i915_request.c
+@@ -356,9 +356,7 @@ static void __retire_engine_request(struct intel_engine_cs *engine,
+ 
+ 	GEM_BUG_ON(!i915_request_completed(rq));
+ 
+-	local_irq_disable();
+-
+-	spin_lock(&engine->timeline.lock);
++	spin_lock_irq(&engine->timeline.lock);
+ 	GEM_BUG_ON(!list_is_first(&rq->link, &engine->timeline.requests));
+ 	list_del_init(&rq->link);
+ 	spin_unlock(&engine->timeline.lock);
+@@ -372,9 +370,7 @@ static void __retire_engine_request(struct intel_engine_cs *engine,
+ 		GEM_BUG_ON(!atomic_read(&rq->i915->gt_pm.rps.num_waiters));
+ 		atomic_dec(&rq->i915->gt_pm.rps.num_waiters);
+ 	}
+-	spin_unlock(&rq->lock);
+-
+-	local_irq_enable();
++	spin_unlock_irq(&rq->lock);
+ 
+ 	/*
+ 	 * The backing object for the context is done after switching to the
 diff --git a/drivers/gpu/drm/i915/i915_trace.h b/drivers/gpu/drm/i915/i915_trace.h
 index b50c6b829715..33028d8f470e 100644
 --- a/drivers/gpu/drm/i915/i915_trace.h
@@ -6023,6 +6226,32 @@ index 6420ae581a80..0f4f41ed9ffa 100644
  }
  
  static int __init
+diff --git a/drivers/tty/sysrq.c b/drivers/tty/sysrq.c
+index 06ed20dd01ba..627517ad55bf 100644
+--- a/drivers/tty/sysrq.c
++++ b/drivers/tty/sysrq.c
+@@ -215,7 +215,7 @@ static struct sysrq_key_op sysrq_showlocks_op = {
+ #endif
+ 
+ #ifdef CONFIG_SMP
+-static DEFINE_SPINLOCK(show_lock);
++static DEFINE_RAW_SPINLOCK(show_lock);
+ 
+ static void showacpu(void *dummy)
+ {
+@@ -225,10 +225,10 @@ static void showacpu(void *dummy)
+ 	if (idle_cpu(smp_processor_id()))
+ 		return;
+ 
+-	spin_lock_irqsave(&show_lock, flags);
++	raw_spin_lock_irqsave(&show_lock, flags);
+ 	pr_info("CPU%d:\n", smp_processor_id());
+ 	show_stack(NULL, NULL);
+-	spin_unlock_irqrestore(&show_lock, flags);
++	raw_spin_unlock_irqrestore(&show_lock, flags);
+ }
+ 
+ static void sysrq_showregs_othercpus(struct work_struct *dummy)
 diff --git a/drivers/usb/core/hcd.c b/drivers/usb/core/hcd.c
 index 1c21955fe7c0..7863dec34f0b 100644
 --- a/drivers/usb/core/hcd.c
@@ -16728,7 +16957,7 @@ index 7fe183404c38..2b765aa4e2c4 100644
  obj-$(CONFIG_SMP) += cpupri.o cpudeadline.o topology.o stop_task.o pelt.o
  obj-$(CONFIG_SCHED_AUTOGROUP) += autogroup.o
 diff --git a/kernel/sched/completion.c b/kernel/sched/completion.c
-index a1ad5b7d5521..755a58084978 100644
+index a1ad5b7d5521..49c14137988e 100644
 --- a/kernel/sched/completion.c
 +++ b/kernel/sched/completion.c
 @@ -29,12 +29,12 @@ void complete(struct completion *x)
@@ -16769,12 +16998,12 @@ index a1ad5b7d5521..755a58084978 100644
 +		DECLARE_SWAITQUEUE(wait);
  
 -		__add_wait_queue_entry_tail_exclusive(&x->wait, &wait);
-+		__prepare_to_swait(&x->wait, &wait);
  		do {
  			if (signal_pending_state(state, current)) {
  				timeout = -ERESTARTSYS;
  				break;
  			}
++			__prepare_to_swait(&x->wait, &wait);
  			__set_current_state(state);
 -			spin_unlock_irq(&x->wait.lock);
 +			raw_spin_unlock_irq(&x->wait.lock);
