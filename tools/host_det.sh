@@ -39,7 +39,7 @@ check_rpm () {
 }
 
 redhat_reqs () {
-	pkgtool="yum"
+	pkgtool="dnf"
 
 	#https://fedoraproject.org/wiki/Releases
 	unset rpm_pkgs
@@ -53,30 +53,37 @@ redhat_reqs () {
 	check_rpm
 	pkg="wget"
 	check_rpm
+	pkg="fakeroot"
+	check_rpm
+	pkg="xz"
+	check_rpm
+	pkg="lzop"
+	check_rpm
+	pkg="bison"
+	check_rpm
+	pkg="flex"
+	check_rpm
+	pkg="uboot-tools"
+	check_rpm
+	pkg="openssl-devel"
+	check_rpm
 
 	arch=$(uname -m)
 	if [ "x${arch}" = "xx86_64" ] ; then
 		pkg="ncurses-devel.x86_64"
 		check_rpm
+		pkg="libmpc-devel.x86_64"
+		check_rpm
 		if [ "x${ignore_32bit}" = "xfalse" ] ; then
 			pkg="ncurses-devel.i686"
+			check_rpm
+			pkg="libmpc-devel.i686"
 			check_rpm
 			pkg="libstdc++.i686"
 			check_rpm
 			pkg="zlib.i686"
 			check_rpm
 		fi
-	fi
-
-	if [ "$(which lsb_release)" ] ; then
-		rpm_distro=$(lsb_release -rs)
-		echo "RPM distro version: [${rpm_distro}]"
-
-		case "${rpm_distro}" in
-		22|23|24|25)
-			pkgtool="dnf"
-			;;
-		esac
 	fi
 
 	if [ "${rpm_pkgs}" ] ; then
@@ -429,9 +436,11 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|cosmic)
+		bionic|cosmic|disco|eoan)
 			#18.04 bionic: (EOL: April 2023) lts: bionic -> xyz
 			#18.10 cosmic: (EOL: July 2019)
+			#19.04 disco: (EOL: )
+			#19.10 eoan: (EOL: )
 			unset warn_eol_distro
 			;;
 		yakkety|zesty|artful)
