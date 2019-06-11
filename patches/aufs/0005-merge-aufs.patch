@@ -1,13 +1,13 @@
-From 5fd30be9804d2cd0bdd8c023b5db9ecf41e9175e Mon Sep 17 00:00:00 2001
+From 97dc9c2ca848bc99aa293d5617c9f821557d73b3 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 13 May 2019 10:41:01 -0500
+Date: Mon, 10 Jun 2019 20:23:39 -0500
 Subject: [PATCH 5/5] merge: aufs
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  Documentation/ABI/testing/debugfs-aufs        |   55 +
  Documentation/ABI/testing/sysfs-aufs          |   31 +
- Documentation/filesystems/aufs/README         |  395 ++++
+ Documentation/filesystems/aufs/README         |  402 ++++
  .../filesystems/aufs/design/01intro.txt       |  171 ++
  .../filesystems/aufs/design/02struct.txt      |  258 +++
  .../filesystems/aufs/design/03atomic_open.txt |   85 +
@@ -26,7 +26,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/Makefile                              |   46 +
  fs/aufs/aufs.h                                |   62 +
  fs/aufs/branch.c                              | 1422 ++++++++++++
- fs/aufs/branch.h                              |  365 +++
+ fs/aufs/branch.h                              |  366 +++
  fs/aufs/conf.mk                               |   40 +
  fs/aufs/cpup.c                                | 1449 ++++++++++++
  fs/aufs/cpup.h                                |  100 +
@@ -95,9 +95,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/wkq.c                                 |  392 ++++
  fs/aufs/wkq.h                                 |   89 +
  fs/aufs/xattr.c                               |  356 +++
- fs/aufs/xino.c                                | 1956 +++++++++++++++++
+ fs/aufs/xino.c                                | 1965 +++++++++++++++++
  include/uapi/linux/aufs_type.h                |  448 ++++
- 92 files changed, 37814 insertions(+)
+ 92 files changed, 37831 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -291,10 +291,10 @@ index 000000000000..82f9518495ea
 +		will be empty. About XINO files, see the aufs manual.
 diff --git a/Documentation/filesystems/aufs/README b/Documentation/filesystems/aufs/README
 new file mode 100644
-index 000000000000..fb05e3b722ea
+index 000000000000..029c3e5df231
 --- /dev/null
 +++ b/Documentation/filesystems/aufs/README
-@@ -0,0 +1,395 @@
+@@ -0,0 +1,402 @@
 +
 +Aufs4 -- advanced multi layered unification filesystem version 4.x
 +http://aufs.sf.net
@@ -549,6 +549,13 @@ index 000000000000..fb05e3b722ea
 +  Supports a nested loopback mount in a branch-fs. This patch is
 +  unnecessary until aufs produces a message like "you may want to try
 +  another patch for loopback file".
++- proc_mounts.patch
++  When there are many mountpoints and many mount(2)/umount(2) are
++  running, then /proc/mounts may not show the all mountpoints.  This
++  patch makes /proc/mounts always show the full mountpoints list.
++  If you don't want to apply this patch and meet such problem, then you
++  need to increase the value of 'ProcMounts_Times' make-variable in
++  aufs-util.git as a second best solution.
 +- vfs-ino.patch
 +  Modifies a system global kernel internal function get_next_ino() in
 +  order to stop assigning 0 for an inode-number. Not directly related to
@@ -3872,10 +3879,10 @@ index 000000000000..598cf370a1dc
 +}
 diff --git a/fs/aufs/branch.h b/fs/aufs/branch.h
 new file mode 100644
-index 000000000000..f99063aa54cd
+index 000000000000..012459ad57f3
 --- /dev/null
 +++ b/fs/aufs/branch.h
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,366 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2005-2019 Junjiro R. Okajima
@@ -4103,7 +4110,8 @@ index 000000000000..f99063aa54cd
 +static const loff_t au_loff_max = LLONG_MAX;
 +
 +aufs_bindex_t au_xi_root(struct super_block *sb, struct dentry *dentry);
-+struct file *au_xino_create(struct super_block *sb, char *fpath, int silent);
++struct file *au_xino_create(struct super_block *sb, char *fpath, int silent,
++			    int wbrtop);
 +struct file *au_xino_create2(struct super_block *sb, struct path *base,
 +			     struct file *copy_src);
 +struct au_xi_new {
@@ -11863,7 +11871,7 @@ index 000000000000..a986736462c3
 +#endif /* __AUFS_DIRREN_H__ */
 diff --git a/fs/aufs/dynop.c b/fs/aufs/dynop.c
 new file mode 100644
-index 000000000000..06c558367944
+index 000000000000..7c7d8432d422
 --- /dev/null
 +++ b/fs/aufs/dynop.c
 @@ -0,0 +1,370 @@
@@ -11909,8 +11917,8 @@ index 000000000000..06c558367944
 +	hlist_bl_lock(hbl);
 +	hlist_bl_for_each_entry(tmp, pos, hbl, dk_hnode)
 +		if (tmp->dk_op.dy_hop == h_op) {
-+			key = tmp;
-+			kref_get(&key->dk_kref);
++			if (kref_get_unless_zero(&tmp->dk_kref))
++				key = tmp;
 +			break;
 +		}
 +	hlist_bl_unlock(hbl);
@@ -11964,8 +11972,8 @@ index 000000000000..06c558367944
 +	hlist_bl_lock(hbl);
 +	hlist_bl_for_each_entry(tmp, pos, hbl, dk_hnode)
 +		if (tmp->dk_op.dy_hop == h_op) {
-+			kref_get(&tmp->dk_kref);
-+			found = tmp;
++			if (kref_get_unless_zero(&tmp->dk_kref))
++				found = tmp;
 +			break;
 +		}
 +	if (!found)
@@ -11983,7 +11991,7 @@ index 000000000000..06c558367944
 +
 +	key = container_of(rcu, struct au_dykey, dk_rcu);
 +	DyPrSym(key);
-+	au_kfree_rcu(key);
++	kfree(key);
 +}
 +
 +static void dy_free(struct kref *kref)
@@ -23690,7 +23698,7 @@ index 000000000000..cef7d96362c7
 +}
 diff --git a/fs/aufs/loop.h b/fs/aufs/loop.h
 new file mode 100644
-index 000000000000..625bd78d99af
+index 000000000000..7fc394e72d75
 --- /dev/null
 +++ b/fs/aufs/loop.h
 @@ -0,0 +1,55 @@
@@ -23736,7 +23744,7 @@ index 000000000000..625bd78d99af
 +int au_loopback_init(void);
 +void au_loopback_fin(void);
 +#else
-+AuStub(struct file *, loop_backing_file, return NULL)
++AuStub(struct file *, loop_backing_file, return NULL, struct super_block *sb)
 +
 +AuStubInt0(au_test_loopback_overlap, struct super_block *sb,
 +	   struct dentry *h_adding)
@@ -24950,7 +24958,7 @@ index 000000000000..59ce2d700ec9
 +}
 diff --git a/fs/aufs/opts.c b/fs/aufs/opts.c
 new file mode 100644
-index 000000000000..645e1c7f8625
+index 000000000000..4349bfa211dd
 --- /dev/null
 +++ b/fs/aufs/opts.c
 @@ -0,0 +1,1877 @@
@@ -25874,7 +25882,7 @@ index 000000000000..645e1c7f8625
 +	int err;
 +	struct file *file;
 +
-+	file = au_xino_create(sb, args[0].from, /*silent*/0);
++	file = au_xino_create(sb, args[0].from, /*silent*/0, /*wbrtop*/0);
 +	err = PTR_ERR(file);
 +	if (IS_ERR(file))
 +		goto out;
@@ -27755,7 +27763,7 @@ index 000000000000..64c504002290
 +}
 diff --git a/fs/aufs/procfs.c b/fs/aufs/procfs.c
 new file mode 100644
-index 000000000000..29c6377e888c
+index 000000000000..582dd486fcd3
 --- /dev/null
 +++ b/fs/aufs/procfs.c
 @@ -0,0 +1,171 @@
@@ -27822,8 +27830,8 @@ index 000000000000..29c6377e888c
 +	hlist_bl_lock(&au_sbilist);
 +	hlist_bl_for_each_entry(sbinfo, pos, &au_sbilist, si_list)
 +		if (id == sysaufs_si_id(sbinfo)) {
-+			kobject_get(&sbinfo->si_kobj);
-+			sb = sbinfo->si_sb;
++			if (kobject_get_unless_zero(&sbinfo->si_kobj))
++				sb = sbinfo->si_sb;
 +			break;
 +		}
 +	hlist_bl_unlock(&au_sbilist);
@@ -36143,10 +36151,10 @@ index 000000000000..4b25f2f14d4f
 +}
 diff --git a/fs/aufs/xino.c b/fs/aufs/xino.c
 new file mode 100644
-index 000000000000..7733b9a28779
+index 000000000000..35ea33469d36
 --- /dev/null
 +++ b/fs/aufs/xino.c
-@@ -0,0 +1,1956 @@
+@@ -0,0 +1,1965 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2005-2019 Junjiro R. Okajima
@@ -36309,22 +36317,28 @@ index 000000000000..7733b9a28779
 +/*
 + * create and set a new xino file
 + */
-+struct file *au_xino_create(struct super_block *sb, char *fpath, int silent)
++struct file *au_xino_create(struct super_block *sb, char *fpath, int silent,
++			    int wbrtop)
 +{
 +	struct file *file;
 +	struct dentry *h_parent, *d;
 +	struct inode *h_dir, *inode;
 +	int err;
++	static DEFINE_MUTEX(mtx);
 +
 +	/*
 +	 * at mount-time, and the xino file is the default path,
 +	 * hnotify is disabled so we have no notify events to ignore.
 +	 * when a user specified the xino, we cannot get au_hdir to be ignored.
 +	 */
++	if (!wbrtop)
++		mutex_lock(&mtx);
 +	file = vfsub_filp_open(fpath, O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE
 +			       /* | __FMODE_NONOTIFY */,
 +			       0666);
 +	if (IS_ERR(file)) {
++		if (!wbrtop)
++			mutex_unlock(&mtx);
 +		if (!silent)
 +			pr_err("open %s(%ld)\n", fpath, PTR_ERR(file));
 +		return file;
@@ -36334,6 +36348,8 @@ index 000000000000..7733b9a28779
 +	err = 0;
 +	d = file->f_path.dentry;
 +	h_parent = au_dget_parent_lock(d, AuLsc_I_PARENT);
++	if (!wbrtop)
++		mutex_unlock(&mtx);
 +	/* mnt_want_write() is unnecessary here */
 +	h_dir = d_inode(h_parent);
 +	inode = file_inode(file);
@@ -37816,11 +37832,12 @@ index 000000000000..7733b9a28779
 +		if (!IS_ERR(p)) {
 +			strcat(p, "/" AUFS_XINO_FNAME);
 +			AuDbg("%s\n", p);
-+			file = au_xino_create(sb, p, /*silent*/0);
++			file = au_xino_create(sb, p, /*silent*/0, /*wbrtop*/1);
 +		}
 +		free_page((unsigned long)page);
 +	} else {
-+		file = au_xino_create(sb, AUFS_XINO_DEFPATH, /*silent*/0);
++		file = au_xino_create(sb, AUFS_XINO_DEFPATH, /*silent*/0,
++				      /*wbrtop*/0);
 +		if (IS_ERR(file))
 +			goto out;
 +		h_sb = file->f_path.dentry->d_sb;
@@ -38105,7 +38122,7 @@ index 000000000000..7733b9a28779
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..5bc101d0f8fa
+index 000000000000..0ba6b9005487
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,448 @@
@@ -38151,7 +38168,7 @@ index 000000000000..5bc101d0f8fa
 +
 +#include <linux/limits.h>
 +
-+#define AUFS_VERSION	"4.14.73+-20190311"
++#define AUFS_VERSION	"4.14.73+-20190610"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
