@@ -1,22 +1,26 @@
-From fd0e9014fc9d94f9d8fe6fd4028f46771a24211b Mon Sep 17 00:00:00 2001
+From 16f5d887dd30c22ec478e1db90f8da2855a72c75 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 10 Jun 2019 20:25:08 -0500
+Date: Tue, 25 Jun 2019 21:48:02 -0500
 Subject: [PATCH] merge: brcm80211
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  .../broadcom/brcm80211/brcmfmac/bus.h         |  13 ++
- .../broadcom/brcm80211/brcmfmac/cfg80211.c    |  63 ++-----
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    |  69 ++-----
  .../broadcom/brcm80211/brcmfmac/common.c      | 177 +++++++++++++++++-
- .../broadcom/brcm80211/brcmfmac/core.c        |  39 ++++
+ .../broadcom/brcm80211/brcmfmac/core.c        |  54 +++++-
  .../broadcom/brcm80211/brcmfmac/core.h        |   1 +
  .../broadcom/brcm80211/brcmfmac/fweh.c        |   5 -
+ .../broadcom/brcm80211/brcmfmac/fweh.h        |  16 +-
  .../broadcom/brcm80211/brcmfmac/fwil_types.h  |  27 +++
+ .../broadcom/brcm80211/brcmfmac/fwsignal.c    |  42 ++---
+ .../broadcom/brcm80211/brcmfmac/msgbuf.c      |   2 +-
  .../broadcom/brcm80211/brcmfmac/p2p.c         |   3 +-
  .../broadcom/brcm80211/brcmfmac/pcie.c        |  19 ++
  .../broadcom/brcm80211/brcmfmac/sdio.c        |  22 ++-
- .../broadcom/brcm80211/brcmfmac/usb.c         |  18 ++
- 11 files changed, 332 insertions(+), 55 deletions(-)
+ .../broadcom/brcm80211/brcmfmac/usb.c         |  45 +++--
+ .../broadcom/brcm80211/brcmfmac/vendor.c      |   5 +-
+ 15 files changed, 373 insertions(+), 127 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h
 index 163ddc49f951..fb60a7c66e2c 100644
@@ -57,7 +61,7 @@ index 163ddc49f951..fb60a7c66e2c 100644
   * interface functions from common layer
   */
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
-index cd6c5ece9a5d..48733c5f343d 100644
+index 04fa66ed99a0..48733c5f343d 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
 @@ -472,47 +472,6 @@ send_key_to_dongle(struct brcmf_if *ifp, struct brcmf_wsec_key *key)
@@ -117,7 +121,34 @@ index cd6c5ece9a5d..48733c5f343d 100644
  	cfg->pwr_save = enabled;
  	if (!check_vif_up(ifp->vif)) {
  
-@@ -6863,12 +6824,18 @@ static s32 brcmf_translate_country_code(struct brcmf_pub *drvr, char alpha2[2],
+@@ -3581,8 +3542,6 @@ brcmf_wowl_nd_results(struct brcmf_if *ifp, const struct brcmf_event_msg *e,
+ 	}
+ 
+ 	netinfo = brcmf_get_netinfo_array(pfn_result);
+-	if (netinfo->SSID_len > IEEE80211_MAX_SSID_LEN)
+-		netinfo->SSID_len = IEEE80211_MAX_SSID_LEN;
+ 	memcpy(cfg->wowl.nd->ssid.ssid, netinfo->SSID, netinfo->SSID_len);
+ 	cfg->wowl.nd->ssid.ssid_len = netinfo->SSID_len;
+ 	cfg->wowl.nd->n_channels = 1;
+@@ -5467,8 +5426,6 @@ static s32 brcmf_get_assoc_ies(struct brcmf_cfg80211_info *cfg,
+ 		conn_info->req_ie =
+ 		    kmemdup(cfg->extra_buf, conn_info->req_ie_len,
+ 			    GFP_KERNEL);
+-		if (!conn_info->req_ie)
+-			conn_info->req_ie_len = 0;
+ 	} else {
+ 		conn_info->req_ie_len = 0;
+ 		conn_info->req_ie = NULL;
+@@ -5485,8 +5442,6 @@ static s32 brcmf_get_assoc_ies(struct brcmf_cfg80211_info *cfg,
+ 		conn_info->resp_ie =
+ 		    kmemdup(cfg->extra_buf, conn_info->resp_ie_len,
+ 			    GFP_KERNEL);
+-		if (!conn_info->resp_ie)
+-			conn_info->resp_ie_len = 0;
+ 	} else {
+ 		conn_info->resp_ie_len = 0;
+ 		conn_info->resp_ie = NULL;
+@@ -6869,12 +6824,18 @@ static s32 brcmf_translate_country_code(struct brcmf_pub *drvr, char alpha2[2],
  	struct brcmfmac_pd_cc *country_codes;
  	struct brcmfmac_pd_cc_entry *cc;
  	s32 found_index;
@@ -138,7 +169,7 @@ index cd6c5ece9a5d..48733c5f343d 100644
  	}
  
  	if ((alpha2[0] == ccreq->country_abbrev[0]) &&
-@@ -6892,10 +6859,14 @@ static s32 brcmf_translate_country_code(struct brcmf_pub *drvr, char alpha2[2],
+@@ -6898,10 +6859,14 @@ static s32 brcmf_translate_country_code(struct brcmf_pub *drvr, char alpha2[2],
  		brcmf_dbg(TRACE, "No country code match found\n");
  		return -EINVAL;
  	}
@@ -382,7 +413,7 @@ index 7a2b49587b4d..b5889360da96 100644
  	err = brcmf_fil_iovar_int_set(ifp, "mpc", 1);
  	if (err) {
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
-index 5cc3a07dda9e..9763ff4f7ddc 100644
+index bfc0e37b7f34..9763ff4f7ddc 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
 @@ -71,6 +71,43 @@ struct brcmf_if *brcmf_get_ifp(struct brcmf_pub *drvr, int ifidx)
@@ -438,6 +469,57 @@ index 5cc3a07dda9e..9763ff4f7ddc 100644
  }
  
  #if IS_ENABLED(CONFIG_IPV6)
+@@ -344,8 +383,7 @@ void brcmf_rx_frame(struct device *dev, struct sk_buff *skb, bool handle_event)
+ 	} else {
+ 		/* Process special event packets */
+ 		if (handle_event)
+-			brcmf_fweh_process_skb(ifp->drvr, skb,
+-					       BCMILCP_SUBTYPE_VENDOR_LONG);
++			brcmf_fweh_process_skb(ifp->drvr, skb);
+ 
+ 		brcmf_netif_rx(ifp, skb);
+ 	}
+@@ -362,7 +400,7 @@ void brcmf_rx_event(struct device *dev, struct sk_buff *skb)
+ 	if (brcmf_rx_hdrpull(drvr, skb, &ifp))
+ 		return;
+ 
+-	brcmf_fweh_process_skb(ifp->drvr, skb, 0);
++	brcmf_fweh_process_skb(ifp->drvr, skb);
+ 	brcmu_pkt_buf_free_skb(skb);
+ }
+ 
+@@ -664,17 +702,17 @@ static void brcmf_del_if(struct brcmf_pub *drvr, s32 bsscfgidx,
+ 			 bool rtnl_locked)
+ {
+ 	struct brcmf_if *ifp;
+-	int ifidx;
+ 
+ 	ifp = drvr->iflist[bsscfgidx];
++	drvr->iflist[bsscfgidx] = NULL;
+ 	if (!ifp) {
+ 		brcmf_err("Null interface, bsscfgidx=%d\n", bsscfgidx);
+ 		return;
+ 	}
+ 	brcmf_dbg(TRACE, "Enter, bsscfgidx=%d, ifidx=%d\n", bsscfgidx,
+ 		  ifp->ifidx);
+-	ifidx = ifp->ifidx;
+-
++	if (drvr->if2bss[ifp->ifidx] == bsscfgidx)
++		drvr->if2bss[ifp->ifidx] = BRCMF_BSSIDX_INVALID;
+ 	if (ifp->ndev) {
+ 		if (bsscfgidx == 0) {
+ 			if (ifp->ndev->netdev_ops == &brcmf_netdev_ops_pri) {
+@@ -702,10 +740,6 @@ static void brcmf_del_if(struct brcmf_pub *drvr, s32 bsscfgidx,
+ 		brcmf_p2p_ifp_removed(ifp, rtnl_locked);
+ 		kfree(ifp);
+ 	}
+-
+-	drvr->iflist[bsscfgidx] = NULL;
+-	if (drvr->if2bss[ifidx] == bsscfgidx)
+-		drvr->if2bss[ifidx] = BRCMF_BSSIDX_INVALID;
+ }
+ 
+ void brcmf_remove_interface(struct brcmf_if *ifp, bool rtnl_locked)
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.h
 index a4dd313140f3..b9a96cbc70f0 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.h
@@ -466,6 +548,50 @@ index ef72baf6dd96..e7eaa57d11d9 100644
  
  		/* special handling of interface event */
  		if (event->code == BRCMF_E_IF) {
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
+index ebd66fe0d949..816f80ea925b 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
+@@ -211,7 +211,7 @@ enum brcmf_fweh_event_code {
+  */
+ #define BRCM_OUI				"\x00\x10\x18"
+ #define BCMILCP_BCM_SUBTYPE_EVENT		1
+-#define BCMILCP_SUBTYPE_VENDOR_LONG		32769
++
+ 
+ /**
+  * struct brcm_ethhdr - broadcom specific ether header.
+@@ -334,10 +334,10 @@ void brcmf_fweh_process_event(struct brcmf_pub *drvr,
+ void brcmf_fweh_p2pdev_setup(struct brcmf_if *ifp, bool ongoing);
+ 
+ static inline void brcmf_fweh_process_skb(struct brcmf_pub *drvr,
+-					  struct sk_buff *skb, u16 stype)
++					  struct sk_buff *skb)
+ {
+ 	struct brcmf_event *event_packet;
+-	u16 subtype, usr_stype;
++	u16 usr_stype;
+ 
+ 	/* only process events when protocol matches */
+ 	if (skb->protocol != cpu_to_be16(ETH_P_LINK_CTL))
+@@ -346,16 +346,8 @@ static inline void brcmf_fweh_process_skb(struct brcmf_pub *drvr,
+ 	if ((skb->len + ETH_HLEN) < sizeof(*event_packet))
+ 		return;
+ 
+-	event_packet = (struct brcmf_event *)skb_mac_header(skb);
+-
+-	/* check subtype if needed */
+-	if (unlikely(stype)) {
+-		subtype = get_unaligned_be16(&event_packet->hdr.subtype);
+-		if (subtype != stype)
+-			return;
+-	}
+-
+ 	/* check for BRCM oui match */
++	event_packet = (struct brcmf_event *)skb_mac_header(skb);
+ 	if (memcmp(BRCM_OUI, &event_packet->hdr.oui[0],
+ 		   sizeof(event_packet->hdr.oui)))
+ 		return;
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
 index e0d22fedb2b4..b99dc2b76046 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
@@ -509,6 +635,86 @@ index e0d22fedb2b4..b99dc2b76046 100644
 +};
 +
  #endif /* FWIL_TYPES_H_ */
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwsignal.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwsignal.c
+index 2370060ef980..f59642b2c935 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwsignal.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwsignal.c
+@@ -579,6 +579,24 @@ static bool brcmf_fws_ifidx_match(struct sk_buff *skb, void *arg)
+ 	return ifidx == *(int *)arg;
+ }
+ 
++static void brcmf_fws_psq_flush(struct brcmf_fws_info *fws, struct pktq *q,
++				int ifidx)
++{
++	bool (*matchfn)(struct sk_buff *, void *) = NULL;
++	struct sk_buff *skb;
++	int prec;
++
++	if (ifidx != -1)
++		matchfn = brcmf_fws_ifidx_match;
++	for (prec = 0; prec < q->num_prec; prec++) {
++		skb = brcmu_pktq_pdeq_match(q, prec, matchfn, &ifidx);
++		while (skb) {
++			brcmu_pkt_buf_free_skb(skb);
++			skb = brcmu_pktq_pdeq_match(q, prec, matchfn, &ifidx);
++		}
++	}
++}
++
+ static void brcmf_fws_hanger_init(struct brcmf_fws_hanger *hanger)
+ {
+ 	int i;
+@@ -650,28 +668,6 @@ static inline int brcmf_fws_hanger_poppkt(struct brcmf_fws_hanger *h,
+ 	return 0;
+ }
+ 
+-static void brcmf_fws_psq_flush(struct brcmf_fws_info *fws, struct pktq *q,
+-				int ifidx)
+-{
+-	bool (*matchfn)(struct sk_buff *, void *) = NULL;
+-	struct sk_buff *skb;
+-	int prec;
+-	u32 hslot;
+-
+-	if (ifidx != -1)
+-		matchfn = brcmf_fws_ifidx_match;
+-	for (prec = 0; prec < q->num_prec; prec++) {
+-		skb = brcmu_pktq_pdeq_match(q, prec, matchfn, &ifidx);
+-		while (skb) {
+-			hslot = brcmf_skb_htod_tag_get_field(skb, HSLOT);
+-			brcmf_fws_hanger_poppkt(&fws->hanger, hslot, &skb,
+-						true);
+-			brcmu_pkt_buf_free_skb(skb);
+-			skb = brcmu_pktq_pdeq_match(q, prec, matchfn, &ifidx);
+-		}
+-	}
+-}
+-
+ static int brcmf_fws_hanger_mark_suppressed(struct brcmf_fws_hanger *h,
+ 					    u32 slot_id)
+ {
+@@ -2172,8 +2168,6 @@ void brcmf_fws_del_interface(struct brcmf_if *ifp)
+ 	brcmf_fws_lock(fws);
+ 	ifp->fws_desc = NULL;
+ 	brcmf_dbg(TRACE, "deleting %s\n", entry->name);
+-	brcmf_fws_macdesc_cleanup(fws, &fws->desc.iface[ifp->ifidx],
+-				  ifp->ifidx);
+ 	brcmf_fws_macdesc_deinit(entry);
+ 	brcmf_fws_cleanup(fws, ifp->ifidx);
+ 	brcmf_fws_unlock(fws);
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+index 65e16e3646ec..d2c834c3b2fc 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+@@ -1112,7 +1112,7 @@ static void brcmf_msgbuf_process_event(struct brcmf_msgbuf *msgbuf, void *buf)
+ 
+ 	skb->protocol = eth_type_trans(skb, ifp->ndev);
+ 
+-	brcmf_fweh_process_skb(ifp->drvr, skb, 0);
++	brcmf_fweh_process_skb(ifp->drvr, skb);
+ 
+ exit:
+ 	brcmu_pkt_buf_free_skb(skb);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c
 index 450f2216fac2..30f4b06ee60c 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c
@@ -622,10 +828,40 @@ index 4c28b04ea605..cb0f7a043c39 100644
  
  static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
-index 11ffaa01599e..b27170c12482 100644
+index be855aa32154..b27170c12482 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
-@@ -1128,12 +1128,30 @@ static void brcmf_usb_wowl_config(struct device *dev, bool enabled)
+@@ -160,7 +160,7 @@ struct brcmf_usbdev_info {
+ 
+ 	struct usb_device *usbdev;
+ 	struct device *dev;
+-	struct completion dev_init_done;
++	struct mutex dev_init_lock;
+ 
+ 	int ctl_in_pipe, ctl_out_pipe;
+ 	struct urb *ctl_urb; /* URB for control endpoint */
+@@ -684,18 +684,12 @@ static int brcmf_usb_up(struct device *dev)
+ 
+ static void brcmf_cancel_all_urbs(struct brcmf_usbdev_info *devinfo)
+ {
+-	int i;
+-
+ 	if (devinfo->ctl_urb)
+ 		usb_kill_urb(devinfo->ctl_urb);
+ 	if (devinfo->bulk_urb)
+ 		usb_kill_urb(devinfo->bulk_urb);
+-	if (devinfo->tx_reqs)
+-		for (i = 0; i < devinfo->bus_pub.ntxq; i++)
+-			usb_kill_urb(devinfo->tx_reqs[i].urb);
+-	if (devinfo->rx_reqs)
+-		for (i = 0; i < devinfo->bus_pub.nrxq; i++)
+-			usb_kill_urb(devinfo->rx_reqs[i].urb);
++	brcmf_usb_free_q(&devinfo->tx_postq, true);
++	brcmf_usb_free_q(&devinfo->rx_postq, true);
+ }
+ 
+ static void brcmf_usb_down(struct device *dev)
+@@ -1134,12 +1128,30 @@ static void brcmf_usb_wowl_config(struct device *dev, bool enabled)
  		device_set_wakeup_enable(devinfo->dev, false);
  }
  
@@ -656,6 +892,86 @@ index 11ffaa01599e..b27170c12482 100644
  };
  
  static int brcmf_usb_bus_setup(struct brcmf_usbdev_info *devinfo)
+@@ -1198,11 +1210,11 @@ static void brcmf_usb_probe_phase2(struct device *dev, int ret,
+ 	if (ret)
+ 		goto error;
+ 
+-	complete(&devinfo->dev_init_done);
++	mutex_unlock(&devinfo->dev_init_lock);
+ 	return;
+ error:
+ 	brcmf_dbg(TRACE, "failed: dev=%s, err=%d\n", dev_name(dev), ret);
+-	complete(&devinfo->dev_init_done);
++	mutex_unlock(&devinfo->dev_init_lock);
+ 	device_release_driver(dev);
+ }
+ 
+@@ -1248,7 +1260,7 @@ static int brcmf_usb_probe_cb(struct brcmf_usbdev_info *devinfo)
+ 		if (ret)
+ 			goto fail;
+ 		/* we are done */
+-		complete(&devinfo->dev_init_done);
++		mutex_unlock(&devinfo->dev_init_lock);
+ 		return 0;
+ 	}
+ 	bus->chip = bus_pub->devid;
+@@ -1309,10 +1321,11 @@ brcmf_usb_probe(struct usb_interface *intf, const struct usb_device_id *id)
+ 
+ 	devinfo->usbdev = usb;
+ 	devinfo->dev = &usb->dev;
+-	/* Init completion, to protect for disconnect while still loading.
++	/* Take an init lock, to protect for disconnect while still loading.
+ 	 * Necessary because of the asynchronous firmware load construction
+ 	 */
+-	init_completion(&devinfo->dev_init_done);
++	mutex_init(&devinfo->dev_init_lock);
++	mutex_lock(&devinfo->dev_init_lock);
+ 
+ 	usb_set_intfdata(intf, devinfo);
+ 
+@@ -1390,7 +1403,7 @@ brcmf_usb_probe(struct usb_interface *intf, const struct usb_device_id *id)
+ 	return 0;
+ 
+ fail:
+-	complete(&devinfo->dev_init_done);
++	mutex_unlock(&devinfo->dev_init_lock);
+ 	kfree(devinfo);
+ 	usb_set_intfdata(intf, NULL);
+ 	return ret;
+@@ -1405,7 +1418,7 @@ brcmf_usb_disconnect(struct usb_interface *intf)
+ 	devinfo = (struct brcmf_usbdev_info *)usb_get_intfdata(intf);
+ 
+ 	if (devinfo) {
+-		wait_for_completion(&devinfo->dev_init_done);
++		mutex_lock(&devinfo->dev_init_lock);
+ 		/* Make sure that devinfo still exists. Firmware probe routines
+ 		 * may have released the device and cleared the intfdata.
+ 		 */
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
+index d493021f6031..8eff2753abad 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
+@@ -35,10 +35,9 @@ static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
+ 	struct brcmf_if *ifp;
+ 	const struct brcmf_vndr_dcmd_hdr *cmdhdr = data;
+ 	struct sk_buff *reply;
+-	unsigned int payload, ret_len;
++	int ret, payload, ret_len;
+ 	void *dcmd_buf = NULL, *wr_pointer;
+ 	u16 msglen, maxmsglen = PAGE_SIZE - 0x100;
+-	int ret;
+ 
+ 	if (len < sizeof(*cmdhdr)) {
+ 		brcmf_err("vendor command too short: %d\n", len);
+@@ -66,7 +65,7 @@ static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
+ 			brcmf_err("oversize return buffer %d\n", ret_len);
+ 			ret_len = BRCMF_DCMD_MAXLEN;
+ 		}
+-		payload = max_t(unsigned int, ret_len, len) + 1;
++		payload = max(ret_len, len) + 1;
+ 		dcmd_buf = vzalloc(payload);
+ 		if (NULL == dcmd_buf)
+ 			return -ENOMEM;
 -- 
 2.20.1
 
