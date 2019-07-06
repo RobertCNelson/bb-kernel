@@ -1,6 +1,6 @@
-From 0ae6f71da0ec93c6341a1ccb49dd4249c7e1498b Mon Sep 17 00:00:00 2001
+From f8491cd9222750d0baf00c4880662ab0a9f0eab1 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 25 Jun 2019 16:31:36 -0500
+Date: Sat, 6 Jul 2019 14:14:44 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -11,10 +11,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/Makefile                        |   14 +
  net/wireguard/allowedips.c                    |  377 +
  net/wireguard/allowedips.h                    |   59 +
- net/wireguard/compat/Makefile.include         |   88 +
+ net/wireguard/compat/Makefile.include         |   92 +
  .../compat/checksum/checksum_partial_compat.h |  208 +
  net/wireguard/compat/compat-asm.h             |   43 +
- net/wireguard/compat/compat.h                 |  905 ++
+ net/wireguard/compat/compat.h                 |  907 ++
  net/wireguard/compat/dst_cache/dst_cache.c    |  175 +
  .../compat/dst_cache/include/net/dst_cache.h  |   97 +
  .../compat/fpu-x86/include/asm/fpu/api.h      |    1 +
@@ -80,7 +80,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/device.h                        |   65 +
  net/wireguard/main.c                          |   69 +
  net/wireguard/messages.h                      |  128 +
- net/wireguard/netlink.c                       |  639 ++
+ net/wireguard/netlink.c                       |  644 ++
  net/wireguard/netlink.h                       |   12 +
  net/wireguard/noise.c                         |  807 ++
  net/wireguard/noise.h                         |  130 +
@@ -89,10 +89,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/peerlookup.c                    |  221 +
  net/wireguard/peerlookup.h                    |   64 +
  net/wireguard/queueing.c                      |   53 +
- net/wireguard/queueing.h                      |  198 +
+ net/wireguard/queueing.h                      |  197 +
  net/wireguard/ratelimiter.c                   |  235 +
  net/wireguard/ratelimiter.h                   |   19 +
- net/wireguard/receive.c                       |  606 ++
+ net/wireguard/receive.c                       |  605 ++
  net/wireguard/selftest/allowedips.c           |  682 ++
  net/wireguard/selftest/counter.c              |  104 +
  net/wireguard/selftest/ratelimiter.c          |  226 +
@@ -103,7 +103,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/timers.h                        |   31 +
  net/wireguard/uapi/wireguard.h                |  190 +
  net/wireguard/version.h                       |    1 +
- 98 files changed, 51026 insertions(+)
+ 98 files changed, 51035 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -733,10 +733,10 @@ index 000000000000..e5c83cafcef4
 +#endif /* _WG_ALLOWEDIPS_H */
 diff --git a/net/wireguard/compat/Makefile.include b/net/wireguard/compat/Makefile.include
 new file mode 100644
-index 000000000000..f537abec1ac0
+index 000000000000..391f81f68435
 --- /dev/null
 +++ b/net/wireguard/compat/Makefile.include
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,92 @@
 +# SPDX-License-Identifier: GPL-2.0
 +#
 +# Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -784,6 +784,10 @@ index 000000000000..f537abec1ac0
 +ifeq ($(shell grep -s -F "int crypto_memneq" "$(srctree)/include/crypto/algapi.h"),)
 +ccflags-y += -include $(kbuild-dir)/compat/memneq/include.h
 +wireguard-y += compat/memneq/memneq.o
++endif
++
++ifeq ($(wildcard $(srctree)/include/generated/timeconst.h),)
++ccflags-y += $(shell echo 'define gcd(a,b){auto t;while(b){t=b;b=a%b;a=t;};return a;};hz=$(CONFIG_HZ);cd=gcd(hz,1000000);print "-DHZ_TO_USEC_NUM=",1000000/cd," -DHZ_TO_USEC_DEN=",hz/cd;halt;' | bc -q)
 +endif
 +
 +ifeq ($(wildcard $(srctree)/arch/arm/include/asm/neon.h)$(CONFIG_ARM),y)
@@ -1090,10 +1094,10 @@ index 000000000000..f5c5bc29db26
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..7fee52d4f849
+index 000000000000..628855004c1f
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
-@@ -0,0 +1,905 @@
+@@ -0,0 +1,907 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1110,6 +1114,8 @@ index 000000000000..7fee52d4f849
 +#ifdef RHEL_MAJOR
 +#if RHEL_MAJOR == 7
 +#define ISRHEL7
++#elif RHEL_MAJOR == 8
++#define ISRHEL8
 +#endif
 +#endif
 +#ifdef UTS_UBUNTU_RELEASE_ABI
@@ -1500,7 +1506,7 @@ index 000000000000..7fee52d4f849
 +{
 +#if !(NSEC_PER_SEC % HZ)
 +	return (NSEC_PER_SEC / HZ) * j;
-+# else
++#else
 +	return div_u64(j * HZ_TO_USEC_NUM, HZ_TO_USEC_DEN) * 1000;
 +#endif
 +}
@@ -1919,7 +1925,7 @@ index 000000000000..7fee52d4f849
 +#define COMPAT_CANNOT_DEPRECIATE_BH_RCU
 +#endif
 +
-+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 10)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 10) && !defined(ISRHEL8)
 +static inline void skb_mark_not_on_list(struct sk_buff *skb)
 +{
 +	skb->next = NULL;
@@ -45995,10 +46001,10 @@ index 000000000000..3cfd1c5e9b02
 +#endif /* _WG_MESSAGES_H */
 diff --git a/net/wireguard/netlink.c b/net/wireguard/netlink.c
 new file mode 100644
-index 000000000000..ae3319750dd8
+index 000000000000..6fa5ba7cfde2
 --- /dev/null
 +++ b/net/wireguard/netlink.c
-@@ -0,0 +1,639 @@
+@@ -0,0 +1,644 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -46091,12 +46097,21 @@ index 000000000000..ae3319750dd8
 +	return 0;
 +}
 +
++struct dump_ctx {
++	struct wg_device *wg;
++	struct wg_peer *next_peer;
++	struct allowedips_node *next_allowedip;
++	u64 allowedips_seq;
++};
++
++#define DUMP_CTX(cb) ((struct dump_ctx *)(cb)->args)
++
 +static int
-+get_peer(struct wg_peer *peer, struct allowedips_node **next_allowedips_node,
-+	 u64 *allowedips_seq, struct sk_buff *skb)
++get_peer(struct wg_peer *peer, struct sk_buff *skb, struct dump_ctx *ctx)
 +{
++
 +	struct nlattr *allowedips_nest, *peer_nest = nla_nest_start(skb, 0);
-+	struct allowedips_node *allowedips_node = *next_allowedips_node;
++	struct allowedips_node *allowedips_node = ctx->next_allowedip;
 +	bool fail;
 +
 +	if (!peer_nest)
@@ -46152,9 +46167,9 @@ index 000000000000..ae3319750dd8
 +	}
 +	if (!allowedips_node)
 +		goto no_allowedips;
-+	if (!*allowedips_seq)
-+		*allowedips_seq = peer->device->peer_allowedips.seq;
-+	else if (*allowedips_seq != peer->device->peer_allowedips.seq)
++	if (!ctx->allowedips_seq)
++		ctx->allowedips_seq = peer->device->peer_allowedips.seq;
++	else if (ctx->allowedips_seq != peer->device->peer_allowedips.seq)
 +		goto no_allowedips;
 +
 +	allowedips_nest = nla_nest_start(skb, WGPEER_A_ALLOWEDIPS);
@@ -46170,15 +46185,15 @@ index 000000000000..ae3319750dd8
 +		if (get_allowedips(skb, ip, cidr, family)) {
 +			nla_nest_end(skb, allowedips_nest);
 +			nla_nest_end(skb, peer_nest);
-+			*next_allowedips_node = allowedips_node;
++			ctx->next_allowedip = allowedips_node;
 +			return -EMSGSIZE;
 +		}
 +	}
 +	nla_nest_end(skb, allowedips_nest);
 +no_allowedips:
 +	nla_nest_end(skb, peer_nest);
-+	*next_allowedips_node = NULL;
-+	*allowedips_seq = 0;
++	ctx->next_allowedip = NULL;
++	ctx->allowedips_seq = 0;
 +	return 0;
 +err:
 +	nla_nest_cancel(skb, peer_nest);
@@ -46198,26 +46213,24 @@ index 000000000000..ae3319750dd8
 +	wg = lookup_interface(attrs, cb->skb);
 +	if (IS_ERR(wg))
 +		return PTR_ERR(wg);
-+	cb->args[0] = (long)wg;
++	DUMP_CTX(cb)->wg = wg;
 +	return 0;
 +}
 +
 +static int wg_get_device_dump(struct sk_buff *skb, struct netlink_callback *cb)
 +{
-+	struct wg_peer *peer, *next_peer_cursor, *last_peer_cursor;
++	struct wg_peer *peer, *next_peer_cursor;
++	struct dump_ctx *ctx = DUMP_CTX(cb);
++	struct wg_device *wg = ctx->wg;
 +	struct nlattr *peers_nest;
-+	struct wg_device *wg;
 +	int ret = -EMSGSIZE;
 +	bool done = true;
 +	void *hdr;
 +
-+	wg = (struct wg_device *)cb->args[0];
-+	next_peer_cursor = (struct wg_peer *)cb->args[1];
-+	last_peer_cursor = (struct wg_peer *)cb->args[1];
-+
 +	rtnl_lock();
 +	mutex_lock(&wg->device_update_lock);
 +	cb->seq = wg->device_update_gen;
++	next_peer_cursor = ctx->next_peer;
 +
 +	hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
 +			  &genl_family, NLM_F_MULTI, WG_CMD_GET_DEVICE);
@@ -46225,7 +46238,7 @@ index 000000000000..ae3319750dd8
 +		goto out;
 +	genl_dump_check_consistent(cb, hdr);
 +
-+	if (!last_peer_cursor) {
++	if (!ctx->next_peer) {
 +		if (nla_put_u16(skb, WGDEVICE_A_LISTEN_PORT,
 +				wg->incoming_port) ||
 +		    nla_put_u32(skb, WGDEVICE_A_FWMARK, wg->fwmark) ||
@@ -46258,15 +46271,14 @@ index 000000000000..ae3319750dd8
 +	 * coherent dump anyway, so they'll try again.
 +	 */
 +	if (list_empty(&wg->peer_list) ||
-+	    (last_peer_cursor && list_empty(&last_peer_cursor->peer_list))) {
++	    (ctx->next_peer && list_empty(&ctx->next_peer->peer_list))) {
 +		nla_nest_cancel(skb, peers_nest);
 +		goto out;
 +	}
 +	lockdep_assert_held(&wg->device_update_lock);
-+	peer = list_prepare_entry(last_peer_cursor, &wg->peer_list, peer_list);
++	peer = list_prepare_entry(ctx->next_peer, &wg->peer_list, peer_list);
 +	list_for_each_entry_continue(peer, &wg->peer_list, peer_list) {
-+		if (get_peer(peer, (struct allowedips_node **)&cb->args[2],
-+			     (u64 *)&cb->args[4] /* and args[5] */, skb)) {
++		if (get_peer(peer, skb, ctx)) {
 +			done = false;
 +			break;
 +		}
@@ -46277,7 +46289,7 @@ index 000000000000..ae3319750dd8
 +out:
 +	if (!ret && !done && next_peer_cursor)
 +		wg_peer_get(next_peer_cursor);
-+	wg_peer_put(last_peer_cursor);
++	wg_peer_put(ctx->next_peer);
 +	mutex_unlock(&wg->device_update_lock);
 +	rtnl_unlock();
 +
@@ -46287,10 +46299,10 @@ index 000000000000..ae3319750dd8
 +	}
 +	genlmsg_end(skb, hdr);
 +	if (done) {
-+		cb->args[1] = 0;
++		ctx->next_peer = NULL;
 +		return 0;
 +	}
-+	cb->args[1] = (long)next_peer_cursor;
++	ctx->next_peer = next_peer_cursor;
 +	return skb->len;
 +
 +	/* At this point, we can't really deal ourselves with safely zeroing out
@@ -46301,12 +46313,11 @@ index 000000000000..ae3319750dd8
 +
 +static int wg_get_device_done(struct netlink_callback *cb)
 +{
-+	struct wg_device *wg = (struct wg_device *)cb->args[0];
-+	struct wg_peer *peer = (struct wg_peer *)cb->args[1];
++	struct dump_ctx *ctx = DUMP_CTX(cb);
 +
-+	if (wg)
-+		dev_put(wg->dev);
-+	wg_peer_put(peer);
++	if (ctx->wg)
++		dev_put(ctx->wg->dev);
++	wg_peer_put(ctx->next_peer);
 +	return 0;
 +}
 +
@@ -47607,7 +47618,7 @@ index 000000000000..253323787081
 +#endif /* _WG_NOISE_H */
 diff --git a/net/wireguard/peer.c b/net/wireguard/peer.c
 new file mode 100644
-index 000000000000..71325bbcf64f
+index 000000000000..b66e8b5f218e
 --- /dev/null
 +++ b/net/wireguard/peer.c
 @@ -0,0 +1,239 @@
@@ -47790,8 +47801,8 @@ index 000000000000..71325bbcf64f
 +
 +void wg_peer_remove_all(struct wg_device *wg)
 +{
-+	struct list_head dead_peers = LIST_HEAD_INIT(dead_peers);
 +	struct wg_peer *peer, *temp;
++	LIST_HEAD(dead_peers);
 +
 +	lockdep_assert_held(&wg->device_update_lock);
 +
@@ -48297,10 +48308,10 @@ index 000000000000..5c964fcb994e
 +}
 diff --git a/net/wireguard/queueing.h b/net/wireguard/queueing.h
 new file mode 100644
-index 000000000000..f8de703dff97
+index 000000000000..e49a464238fd
 --- /dev/null
 +++ b/net/wireguard/queueing.h
-@@ -0,0 +1,198 @@
+@@ -0,0 +1,197 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -48480,8 +48491,7 @@ index 000000000000..f8de703dff97
 +	wg_peer_put(peer);
 +}
 +
-+static inline void wg_queue_enqueue_per_peer_napi(struct crypt_queue *queue,
-+						  struct sk_buff *skb,
++static inline void wg_queue_enqueue_per_peer_napi(struct sk_buff *skb,
 +						  enum packet_state state)
 +{
 +	/* We take a reference, because as soon as we call atomic_set, the
@@ -48767,10 +48777,10 @@ index 000000000000..83067f71ea99
 +#endif /* _WG_RATELIMITER_H */
 diff --git a/net/wireguard/receive.c b/net/wireguard/receive.c
 new file mode 100644
-index 000000000000..6a3980bc2989
+index 000000000000..247a56b6ed94
 --- /dev/null
 +++ b/net/wireguard/receive.c
-@@ -0,0 +1,606 @@
+@@ -0,0 +1,605 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -49294,8 +49304,7 @@ index 000000000000..6a3980bc2989
 +					   &PACKET_CB(skb)->keypair->receiving,
 +					   &simd_context)) ?
 +				PACKET_STATE_CRYPTED : PACKET_STATE_DEAD;
-+		wg_queue_enqueue_per_peer_napi(&PACKET_PEER(skb)->rx_queue, skb,
-+					       state);
++		wg_queue_enqueue_per_peer_napi(skb, state);
 +		simd_relax(&simd_context);
 +	}
 +
@@ -49324,7 +49333,7 @@ index 000000000000..6a3980bc2989
 +						   wg->packet_crypt_wq,
 +						   &wg->decrypt_queue.last_cpu);
 +	if (unlikely(ret == -EPIPE))
-+		wg_queue_enqueue_per_peer(&peer->rx_queue, skb, PACKET_STATE_DEAD);
++		wg_queue_enqueue_per_peer_napi(skb, PACKET_STATE_DEAD);
 +	if (likely(!ret || ret == -EPIPE)) {
 +		rcu_read_unlock_bh();
 +		return;
@@ -51820,11 +51829,11 @@ index 000000000000..912f2167a202
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..8ec1423ef2ef
+index 000000000000..ae368725d068
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20190601"
++#define WIREGUARD_VERSION "0.0.20190702"
 -- 
 2.20.1
 
