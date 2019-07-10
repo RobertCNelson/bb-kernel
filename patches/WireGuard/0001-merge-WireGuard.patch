@@ -1,6 +1,6 @@
-From f8491cd9222750d0baf00c4880662ab0a9f0eab1 Mon Sep 17 00:00:00 2001
+From 3540e971089f9ceb4401b83cf6bbb84bc24e6043 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sat, 6 Jul 2019 14:14:44 -0500
+Date: Wed, 10 Jul 2019 18:03:56 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -80,7 +80,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/device.h                        |   65 +
  net/wireguard/main.c                          |   69 +
  net/wireguard/messages.h                      |  128 +
- net/wireguard/netlink.c                       |  644 ++
+ net/wireguard/netlink.c                       |  653 ++
  net/wireguard/netlink.h                       |   12 +
  net/wireguard/noise.c                         |  807 ++
  net/wireguard/noise.h                         |  130 +
@@ -101,9 +101,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/socket.h                        |   44 +
  net/wireguard/timers.c                        |  243 +
  net/wireguard/timers.h                        |   31 +
- net/wireguard/uapi/wireguard.h                |  190 +
+ net/wireguard/uapi/wireguard.h                |  192 +
  net/wireguard/version.h                       |    1 +
- 98 files changed, 51035 insertions(+)
+ 98 files changed, 51046 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -46001,10 +46001,10 @@ index 000000000000..3cfd1c5e9b02
 +#endif /* _WG_MESSAGES_H */
 diff --git a/net/wireguard/netlink.c b/net/wireguard/netlink.c
 new file mode 100644
-index 000000000000..6fa5ba7cfde2
+index 000000000000..a50eaa753943
 --- /dev/null
 +++ b/net/wireguard/netlink.c
-@@ -0,0 +1,644 @@
+@@ -0,0 +1,653 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -46380,8 +46380,12 @@ index 000000000000..6fa5ba7cfde2
 +	if (attrs[WGPEER_A_PRESHARED_KEY] &&
 +	    nla_len(attrs[WGPEER_A_PRESHARED_KEY]) == NOISE_SYMMETRIC_KEY_LEN)
 +		preshared_key = nla_data(attrs[WGPEER_A_PRESHARED_KEY]);
++
 +	if (attrs[WGPEER_A_FLAGS])
 +		flags = nla_get_u32(attrs[WGPEER_A_FLAGS]);
++	ret = -EOPNOTSUPP;
++	if (flags & ~__WGPEER_F_ALL)
++		goto out;
 +
 +	ret = -EPFNOSUPPORT;
 +	if (attrs[WGPEER_A_PROTOCOL_VERSION]) {
@@ -46499,6 +46503,7 @@ index 000000000000..6fa5ba7cfde2
 +static int wg_set_device(struct sk_buff *skb, struct genl_info *info)
 +{
 +	struct wg_device *wg = lookup_interface(info->attrs, skb);
++	u32 flags = 0;
 +	int ret;
 +
 +	if (IS_ERR(wg)) {
@@ -46508,6 +46513,12 @@ index 000000000000..6fa5ba7cfde2
 +
 +	rtnl_lock();
 +	mutex_lock(&wg->device_update_lock);
++
++	if (info->attrs[WGDEVICE_A_FLAGS])
++		flags = nla_get_u32(info->attrs[WGDEVICE_A_FLAGS]);
++	ret = -EOPNOTSUPP;
++	if (flags & ~__WGDEVICE_F_ALL)
++		goto out;
 +
 +	ret = -EPERM;
 +	if ((info->attrs[WGDEVICE_A_LISTEN_PORT] ||
@@ -46532,9 +46543,7 @@ index 000000000000..6fa5ba7cfde2
 +			goto out;
 +	}
 +
-+	if (info->attrs[WGDEVICE_A_FLAGS] &&
-+	    nla_get_u32(info->attrs[WGDEVICE_A_FLAGS]) &
-+		    WGDEVICE_F_REPLACE_PEERS)
++	if (flags & WGDEVICE_F_REPLACE_PEERS)
 +		wg_peer_remove_all(wg);
 +
 +	if (info->attrs[WGDEVICE_A_PRIVATE_KEY] &&
@@ -51633,10 +51642,10 @@ index 000000000000..f0653dcb1326
 +#endif /* _WG_TIMERS_H */
 diff --git a/net/wireguard/uapi/wireguard.h b/net/wireguard/uapi/wireguard.h
 new file mode 100644
-index 000000000000..912f2167a202
+index 000000000000..5a3e5a79fbcb
 --- /dev/null
 +++ b/net/wireguard/uapi/wireguard.h
-@@ -0,0 +1,190 @@
+@@ -0,0 +1,192 @@
 +/* SPDX-License-Identifier: (GPL-2.0 WITH Linux-syscall-note) OR MIT */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -51781,7 +51790,8 @@ index 000000000000..912f2167a202
 +#define WG_CMD_MAX (__WG_CMD_MAX - 1)
 +
 +enum wgdevice_flag {
-+	WGDEVICE_F_REPLACE_PEERS = 1U << 0
++	WGDEVICE_F_REPLACE_PEERS = 1U << 0,
++	__WGDEVICE_F_ALL = WGDEVICE_F_REPLACE_PEERS
 +};
 +enum wgdevice_attribute {
 +	WGDEVICE_A_UNSPEC,
@@ -51799,7 +51809,8 @@ index 000000000000..912f2167a202
 +
 +enum wgpeer_flag {
 +	WGPEER_F_REMOVE_ME = 1U << 0,
-+	WGPEER_F_REPLACE_ALLOWEDIPS = 1U << 1
++	WGPEER_F_REPLACE_ALLOWEDIPS = 1U << 1,
++	__WGPEER_F_ALL = WGPEER_F_REMOVE_ME | WGPEER_F_REPLACE_ALLOWEDIPS
 +};
 +enum wgpeer_attribute {
 +	WGPEER_A_UNSPEC,
