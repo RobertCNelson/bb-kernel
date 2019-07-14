@@ -1,6 +1,6 @@
-From 3540e971089f9ceb4401b83cf6bbb84bc24e6043 Mon Sep 17 00:00:00 2001
+From da8cb4c64974171588eb7aae817ae1453ce35699 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 10 Jul 2019 18:03:56 -0500
+Date: Sun, 14 Jul 2019 18:09:02 -0500
 Subject: [PATCH] merge: WireGuard
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -76,15 +76,15 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../crypto/zinc/selftest/curve25519.c         | 1315 +++
  net/wireguard/crypto/zinc/selftest/poly1305.c | 1107 ++
  net/wireguard/crypto/zinc/selftest/run.h      |   48 +
- net/wireguard/device.c                        |  472 +
+ net/wireguard/device.c                        |  470 +
  net/wireguard/device.h                        |   65 +
  net/wireguard/main.c                          |   69 +
  net/wireguard/messages.h                      |  128 +
- net/wireguard/netlink.c                       |  653 ++
+ net/wireguard/netlink.c                       |  661 ++
  net/wireguard/netlink.h                       |   12 +
- net/wireguard/noise.c                         |  807 ++
- net/wireguard/noise.h                         |  130 +
- net/wireguard/peer.c                          |  239 +
+ net/wireguard/noise.c                         |  826 ++
+ net/wireguard/noise.h                         |  137 +
+ net/wireguard/peer.c                          |  237 +
  net/wireguard/peer.h                          |   83 +
  net/wireguard/peerlookup.c                    |  221 +
  net/wireguard/peerlookup.h                    |   64 +
@@ -103,7 +103,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/timers.h                        |   31 +
  net/wireguard/uapi/wireguard.h                |  192 +
  net/wireguard/version.h                       |    1 +
- 98 files changed, 51046 insertions(+)
+ 98 files changed, 51076 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -45243,10 +45243,10 @@ index 000000000000..4ffaf6089eea
 +#endif
 diff --git a/net/wireguard/device.c b/net/wireguard/device.c
 new file mode 100644
-index 000000000000..d17dbf75795c
+index 000000000000..532d399f3c22
 --- /dev/null
 +++ b/net/wireguard/device.c
-@@ -0,0 +1,472 @@
+@@ -0,0 +1,470 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -45361,9 +45361,7 @@ index 000000000000..d17dbf75795c
 +		wg_timers_stop(peer);
 +		wg_noise_handshake_clear(&peer->handshake);
 +		wg_noise_keypairs_clear(&peer->keypairs);
-+		atomic64_set(&peer->last_sent_handshake,
-+			     ktime_get_coarse_boottime_ns() -
-+				     (u64)(REKEY_TIMEOUT + 1) * NSEC_PER_SEC);
++		wg_noise_reset_last_sent_handshake(&peer->last_sent_handshake);
 +	}
 +	mutex_unlock(&wg->device_update_lock);
 +	skb_queue_purge(&wg->incoming_handshakes);
@@ -46001,10 +45999,10 @@ index 000000000000..3cfd1c5e9b02
 +#endif /* _WG_MESSAGES_H */
 diff --git a/net/wireguard/netlink.c b/net/wireguard/netlink.c
 new file mode 100644
-index 000000000000..a50eaa753943
+index 000000000000..eb94f4d72ace
 --- /dev/null
 +++ b/net/wireguard/netlink.c
-@@ -0,0 +1,653 @@
+@@ -0,0 +1,661 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -46020,6 +46018,7 @@ index 000000000000..a50eaa753943
 +#include <linux/if.h>
 +#include <net/genetlink.h>
 +#include <net/sock.h>
++#include <crypto/algapi.h>
 +
 +static struct genl_family genl_family;
 +
@@ -46553,6 +46552,10 @@ index 000000000000..a50eaa753943
 +		u8 public_key[NOISE_PUBLIC_KEY_LEN];
 +		struct wg_peer *peer, *temp;
 +
++		if (!crypto_memneq(wg->static_identity.static_private,
++				   private_key, NOISE_PUBLIC_KEY_LEN))
++			goto skip_set_private_key;
++
 +		/* We remove before setting, to prevent race, which means doing
 +		 * two 25519-genpub ops.
 +		 */
@@ -46570,12 +46573,15 @@ index 000000000000..a50eaa753943
 +							 private_key);
 +		list_for_each_entry_safe(peer, temp, &wg->peer_list,
 +					 peer_list) {
-+			if (!wg_noise_precompute_static_static(peer))
++			if (wg_noise_precompute_static_static(peer))
++				wg_noise_expire_current_peer_keypairs(peer);
++			else
 +				wg_peer_remove(peer);
 +		}
 +		wg_cookie_checker_precompute_device_keys(&wg->cookie_checker);
 +		up_write(&wg->static_identity.lock);
 +	}
++skip_set_private_key:
 +
 +	if (info->attrs[WGDEVICE_A_PEERS]) {
 +		struct nlattr *attr, *peer[WGPEER_A_MAX + 1];
@@ -46678,10 +46684,10 @@ index 000000000000..15100d92e2e3
 +#endif /* _WG_NETLINK_H */
 diff --git a/net/wireguard/noise.c b/net/wireguard/noise.c
 new file mode 100644
-index 000000000000..a8f86df77c60
+index 000000000000..57f749ceb8ac
 --- /dev/null
 +++ b/net/wireguard/noise.c
-@@ -0,0 +1,807 @@
+@@ -0,0 +1,826 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -46865,6 +46871,25 @@ index 000000000000..a8f86df77c60
 +	wg_noise_keypair_put(old, true);
 +
 +	spin_unlock_bh(&keypairs->keypair_update_lock);
++}
++
++void wg_noise_expire_current_peer_keypairs(struct wg_peer *peer)
++{
++	struct noise_keypair *keypair;
++
++	wg_noise_handshake_clear(&peer->handshake);
++	wg_noise_reset_last_sent_handshake(&peer->last_sent_handshake);
++
++	spin_lock_bh(&peer->keypairs.keypair_update_lock);
++	keypair = rcu_dereference_protected(peer->keypairs.next_keypair,
++			lockdep_is_held(&peer->keypairs.keypair_update_lock));
++	if (keypair)
++		keypair->sending.is_valid = false;
++	keypair = rcu_dereference_protected(peer->keypairs.current_keypair,
++			lockdep_is_held(&peer->keypairs.keypair_update_lock));
++	if (keypair)
++		keypair->sending.is_valid = false;
++	spin_unlock_bh(&peer->keypairs.keypair_update_lock);
 +}
 +
 +static void add_new_keypair(struct noise_keypairs *keypairs,
@@ -47491,10 +47516,10 @@ index 000000000000..a8f86df77c60
 +}
 diff --git a/net/wireguard/noise.h b/net/wireguard/noise.h
 new file mode 100644
-index 000000000000..253323787081
+index 000000000000..138a07bb817c
 --- /dev/null
 +++ b/net/wireguard/noise.h
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,137 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -47597,11 +47622,18 @@ index 000000000000..253323787081
 +			   const u8 peer_preshared_key[NOISE_SYMMETRIC_KEY_LEN],
 +			   struct wg_peer *peer);
 +void wg_noise_handshake_clear(struct noise_handshake *handshake);
++static inline void wg_noise_reset_last_sent_handshake(atomic64_t *handshake_ns)
++{
++	atomic64_set(handshake_ns, ktime_get_coarse_boottime_ns() -
++				       (u64)(REKEY_TIMEOUT + 1) * NSEC_PER_SEC);
++}
++
 +void wg_noise_keypair_put(struct noise_keypair *keypair, bool unreference_now);
 +struct noise_keypair *wg_noise_keypair_get(struct noise_keypair *keypair);
 +void wg_noise_keypairs_clear(struct noise_keypairs *keypairs);
 +bool wg_noise_received_with_keypair(struct noise_keypairs *keypairs,
 +				    struct noise_keypair *received_keypair);
++void wg_noise_expire_current_peer_keypairs(struct wg_peer *peer);
 +
 +void wg_noise_set_static_identity_private_key(
 +	struct noise_static_identity *static_identity,
@@ -47627,10 +47659,10 @@ index 000000000000..253323787081
 +#endif /* _WG_NOISE_H */
 diff --git a/net/wireguard/peer.c b/net/wireguard/peer.c
 new file mode 100644
-index 000000000000..b66e8b5f218e
+index 000000000000..ffb911f18377
 --- /dev/null
 +++ b/net/wireguard/peer.c
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,237 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -47689,9 +47721,7 @@ index 000000000000..b66e8b5f218e
 +	rwlock_init(&peer->endpoint_lock);
 +	kref_init(&peer->refcount);
 +	skb_queue_head_init(&peer->staged_packet_queue);
-+	atomic64_set(&peer->last_sent_handshake,
-+		     ktime_get_coarse_boottime_ns() -
-+			     (u64)(REKEY_TIMEOUT + 1) * NSEC_PER_SEC);
++	wg_noise_reset_last_sent_handshake(&peer->last_sent_handshake);
 +	set_bit(NAPI_STATE_NO_BUSY_POLL, &peer->napi.state);
 +	netif_napi_add(wg->dev, &peer->napi, wg_packet_rx_poll,
 +		       NAPI_POLL_WEIGHT);
