@@ -186,7 +186,7 @@ rt_cleanup () {
 rt () {
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v5.0.x
+	#v5.2.x
 	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
@@ -294,7 +294,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	bbdtbs="v5.0.x"
+	bbdtbs="v5.2.x"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
@@ -318,12 +318,6 @@ beagleboard_dtbs () {
 		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -352,7 +346,7 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 rt
 #wireguard
 ti_pm_firmware
@@ -410,48 +404,6 @@ backports () {
 	fi
 }
 
-ti_rogerq_pruss () {
-	#https://github.com/rogerq/linux/commits/for-v5.1/pruss-2.0
-	#regenerate="enable"
-	branch="for-v5.1/pruss-2.0"
-	git_depth="30"
-	patch_depth="25"
-	if [ "x${regenerate}" = "xenable" ] ; then
-
-		cd ../
-		if [ ! -d ./rogerq_pruss/ ] ; then
-			${git_bin} clone -b ${branch} https://github.com/rogerq/linux --depth=${git_depth} ./rogerq_pruss/
-		else
-			rm -rf ./rogerq_pruss || true
-			${git_bin} clone -b ${branch} https://github.com/rogerq/linux --depth=${git_depth} ./rogerq_pruss/
-		fi
-
-		cd ./rogerq_pruss/
-
-		${git_bin} format-patch -${patch_depth} -o ../patches/drivers/ti/rogerq_pruss
-
-		cd ../KERNEL/
-
-		rm -rf ../rogerq_pruss/ || true
-
-		dir 'drivers/ti/rogerq_pruss'
-		exit 2
-	fi
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	dir 'drivers/ti/rogerq_pruss'
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="drivers/ti/rogerq_pruss"
-		number=25
-		cleanup
-	fi
-}
-
 reverts () {
 	echo "dir: reverts"
 	#regenerate="enable"
@@ -481,20 +433,16 @@ drivers () {
 
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
-	dir 'drivers/ti/etnaviv'
 	dir 'drivers/ti/eqep'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
-	#[PATCH v3 1/4] mfd: stmpe: Move ADC related defines to header of mfd
-	dir 'drivers/iio/stmpe'
 }
 
 soc () {
 #	dir 'soc/imx/udoo'
 #	dir 'soc/imx/wandboard'
-#	dir 'soc/imx/imx6'
 #	dir 'soc/imx/imx7'
 
 	dir 'soc/ti/panda'
@@ -502,7 +450,6 @@ soc () {
 
 ###
 #backports
-ti_rogerq_pruss
 #reverts
 drivers
 soc
