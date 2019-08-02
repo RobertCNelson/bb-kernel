@@ -346,7 +346,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 rt
 #wireguard
 ti_pm_firmware
@@ -453,6 +453,7 @@ soc () {
 #reverts
 drivers
 soc
+dir 'fixes'
 
 packaging () {
 	echo "dir: packaging"
