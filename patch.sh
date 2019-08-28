@@ -439,6 +439,8 @@ backports () {
 	else
 		patch_backports
 	fi
+
+	dir 'drivers/exfat'
 }
 
 reverts () {
