@@ -408,21 +408,22 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.x-y"
+	backport_tag="v4.19.68"
 
-	subsystem="xyz"
+	subsystem="greybus"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		mkdir -p ./x/
-		cp -v ~/linux-src/x/* ./x/
+		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
 
 		post_backports
 		exit 2
 	else
 		patch_backports
 	fi
+
+	dir 'drivers/exfat'
 }
 
 reverts () {
@@ -532,6 +533,7 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/uio'
 	dir 'drivers/ti/gpio'
+	dir 'drivers/greybus'
 }
 
 soc () {
@@ -633,7 +635,7 @@ sgx () {
 }
 
 ###
-#backports
+backports
 reverts
 drivers
 soc
