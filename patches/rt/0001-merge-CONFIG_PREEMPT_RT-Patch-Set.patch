@@ -1,6 +1,6 @@
-From 2f3d0a7cb654657fbcb0d5d0786a3ee898b946cd Mon Sep 17 00:00:00 2001
+From df71b32464bc0e2fae5d397836106747f140bb81 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 25 Aug 2019 18:02:47 -0500
+Date: Wed, 28 Aug 2019 13:41:39 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
@@ -100,8 +100,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/char/random.c                         |   11 +-
  drivers/char/tpm/tpm-dev-common.c             |    1 -
  drivers/char/tpm/tpm_tis.c                    |   29 +-
- drivers/clocksource/Kconfig                   |    9 +-
- drivers/clocksource/timer-atmel-tcb.c         |   69 +-
+ drivers/clocksource/Kconfig                   |    7 +
+ drivers/clocksource/timer-atmel-tcb.c         |   73 +-
  drivers/connector/cn_proc.c                   |    6 +-
  drivers/cpufreq/Kconfig.x86                   |    2 +-
  drivers/dma-buf/dma-buf.c                     |    8 +-
@@ -378,7 +378,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/lsm.c                       |    2 +-
  virt/kvm/arm/arch_timer.c                     |    8 +-
  virt/kvm/arm/arm.c                            |    6 +-
- 373 files changed, 9454 insertions(+), 3278 deletions(-)
+ 373 files changed, 9455 insertions(+), 3279 deletions(-)
  create mode 100644 Documentation/printk-ringbuffer.txt
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -3914,16 +3914,10 @@ index e4fdde93ed4c..961e67b354c1 100644
  	return 0;
  }
 diff --git a/drivers/clocksource/Kconfig b/drivers/clocksource/Kconfig
-index 3300739edce4..36f8c58386e2 100644
+index 3300739edce4..2927b673caa6 100644
 --- a/drivers/clocksource/Kconfig
 +++ b/drivers/clocksource/Kconfig
-@@ -424,11 +424,18 @@ config ATMEL_ST
- 
- config ATMEL_TCB_CLKSRC
- 	bool "Atmel TC Block timer driver" if COMPILE_TEST
--	depends on HAS_IOMEM
-+	depends on HAS_IOMEM && ATMEL_TCLIB
- 	select TIMER_OF if OF
+@@ -429,6 +429,13 @@ config ATMEL_TCB_CLKSRC
  	help
  	  Support for Timer Counter Blocks on Atmel SoCs.
  
@@ -3938,7 +3932,7 @@ index 3300739edce4..36f8c58386e2 100644
  	bool "Exynos multi core timer driver" if COMPILE_TEST
  	depends on ARM || ARM64
 diff --git a/drivers/clocksource/timer-atmel-tcb.c b/drivers/clocksource/timer-atmel-tcb.c
-index 6ed31f9def7e..05b5272f5d7e 100644
+index 6ed31f9def7e..1a5abc178b65 100644
 --- a/drivers/clocksource/timer-atmel-tcb.c
 +++ b/drivers/clocksource/timer-atmel-tcb.c
 @@ -27,8 +27,7 @@
@@ -4053,18 +4047,20 @@ index 6ed31f9def7e..05b5272f5d7e 100644
  		.set_state_periodic	= tc_set_periodic,
  		.set_state_oneshot	= tc_set_oneshot,
  	},
-@@ -243,8 +265,9 @@ static irqreturn_t ch2_irq(int irq, void *handle)
+@@ -243,8 +265,11 @@ static irqreturn_t ch2_irq(int irq, void *handle)
  	return IRQ_NONE;
  }
  
 -static int __init setup_clkevents(struct atmel_tc *tc, int clk32k_divisor_idx)
++static const u8 atmel_tcb_divisors[5] = { 2, 8, 32, 128, 0, };
++
 +static int __init setup_clkevents(struct atmel_tc *tc, int divisor_idx)
  {
-+	unsigned divisor = atmel_tc_divisors[divisor_idx];
++	unsigned divisor = atmel_tcb_divisors[divisor_idx];
  	int ret;
  	struct clk *t2_clk = tc->clk[2];
  	int irq = tc->irq[2];
-@@ -265,7 +288,11 @@ static int __init setup_clkevents(struct atmel_tc *tc, int clk32k_divisor_idx)
+@@ -265,7 +290,11 @@ static int __init setup_clkevents(struct atmel_tc *tc, int clk32k_divisor_idx)
  	clkevt.regs = tc->regs;
  	clkevt.clk = t2_clk;
  
@@ -4077,7 +4073,7 @@ index 6ed31f9def7e..05b5272f5d7e 100644
  
  	clkevt.clkevt.cpumask = cpumask_of(0);
  
-@@ -276,7 +303,7 @@ static int __init setup_clkevents(struct atmel_tc *tc, int clk32k_divisor_idx)
+@@ -276,7 +305,7 @@ static int __init setup_clkevents(struct atmel_tc *tc, int clk32k_divisor_idx)
  		return ret;
  	}
  
@@ -4086,6 +4082,15 @@ index 6ed31f9def7e..05b5272f5d7e 100644
  
  	return ret;
  }
+@@ -333,8 +362,6 @@ static void __init tcb_setup_single_chan(struct atmel_tc *tc, int mck_divisor_id
+ 	writel(ATMEL_TC_SYNC, tcaddr + ATMEL_TC_BCR);
+ }
+ 
+-static const u8 atmel_tcb_divisors[5] = { 2, 8, 32, 128, 0, };
+-
+ static const struct of_device_id atmel_tcb_of_match[] = {
+ 	{ .compatible = "atmel,at91rm9200-tcb", .data = (void *)16, },
+ 	{ .compatible = "atmel,at91sam9x5-tcb", .data = (void *)32, },
 @@ -452,7 +479,11 @@ static int __init tcb_clksrc_init(struct device_node *node)
  		goto err_disable_t1;
  
@@ -4093,7 +4098,7 @@ index 6ed31f9def7e..05b5272f5d7e 100644
 +#ifdef CONFIG_ATMEL_TCB_CLKSRC_USE_SLOW_CLOCK
  	ret = setup_clkevents(&tc, clk32k_divisor_idx);
 +#else
-+	ret = setup_clkevents(tc, best_divisor_idx);
++	ret = setup_clkevents(&tc, best_divisor_idx);
 +#endif
  	if (ret)
  		goto err_unregister_clksrc;
@@ -20065,7 +20070,7 @@ index 0519a8805aab..9f17e011087e 100644
  }
  EXPORT_SYMBOL_GPL(alarm_cancel);
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index 41dfff23c1f9..7d7db8802131 100644
+index 41dfff23c1f9..5eb45a868de9 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
 @@ -930,6 +930,16 @@ u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
@@ -20074,9 +20079,9 @@ index 41dfff23c1f9..7d7db8802131 100644
  
 +void hrtimer_grab_expiry_lock(const struct hrtimer *timer)
 +{
-+	struct hrtimer_clock_base *base = timer->base;
++	struct hrtimer_clock_base *base = READ_ONCE(timer->base);
 +
-+	if (base && base->cpu_base) {
++	if (timer->is_soft && base != &migration_base) {
 +		spin_lock(&base->cpu_base->softirq_expiry_lock);
 +		spin_unlock(&base->cpu_base->softirq_expiry_lock);
 +	}
