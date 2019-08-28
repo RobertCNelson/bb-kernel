@@ -240,6 +240,7 @@ rt () {
 	fi
 
 	dir 'rt'
+	dir 'rt_fixes'
 }
 
 wireguard_fail () {
