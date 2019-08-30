@@ -109,7 +109,6 @@ aufs_fail () {
 }
 
 aufs () {
-	echo "dir: aufs"
 	aufs_prefix="aufs4-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -178,11 +177,7 @@ aufs () {
 		cleanup
 	fi
 
-	${git} "${DIR}/patches/aufs/0001-merge-aufs-kbuild.patch"
-	${git} "${DIR}/patches/aufs/0002-merge-aufs-base.patch"
-	${git} "${DIR}/patches/aufs/0003-merge-aufs-mmap.patch"
-	${git} "${DIR}/patches/aufs/0004-merge-aufs-standalone.patch"
-	${git} "${DIR}/patches/aufs/0005-merge-aufs.patch"
+	dir 'aufs'
 }
 
 can_isotp () {
@@ -228,7 +223,6 @@ rt_cleanup () {
 }
 
 rt () {
-	echo "dir: rt"
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
 	#v4.19.x
@@ -247,7 +241,7 @@ rt () {
 		exit 2
 	fi
 
-	${git} "${DIR}/patches/rt/0001-merge-CONFIG_PREEMPT_RT-Patch-Set.patch"
+	dir 'rt'
 }
 
 wireguard_fail () {
@@ -256,7 +250,6 @@ wireguard_fail () {
 }
 
 wireguard () {
-	echo "dir: WireGuard"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
@@ -266,6 +259,11 @@ wireguard () {
 			rm -rf ./WireGuard || true
 			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
 		fi
+
+		#cd ./WireGuard/
+		#${git_bin}  revert --no-edit xyz
+		#cd ../
+
 		cd ./KERNEL/
 
 		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
@@ -287,7 +285,7 @@ wireguard () {
 		cleanup
 	fi
 
-	${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
+	dir 'WireGuard'
 }
 
 ti_pm_firmware () {
@@ -389,6 +387,8 @@ backports () {
 	else
 		patch_backports
 	fi
+
+	dir 'drivers/exfat'
 }
 
 reverts () {
@@ -435,6 +435,7 @@ drivers () {
 
 	#[PATCH v3 1/4] mfd: stmpe: Move ADC related defines to header of mfd
 	dir 'drivers/iio/stmpe'
+	dir 'drivers/greybus'
 }
 
 soc () {
