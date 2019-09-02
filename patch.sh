@@ -424,21 +424,22 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.x-y"
-
-	subsystem="xyz"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		mkdir -p ./x/
-		cp -v ~/linux-src/x/* ./x/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
+#	backport_tag="v4.x-y"
+#
+#	subsystem="xyz"
+#	#regenerate="enable"
+#	if [ "x${regenerate}" = "xenable" ] ; then
+#		pre_backports
+#
+#		mkdir -p ./x/
+#		cp -v ~/linux-src/x/* ./x/
+#
+#		post_backports
+#		exit 2
+#	else
+#		patch_backports
+#	fi
+	dir 'drivers/exfat'
 }
 
 reverts () {
@@ -486,11 +487,10 @@ soc () {
 }
 
 ###
-#backports
+backports
 #reverts
 drivers
 soc
-dir 'fixes'
 
 packaging () {
 	echo "dir: packaging"
