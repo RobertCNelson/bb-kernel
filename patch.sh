@@ -382,7 +382,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 can_isotp
 #rt
 wireguard
@@ -424,22 +424,24 @@ patch_backports (){
 }
 
 backports () {
-#	backport_tag="v4.x-y"
-#
-#	subsystem="xyz"
-#	#regenerate="enable"
-#	if [ "x${regenerate}" = "xenable" ] ; then
-#		pre_backports
-#
-#		mkdir -p ./x/
-#		cp -v ~/linux-src/x/* ./x/
-#
-#		post_backports
-#		exit 2
-#	else
-#		patch_backports
-#	fi
 	dir 'drivers/exfat'
+
+#	backport_tag="v4.x-y"
+	backport_tag="619e17cf75dd58905aa67ccd494a6ba5f19d6cc6"
+
+	subsystem="exfat"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		mkdir -p ./x/
+		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
 }
 
 reverts () {
