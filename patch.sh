@@ -388,21 +388,6 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v4.20.17"
-
-	subsystem="greybus"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
 	dir 'drivers/exfat'
 
 #	backport_tag="v4.x-y"
