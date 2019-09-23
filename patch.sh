@@ -112,7 +112,7 @@ aufs () {
 	aufs_prefix="aufs4-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=4.19.17+
+		KERNEL_REL=4.19.63+
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -388,7 +388,39 @@ backports () {
 		patch_backports
 	fi
 
+	backport_tag="v4.20.17"
+
+	subsystem="greybus"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
 	dir 'drivers/exfat'
+
+#	backport_tag="v4.x-y"
+	backport_tag="619e17cf75dd58905aa67ccd494a6ba5f19d6cc6"
+
+	subsystem="exfat"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		mkdir -p ./x/
+		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
 }
 
 reverts () {
