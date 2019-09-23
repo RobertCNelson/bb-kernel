@@ -112,6 +112,7 @@ aufs () {
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
+		KERNEL_REL=5.2.5+
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -146,6 +147,7 @@ aufs () {
 			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
 		fi
 		cd ./KERNEL/
+		KERNEL_REL=5.2
 
 		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -425,7 +427,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.3-rc7"
+	backport_tag="v5.3.1"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -441,6 +443,23 @@ backports () {
 	fi
 
 	dir 'drivers/exfat'
+
+#	backport_tag="v4.x-y"
+	backport_tag="619e17cf75dd58905aa67ccd494a6ba5f19d6cc6"
+
+	subsystem="exfat"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		mkdir -p ./x/
+		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
 }
 
 reverts () {
@@ -493,7 +512,6 @@ backports
 #reverts
 drivers
 soc
-dir 'fixes'
 
 packaging () {
 	echo "dir: packaging"
