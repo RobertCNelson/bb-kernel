@@ -32,10 +32,10 @@ toolchain="gcc_arm_gnueabihf_8"
 
 #Kernel
 KERNEL_REL=5.3
-KERNEL_TAG=${KERNEL_REL}.2
+KERNEL_TAG=${KERNEL_REL}.5
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}10
+BUILD=${build_prefix}10.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
