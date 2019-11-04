@@ -1,8 +1,9 @@
-From 5f4b1c76ae537dd11b5edbc8b5a88020e449440e Mon Sep 17 00:00:00 2001
+From 5fcac6a09ee36a13b7faff7d15a06bf49d6ea27b Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 23 Sep 2019 11:00:04 -0500
+Date: Mon, 4 Nov 2019 14:49:06 -0600
 Subject: [PATCH] merge: WireGuard
 
+https://git.zx2c4.com/WireGuard/commit/21df5a545df65ec58a73e3af6bfb67f93b70feb9
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  net/Kconfig                                   |    1 +
@@ -80,9 +81,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/device.h                        |   65 +
  net/wireguard/main.c                          |   69 +
  net/wireguard/messages.h                      |  128 +
- net/wireguard/netlink.c                       |  667 ++
+ net/wireguard/netlink.c                       |  666 ++
  net/wireguard/netlink.h                       |   12 +
- net/wireguard/noise.c                         |  826 ++
+ net/wireguard/noise.c                         |  830 ++
  net/wireguard/noise.h                         |  137 +
  net/wireguard/peer.c                          |  240 +
  net/wireguard/peer.h                          |   83 +
@@ -101,9 +102,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/socket.h                        |   44 +
  net/wireguard/timers.c                        |  243 +
  net/wireguard/timers.h                        |   31 +
- net/wireguard/uapi/wireguard.h                |  192 +
+ net/wireguard/uapi/wireguard.h                |  196 +
  net/wireguard/version.h                       |    1 +
- 98 files changed, 51110 insertions(+)
+ 98 files changed, 51117 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -202,7 +203,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  create mode 100644 net/wireguard/version.h
 
 diff --git a/net/Kconfig b/net/Kconfig
-index bc8d01996f22..5bc6b7c76b61 100644
+index 228dfa382eec..fd14cb4accf2 100644
 --- a/net/Kconfig
 +++ b/net/Kconfig
 @@ -86,6 +86,7 @@ config INET
@@ -45890,7 +45891,7 @@ index 000000000000..4b5b58e8956e
 +MODULE_ALIAS_GENL_FAMILY(WG_GENL_NAME);
 diff --git a/net/wireguard/messages.h b/net/wireguard/messages.h
 new file mode 100644
-index 000000000000..3cfd1c5e9b02
+index 000000000000..f415cdd2e90a
 --- /dev/null
 +++ b/net/wireguard/messages.h
 @@ -0,0 +1,128 @@
@@ -45934,7 +45935,7 @@ index 000000000000..3cfd1c5e9b02
 +};
 +
 +enum limits {
-+	REKEY_AFTER_MESSAGES = U64_MAX - 0xffff,
++	REKEY_AFTER_MESSAGES = 1ULL << 60,
 +	REJECT_AFTER_MESSAGES = U64_MAX - COUNTER_WINDOW_SIZE - 1,
 +	REKEY_TIMEOUT = 5,
 +	REKEY_TIMEOUT_JITTER_MAX_JIFFIES = HZ / 3,
@@ -46024,10 +46025,10 @@ index 000000000000..3cfd1c5e9b02
 +#endif /* _WG_MESSAGES_H */
 diff --git a/net/wireguard/netlink.c b/net/wireguard/netlink.c
 new file mode 100644
-index 000000000000..0805a264b799
+index 000000000000..190e405aeca0
 --- /dev/null
 +++ b/net/wireguard/netlink.c
-@@ -0,0 +1,667 @@
+@@ -0,0 +1,666 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -46419,10 +46420,10 @@ index 000000000000..0805a264b799
 +
 +	peer = wg_pubkey_hashtable_lookup(wg->peer_hashtable,
 +					  nla_data(attrs[WGPEER_A_PUBLIC_KEY]));
++	ret = 0;
 +	if (!peer) { /* Peer doesn't exist yet. Add a new one. */
-+		ret = -ENODEV;
-+		if (flags & WGPEER_F_REMOVE_ME)
-+			goto out; /* Tried to remove a non-existing peer. */
++		if (flags & (WGPEER_F_REMOVE_ME | WGPEER_F_UPDATE_ONLY))
++			goto out;
 +
 +		/* The peer is new, so there aren't allowed IPs to remove. */
 +		flags &= ~WGPEER_F_REPLACE_ALLOWEDIPS;
@@ -46459,7 +46460,6 @@ index 000000000000..0805a264b799
 +		wg_peer_get(peer);
 +	}
 +
-+	ret = 0;
 +	if (flags & WGPEER_F_REMOVE_ME) {
 +		wg_peer_remove(peer);
 +		goto out;
@@ -46715,10 +46715,10 @@ index 000000000000..15100d92e2e3
 +#endif /* _WG_NETLINK_H */
 diff --git a/net/wireguard/noise.c b/net/wireguard/noise.c
 new file mode 100644
-index 000000000000..57f749ceb8ac
+index 000000000000..269b69faf11a
 --- /dev/null
 +++ b/net/wireguard/noise.c
-@@ -0,0 +1,826 @@
+@@ -0,0 +1,830 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -47287,6 +47287,7 @@ index 000000000000..57f749ceb8ac
 +	u8 s[NOISE_PUBLIC_KEY_LEN];
 +	u8 e[NOISE_PUBLIC_KEY_LEN];
 +	u8 t[NOISE_TIMESTAMP_LEN];
++	u64 initiation_consumption;
 +
 +	down_read(&wg->static_identity.lock);
 +	if (unlikely(!wg->static_identity.has_identity))
@@ -47335,11 +47336,14 @@ index 000000000000..57f749ceb8ac
 +	/* Success! Copy everything to peer */
 +	down_write(&handshake->lock);
 +	memcpy(handshake->remote_ephemeral, e, NOISE_PUBLIC_KEY_LEN);
-+	memcpy(handshake->latest_timestamp, t, NOISE_TIMESTAMP_LEN);
++	if (memcmp(t, handshake->latest_timestamp, NOISE_TIMESTAMP_LEN) > 0)
++		memcpy(handshake->latest_timestamp, t, NOISE_TIMESTAMP_LEN);
 +	memcpy(handshake->hash, hash, NOISE_HASH_LEN);
 +	memcpy(handshake->chaining_key, chaining_key, NOISE_HASH_LEN);
 +	handshake->remote_index = src->sender_index;
-+	handshake->last_initiation_consumption = ktime_get_coarse_boottime_ns();
++	if ((s64)(handshake->last_initiation_consumption -
++	    (initiation_consumption = ktime_get_coarse_boottime_ns())) < 0)
++		handshake->last_initiation_consumption = initiation_consumption;
 +	handshake->state = HANDSHAKE_CONSUMED_INITIATION;
 +	up_write(&handshake->lock);
 +	ret_peer = peer;
@@ -51706,10 +51710,10 @@ index 000000000000..f0653dcb1326
 +#endif /* _WG_TIMERS_H */
 diff --git a/net/wireguard/uapi/wireguard.h b/net/wireguard/uapi/wireguard.h
 new file mode 100644
-index 000000000000..5a3e5a79fbcb
+index 000000000000..dd8a47c4ad11
 --- /dev/null
 +++ b/net/wireguard/uapi/wireguard.h
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,196 @@
 +/* SPDX-License-Identifier: (GPL-2.0 WITH Linux-syscall-note) OR MIT */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -51799,10 +51803,12 @@ index 000000000000..5a3e5a79fbcb
 + *        0: NLA_NESTED
 + *            WGPEER_A_PUBLIC_KEY: len WG_KEY_LEN
 + *            WGPEER_A_FLAGS: NLA_U32, 0 and/or WGPEER_F_REMOVE_ME if the
-+ *                            specified peer should be removed rather than
-+ *                            added/updated and/or WGPEER_F_REPLACE_ALLOWEDIPS
-+ *                            if all current allowed IPs of this peer should be
-+ *                            removed prior to adding the list below.
++ *                            specified peer should not exist at the end of the
++ *                            operation, rather than added/updated and/or
++ *                            WGPEER_F_REPLACE_ALLOWEDIPS if all current allowed
++ *                            IPs of this peer should be removed prior to adding
++ *                            the list below and/or WGPEER_F_UPDATE_ONLY if the
++ *                            peer should only be set if it already exists.
 + *            WGPEER_A_PRESHARED_KEY: len WG_KEY_LEN, all zeros to remove
 + *            WGPEER_A_ENDPOINT: struct sockaddr_in or struct sockaddr_in6
 + *            WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL: NLA_U16, 0 to disable
@@ -51874,7 +51880,9 @@ index 000000000000..5a3e5a79fbcb
 +enum wgpeer_flag {
 +	WGPEER_F_REMOVE_ME = 1U << 0,
 +	WGPEER_F_REPLACE_ALLOWEDIPS = 1U << 1,
-+	__WGPEER_F_ALL = WGPEER_F_REMOVE_ME | WGPEER_F_REPLACE_ALLOWEDIPS
++	WGPEER_F_UPDATE_ONLY = 1U << 2,
++	__WGPEER_F_ALL = WGPEER_F_REMOVE_ME | WGPEER_F_REPLACE_ALLOWEDIPS |
++			 WGPEER_F_UPDATE_ONLY
 +};
 +enum wgpeer_attribute {
 +	WGPEER_A_UNSPEC,
@@ -51904,11 +51912,11 @@ index 000000000000..5a3e5a79fbcb
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..cee4e8df1afc
+index 000000000000..2cb62e1dbafd
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20190913"
++#define WIREGUARD_VERSION "0.0.20191012"
 -- 
 2.23.0
 
