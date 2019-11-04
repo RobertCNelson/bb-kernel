@@ -574,19 +574,19 @@ drivers () {
 }
 
 soc () {
-#	dir 'soc/imx/udoo'
-#	dir 'soc/imx/wandboard'
-#	dir 'soc/imx/imx6'
-#	dir 'soc/imx/imx7'
+	dir 'soc/imx/udoo'
+	dir 'soc/imx/wandboard'
+	dir 'soc/imx/imx6'
+	dir 'soc/imx/imx7'
 
-#	dir 'soc/ti/omap4'
+	dir 'soc/ti/omap4'
 }
 
 ###
 backports
 #reverts
 drivers
-soc
+#soc
 
 packaging () {
 	echo "dir: packaging"
