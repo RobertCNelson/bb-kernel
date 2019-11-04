@@ -383,6 +383,7 @@ beagleboard_dtbs () {
 		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
 		device="am335x-abbbi.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
@@ -462,7 +463,7 @@ patch_backports (){
 backports () {
 	dir 'drivers/exfat'
 
-	backport_tag="v5.4-rc3"
+	backport_tag="v5.4-rc6"
 
 	subsystem="exfat"
 	#regenerate="enable"
