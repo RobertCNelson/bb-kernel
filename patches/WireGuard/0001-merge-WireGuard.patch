@@ -1,20 +1,21 @@
-From 8d57954d50def4e9b0feaaae0319d3315881d0e5 Mon Sep 17 00:00:00 2001
+From e3ee0d8c99007c184c8b70453f37082e42b7e011 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 29 Aug 2019 23:13:13 -0500
+Date: Wed, 27 Nov 2019 16:07:03 -0600
 Subject: [PATCH] merge: WireGuard
 
+https://git.zx2c4.com/WireGuard/commit/3a7750a6131236414076365797c697d83ad28342
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  net/Kconfig                                   |    1 +
  net/Makefile                                  |    1 +
  net/wireguard/Kconfig                         |   34 +
- net/wireguard/Makefile                        |   14 +
- net/wireguard/allowedips.c                    |  377 +
+ net/wireguard/Makefile                        |   15 +
+ net/wireguard/allowedips.c                    |  381 +
  net/wireguard/allowedips.h                    |   59 +
  net/wireguard/compat/Makefile.include         |   98 +
  .../compat/checksum/checksum_partial_compat.h |  208 +
  net/wireguard/compat/compat-asm.h             |   43 +
- net/wireguard/compat/compat.h                 |  911 ++
+ net/wireguard/compat/compat.h                 |  941 ++
  net/wireguard/compat/dst_cache/dst_cache.c    |  175 +
  .../compat/dst_cache/include/net/dst_cache.h  |   97 +
  .../compat/fpu-x86/include/asm/fpu/api.h      |    1 +
@@ -80,9 +81,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/device.h                        |   65 +
  net/wireguard/main.c                          |   69 +
  net/wireguard/messages.h                      |  128 +
- net/wireguard/netlink.c                       |  667 ++
+ net/wireguard/netlink.c                       |  660 ++
  net/wireguard/netlink.h                       |   12 +
- net/wireguard/noise.c                         |  826 ++
+ net/wireguard/noise.c                         |  830 ++
  net/wireguard/noise.h                         |  137 +
  net/wireguard/peer.c                          |  240 +
  net/wireguard/peer.h                          |   83 +
@@ -93,7 +94,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/ratelimiter.c                   |  235 +
  net/wireguard/ratelimiter.h                   |   19 +
  net/wireguard/receive.c                       |  605 ++
- net/wireguard/selftest/allowedips.c           |  682 ++
+ net/wireguard/selftest/allowedips.c           |  683 ++
  net/wireguard/selftest/counter.c              |  104 +
  net/wireguard/selftest/ratelimiter.c          |  226 +
  net/wireguard/send.c                          |  431 +
@@ -101,9 +102,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/socket.h                        |   44 +
  net/wireguard/timers.c                        |  243 +
  net/wireguard/timers.h                        |   31 +
- net/wireguard/uapi/wireguard.h                |  192 +
+ net/wireguard/uapi/wireguard.h                |  196 +
  net/wireguard/version.h                       |    1 +
- 98 files changed, 51097 insertions(+)
+ 98 files changed, 51134 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -267,10 +268,10 @@ index 000000000000..65fb31ddb01f
 +	  Say N here unless you know what you're doing.
 diff --git a/net/wireguard/Makefile b/net/wireguard/Makefile
 new file mode 100644
-index 000000000000..c1a2673f6fe2
+index 000000000000..364deb705376
 --- /dev/null
 +++ b/net/wireguard/Makefile
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,15 @@
 +# SPDX-License-Identifier: GPL-2.0
 +#
 +# Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -278,6 +279,7 @@ index 000000000000..c1a2673f6fe2
 +ccflags-y := -O3 -fvisibility=hidden
 +ccflags-$(CONFIG_WIREGUARD_DEBUG) += -DDEBUG -g
 +ccflags-y += -D'pr_fmt(fmt)=KBUILD_MODNAME ": " fmt'
++ccflags-y += -Wframe-larger-than=2048
 +
 +wireguard-y := main.o noise.o device.o peer.o timers.o queueing.o send.o receive.o socket.o peerlookup.o allowedips.o ratelimiter.o cookie.o netlink.o
 +
@@ -287,10 +289,10 @@ index 000000000000..c1a2673f6fe2
 +obj-$(if $(KBUILD_EXTMOD),m,$(CONFIG_WIREGUARD)) := wireguard.o
 diff --git a/net/wireguard/allowedips.c b/net/wireguard/allowedips.c
 new file mode 100644
-index 000000000000..610aab047751
+index 000000000000..72667d5399c3
 --- /dev/null
 +++ b/net/wireguard/allowedips.c
-@@ -0,0 +1,377 @@
+@@ -0,0 +1,381 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -592,14 +594,18 @@ index 000000000000..610aab047751
 +	RCU_INIT_POINTER(table->root4, NULL);
 +	RCU_INIT_POINTER(table->root6, NULL);
 +	if (rcu_access_pointer(old4)) {
-+		root_remove_peer_lists(old4);
-+		call_rcu(&rcu_dereference_protected(old4,
-+				lockdep_is_held(lock))->rcu, root_free_rcu);
++		struct allowedips_node *node = rcu_dereference_protected(old4,
++							lockdep_is_held(lock));
++
++		root_remove_peer_lists(node);
++		call_rcu(&node->rcu, root_free_rcu);
 +	}
 +	if (rcu_access_pointer(old6)) {
-+		root_remove_peer_lists(old6);
-+		call_rcu(&rcu_dereference_protected(old6,
-+				lockdep_is_held(lock))->rcu, root_free_rcu);
++		struct allowedips_node *node = rcu_dereference_protected(old6,
++							lockdep_is_held(lock));
++
++		root_remove_peer_lists(node);
++		call_rcu(&node->rcu, root_free_rcu);
 +	}
 +}
 +
@@ -1102,10 +1108,10 @@ index 000000000000..f5c5bc29db26
 +#endif /* _WG_COMPATASM_H */
 diff --git a/net/wireguard/compat/compat.h b/net/wireguard/compat/compat.h
 new file mode 100644
-index 000000000000..fb09037e8d6b
+index 000000000000..ab22fa4e30b5
 --- /dev/null
 +++ b/net/wireguard/compat/compat.h
-@@ -0,0 +1,911 @@
+@@ -0,0 +1,941 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1129,6 +1135,8 @@ index 000000000000..fb09037e8d6b
 +#ifdef UTS_UBUNTU_RELEASE_ABI
 +#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 13, 11)
 +#define ISUBUNTU1404
++#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
++#define ISUBUNTU1604
 +#endif
 +#endif
 +#ifdef CONFIG_SUSE_KERNEL
@@ -1153,6 +1161,7 @@ index 000000000000..fb09037e8d6b
 +#endif
 +
 +#include <linux/cache.h>
++#include <linux/init.h>
 +#ifndef __ro_after_init
 +#define __ro_after_init __read_mostly
 +#endif
@@ -1195,7 +1204,7 @@ index 000000000000..fb09037e8d6b
 +    (LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 27) && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0)) || \
 +    (LINUX_VERSION_CODE < KERNEL_VERSION(3, 16, 8) && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 15, 0)) || \
 +    (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 40) && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0)) || \
-+    (LINUX_VERSION_CODE < KERNEL_VERSION(3, 12, 54))) && !defined(ISUBUNTU1404)
++    (LINUX_VERSION_CODE < KERNEL_VERSION(3, 12, 54))) && !defined(ISUBUNTU1404) && (!defined(ISRHEL7) || RHEL_MINOR < 7) /* TODO: remove < 7 workaround once CentOS 7.7 comes out. */
 +#include <linux/if.h>
 +#include <net/ip_tunnels.h>
 +#define IP6_ECN_set_ce(a, b) IP6_ECN_set_ce(b)
@@ -1946,6 +1955,33 @@ index 000000000000..fb09037e8d6b
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0) && defined(__aarch64__)
 +#define cpu_have_named_feature(name) (elf_hwcap & (HWCAP_ ## name))
++#endif
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0)
++#include <linux/stddef.h>
++#ifndef offsetofend
++#define offsetofend(TYPE, MEMBER) (offsetof(TYPE, MEMBER) + sizeof(((TYPE *)0)->MEMBER))
++#endif
++#endif
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)
++#define genl_dumpit_info(cb) ({ \
++	struct { struct nlattr **attrs; } *a = (void *)((u8 *)cb->args + offsetofend(struct dump_ctx, next_allowedip)); \
++	BUILD_BUG_ON(sizeof(cb->args) < offsetofend(struct dump_ctx, next_allowedip) + sizeof(*a)); \
++	a->attrs = genl_family_attrbuf(&genl_family); \
++	if (nlmsg_parse(cb->nlh, GENL_HDRLEN + genl_family.hdrsize, a->attrs, genl_family.maxattr, device_policy, NULL) < 0) \
++		memset(a->attrs, 0, (genl_family.maxattr + 1) * sizeof(struct nlattr *)); \
++	a; \
++})
++#endif
++
++#if defined(ISUBUNTU1604)
++#include <linux/siphash.h>
++#ifndef _WG_LINUX_SIPHASH_H
++#define hsiphash_2u32 siphash_2u32
++#define hsiphash_3u32 siphash_3u32
++#define hsiphash_key_t siphash_key_t
++#endif
 +#endif
 +
 +#ifdef CONFIG_VE
@@ -45877,7 +45913,7 @@ index 000000000000..4b5b58e8956e
 +MODULE_ALIAS_GENL_FAMILY(WG_GENL_NAME);
 diff --git a/net/wireguard/messages.h b/net/wireguard/messages.h
 new file mode 100644
-index 000000000000..3cfd1c5e9b02
+index 000000000000..f415cdd2e90a
 --- /dev/null
 +++ b/net/wireguard/messages.h
 @@ -0,0 +1,128 @@
@@ -45921,7 +45957,7 @@ index 000000000000..3cfd1c5e9b02
 +};
 +
 +enum limits {
-+	REKEY_AFTER_MESSAGES = U64_MAX - 0xffff,
++	REKEY_AFTER_MESSAGES = 1ULL << 60,
 +	REJECT_AFTER_MESSAGES = U64_MAX - COUNTER_WINDOW_SIZE - 1,
 +	REKEY_TIMEOUT = 5,
 +	REKEY_TIMEOUT_JITTER_MAX_JIFFIES = HZ / 3,
@@ -46011,10 +46047,10 @@ index 000000000000..3cfd1c5e9b02
 +#endif /* _WG_MESSAGES_H */
 diff --git a/net/wireguard/netlink.c b/net/wireguard/netlink.c
 new file mode 100644
-index 000000000000..0805a264b799
+index 000000000000..9bf2f84edda8
 --- /dev/null
 +++ b/net/wireguard/netlink.c
-@@ -0,0 +1,667 @@
+@@ -0,0 +1,660 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -46111,8 +46147,8 @@ index 000000000000..0805a264b799
 +struct dump_ctx {
 +	struct wg_device *wg;
 +	struct wg_peer *next_peer;
-+	struct allowedips_node *next_allowedip;
 +	u64 allowedips_seq;
++	struct allowedips_node *next_allowedip;
 +};
 +
 +#define DUMP_CTX(cb) ((struct dump_ctx *)(cb)->args)
@@ -46213,15 +46249,9 @@ index 000000000000..0805a264b799
 +
 +static int wg_get_device_start(struct netlink_callback *cb)
 +{
-+	struct nlattr **attrs = genl_family_attrbuf(&genl_family);
 +	struct wg_device *wg;
-+	int ret;
 +
-+	ret = nlmsg_parse(cb->nlh, GENL_HDRLEN + genl_family.hdrsize, attrs,
-+			  genl_family.maxattr, device_policy, NULL);
-+	if (ret < 0)
-+		return ret;
-+	wg = lookup_interface(attrs, cb->skb);
++	wg = lookup_interface(genl_dumpit_info(cb)->attrs, cb->skb);
 +	if (IS_ERR(wg))
 +		return PTR_ERR(wg);
 +	DUMP_CTX(cb)->wg = wg;
@@ -46406,10 +46436,10 @@ index 000000000000..0805a264b799
 +
 +	peer = wg_pubkey_hashtable_lookup(wg->peer_hashtable,
 +					  nla_data(attrs[WGPEER_A_PUBLIC_KEY]));
++	ret = 0;
 +	if (!peer) { /* Peer doesn't exist yet. Add a new one. */
-+		ret = -ENODEV;
-+		if (flags & WGPEER_F_REMOVE_ME)
-+			goto out; /* Tried to remove a non-existing peer. */
++		if (flags & (WGPEER_F_REMOVE_ME | WGPEER_F_UPDATE_ONLY))
++			goto out;
 +
 +		/* The peer is new, so there aren't allowed IPs to remove. */
 +		flags &= ~WGPEER_F_REPLACE_ALLOWEDIPS;
@@ -46446,7 +46476,6 @@ index 000000000000..0805a264b799
 +		wg_peer_get(peer);
 +	}
 +
-+	ret = 0;
 +	if (flags & WGPEER_F_REMOVE_ME) {
 +		wg_peer_remove(peer);
 +		goto out;
@@ -46702,10 +46731,10 @@ index 000000000000..15100d92e2e3
 +#endif /* _WG_NETLINK_H */
 diff --git a/net/wireguard/noise.c b/net/wireguard/noise.c
 new file mode 100644
-index 000000000000..57f749ceb8ac
+index 000000000000..269b69faf11a
 --- /dev/null
 +++ b/net/wireguard/noise.c
-@@ -0,0 +1,826 @@
+@@ -0,0 +1,830 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -47274,6 +47303,7 @@ index 000000000000..57f749ceb8ac
 +	u8 s[NOISE_PUBLIC_KEY_LEN];
 +	u8 e[NOISE_PUBLIC_KEY_LEN];
 +	u8 t[NOISE_TIMESTAMP_LEN];
++	u64 initiation_consumption;
 +
 +	down_read(&wg->static_identity.lock);
 +	if (unlikely(!wg->static_identity.has_identity))
@@ -47322,11 +47352,14 @@ index 000000000000..57f749ceb8ac
 +	/* Success! Copy everything to peer */
 +	down_write(&handshake->lock);
 +	memcpy(handshake->remote_ephemeral, e, NOISE_PUBLIC_KEY_LEN);
-+	memcpy(handshake->latest_timestamp, t, NOISE_TIMESTAMP_LEN);
++	if (memcmp(t, handshake->latest_timestamp, NOISE_TIMESTAMP_LEN) > 0)
++		memcpy(handshake->latest_timestamp, t, NOISE_TIMESTAMP_LEN);
 +	memcpy(handshake->hash, hash, NOISE_HASH_LEN);
 +	memcpy(handshake->chaining_key, chaining_key, NOISE_HASH_LEN);
 +	handshake->remote_index = src->sender_index;
-+	handshake->last_initiation_consumption = ktime_get_coarse_boottime_ns();
++	if ((s64)(handshake->last_initiation_consumption -
++	    (initiation_consumption = ktime_get_coarse_boottime_ns())) < 0)
++		handshake->last_initiation_consumption = initiation_consumption;
 +	handshake->state = HANDSHAKE_CONSUMED_INITIATION;
 +	up_write(&handshake->lock);
 +	ret_peer = peer;
@@ -49448,10 +49481,10 @@ index 000000000000..247a56b6ed94
 +}
 diff --git a/net/wireguard/selftest/allowedips.c b/net/wireguard/selftest/allowedips.c
 new file mode 100644
-index 000000000000..6e244a93d64d
+index 000000000000..846db14cb046
 --- /dev/null
 +++ b/net/wireguard/selftest/allowedips.c
-@@ -0,0 +1,682 @@
+@@ -0,0 +1,683 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -49761,12 +49794,12 @@ index 000000000000..6e244a93d64d
 +		if (wg_allowedips_insert_v4(&t, (struct in_addr *)ip, cidr,
 +					    peer, &mutex) < 0) {
 +			pr_err("allowedips random self-test malloc: FAIL\n");
-+			goto free;
++			goto free_locked;
 +		}
 +		if (horrible_allowedips_insert_v4(&h, (struct in_addr *)ip,
 +						  cidr, peer) < 0) {
 +			pr_err("allowedips random self-test malloc: FAIL\n");
-+			goto free;
++			goto free_locked;
 +		}
 +		for (j = 0; j < NUM_MUTATED_ROUTES; ++j) {
 +			memcpy(mutated, ip, 4);
@@ -49788,12 +49821,12 @@ index 000000000000..6e244a93d64d
 +						    (struct in_addr *)mutated,
 +						    cidr, peer, &mutex) < 0) {
 +				pr_err("allowedips random malloc: FAIL\n");
-+				goto free;
++				goto free_locked;
 +			}
 +			if (horrible_allowedips_insert_v4(&h,
 +				(struct in_addr *)mutated, cidr, peer)) {
 +				pr_err("allowedips random self-test malloc: FAIL\n");
-+				goto free;
++				goto free_locked;
 +			}
 +		}
 +	}
@@ -49805,12 +49838,12 @@ index 000000000000..6e244a93d64d
 +		if (wg_allowedips_insert_v6(&t, (struct in6_addr *)ip, cidr,
 +					    peer, &mutex) < 0) {
 +			pr_err("allowedips random self-test malloc: FAIL\n");
-+			goto free;
++			goto free_locked;
 +		}
 +		if (horrible_allowedips_insert_v6(&h, (struct in6_addr *)ip,
 +						  cidr, peer) < 0) {
 +			pr_err("allowedips random self-test malloc: FAIL\n");
-+			goto free;
++			goto free_locked;
 +		}
 +		for (j = 0; j < NUM_MUTATED_ROUTES; ++j) {
 +			memcpy(mutated, ip, 16);
@@ -49832,13 +49865,13 @@ index 000000000000..6e244a93d64d
 +						    (struct in6_addr *)mutated,
 +						    cidr, peer, &mutex) < 0) {
 +				pr_err("allowedips random self-test malloc: FAIL\n");
-+				goto free;
++				goto free_locked;
 +			}
 +			if (horrible_allowedips_insert_v6(
 +				    &h, (struct in6_addr *)mutated, cidr,
 +				    peer)) {
 +				pr_err("allowedips random self-test malloc: FAIL\n");
-+				goto free;
++				goto free_locked;
 +			}
 +		}
 +	}
@@ -49871,6 +49904,7 @@ index 000000000000..6e244a93d64d
 +
 +free:
 +	mutex_lock(&mutex);
++free_locked:
 +	wg_allowedips_free(&t, &mutex);
 +	mutex_unlock(&mutex);
 +	horrible_allowedips_free(&h);
@@ -50915,7 +50949,7 @@ index 000000000000..62f1a97aba23
 +}
 diff --git a/net/wireguard/socket.c b/net/wireguard/socket.c
 new file mode 100644
-index 000000000000..d4f65bb07044
+index 000000000000..f9a06a35b91b
 --- /dev/null
 +++ b/net/wireguard/socket.c
 @@ -0,0 +1,436 @@
@@ -51331,7 +51365,7 @@ index 000000000000..d4f65bb07044
 +	}
 +#endif
 +
-+	wg_socket_reinit(wg, new4 ? new4->sk : NULL, new6 ? new6->sk : NULL);
++	wg_socket_reinit(wg, new4->sk, new6 ? new6->sk : NULL);
 +	return 0;
 +}
 +
@@ -51693,10 +51727,10 @@ index 000000000000..f0653dcb1326
 +#endif /* _WG_TIMERS_H */
 diff --git a/net/wireguard/uapi/wireguard.h b/net/wireguard/uapi/wireguard.h
 new file mode 100644
-index 000000000000..5a3e5a79fbcb
+index 000000000000..dd8a47c4ad11
 --- /dev/null
 +++ b/net/wireguard/uapi/wireguard.h
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,196 @@
 +/* SPDX-License-Identifier: (GPL-2.0 WITH Linux-syscall-note) OR MIT */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -51786,10 +51820,12 @@ index 000000000000..5a3e5a79fbcb
 + *        0: NLA_NESTED
 + *            WGPEER_A_PUBLIC_KEY: len WG_KEY_LEN
 + *            WGPEER_A_FLAGS: NLA_U32, 0 and/or WGPEER_F_REMOVE_ME if the
-+ *                            specified peer should be removed rather than
-+ *                            added/updated and/or WGPEER_F_REPLACE_ALLOWEDIPS
-+ *                            if all current allowed IPs of this peer should be
-+ *                            removed prior to adding the list below.
++ *                            specified peer should not exist at the end of the
++ *                            operation, rather than added/updated and/or
++ *                            WGPEER_F_REPLACE_ALLOWEDIPS if all current allowed
++ *                            IPs of this peer should be removed prior to adding
++ *                            the list below and/or WGPEER_F_UPDATE_ONLY if the
++ *                            peer should only be set if it already exists.
 + *            WGPEER_A_PRESHARED_KEY: len WG_KEY_LEN, all zeros to remove
 + *            WGPEER_A_ENDPOINT: struct sockaddr_in or struct sockaddr_in6
 + *            WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL: NLA_U16, 0 to disable
@@ -51861,7 +51897,9 @@ index 000000000000..5a3e5a79fbcb
 +enum wgpeer_flag {
 +	WGPEER_F_REMOVE_ME = 1U << 0,
 +	WGPEER_F_REPLACE_ALLOWEDIPS = 1U << 1,
-+	__WGPEER_F_ALL = WGPEER_F_REMOVE_ME | WGPEER_F_REPLACE_ALLOWEDIPS
++	WGPEER_F_UPDATE_ONLY = 1U << 2,
++	__WGPEER_F_ALL = WGPEER_F_REMOVE_ME | WGPEER_F_REPLACE_ALLOWEDIPS |
++			 WGPEER_F_UPDATE_ONLY
 +};
 +enum wgpeer_attribute {
 +	WGPEER_A_UNSPEC,
@@ -51891,11 +51929,11 @@ index 000000000000..5a3e5a79fbcb
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..ae368725d068
+index 000000000000..1381caeeb067
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20190702"
++#define WIREGUARD_VERSION "0.0.20191127"
 -- 
-2.23.0.rc1
+2.24.0
 
