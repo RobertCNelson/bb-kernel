@@ -142,9 +142,15 @@ aufs () {
 		cd ../
 		if [ ! -d ./${aufs_prefix}standalone ] ; then
 			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
+			cd ./${aufs_prefix}standalone/
+				aufs_hash=$(git rev-parse HEAD)
+			cd -
 		else
 			rm -rf ./${aufs_prefix}standalone || true
 			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
+			cd ./${aufs_prefix}standalone/
+				aufs_hash=$(git rev-parse HEAD)
+			cd -
 		fi
 		cd ./KERNEL/
 		KERNEL_REL=4.14
@@ -157,8 +163,9 @@ aufs () {
 		cp -v ../${aufs_prefix}standalone/include/uapi/linux/aufs_type.h ./include/uapi/linux/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs' -s
+		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" -s
 		${git_bin} format-patch -5 -o ../patches/aufs/
+		echo "AUFS: https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" > ../patches/git/AUFS
 
 		rm -rf ../${aufs_prefix}standalone/ || true
 
@@ -186,9 +193,15 @@ can_isotp () {
 		cd ../
 		if [ ! -d ./can-isotp ] ; then
 			${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
+			cd ./can-isotp
+				isotp_hash=$(git rev-parse HEAD)
+			cd -
 		else
 			rm -rf ./can-isotp || true
 			${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
+			cd ./can-isotp
+				isotp_hash=$(git rev-parse HEAD)
+			cd -
 		fi
 
 		cd ./KERNEL/
@@ -197,8 +210,9 @@ can_isotp () {
 		cp -v ../can-isotp/net/can/isotp.c net/can/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: can-isotp: https://github.com/hartkopp/can-isotp' -s
+		${git_bin} commit -a -m 'merge: can-isotp: https://github.com/hartkopp/can-isotp' -m "https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/can_isotp/
+		echo "CAN-ISOTP: https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" > ../patches/git/CAN-ISOTP
 
 		rm -rf ../can-isotp/ || true
 
@@ -235,8 +249,9 @@ rt () {
 		rm -f patch-${rt_patch}.patch.xz
 		rm -f localversion-rt
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
+		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 		${git_bin} format-patch -1 -o ../patches/rt/
+		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/git/RT
 
 		exit 2
 	fi
@@ -290,9 +305,15 @@ wireguard () {
 		cd ../
 		if [ ! -d ./WireGuard ] ; then
 			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+			cd ./WireGuard
+				wireguard_hash=$(git rev-parse HEAD)
+			cd -
 		else
 			rm -rf ./WireGuard || true
 			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+			cd ./WireGuard
+				wireguard_hash=$(git rev-parse HEAD)
+			cd -
 		fi
 
 		#cd ./WireGuard/
@@ -304,8 +325,9 @@ wireguard () {
 		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: WireGuard' -s
+		${git_bin} commit -a -m 'merge: WireGuard' -m "https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/WireGuard/
+		echo "WIREGUARD: https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" > ../patches/git/WIREGUARD
 
 		rm -rf ../WireGuard/ || true
 
@@ -331,9 +353,15 @@ ti_pm_firmware () {
 		cd ../
 		if [ ! -d ./ti-amx3-cm3-pm-firmware ] ; then
 			${git_bin} clone -b ti-v4.1.y-next git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
+			cd ./ti-amx3-cm3-pm-firmware
+				ti_amx3_cm3_hash=$(git rev-parse HEAD)
+			cd -
 		else
 			rm -rf ./ti-amx3-cm3-pm-firmware || true
 			${git_bin} clone -b ti-v4.1.y-next git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
+			cd ./ti-amx3-cm3-pm-firmware
+				ti_amx3_cm3_hash=$(git rev-parse HEAD)
+			cd -
 		fi
 		cd ./KERNEL/
 
@@ -341,8 +369,9 @@ ti_pm_firmware () {
 		cp -v ../ti-amx3-cm3-pm-firmware/bin/am* ./firmware/
 
 		${git_bin} add -f ./firmware/am*
-		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -s
+		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -m "http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
+		echo "TI_AMX3_CM3: http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" > ../patches/git/TI_AMX3_CM3
 
 		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
 
@@ -395,7 +424,7 @@ post_backports () {
 	fi
 
 	${git_bin} add .
-	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -s
+	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
@@ -408,7 +437,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.71"
+	backport_tag="v4.19.86"
 
 	subsystem="greybus"
 	#regenerate="enable"
