@@ -499,6 +499,7 @@ backports () {
 		cp -rv ~/linux-src/drivers/bus/* ./drivers/bus/
 		cp -rv ~/linux-src/drivers/counter/* ./drivers/counter/
 		cp -rv ~/linux-src/drivers/pwm/* ./drivers/pwm/
+		cp -v ~/linux-src/include/linux/counter.h ./include/linux/counter.h
 		rm -rf ./drivers/pwm/pwm-tipwmss.c || true
 
 		post_backports
