@@ -463,14 +463,13 @@ patch_backports (){
 backports () {
 	dir 'drivers/exfat'
 
-	backport_tag="v5.4-rc7"
+	backport_tag="v5.4.1"
 
 	subsystem="exfat"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		mkdir -p ./x/
 		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
 
 		post_backports

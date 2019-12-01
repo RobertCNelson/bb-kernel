@@ -1,9 +1,9 @@
-From 944f305a04b0d78091760969683ac899469d05ba Mon Sep 17 00:00:00 2001
+From 0a7434746aa1bd67b789839fd5438de19efb21b8 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 27 Nov 2019 15:37:09 -0600
+Date: Sun, 1 Dec 2019 07:59:27 -0600
 Subject: [PATCH] merge: WireGuard
 
-https://git.zx2c4.com/WireGuard/commit/3a7750a6131236414076365797c697d83ad28342
+https://git.zx2c4.com/WireGuard/commit/f99a92c6946ad70187a4e6a4d990812c5da89079
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  net/Kconfig                                   |    1 +
@@ -78,7 +78,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/zinc/selftest/poly1305.c | 1107 ++
  net/wireguard/crypto/zinc/selftest/run.h      |   48 +
  net/wireguard/device.c                        |  470 +
- net/wireguard/device.h                        |   65 +
+ net/wireguard/device.h                        |   73 +
  net/wireguard/main.c                          |   69 +
  net/wireguard/messages.h                      |  128 +
  net/wireguard/netlink.c                       |  660 ++
@@ -97,14 +97,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/selftest/allowedips.c           |  683 ++
  net/wireguard/selftest/counter.c              |  104 +
  net/wireguard/selftest/ratelimiter.c          |  226 +
- net/wireguard/send.c                          |  431 +
+ net/wireguard/send.c                          |  420 +
  net/wireguard/socket.c                        |  436 +
  net/wireguard/socket.h                        |   44 +
  net/wireguard/timers.c                        |  243 +
  net/wireguard/timers.h                        |   31 +
  net/wireguard/uapi/wireguard.h                |  196 +
  net/wireguard/version.h                       |    1 +
- 98 files changed, 51134 insertions(+)
+ 98 files changed, 51131 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -45291,7 +45291,7 @@ index 000000000000..4ffaf6089eea
 +#endif
 diff --git a/net/wireguard/device.c b/net/wireguard/device.c
 new file mode 100644
-index 000000000000..532d399f3c22
+index 000000000000..e888ac37f9a8
 --- /dev/null
 +++ b/net/wireguard/device.c
 @@ -0,0 +1,470 @@
@@ -45468,8 +45468,8 @@ index 000000000000..532d399f3c22
 +		dev_kfree_skb(skb);
 +		skb = segs;
 +	}
-+	do {
-+		next = skb->next;
++
++	skb_list_walk_safe(skb, skb, next) {
 +		skb_mark_not_on_list(skb);
 +
 +		skb = skb_share_check(skb, GFP_ATOMIC);
@@ -45484,7 +45484,7 @@ index 000000000000..532d399f3c22
 +		PACKET_CB(skb)->mtu = mtu;
 +
 +		__skb_queue_tail(&packets, skb);
-+	} while ((skb = next) != NULL);
++	}
 +
 +	spin_lock_bh(&peer->staged_packet_queue.lock);
 +	/* If the queue is getting too big, we start removing the oldest packets
@@ -45767,10 +45767,10 @@ index 000000000000..532d399f3c22
 +}
 diff --git a/net/wireguard/device.h b/net/wireguard/device.h
 new file mode 100644
-index 000000000000..b15a8be9d816
+index 000000000000..c91f3051c5c7
 --- /dev/null
 +++ b/net/wireguard/device.h
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,73 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -45834,6 +45834,14 @@ index 000000000000..b15a8be9d816
 +
 +int wg_device_init(void);
 +void wg_device_uninit(void);
++
++/* Later after the dust settles, this can be moved into include/linux/skbuff.h,
++ * where virtually all code that deals with GSO segs can benefit, around ~30
++ * drivers as of writing.
++ */
++#define skb_list_walk_safe(first, skb, next)                                   \
++	for (skb = first, next = skb->next; skb;                               \
++	     skb = next, next = skb ? skb->next : NULL)
 +
 +#endif /* _WG_DEVICE_H */
 diff --git a/net/wireguard/main.c b/net/wireguard/main.c
@@ -50512,10 +50520,10 @@ index 000000000000..bcd6462e4540
 +#endif
 diff --git a/net/wireguard/send.c b/net/wireguard/send.c
 new file mode 100644
-index 000000000000..62f1a97aba23
+index 000000000000..9b54f4a26cd8
 --- /dev/null
 +++ b/net/wireguard/send.c
-@@ -0,0 +1,431 @@
+@@ -0,0 +1,420 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -50751,17 +50759,6 @@ index 000000000000..62f1a97aba23
 +	wg_packet_send_staged_packets(peer);
 +}
 +
-+#define skb_walk_null_queue_safe(first, skb, next)                             \
-+	for (skb = first, next = skb->next; skb;                               \
-+	     skb = next, next = skb ? skb->next : NULL)
-+static void skb_free_null_queue(struct sk_buff *first)
-+{
-+	struct sk_buff *skb, *next;
-+
-+	skb_walk_null_queue_safe(first, skb, next)
-+		dev_kfree_skb(skb);
-+}
-+
 +static void wg_packet_create_data_done(struct sk_buff *first,
 +				       struct wg_peer *peer)
 +{
@@ -50770,7 +50767,7 @@ index 000000000000..62f1a97aba23
 +
 +	wg_timers_any_authenticated_packet_traversal(peer);
 +	wg_timers_any_authenticated_packet_sent(peer);
-+	skb_walk_null_queue_safe(first, skb, next) {
++	skb_list_walk_safe(first, skb, next) {
 +		is_keepalive = skb->len == message_data_len(0);
 +		if (likely(!wg_socket_send_skb_to_peer(peer, skb,
 +				PACKET_CB(skb)->ds) && !is_keepalive))
@@ -50802,7 +50799,7 @@ index 000000000000..62f1a97aba23
 +		if (likely(state == PACKET_STATE_CRYPTED))
 +			wg_packet_create_data_done(first, peer);
 +		else
-+			skb_free_null_queue(first);
++			kfree_skb_list(first);
 +
 +		wg_noise_keypair_put(keypair, false);
 +		wg_peer_put(peer);
@@ -50820,7 +50817,7 @@ index 000000000000..62f1a97aba23
 +	while ((first = ptr_ring_consume_bh(&queue->ring)) != NULL) {
 +		enum packet_state state = PACKET_STATE_CRYPTED;
 +
-+		skb_walk_null_queue_safe(first, skb, next) {
++		skb_list_walk_safe(first, skb, next) {
 +			if (likely(encrypt_packet(skb,
 +						  PACKET_CB(first)->keypair,
 +						  &simd_context))) {
@@ -50861,7 +50858,7 @@ index 000000000000..62f1a97aba23
 +		return;
 +	wg_noise_keypair_put(PACKET_CB(first)->keypair, false);
 +	wg_peer_put(peer);
-+	skb_free_null_queue(first);
++	kfree_skb_list(first);
 +}
 +
 +void wg_packet_purge_staged_packets(struct wg_peer *peer)
@@ -50949,7 +50946,7 @@ index 000000000000..62f1a97aba23
 +}
 diff --git a/net/wireguard/socket.c b/net/wireguard/socket.c
 new file mode 100644
-index 000000000000..f9a06a35b91b
+index 000000000000..a90dadd3edb2
 --- /dev/null
 +++ b/net/wireguard/socket.c
 @@ -0,0 +1,436 @@
@@ -50986,7 +50983,7 @@ index 000000000000..f9a06a35b91b
 +	struct sock *sock;
 +	int ret = 0;
 +
-+	skb->next = skb->prev = NULL;
++	skb_mark_not_on_list(skb);
 +	skb->dev = wg->dev;
 +	skb->mark = wg->fwmark;
 +
@@ -51072,7 +51069,7 @@ index 000000000000..f9a06a35b91b
 +	struct sock *sock;
 +	int ret = 0;
 +
-+	skb->next = skb->prev = NULL;
++	skb_mark_not_on_list(skb);
 +	skb->dev = wg->dev;
 +	skb->mark = wg->fwmark;
 +
