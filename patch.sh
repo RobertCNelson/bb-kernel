@@ -461,6 +461,7 @@ patch_backports (){
 }
 
 backports () {
+	backport_tag="b94ae8ad9fe79da61231999f347f79645b909bda"
 #	backport_tag="v4.x-y"
 
 	subsystem="exfat"
@@ -468,7 +469,6 @@ backports () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		mkdir -p ./x/
 		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
 
 		post_backports
@@ -476,6 +476,37 @@ backports () {
 	else
 		patch_backports
 	fi
+
+	subsystem="greybus"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
+		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	subsystem="counter"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/bus/* ./drivers/bus/
+		cp -rv ~/linux-src/drivers/counter/* ./drivers/counter/
+		cp -rv ~/linux-src/drivers/pwm/* ./drivers/pwm/
+		rm -rf ./drivers/pwm/pwm-tipwmss.c || true
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
 }
 
 reverts () {
@@ -523,7 +554,7 @@ soc () {
 }
 
 ###
-#backports
+backports
 #reverts
 drivers
 soc
