@@ -1,20 +1,20 @@
-From 0a7434746aa1bd67b789839fd5438de19efb21b8 Mon Sep 17 00:00:00 2001
+From b8d3bf8dd9c565e245b7e8017f7e08af67c5b9d5 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 1 Dec 2019 07:59:27 -0600
+Date: Thu, 5 Dec 2019 09:21:31 -0600
 Subject: [PATCH] merge: WireGuard
 
-https://git.zx2c4.com/WireGuard/commit/f99a92c6946ad70187a4e6a4d990812c5da89079
+https://git.zx2c4.com/WireGuard/commit/091dcd954458869c6d2be981f7ab6144424350cb
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  net/Kconfig                                   |    1 +
  net/Makefile                                  |    1 +
- net/wireguard/Kconfig                         |   34 +
+ net/wireguard/Kconfig                         |   33 +
  net/wireguard/Makefile                        |   15 +
  net/wireguard/allowedips.c                    |  381 +
  net/wireguard/allowedips.h                    |   59 +
  net/wireguard/compat/Makefile.include         |   98 +
  .../compat/checksum/checksum_partial_compat.h |  208 +
- net/wireguard/compat/compat-asm.h             |   43 +
+ net/wireguard/compat/compat-asm.h             |   48 +
  net/wireguard/compat/compat.h                 |  941 ++
  net/wireguard/compat/dst_cache/dst_cache.c    |  175 +
  .../compat/dst_cache/include/net/dst_cache.h  |   97 +
@@ -52,7 +52,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../zinc/chacha20/chacha20-x86_64-glue.c      |  105 +
  .../crypto/zinc/chacha20/chacha20-x86_64.pl   | 4106 ++++++++
  net/wireguard/crypto/zinc/chacha20/chacha20.c |  193 +
- net/wireguard/crypto/zinc/chacha20poly1305.c  |  364 +
+ net/wireguard/crypto/zinc/chacha20poly1305.c  |  402 +
  .../zinc/curve25519/curve25519-arm-glue.c     |   43 +
  .../crypto/zinc/curve25519/curve25519-arm.S   | 2064 ++++
  .../zinc/curve25519/curve25519-fiat32.c       |  860 ++
@@ -73,7 +73,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/crypto/zinc/poly1305/poly1305.c |  168 +
  net/wireguard/crypto/zinc/selftest/blake2s.c  | 2090 ++++
  net/wireguard/crypto/zinc/selftest/chacha20.c | 2698 +++++
- .../crypto/zinc/selftest/chacha20poly1305.c   | 9034 +++++++++++++++++
+ .../crypto/zinc/selftest/chacha20poly1305.c   | 9025 +++++++++++++++++
  .../crypto/zinc/selftest/curve25519.c         | 1315 +++
  net/wireguard/crypto/zinc/selftest/poly1305.c | 1107 ++
  net/wireguard/crypto/zinc/selftest/run.h      |   48 +
@@ -97,14 +97,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireguard/selftest/allowedips.c           |  683 ++
  net/wireguard/selftest/counter.c              |  104 +
  net/wireguard/selftest/ratelimiter.c          |  226 +
- net/wireguard/send.c                          |  420 +
+ net/wireguard/send.c                          |  421 +
  net/wireguard/socket.c                        |  436 +
  net/wireguard/socket.h                        |   44 +
  net/wireguard/timers.c                        |  243 +
  net/wireguard/timers.h                        |   31 +
  net/wireguard/uapi/wireguard.h                |  196 +
  net/wireguard/version.h                       |    1 +
- 98 files changed, 51131 insertions(+)
+ 98 files changed, 51165 insertions(+)
  create mode 100644 net/wireguard/Kconfig
  create mode 100644 net/wireguard/Makefile
  create mode 100644 net/wireguard/allowedips.c
@@ -228,10 +228,10 @@ index 449fc0b221f8..bf63f55e444b 100644
  obj-$(CONFIG_XFRM)		+= xfrm/
 diff --git a/net/wireguard/Kconfig b/net/wireguard/Kconfig
 new file mode 100644
-index 000000000000..65fb31ddb01f
+index 000000000000..156e9dbfc051
 --- /dev/null
 +++ b/net/wireguard/Kconfig
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,33 @@
 +config WIREGUARD
 +	tristate "IP: WireGuard secure network tunnel"
 +	depends on NET && INET
@@ -239,8 +239,7 @@ index 000000000000..65fb31ddb01f
 +	select NET_UDP_TUNNEL
 +	select DST_CACHE
 +	select CRYPTO
-+	select CRYPTO_BLKCIPHER
-+	select XOR_BLOCKS
++	select CRYPTO_ALGAPI
 +	select VFP
 +	select VFPv3 if CPU_V7
 +	select NEON if CPU_V7
@@ -1059,10 +1058,10 @@ index 000000000000..3dfe5397a94f
 +}
 diff --git a/net/wireguard/compat/compat-asm.h b/net/wireguard/compat/compat-asm.h
 new file mode 100644
-index 000000000000..f5c5bc29db26
+index 000000000000..bafd70beb68f
 --- /dev/null
 +++ b/net/wireguard/compat/compat-asm.h
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,48 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -1103,6 +1102,11 @@ index 000000000000..f5c5bc29db26
 +#define lspull pull
 +#undef push
 +#undef pull
++#endif
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)
++#define SYM_FUNC_START ENTRY
++#define SYM_FUNC_END ENDPROC
 +#endif
 +
 +#endif /* _WG_COMPATASM_H */
@@ -5298,7 +5302,7 @@ index 000000000000..1b0083d871fb
 +#endif /* _ZINC_CHACHA20_H */
 diff --git a/net/wireguard/crypto/include/zinc/chacha20poly1305.h b/net/wireguard/crypto/include/zinc/chacha20poly1305.h
 new file mode 100644
-index 000000000000..ce7274092965
+index 000000000000..e3339f02996e
 --- /dev/null
 +++ b/net/wireguard/crypto/include/zinc/chacha20poly1305.h
 @@ -0,0 +1,50 @@
@@ -5326,9 +5330,9 @@ index 000000000000..ce7274092965
 +			      const u64 nonce,
 +			      const u8 key[CHACHA20POLY1305_KEY_SIZE]);
 +
-+bool __must_check chacha20poly1305_encrypt_sg(
-+	struct scatterlist *dst, struct scatterlist *src, const size_t src_len,
-+	const u8 *ad, const size_t ad_len, const u64 nonce,
++bool __must_check chacha20poly1305_encrypt_sg_inplace(
++	struct scatterlist *src, const size_t src_len, const u8 *ad,
++	const size_t ad_len, const u64 nonce,
 +	const u8 key[CHACHA20POLY1305_KEY_SIZE], simd_context_t *simd_context);
 +
 +bool __must_check
@@ -5336,9 +5340,9 @@ index 000000000000..ce7274092965
 +			 const u8 *ad, const size_t ad_len, const u64 nonce,
 +			 const u8 key[CHACHA20POLY1305_KEY_SIZE]);
 +
-+bool __must_check chacha20poly1305_decrypt_sg(
-+	struct scatterlist *dst, struct scatterlist *src, const size_t src_len,
-+	const u8 *ad, const size_t ad_len, const u64 nonce,
++bool __must_check chacha20poly1305_decrypt_sg_inplace(
++	struct scatterlist *src, size_t src_len, const u8 *ad,
++	const size_t ad_len, const u64 nonce,
 +	const u8 key[CHACHA20POLY1305_KEY_SIZE], simd_context_t *simd_context);
 +
 +void xchacha20poly1305_encrypt(u8 *dst, const u8 *src, const size_t src_len,
@@ -5524,7 +5528,7 @@ index 000000000000..f8cda59bf297
 +}
 diff --git a/net/wireguard/crypto/zinc/blake2s/blake2s-x86_64.S b/net/wireguard/crypto/zinc/blake2s/blake2s-x86_64.S
 new file mode 100644
-index 000000000000..8591938eee26
+index 000000000000..24910b766bdd
 --- /dev/null
 +++ b/net/wireguard/crypto/zinc/blake2s/blake2s-x86_64.S
 @@ -0,0 +1,258 @@
@@ -5577,7 +5581,7 @@ index 000000000000..8591938eee26
 +
 +.text
 +#ifdef CONFIG_AS_SSSE3
-+ENTRY(blake2s_compress_ssse3)
++SYM_FUNC_START(blake2s_compress_ssse3)
 +	testq		%rdx,%rdx
 +	je		.Lendofloop
 +	movdqu		(%rdi),%xmm0
@@ -5703,11 +5707,11 @@ index 000000000000..8591938eee26
 +	movdqu		%xmm14,0x20(%rdi)
 +.Lendofloop:
 +	ret
-+ENDPROC(blake2s_compress_ssse3)
++SYM_FUNC_END(blake2s_compress_ssse3)
 +#endif /* CONFIG_AS_SSSE3 */
 +
 +#ifdef CONFIG_AS_AVX512
-+ENTRY(blake2s_compress_avx512)
++SYM_FUNC_START(blake2s_compress_avx512)
 +	vmovdqu		(%rdi),%xmm0
 +	vmovdqu		0x10(%rdi),%xmm1
 +	vmovdqu		0x20(%rdi),%xmm4
@@ -5784,7 +5788,7 @@ index 000000000000..8591938eee26
 +	vmovdqu		%xmm4,0x20(%rdi)
 +	vzeroupper
 +	retq
-+ENDPROC(blake2s_compress_avx512)
++SYM_FUNC_END(blake2s_compress_avx512)
 +#endif /* CONFIG_AS_AVX512 */
 diff --git a/net/wireguard/crypto/zinc/blake2s/blake2s.c b/net/wireguard/crypto/zinc/blake2s/blake2s.c
 new file mode 100644
@@ -9039,7 +9043,7 @@ index 000000000000..a81e02db95e7
 +.set at
 diff --git a/net/wireguard/crypto/zinc/chacha20/chacha20-unrolled-arm.S b/net/wireguard/crypto/zinc/chacha20/chacha20-unrolled-arm.S
 new file mode 100644
-index 000000000000..2140319b64a0
+index 000000000000..8fb4bc2e7b5b
 --- /dev/null
 +++ b/net/wireguard/crypto/zinc/chacha20/chacha20-unrolled-arm.S
 @@ -0,0 +1,461 @@
@@ -9439,7 +9443,7 @@ index 000000000000..2140319b64a0
 + * void chacha20_arm(u8 *out, const u8 *in, size_t len, const u32 key[8],
 + *		     const u32 iv[4]);
 + */
-+ENTRY(chacha20_arm)
++SYM_FUNC_START(chacha20_arm)
 +	cmp		r2, #0			// len == 0?
 +	reteq		lr
 +
@@ -9473,12 +9477,12 @@ index 000000000000..2140319b64a0
 +
 +	add		sp, #76
 +	pop		{r4-r11, pc}
-+ENDPROC(chacha20_arm)
++SYM_FUNC_END(chacha20_arm)
 +
 +/*
 + * void hchacha20_arm(const u32 state[16], u32 out[8]);
 + */
-+ENTRY(hchacha20_arm)
++SYM_FUNC_START(hchacha20_arm)
 +	push		{r1,r4-r11,lr}
 +
 +	mov		r14, r0
@@ -9503,7 +9507,7 @@ index 000000000000..2140319b64a0
 +	stm		r4, {X0,X1,X2,X3,X12,X13,X14,X15}
 +
 +	pop		{r4-r11,pc}
-+ENDPROC(hchacha20_arm)
++SYM_FUNC_END(hchacha20_arm)
 diff --git a/net/wireguard/crypto/zinc/chacha20/chacha20-x86_64-glue.c b/net/wireguard/crypto/zinc/chacha20/chacha20-x86_64-glue.c
 new file mode 100644
 index 000000000000..5ac5f686a641
@@ -9617,7 +9621,7 @@ index 000000000000..5ac5f686a641
 +}
 diff --git a/net/wireguard/crypto/zinc/chacha20/chacha20-x86_64.pl b/net/wireguard/crypto/zinc/chacha20/chacha20-x86_64.pl
 new file mode 100644
-index 000000000000..cec75729bf69
+index 000000000000..29906a66b8b7
 --- /dev/null
 +++ b/net/wireguard/crypto/zinc/chacha20/chacha20-x86_64.pl
 @@ -0,0 +1,4106 @@
@@ -9747,7 +9751,7 @@ index 000000000000..cec75729bf69
 +	my ($name, $align, $nargs) = @_;
 +	if($kernel) {
 +		$code .= ".align $align\n";
-+		$code .= "ENTRY($name)\n";
++		$code .= "SYM_FUNC_START($name)\n";
 +		$code .= ".L$name:\n";
 +	} else {
 +		$code .= ".globl	$name\n";
@@ -9760,7 +9764,7 @@ index 000000000000..cec75729bf69
 +sub end_function() {
 +	my ($name) = @_;
 +	if($kernel) {
-+		$code .= "ENDPROC($name)\n";
++		$code .= "SYM_FUNC_END($name)\n";
 +	} else {
 +		$code .= ".size   $name,.-$name\n";
 +	}
@@ -13928,10 +13932,10 @@ index 000000000000..b4763c81e082
 +#endif
 diff --git a/net/wireguard/crypto/zinc/chacha20poly1305.c b/net/wireguard/crypto/zinc/chacha20poly1305.c
 new file mode 100644
-index 000000000000..0001c9205918
+index 000000000000..571a64e95a83
 --- /dev/null
 +++ b/net/wireguard/crypto/zinc/chacha20poly1305.c
-@@ -0,0 +1,364 @@
+@@ -0,0 +1,402 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -13952,16 +13956,7 @@ index 000000000000..0001c9205918
 +#include <linux/init.h>
 +#include <crypto/scatterwalk.h> // For blkcipher_walk.
 +
-+static const u8 pad0[16] = { 0 };
-+
-+static struct blkcipher_desc desc = { .tfm = &(struct crypto_blkcipher){
-+	.base = { .__crt_alg = &(struct crypto_alg){
-+		.cra_blocksize = 1,
-+#ifndef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS
-+		.cra_alignmask = sizeof(u32) - 1
-+#endif
-+	} }
-+} };
++static const u8 pad0[CHACHA20_BLOCK_SIZE] = { 0 };
 +
 +static inline void
 +__chacha20poly1305_encrypt(u8 *dst, const u8 *src, const size_t src_len,
@@ -14016,22 +14011,25 @@ index 000000000000..0001c9205918
 +}
 +EXPORT_SYMBOL(chacha20poly1305_encrypt);
 +
-+bool chacha20poly1305_encrypt_sg(struct scatterlist *dst,
-+				 struct scatterlist *src, const size_t src_len,
-+				 const u8 *ad, const size_t ad_len,
-+				 const u64 nonce,
-+				 const u8 key[CHACHA20POLY1305_KEY_SIZE],
-+				 simd_context_t *simd_context)
++bool chacha20poly1305_encrypt_sg_inplace(struct scatterlist *src,
++					 const size_t src_len,
++					 const u8 *ad, const size_t ad_len,
++					 const u64 nonce,
++					 const u8 key[CHACHA20POLY1305_KEY_SIZE],
++					 simd_context_t *simd_context)
 +{
 +	struct poly1305_ctx poly1305_state;
 +	struct chacha20_ctx chacha20_state;
-+	int ret = 0;
-+	struct blkcipher_walk walk;
++	struct sg_mapping_iter miter;
++	size_t partial = 0;
++	ssize_t sl;
 +	union {
++		u8 chacha20_stream[CHACHA20_BLOCK_SIZE];
 +		u8 block0[POLY1305_KEY_SIZE];
 +		u8 mac[POLY1305_MAC_SIZE];
 +		__le64 lens[2];
-+	} b = { { 0 } };
++	} b __aligned(16) = { { 0 } };
++
 +
 +	chacha20_init(&chacha20_state, key, nonce);
 +	chacha20(&chacha20_state, b.block0, b.block0, sizeof(b.block0),
@@ -14042,32 +14040,43 @@ index 000000000000..0001c9205918
 +	poly1305_update(&poly1305_state, pad0, (0x10 - ad_len) & 0xf,
 +			simd_context);
 +
-+	if (likely(src_len)) {
-+		blkcipher_walk_init(&walk, dst, src, src_len);
-+		ret = blkcipher_walk_virt_block(&desc, &walk,
-+						CHACHA20_BLOCK_SIZE);
-+		while (walk.nbytes >= CHACHA20_BLOCK_SIZE) {
-+			size_t chunk_len =
-+				rounddown(walk.nbytes, CHACHA20_BLOCK_SIZE);
++	sg_miter_start(&miter, src, sg_nents(src), SG_MITER_TO_SG | SG_MITER_ATOMIC);
++	for (sl = src_len; sl > 0 && sg_miter_next(&miter); sl -= miter.length) {
++		u8 *addr = miter.addr;
++		size_t length = min_t(size_t, sl, miter.length);
 +
-+			chacha20(&chacha20_state, walk.dst.virt.addr,
-+				 walk.src.virt.addr, chunk_len, simd_context);
-+			poly1305_update(&poly1305_state, walk.dst.virt.addr,
-+					chunk_len, simd_context);
-+			simd_relax(simd_context);
-+			ret = blkcipher_walk_done(&desc, &walk,
-+					walk.nbytes % CHACHA20_BLOCK_SIZE);
++		if (unlikely(partial)) {
++			size_t l = min(length, CHACHA20_BLOCK_SIZE - partial);
++
++			crypto_xor(addr, b.chacha20_stream + partial, l);
++			partial = (partial + l) & (CHACHA20_BLOCK_SIZE - 1);
++
++			addr += l;
++			length -= l;
 +		}
-+		if (walk.nbytes) {
-+			chacha20(&chacha20_state, walk.dst.virt.addr,
-+				 walk.src.virt.addr, walk.nbytes, simd_context);
-+			poly1305_update(&poly1305_state, walk.dst.virt.addr,
-+					walk.nbytes, simd_context);
-+			ret = blkcipher_walk_done(&desc, &walk, 0);
++
++		if (likely(length >= CHACHA20_BLOCK_SIZE || length == sl)) {
++			size_t l = length;
++
++			if (unlikely(length < sl))
++				l &= ~(CHACHA20_BLOCK_SIZE - 1);
++			chacha20(&chacha20_state, addr, addr, l, simd_context);
++			addr += l;
++			length -= l;
 +		}
++
++		if (unlikely(length > 0)) {
++			chacha20(&chacha20_state, b.chacha20_stream, pad0,
++				 CHACHA20_BLOCK_SIZE, simd_context);
++			crypto_xor(addr, b.chacha20_stream, length);
++			partial = length;
++		}
++
++		poly1305_update(&poly1305_state, miter.addr,
++				min_t(size_t, sl, miter.length), simd_context);
++
++		simd_relax(simd_context);
 +	}
-+	if (unlikely(ret))
-+		goto err;
 +
 +	poly1305_update(&poly1305_state, pad0, (0x10 - src_len) & 0xf,
 +			simd_context);
@@ -14077,14 +14086,22 @@ index 000000000000..0001c9205918
 +	poly1305_update(&poly1305_state, (u8 *)b.lens, sizeof(b.lens),
 +			simd_context);
 +
-+	poly1305_final(&poly1305_state, b.mac, simd_context);
-+	scatterwalk_map_and_copy(b.mac, dst, src_len, sizeof(b.mac), 1);
-+err:
++	if (likely(sl <= -POLY1305_MAC_SIZE))
++		poly1305_final(&poly1305_state, miter.addr + miter.length + sl,
++			       simd_context);
++
++	sg_miter_stop(&miter);
++
++	if (unlikely(sl > -POLY1305_MAC_SIZE)) {
++		poly1305_final(&poly1305_state, b.mac, simd_context);
++		scatterwalk_map_and_copy(b.mac, src, src_len, sizeof(b.mac), 1);
++	}
++
 +	memzero_explicit(&chacha20_state, sizeof(chacha20_state));
 +	memzero_explicit(&b, sizeof(b));
-+	return !ret;
++	return true;
 +}
-+EXPORT_SYMBOL(chacha20poly1305_encrypt_sg);
++EXPORT_SYMBOL(chacha20poly1305_encrypt_sg_inplace);
 +
 +static inline bool
 +__chacha20poly1305_decrypt(u8 *dst, const u8 *src, const size_t src_len,
@@ -14151,29 +14168,32 @@ index 000000000000..0001c9205918
 +}
 +EXPORT_SYMBOL(chacha20poly1305_decrypt);
 +
-+bool chacha20poly1305_decrypt_sg(struct scatterlist *dst,
-+				 struct scatterlist *src, const size_t src_len,
-+				 const u8 *ad, const size_t ad_len,
-+				 const u64 nonce,
-+				 const u8 key[CHACHA20POLY1305_KEY_SIZE],
-+				 simd_context_t *simd_context)
++bool chacha20poly1305_decrypt_sg_inplace(struct scatterlist *src,
++					 size_t src_len,
++					 const u8 *ad, const size_t ad_len,
++					 const u64 nonce,
++					 const u8 key[CHACHA20POLY1305_KEY_SIZE],
++					 simd_context_t *simd_context)
 +{
 +	struct poly1305_ctx poly1305_state;
 +	struct chacha20_ctx chacha20_state;
-+	struct blkcipher_walk walk;
-+	int ret = 0;
-+	size_t dst_len;
++	struct sg_mapping_iter miter;
++	size_t partial = 0;
++	ssize_t sl;
 +	union {
++		u8 chacha20_stream[CHACHA20_BLOCK_SIZE];
 +		u8 block0[POLY1305_KEY_SIZE];
 +		struct {
 +			u8 read_mac[POLY1305_MAC_SIZE];
 +			u8 computed_mac[POLY1305_MAC_SIZE];
 +		};
 +		__le64 lens[2];
-+	} b = { { 0 } };
++	} b __aligned(16) = { { 0 } };
++	bool ret = false;
 +
 +	if (unlikely(src_len < POLY1305_MAC_SIZE))
-+		return false;
++		return ret;
++	src_len -= POLY1305_MAC_SIZE;
 +
 +	chacha20_init(&chacha20_state, key, nonce);
 +	chacha20(&chacha20_state, b.block0, b.block0, sizeof(b.block0),
@@ -14184,52 +14204,74 @@ index 000000000000..0001c9205918
 +	poly1305_update(&poly1305_state, pad0, (0x10 - ad_len) & 0xf,
 +			simd_context);
 +
-+	dst_len = src_len - POLY1305_MAC_SIZE;
-+	if (likely(dst_len)) {
-+		blkcipher_walk_init(&walk, dst, src, dst_len);
-+		ret = blkcipher_walk_virt_block(&desc, &walk,
-+						CHACHA20_BLOCK_SIZE);
-+		while (walk.nbytes >= CHACHA20_BLOCK_SIZE) {
-+			size_t chunk_len =
-+				rounddown(walk.nbytes, CHACHA20_BLOCK_SIZE);
++	sg_miter_start(&miter, src, sg_nents(src), SG_MITER_TO_SG | SG_MITER_ATOMIC);
++	for (sl = src_len; sl > 0 && sg_miter_next(&miter); sl -= miter.length) {
++		u8 *addr = miter.addr;
++		size_t length = min_t(size_t, sl, miter.length);
 +
-+			poly1305_update(&poly1305_state, walk.src.virt.addr,
-+					chunk_len, simd_context);
-+			chacha20(&chacha20_state, walk.dst.virt.addr,
-+				 walk.src.virt.addr, chunk_len, simd_context);
-+			simd_relax(simd_context);
-+			ret = blkcipher_walk_done(&desc, &walk,
-+					walk.nbytes % CHACHA20_BLOCK_SIZE);
++		poly1305_update(&poly1305_state, addr, length, simd_context);
++
++		if (unlikely(partial)) {
++			size_t l = min(length, CHACHA20_BLOCK_SIZE - partial);
++
++			crypto_xor(addr, b.chacha20_stream + partial, l);
++			partial = (partial + l) & (CHACHA20_BLOCK_SIZE - 1);
++
++			addr += l;
++			length -= l;
 +		}
-+		if (walk.nbytes) {
-+			poly1305_update(&poly1305_state, walk.src.virt.addr,
-+					walk.nbytes, simd_context);
-+			chacha20(&chacha20_state, walk.dst.virt.addr,
-+				 walk.src.virt.addr, walk.nbytes, simd_context);
-+			ret = blkcipher_walk_done(&desc, &walk, 0);
++
++		if (likely(length >= CHACHA20_BLOCK_SIZE || length == sl)) {
++			size_t l = length;
++
++			if (unlikely(length < sl))
++				l &= ~(CHACHA20_BLOCK_SIZE - 1);
++			chacha20(&chacha20_state, addr, addr, l, simd_context);
++			addr += l;
++			length -= l;
 +		}
++
++		if (unlikely(length > 0)) {
++			chacha20(&chacha20_state, b.chacha20_stream, pad0,
++				 CHACHA20_BLOCK_SIZE, simd_context);
++			crypto_xor(addr, b.chacha20_stream, length);
++			partial = length;
++		}
++
++		simd_relax(simd_context);
 +	}
-+	if (unlikely(ret))
-+		goto err;
 +
-+	poly1305_update(&poly1305_state, pad0, (0x10 - dst_len) & 0xf,
++	poly1305_update(&poly1305_state, pad0, (0x10 - src_len) & 0xf,
 +			simd_context);
 +
 +	b.lens[0] = cpu_to_le64(ad_len);
-+	b.lens[1] = cpu_to_le64(dst_len);
++	b.lens[1] = cpu_to_le64(src_len);
 +	poly1305_update(&poly1305_state, (u8 *)b.lens, sizeof(b.lens),
 +			simd_context);
 +
-+	poly1305_final(&poly1305_state, b.computed_mac, simd_context);
++	if (likely(sl <= -POLY1305_MAC_SIZE)) {
++		poly1305_final(&poly1305_state, b.computed_mac, simd_context);
++		ret = !crypto_memneq(b.computed_mac,
++				     miter.addr + miter.length + sl,
++				     POLY1305_MAC_SIZE);
++	}
 +
-+	scatterwalk_map_and_copy(b.read_mac, src, dst_len, POLY1305_MAC_SIZE, 0);
-+	ret = crypto_memneq(b.read_mac, b.computed_mac, POLY1305_MAC_SIZE);
-+err:
++	sg_miter_stop(&miter);
++
++	if (unlikely(sl > -POLY1305_MAC_SIZE)) {
++		poly1305_final(&poly1305_state, b.computed_mac, simd_context);
++		scatterwalk_map_and_copy(b.read_mac, src, src_len,
++					 sizeof(b.read_mac), 0);
++		ret = !crypto_memneq(b.read_mac, b.computed_mac,
++				     POLY1305_MAC_SIZE);
++
++	}
++
 +	memzero_explicit(&chacha20_state, sizeof(chacha20_state));
 +	memzero_explicit(&b, sizeof(b));
-+	return !ret;
++	return ret;
 +}
-+EXPORT_SYMBOL(chacha20poly1305_decrypt_sg);
++EXPORT_SYMBOL(chacha20poly1305_decrypt_sg_inplace);
 +
 +void xchacha20poly1305_encrypt(u8 *dst, const u8 *src, const size_t src_len,
 +			       const u8 *ad, const size_t ad_len,
@@ -14347,7 +14389,7 @@ index 000000000000..e0c5a5d297c0
 +}
 diff --git a/net/wireguard/crypto/zinc/curve25519/curve25519-arm.S b/net/wireguard/crypto/zinc/curve25519/curve25519-arm.S
 new file mode 100644
-index 000000000000..0ef143104121
+index 000000000000..8eca8a11ef28
 --- /dev/null
 +++ b/net/wireguard/crypto/zinc/curve25519/curve25519-arm.S
 @@ -0,0 +1,2064 @@
@@ -14368,7 +14410,7 @@ index 000000000000..0ef143104121
 +.arch armv7-a
 +.align 4
 +
-+ENTRY(curve25519_neon)
++SYM_FUNC_START(curve25519_neon)
 +	push		{r4-r11, lr}
 +	mov		ip, sp
 +	sub		r3, sp, #704
@@ -16413,7 +16455,7 @@ index 000000000000..0ef143104121
 +	movw		r0, #0
 +	mov		sp, ip
 +	pop		{r4-r11, pc}
-+ENDPROC(curve25519_neon)
++SYM_FUNC_END(curve25519_neon)
 +#endif
 diff --git a/net/wireguard/crypto/zinc/curve25519/curve25519-fiat32.c b/net/wireguard/crypto/zinc/curve25519/curve25519-fiat32.c
 new file mode 100644
@@ -24517,7 +24559,7 @@ index 000000000000..ce48a42f7654
 +}
 diff --git a/net/wireguard/crypto/zinc/poly1305/poly1305-x86_64.pl b/net/wireguard/crypto/zinc/poly1305/poly1305-x86_64.pl
 new file mode 100644
-index 000000000000..9293b358d430
+index 000000000000..2fa79c379ca5
 --- /dev/null
 +++ b/net/wireguard/crypto/zinc/poly1305/poly1305-x86_64.pl
 @@ -0,0 +1,4266 @@
@@ -24632,7 +24674,7 @@ index 000000000000..9293b358d430
 +	my ($name, $align, $nargs) = @_;
 +	if($kernel) {
 +		$code .= ".align $align\n";
-+		$code .= "ENTRY($name)\n";
++		$code .= "SYM_FUNC_START($name)\n";
 +		$code .= ".L$name:\n";
 +	} else {
 +		$code .= ".globl	$name\n";
@@ -24645,7 +24687,7 @@ index 000000000000..9293b358d430
 +sub end_function() {
 +	my ($name) = @_;
 +	if($kernel) {
-+		$code .= "ENDPROC($name)\n";
++		$code .= "SYM_FUNC_END($name)\n";
 +	} else {
 +		$code .= ".size   $name,.-$name\n";
 +	}
@@ -33763,10 +33805,10 @@ index 000000000000..1a2390aaf6c2
 +}
 diff --git a/net/wireguard/crypto/zinc/selftest/chacha20poly1305.c b/net/wireguard/crypto/zinc/selftest/chacha20poly1305.c
 new file mode 100644
-index 000000000000..dba9cd794acd
+index 000000000000..d3b928dcfb89
 --- /dev/null
 +++ b/net/wireguard/crypto/zinc/selftest/chacha20poly1305.c
-@@ -0,0 +1,9034 @@
+@@ -0,0 +1,9025 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -42649,14 +42691,13 @@ index 000000000000..dba9cd794acd
 +{
 +	enum { MAXIMUM_TEST_BUFFER_LEN = 1UL << 12 };
 +	size_t i;
-+	u8 *computed_output = NULL, *heap_src = NULL;
++	u8 *computed_output = NULL;
 +	bool success = true, ret;
 +	simd_context_t simd_context;
-+	struct scatterlist sg_src, sg_dst;
++	struct scatterlist sg_src;
 +
-+	heap_src = kmalloc(MAXIMUM_TEST_BUFFER_LEN, GFP_KERNEL);
 +	computed_output = kmalloc(MAXIMUM_TEST_BUFFER_LEN, GFP_KERNEL);
-+	if (!heap_src || !computed_output) {
++	if (!computed_output) {
 +		pr_err("chacha20poly1305 self-test malloc: FAIL\n");
 +		success = false;
 +		goto out;
@@ -42685,15 +42726,12 @@ index 000000000000..dba9cd794acd
 +	for (i = 0; i < ARRAY_SIZE(chacha20poly1305_enc_vectors); ++i) {
 +		if (chacha20poly1305_enc_vectors[i].nlen != 8)
 +			continue;
-+		memset(computed_output, 0, MAXIMUM_TEST_BUFFER_LEN);
-+		memcpy(heap_src, chacha20poly1305_enc_vectors[i].input,
++		memcpy(computed_output, chacha20poly1305_enc_vectors[i].input,
 +		       chacha20poly1305_enc_vectors[i].ilen);
-+		sg_init_one(&sg_src, heap_src,
-+			    chacha20poly1305_enc_vectors[i].ilen);
-+		sg_init_one(&sg_dst, computed_output,
++		sg_init_one(&sg_src, computed_output,
 +			    chacha20poly1305_enc_vectors[i].ilen +
 +				POLY1305_MAC_SIZE);
-+		ret = chacha20poly1305_encrypt_sg(&sg_dst, &sg_src,
++		ret = chacha20poly1305_encrypt_sg_inplace(&sg_src,
 +			chacha20poly1305_enc_vectors[i].ilen,
 +			chacha20poly1305_enc_vectors[i].assoc,
 +			chacha20poly1305_enc_vectors[i].alen,
@@ -42732,15 +42770,11 @@ index 000000000000..dba9cd794acd
 +	}
 +	simd_get(&simd_context);
 +	for (i = 0; i < ARRAY_SIZE(chacha20poly1305_dec_vectors); ++i) {
-+		memset(computed_output, 0, MAXIMUM_TEST_BUFFER_LEN);
-+		memcpy(heap_src, chacha20poly1305_dec_vectors[i].input,
++		memcpy(computed_output, chacha20poly1305_dec_vectors[i].input,
 +		       chacha20poly1305_dec_vectors[i].ilen);
-+		sg_init_one(&sg_src, heap_src,
++		sg_init_one(&sg_src, computed_output,
 +			    chacha20poly1305_dec_vectors[i].ilen);
-+		sg_init_one(&sg_dst, computed_output,
-+			    chacha20poly1305_dec_vectors[i].ilen -
-+							POLY1305_MAC_SIZE);
-+		ret = chacha20poly1305_decrypt_sg(&sg_dst, &sg_src,
++		ret = chacha20poly1305_decrypt_sg_inplace(&sg_src,
 +			chacha20poly1305_dec_vectors[i].ilen,
 +			chacha20poly1305_dec_vectors[i].assoc,
 +			chacha20poly1305_dec_vectors[i].alen,
@@ -42797,7 +42831,6 @@ index 000000000000..dba9cd794acd
 +	}
 +
 +out:
-+	kfree(heap_src);
 +	kfree(computed_output);
 +	return success;
 +}
@@ -48878,7 +48911,7 @@ index 000000000000..83067f71ea99
 +#endif /* _WG_RATELIMITER_H */
 diff --git a/net/wireguard/receive.c b/net/wireguard/receive.c
 new file mode 100644
-index 000000000000..247a56b6ed94
+index 000000000000..dfd6e4087f97
 --- /dev/null
 +++ b/net/wireguard/receive.c
 @@ -0,0 +1,605 @@
@@ -49165,9 +49198,9 @@ index 000000000000..247a56b6ed94
 +	if (skb_to_sgvec(skb, sg, 0, skb->len) <= 0)
 +		return false;
 +
-+	if (!chacha20poly1305_decrypt_sg(sg, sg, skb->len, NULL, 0,
-+					 PACKET_CB(skb)->nonce, key->key,
-+					 simd_context))
++	if (!chacha20poly1305_decrypt_sg_inplace(sg, skb->len, NULL, 0,
++						 PACKET_CB(skb)->nonce, key->key,
++						 simd_context))
 +		return false;
 +
 +	/* Another ugly situation of pushing and pulling the header so as to
@@ -50520,10 +50553,10 @@ index 000000000000..bcd6462e4540
 +#endif
 diff --git a/net/wireguard/send.c b/net/wireguard/send.c
 new file mode 100644
-index 000000000000..9b54f4a26cd8
+index 000000000000..85b83fafbe4f
 --- /dev/null
 +++ b/net/wireguard/send.c
-@@ -0,0 +1,420 @@
+@@ -0,0 +1,421 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
@@ -50733,9 +50766,10 @@ index 000000000000..9b54f4a26cd8
 +	if (skb_to_sgvec(skb, sg, sizeof(struct message_data),
 +			 noise_encrypted_len(plaintext_len)) <= 0)
 +		return false;
-+	return chacha20poly1305_encrypt_sg(sg, sg, plaintext_len, NULL, 0,
-+					   PACKET_CB(skb)->nonce,
-+					   keypair->sending.key, simd_context);
++	return chacha20poly1305_encrypt_sg_inplace(sg, plaintext_len, NULL, 0,
++						   PACKET_CB(skb)->nonce,
++						   keypair->sending.key,
++						   simd_context);
 +}
 +
 +void wg_packet_send_keepalive(struct wg_peer *peer)
@@ -51926,11 +51960,11 @@ index 000000000000..dd8a47c4ad11
 +#endif /* _WG_UAPI_WIREGUARD_H */
 diff --git a/net/wireguard/version.h b/net/wireguard/version.h
 new file mode 100644
-index 000000000000..1381caeeb067
+index 000000000000..4e2bb40d3cfa
 --- /dev/null
 +++ b/net/wireguard/version.h
 @@ -0,0 +1 @@
-+#define WIREGUARD_VERSION "0.0.20191127"
++#define WIREGUARD_VERSION "0.0.20191205"
 -- 
 2.24.0
 

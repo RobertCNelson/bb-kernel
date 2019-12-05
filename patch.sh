@@ -463,7 +463,7 @@ patch_backports (){
 backports () {
 	dir 'drivers/exfat'
 
-	backport_tag="v5.4.1"
+	backport_tag="v5.4.2"
 
 	subsystem="exfat"
 	#regenerate="enable"
