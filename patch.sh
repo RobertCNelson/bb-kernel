@@ -416,6 +416,7 @@ backports () {
 		cp -rv ~/linux-src/drivers/counter/* ./drivers/counter/
 		cp -rv ~/linux-src/drivers/pwm/* ./drivers/pwm/
 		cp -v ~/linux-src/include/linux/counter.h ./include/linux/counter.h
+		cp -v ~/linux-src/include/linux/platform_data/ti-sysc.h ./include/linux/platform_data/ti-sysc.h
 		rm -rf ./drivers/pwm/pwm-tipwmss.c || true
 
 		post_backports
