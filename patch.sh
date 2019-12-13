@@ -417,6 +417,7 @@ backports () {
 		cp -rv ~/linux-src/drivers/pwm/* ./drivers/pwm/
 		cp -v ~/linux-src/include/linux/counter.h ./include/linux/counter.h
 		cp -v ~/linux-src/include/linux/platform_data/ti-sysc.h ./include/linux/platform_data/ti-sysc.h
+		cp -v ~/linux-src/include/linux/mfd/stm32-timers.h ./include/linux/mfd/stm32-timers.h
 		rm -rf ./drivers/pwm/pwm-tipwmss.c || true
 
 		post_backports
