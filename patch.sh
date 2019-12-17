@@ -338,8 +338,8 @@ local_patch () {
 
 #external_git
 can_isotp
-#rt
-wireguard
+rt
+#wireguard
 ti_pm_firmware
 beagleboard_dtbs
 #local_patch
@@ -378,7 +378,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.5-rc1"
+	backport_tag="v5.5-rc2"
 
 	subsystem="exfat"
 	#regenerate="enable"
