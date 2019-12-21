@@ -1,20 +1,20 @@
-From 7176ca0f5a840c400cbd90307f237a2c021cdf3a Mon Sep 17 00:00:00 2001
+From 125aafac19c29cb4ee158b29aa68d36fac266620 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 17 Dec 2019 16:01:38 -0600
+Date: Fri, 20 Dec 2019 15:21:16 -0600
 Subject: [PATCH] backports: exfat: from: linux.git
 
-Reference: v5.5-rc2
+Reference: b371ddb94fae82b6565020639b7db31934043c65
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  drivers/staging/exfat/Kconfig        |    9 -
  drivers/staging/exfat/TODO           |   61 +-
- drivers/staging/exfat/exfat.h        |  190 +--
+ drivers/staging/exfat/exfat.h        |  186 +--
  drivers/staging/exfat/exfat_blkdev.c |   28 +-
  drivers/staging/exfat/exfat_cache.c  |  303 +---
- drivers/staging/exfat/exfat_core.c   | 2128 +++++++-------------------
+ drivers/staging/exfat/exfat_core.c   | 2124 +++++++-------------------
  drivers/staging/exfat/exfat_nls.c    |  192 ---
- drivers/staging/exfat/exfat_super.c  |  900 +++++------
- 8 files changed, 1060 insertions(+), 2751 deletions(-)
+ drivers/staging/exfat/exfat_super.c  |  896 +++++------
+ 8 files changed, 1054 insertions(+), 2745 deletions(-)
 
 diff --git a/drivers/staging/exfat/Kconfig b/drivers/staging/exfat/Kconfig
 index ce32dfe33bec..0130019cbec2 100644
@@ -113,7 +113,7 @@ index a3eb282f9efc..a283ce534cf4 100644
 +	Greg Kroah-Hartman <gregkh@linuxfoundation.org>
 +	Valdis Kletnieks <valdis.kletnieks@vt.edu>
 diff --git a/drivers/staging/exfat/exfat.h b/drivers/staging/exfat/exfat.h
-index 3abab33e932c..51c665a924b7 100644
+index 4973c9edc26e..51c665a924b7 100644
 --- a/drivers/staging/exfat/exfat.h
 +++ b/drivers/staging/exfat/exfat.h
 @@ -30,6 +30,8 @@
@@ -332,7 +332,7 @@ index 3abab33e932c..51c665a924b7 100644
  s32 count_dos_name_entries(struct super_block *sb, struct chain_t *p_dir,
  			   u32 type);
  void update_dir_checksum(struct super_block *sb, struct chain_t *p_dir,
-@@ -907,44 +792,21 @@ bool is_dir_empty(struct super_block *sb, struct chain_t *p_dir);
+@@ -907,36 +792,13 @@ bool is_dir_empty(struct super_block *sb, struct chain_t *p_dir);
  s32 get_num_entries_and_dos_name(struct super_block *sb, struct chain_t *p_dir,
  				 struct uni_name_t *p_uniname, s32 *entries,
  				 struct dos_name_t *p_dosname);
@@ -369,16 +369,6 @@ index 3abab33e932c..51c665a924b7 100644
  s32 exfat_mount(struct super_block *sb, struct pbr_sector_t *p_pbr);
  s32 create_dir(struct inode *inode, struct chain_t *p_dir,
  	       struct uni_name_t *p_uniname, struct file_id_t *fid);
- s32 create_file(struct inode *inode, struct chain_t *p_dir,
- 		struct uni_name_t *p_uniname, u8 mode, struct file_id_t *fid);
- void remove_file(struct inode *inode, struct chain_t *p_dir, s32 entry);
--s32 rename_file(struct inode *inode, struct chain_t *p_dir, s32 old_entry,
--		struct uni_name_t *p_uniname, struct file_id_t *fid);
-+s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 old_entry,
-+		      struct uni_name_t *p_uniname, struct file_id_t *fid);
- s32 move_file(struct inode *inode, struct chain_t *p_olddir, s32 oldentry,
- 	      struct chain_t *p_newdir, struct uni_name_t *p_uniname,
- 	      struct file_id_t *fid);
 @@ -959,13 +821,13 @@ int multi_sector_read(struct super_block *sb, sector_t sec,
  int multi_sector_write(struct super_block *sb, sector_t sec,
  		       struct buffer_head *bh, s32 num_secs, bool sync);
@@ -1028,7 +1018,7 @@ index e1b001718709..3fd5604058a9 100644
 +	mutex_unlock(&b_mutex);
  }
 diff --git a/drivers/staging/exfat/exfat_core.c b/drivers/staging/exfat/exfat_core.c
-index 79174e5c4145..794000e7bc6f 100644
+index f3774a1912d1..794000e7bc6f 100644
 --- a/drivers/staging/exfat/exfat_core.c
 +++ b/drivers/staging/exfat/exfat_core.c
 @@ -20,15 +20,6 @@ static void __set_sb_dirty(struct super_block *sb)
@@ -3783,7 +3773,7 @@ index 79174e5c4145..794000e7bc6f 100644
  }
  
  void remove_file(struct inode *inode, struct chain_t *p_dir, s32 entry)
-@@ -3365,24 +2308,24 @@ void remove_file(struct inode *inode, struct chain_t *p_dir, s32 entry)
+@@ -3365,17 +2308,17 @@ void remove_file(struct inode *inode, struct chain_t *p_dir, s32 entry)
  	if (!ep)
  		return;
  
@@ -3805,16 +3795,7 @@ index 79174e5c4145..794000e7bc6f 100644
  
  	/* (1) update the directory entry */
  	fs_func->delete_dir_entry(sb, p_dir, entry, 0, num_entries);
- }
- 
--s32 rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
--		struct uni_name_t *p_uniname, struct file_id_t *fid)
-+s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
-+		      struct uni_name_t *p_uniname, struct file_id_t *fid)
- {
- 	s32 ret, newentry = -1, num_old_entries, num_new_entries;
- 	sector_t sector_old, sector_new;
-@@ -3394,37 +2337,37 @@ s32 rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
+@@ -3394,37 +2337,37 @@ s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
  
  	epold = get_entry_in_dir(sb, p_dir, oldentry, &sector_old);
  	if (!epold)
@@ -3862,7 +3843,7 @@ index 79174e5c4145..794000e7bc6f 100644
  		}
  
  		memcpy((void *)epnew, (void *)epold, DENTRY_SIZE);
-@@ -3434,30 +2377,28 @@ s32 rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
+@@ -3434,30 +2377,28 @@ s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
  						ATTR_ARCHIVE);
  			fid->attr |= ATTR_ARCHIVE;
  		}
@@ -3909,7 +3890,7 @@ index 79174e5c4145..794000e7bc6f 100644
  			return ret;
  
  		fs_func->delete_dir_entry(sb, p_dir, oldentry, 0,
-@@ -3470,20 +2411,20 @@ s32 rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
+@@ -3470,20 +2411,20 @@ s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
  						ATTR_ARCHIVE);
  			fid->attr |= ATTR_ARCHIVE;
  		}
@@ -4360,7 +4341,7 @@ index a5c4b68925fb..91e8b0c4dce7 100644
  			    struct uni_name_t *p_uniname)
  {
 diff --git a/drivers/staging/exfat/exfat_super.c b/drivers/staging/exfat/exfat_super.c
-index 3b2b0ceb7297..9f91853b189b 100644
+index 58c7d66060f7..9f91853b189b 100644
 --- a/drivers/staging/exfat/exfat_super.c
 +++ b/drivers/staging/exfat/exfat_super.c
 @@ -26,7 +26,7 @@
@@ -5176,15 +5157,7 @@ index 3b2b0ceb7297..9f91853b189b 100644
  				goto out;
  			}
  		}
-@@ -1308,13 +1262,13 @@ static int ffsMoveFile(struct inode *old_parent_inode, struct file_id_t *fid,
- 	fs_set_vol_flags(sb, VOL_DIRTY);
- 
- 	if (olddir.dir == newdir.dir)
--		ret = rename_file(new_parent_inode, &olddir, dentry, &uni_name,
--				  fid);
-+		ret = exfat_rename_file(new_parent_inode, &olddir, dentry,
-+					&uni_name, fid);
- 	else
+@@ -1314,7 +1268,7 @@ static int ffsMoveFile(struct inode *old_parent_inode, struct file_id_t *fid,
  		ret = move_file(new_parent_inode, &olddir, dentry, &newdir,
  				&uni_name, fid);
  
