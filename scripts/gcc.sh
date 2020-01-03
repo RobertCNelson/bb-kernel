@@ -163,12 +163,13 @@ gcc_toolchain () {
 		#https://releases.linaro.org/components/toolchain/binaries/7.2-2017.11/arm-eabi/gcc-linaro-7.2.1-2017.11-x86_64_arm-eabi.tar.xz
 		#https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/arm-eabi/gcc-linaro-7.3.1-2018.05-x86_64_arm-eabi.tar.xz
 		#https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-eabi/gcc-linaro-7.4.1-2019.02-x86_64_arm-eabi.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/7.5-2019.12/arm-eabi/gcc-linaro-7.5.0-2019.12-x86_64_arm-eabi.tar.xz
 		#
 		#site="https://snapshots.linaro.org"
 
-		gcc_version="7.4"
-		gcc_minor=".1"
-		release="19.02"
+		gcc_version="7.5"
+		gcc_minor=".0"
+		release="19.12"
 		target="arm-eabi"
 
 		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
@@ -311,12 +312,13 @@ gcc_toolchain () {
 		#https://releases.linaro.org/components/toolchain/binaries/7.2-2017.11/arm-linux-gnueabihf/gcc-linaro-7.2.1-2017.11-x86_64_arm-linux-gnueabihf.tar.xz
 		#https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/arm-linux-gnueabihf/gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz
 		#https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-linux-gnueabihf/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/7.5-2019.12/arm-linux-gnueabihf/gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabihf.tar.xz
 		#
 		#site="https://snapshots.linaro.org"
 
-		gcc_version="7.4"
-		gcc_minor=".1"
-		release="19.02"
+		gcc_version="7.5"
+		gcc_minor=".0"
+		release="19.12"
 		target="arm-linux-gnueabihf"
 
 		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
@@ -341,6 +343,27 @@ gcc_toolchain () {
 		gcc_minor=""
 		release="19.03"
 		target="arm-linux-gnueabihf"
+
+		version="${gcc_version}-20${release}"
+		filename="gcc-arm-${gcc_version}${gcc_minor}-20${release}-x86_64-${target}.tar.xz"
+		directory="gcc-arm-${gcc_version}${gcc_minor}-20${release}-x86_64-${target}"
+		subdir="/binrel"
+
+		datestamp="${gcc_version}-20${release}-${target}"
+
+		binary="bin/${target}-"
+		;;
+	gcc_arm_gnueabihf_9)
+		#
+		#https://developer.arm.com/-/media/Files/downloads/gnu-a/9.2-2019.12/binrel/gcc-arm-9.2-2019.12-x86_64-arm-none-linux-gnueabihf.tar.xz
+		#
+		site="https://developer.arm.com/-/media/Files/downloads/gnu-a"
+		archive_site="https://developer.arm.com/-/media/Files/downloads/gnu-a"
+
+		gcc_version="9.2"
+		gcc_minor=""
+		release="19.12"
+		target="arm-none-linux-gnueabihf"
 
 		version="${gcc_version}-20${release}"
 		filename="gcc-arm-${gcc_version}${gcc_minor}-20${release}-x86_64-${target}.tar.xz"
@@ -399,12 +422,13 @@ gcc_toolchain () {
 		#https://releases.linaro.org/components/toolchain/binaries/7.2-2017.11/aarch64-linux-gnu/gcc-linaro-7.2.1-2017.11-x86_64_aarch64-linux-gnu.tar.xz
 		#https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/aarch64-linux-gnu/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz
 		#https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/aarch64-linux-gnu/gcc-linaro-7.4.1-2019.02-x86_64_aarch64-linux-gnu.tar.xz
+		#https://releases.linaro.org/components/toolchain/binaries/7.5-2019.12/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz
 		#
 		#site="https://snapshots.linaro.org"
 
-		gcc_version="7.4"
-		gcc_minor=".1"
-		release="19.02"
+		gcc_version="7.5"
+		gcc_minor=".0"
+		release="19.12"
 		target="aarch64-linux-gnu"
 
 		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
@@ -429,6 +453,27 @@ gcc_toolchain () {
 		gcc_minor=""
 		release="19.03"
 		target="aarch64-linux-gnu"
+
+		version="${gcc_version}-20${release}"
+		filename="gcc-arm-${gcc_version}${gcc_minor}-20${release}-x86_64-${target}.tar.xz"
+		directory="gcc-arm-${gcc_version}${gcc_minor}-20${release}-x86_64-${target}"
+		subdir="/binrel"
+
+		datestamp="${gcc_version}-20${release}-${target}"
+
+		binary="bin/${target}-"
+		;;
+	gcc_arm_aarch64_gnu_9)
+		#
+		#https://developer.arm.com/-/media/Files/downloads/gnu-a/9.2-2019.12/binrel/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu.tar.xz
+		#
+		site="https://developer.arm.com/-/media/Files/downloads/gnu-a"
+		archive_site="https://developer.arm.com/-/media/Files/downloads/gnu-a"
+
+		gcc_version="9.2"
+		gcc_minor=""
+		release="19.12"
+		target="aarch64-none-linux-gnu"
 
 		version="${gcc_version}-20${release}"
 		filename="gcc-arm-${gcc_version}${gcc_minor}-20${release}-x86_64-${target}.tar.xz"
