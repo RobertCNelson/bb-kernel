@@ -476,7 +476,7 @@ soc () {
 backports
 #reverts
 drivers
-soc
+#soc
 dir 'fixes'
 
 packaging () {
