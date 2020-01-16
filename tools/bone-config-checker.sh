@@ -130,6 +130,12 @@ config="CONFIG_BEAGLEBONE_PINMUX_HELPER" ; config_enable
 config="CONFIG_NET_VENDOR_CADENCE" ; config_disable
 config="CONFIG_NET_VENDOR_STMICRO" ; config_disable
 
+#
+# MII PHY device drivers
+#
+config="CONFIG_USB_NET_DRIVERS" ; config_enable
+config="CONFIG_USB_USBNET" ; config_enable
+config="CONFIG_USB_NET_SMSC95XX" ; config_enable
 
 #
 # Input Device Drivers
