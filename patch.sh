@@ -437,7 +437,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.86"
+	backport_tag="v4.19.96"
 
 	subsystem="greybus"
 	#regenerate="enable"
