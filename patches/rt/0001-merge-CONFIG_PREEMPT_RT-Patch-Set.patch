@@ -1,9 +1,9 @@
-From be294eacdf7d933aacb0c77727f83859ce282111 Mon Sep 17 00:00:00 2001
+From aa9e47aac3b6bbac35f405a21945de6742bf8329 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 16 Jan 2020 14:49:20 -0600
+Date: Mon, 27 Jan 2020 10:41:31 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-5.4.10-rt5.patch.xz
+patch-5.4.13-rt7.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -116,6 +116,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/x86/kvm/x86.c                            |    8 +
  arch/x86/mm/highmem_32.c                      |   13 +-
  arch/x86/mm/iomap_32.c                        |   11 +-
+ arch/x86/mm/tlb.c                             |    2 +-
  arch/xtensa/include/asm/spinlock_types.h      |    4 -
  arch/xtensa/kernel/entry.S                    |    2 +-
  arch/xtensa/kernel/traps.c                    |    7 +-
@@ -179,7 +180,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/xen/preempt.c                         |    4 +-
  fs/afs/dir_silly.c                            |    2 +-
  fs/btrfs/volumes.h                            |    2 +-
- fs/buffer.c                                   |   19 +-
+ fs/buffer.c                                   |   21 +-
  fs/cifs/readdir.c                             |    2 +-
  fs/dcache.c                                   |   50 +-
  fs/eventpoll.c                                |    4 +-
@@ -268,7 +269,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/serial_8250.h                   |    5 +
  include/linux/signal.h                        |    1 +
  include/linux/skbuff.h                        |    7 +
- include/linux/smp.h                           |    3 +
+ include/linux/smp.h                           |   14 +-
  include/linux/spinlock.h                      |   12 +-
  include/linux/spinlock_api_smp.h              |    4 +-
  include/linux/spinlock_rt.h                   |  156 ++
@@ -347,10 +348,11 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/sched/swait.c                          |   22 +-
  kernel/sched/topology.c                       |    1 +
  kernel/signal.c                               |  105 +-
+ kernel/smp.c                                  |   99 +-
  kernel/softirq.c                              |  231 +-
  kernel/stop_machine.c                         |    7 +-
  kernel/sysctl.c                               |    3 +-
- kernel/time/hrtimer.c                         |   36 +-
+ kernel/time/hrtimer.c                         |   34 +-
  kernel/time/jiffies.c                         |    7 +-
  kernel/time/posix-cpu-timers.c                |  203 +-
  kernel/time/tick-common.c                     |   10 +-
@@ -362,6 +364,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/trace.h                          |    2 +
  kernel/trace/trace_events.c                   |    2 +
  kernel/trace/trace_output.c                   |   19 +-
+ kernel/up.c                                   |   12 +-
  kernel/workqueue.c                            |  191 +-
  lib/Kconfig.debug                             |   21 +-
  lib/Makefile                                  |    2 +-
@@ -384,7 +387,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/page_alloc.c                               |  213 +-
  mm/slab.c                                     |   90 +-
  mm/slab.h                                     |    2 +-
- mm/slub.c                                     |  153 +-
+ mm/slub.c                                     |  155 +-
  mm/swap.c                                     |  269 ++-
  mm/vmalloc.c                                  |   50 +-
  mm/vmstat.c                                   |   12 +
@@ -404,7 +407,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/lsm.c                       |    2 +-
  virt/kvm/arm/arch_timer.c                     |    8 +-
  virt/kvm/arm/arm.c                            |    6 +-
- 397 files changed, 9523 insertions(+), 3547 deletions(-)
+ 400 files changed, 9578 insertions(+), 3618 deletions(-)
  create mode 100644 Documentation/printk-ringbuffer.txt
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -1075,7 +1078,7 @@ index 72be01270e24..1f6bb184a44d 100644
  	; Can't preempt if preemption disabled
  	GET_CURR_THR_INFO_FROM_SP   r10
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
-index 8a50efb559f3..0e95b6d0bd74 100644
+index 39002d769d95..9bb4351b19ed 100644
 --- a/arch/arm/Kconfig
 +++ b/arch/arm/Kconfig
 @@ -32,6 +32,7 @@ config ARM
@@ -1095,7 +1098,7 @@ index 8a50efb559f3..0e95b6d0bd74 100644
  	select HAVE_ARCH_KGDB if !CPU_ENDIAN_BE32 && MMU
  	select HAVE_ARCH_MMAP_RND_BITS if MMU
  	select HAVE_ARCH_SECCOMP_FILTER if AEABI && !OABI_COMPAT
-@@ -102,6 +103,7 @@ config ARM
+@@ -103,6 +104,7 @@ config ARM
  	select HAVE_PERF_EVENTS
  	select HAVE_PERF_REGS
  	select HAVE_PERF_USER_STACK_DUMP
@@ -1311,10 +1314,10 @@ index ab2568996ddb..50d43ce823bf 100644
  		} else {
  			if (unlikely(!user_mode(regs)))
 diff --git a/arch/arm/kernel/smp.c b/arch/arm/kernel/smp.c
-index 4b0bab2607e4..329926363e66 100644
+index 46e1be9e57a8..581caf6493a9 100644
 --- a/arch/arm/kernel/smp.c
 +++ b/arch/arm/kernel/smp.c
-@@ -678,11 +678,9 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
+@@ -682,11 +682,9 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
  		break;
  
  	case IPI_CPU_BACKTRACE:
@@ -1538,7 +1541,7 @@ index a76f8ace9ce6..eb4a361d47d7 100644
 +}
 +#endif
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index 3f047afb982c..d7a5bf29d211 100644
+index 6ccd2ed30963..5eb2bec5aaab 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
 @@ -35,32 +35,32 @@ config ARM64
@@ -1608,7 +1611,7 @@ index 3f047afb982c..d7a5bf29d211 100644
  	select ARCH_WANT_COMPAT_IPC_PARSE_VERSION if COMPAT
  	select ARCH_WANT_DEFAULT_TOPDOWN_MMAP_LAYOUT
  	select ARCH_WANT_FRAME_POINTERS
-@@ -158,6 +159,7 @@ config ARM64
+@@ -159,6 +160,7 @@ config ARM64
  	select HAVE_PERF_EVENTS
  	select HAVE_PERF_REGS
  	select HAVE_PERF_USER_STACK_DUMP
@@ -2060,7 +2063,7 @@ index 19d233497ba5..de72fb23016d 100644
  	volatile unsigned int lock;
  } arch_spinlock_t;
 diff --git a/arch/hexagon/kernel/vm_entry.S b/arch/hexagon/kernel/vm_entry.S
-index 12242c27e2df..65a1ea0eed2f 100644
+index 4023fdbea490..554371d92bed 100644
 --- a/arch/hexagon/kernel/vm_entry.S
 +++ b/arch/hexagon/kernel/vm_entry.S
 @@ -265,12 +265,12 @@ event_dispatch:
@@ -2300,10 +2303,10 @@ index 1e515ccd698e..3d8d1d0bcb64 100644
  	ldw	r4, TI_PREEMPT_COUNT(r1)
  	bne	r4, r0, restore_all
 diff --git a/arch/parisc/Kconfig b/arch/parisc/Kconfig
-index b16237c95ea3..593e4014cef8 100644
+index 0c29d6cb2c8d..9b44f06b263e 100644
 --- a/arch/parisc/Kconfig
 +++ b/arch/parisc/Kconfig
-@@ -81,7 +81,7 @@ config STACK_GROWSUP
+@@ -82,7 +82,7 @@ config STACK_GROWSUP
  config GENERIC_LOCKBREAK
  	bool
  	default y
@@ -4048,6 +4051,19 @@ index 6748b4c2baff..54e2f28fe189 100644
  		kpte_clear_flush(kmap_pte-idx, vaddr);
  		kmap_atomic_idx_pop();
  	}
+diff --git a/arch/x86/mm/tlb.c b/arch/x86/mm/tlb.c
+index e6a9edc5baaf..66f96f21a7b6 100644
+--- a/arch/x86/mm/tlb.c
++++ b/arch/x86/mm/tlb.c
+@@ -708,7 +708,7 @@ void native_flush_tlb_others(const struct cpumask *cpumask,
+ 			       (void *)info, 1);
+ 	else
+ 		on_each_cpu_cond_mask(tlb_is_not_lazy, flush_tlb_func_remote,
+-				(void *)info, 1, GFP_ATOMIC, cpumask);
++				(void *)info, 1, cpumask);
+ }
+ 
+ /*
 diff --git a/arch/xtensa/include/asm/spinlock_types.h b/arch/xtensa/include/asm/spinlock_types.h
 index 64c9389254f1..dc846323b1cd 100644
 --- a/arch/xtensa/include/asm/spinlock_types.h
@@ -4459,7 +4475,7 @@ index 01b8868b9bed..d5ac183bf39c 100644
  	fast_mix(fast_pool);
  	add_interrupt_bench(cycles);
 diff --git a/drivers/char/tpm/tpm-dev-common.c b/drivers/char/tpm/tpm-dev-common.c
-index b23b0b999232..36706fc1aa3c 100644
+index 87f449340202..06a3a1fed42f 100644
 --- a/drivers/char/tpm/tpm-dev-common.c
 +++ b/drivers/char/tpm/tpm-dev-common.c
 @@ -20,7 +20,6 @@
@@ -6613,7 +6629,7 @@ index 5acf5c507ec2..ad1ccf94e4b8 100644
  static inline u64							\
  btrfs_device_get_##name(const struct btrfs_device *dev)			\
 diff --git a/fs/buffer.c b/fs/buffer.c
-index 7744488f7bde..7a371b87407e 100644
+index 91ceca52d14f..0d374ff8ff69 100644
 --- a/fs/buffer.c
 +++ b/fs/buffer.c
 @@ -275,8 +275,7 @@ static void end_buffer_async_read(struct buffer_head *bh, int uptodate)
@@ -6673,6 +6689,15 @@ index 7744488f7bde..7a371b87407e 100644
  	return;
  }
  EXPORT_SYMBOL(end_buffer_async_write);
+@@ -1393,7 +1387,7 @@ static bool has_bh_in_lru(int cpu, void *dummy)
+ 
+ void invalidate_bh_lrus(void)
+ {
+-	on_each_cpu_cond(has_bh_in_lru, invalidate_bh_lru, NULL, 1, GFP_KERNEL);
++	on_each_cpu_cond(has_bh_in_lru, invalidate_bh_lru, NULL, 1);
+ }
+ EXPORT_SYMBOL_GPL(invalidate_bh_lrus);
+ 
 @@ -3345,6 +3339,7 @@ struct buffer_head *alloc_buffer_head(gfp_t gfp_flags)
  	struct buffer_head *ret = kmem_cache_zalloc(bh_cachep, gfp_flags);
  	if (ret) {
@@ -6907,7 +6932,7 @@ index 6a40f75a0d25..6e813ecf8f51 100644
  	if (!o->nodeid) {
  		/*
 diff --git a/fs/inode.c b/fs/inode.c
-index fef457a42882..6f1bab381e40 100644
+index 96d62d97694e..e1fe4723ff80 100644
 --- a/fs/inode.c
 +++ b/fs/inode.c
 @@ -156,7 +156,7 @@ int inode_init_always(struct super_block *sb, struct inode *inode)
@@ -7661,10 +7686,10 @@ index 16b2e5cc3e94..23b9cf27f4b9 100644
  };
  
 diff --git a/fs/nfs/nfs4proc.c b/fs/nfs/nfs4proc.c
-index caacf5e7f5e1..1e8b05d7155e 100644
+index f26d714f9f28..2a1e066da913 100644
 --- a/fs/nfs/nfs4proc.c
 +++ b/fs/nfs/nfs4proc.c
-@@ -2956,7 +2956,7 @@ static int _nfs4_open_and_get_state(struct nfs4_opendata *opendata,
+@@ -2965,7 +2965,7 @@ static int _nfs4_open_and_get_state(struct nfs4_opendata *opendata,
  	unsigned int seq;
  	int ret;
  
@@ -7673,7 +7698,7 @@ index caacf5e7f5e1..1e8b05d7155e 100644
  
  	ret = _nfs4_proc_open(opendata, ctx);
  	if (ret != 0)
-@@ -2998,7 +2998,7 @@ static int _nfs4_open_and_get_state(struct nfs4_opendata *opendata,
+@@ -3007,7 +3007,7 @@ static int _nfs4_open_and_get_state(struct nfs4_opendata *opendata,
  
  	if (d_inode(dentry) == state->inode) {
  		nfs_inode_attach_open_context(ctx);
@@ -11158,10 +11183,36 @@ index 6ae88b0c1c31..e0178d7b775e 100644
  		struct lock_class_key *class)
  {
 diff --git a/include/linux/smp.h b/include/linux/smp.h
-index 6fc856c9eda5..3b9b782e5908 100644
+index 6fc856c9eda5..01ff6ed61591 100644
 --- a/include/linux/smp.h
 +++ b/include/linux/smp.h
-@@ -222,6 +222,9 @@ static inline int get_boot_cpu_id(void)
+@@ -15,6 +15,7 @@
+ #include <linux/llist.h>
+ 
+ typedef void (*smp_call_func_t)(void *info);
++typedef bool (*smp_cond_func_t)(int cpu, void *info);
+ struct __call_single_data {
+ 	struct llist_node llist;
+ 	smp_call_func_t func;
+@@ -49,13 +50,11 @@ void on_each_cpu_mask(const struct cpumask *mask, smp_call_func_t func,
+  * cond_func returns a positive value. This may include the local
+  * processor.
+  */
+-void on_each_cpu_cond(bool (*cond_func)(int cpu, void *info),
+-		smp_call_func_t func, void *info, bool wait,
+-		gfp_t gfp_flags);
++void on_each_cpu_cond(smp_cond_func_t cond_func, smp_call_func_t func,
++		      void *info, bool wait);
+ 
+-void on_each_cpu_cond_mask(bool (*cond_func)(int cpu, void *info),
+-		smp_call_func_t func, void *info, bool wait,
+-		gfp_t gfp_flags, const struct cpumask *mask);
++void on_each_cpu_cond_mask(smp_cond_func_t cond_func, smp_call_func_t func,
++			   void *info, bool wait, const struct cpumask *mask);
+ 
+ int smp_call_function_single_async(int cpu, call_single_data_t *csd);
+ 
+@@ -222,6 +221,9 @@ static inline int get_boot_cpu_id(void)
  #define get_cpu()		({ preempt_disable(); __smp_processor_id(); })
  #define put_cpu()		preempt_enable()
  
@@ -11743,7 +11794,7 @@ index 30a8cdcfd4a4..f3b1ef07e4a5 100644
  
  #define TRACE_EVENT_TYPE_MAX						\
 diff --git a/include/linux/uaccess.h b/include/linux/uaccess.h
-index d4ee6e942562..2761659101c2 100644
+index 38555435a64a..e2777169c539 100644
 --- a/include/linux/uaccess.h
 +++ b/include/linux/uaccess.h
 @@ -182,6 +182,7 @@ static __always_inline void pagefault_disabled_dec(void)
@@ -12669,7 +12720,7 @@ index 22dfaac9e48c..d659c84716b4 100644
  	spin_unlock(&sighand->siglock);
  
 diff --git a/kernel/fork.c b/kernel/fork.c
-index 6cabc124378c..e4d28dc8ac65 100644
+index 755d8160e001..44e95c5207a4 100644
 --- a/kernel/fork.c
 +++ b/kernel/fork.c
 @@ -43,6 +43,7 @@
@@ -15726,7 +15777,7 @@ index 0ff08380f531..45445a2f1799 100644
  
  void __lockfunc _raw_spin_lock_nested(raw_spinlock_t *lock, int subclass)
 diff --git a/kernel/locking/spinlock_debug.c b/kernel/locking/spinlock_debug.c
-index 399669f7eba8..a1c68fd94d13 100644
+index 472dd462a40c..82915146c92c 100644
 --- a/kernel/locking/spinlock_debug.c
 +++ b/kernel/locking/spinlock_debug.c
 @@ -31,6 +31,7 @@ void __raw_spin_lock_init(raw_spinlock_t *lock, const char *name,
@@ -20530,6 +20581,157 @@ index bcd46f547db3..4abd7c02269d 100644
  		freezable_schedule();
  		cgroup_leave_frozen(true);
  	} else {
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 7dbcb402c2fc..d0ada39eb4d4 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -395,22 +395,9 @@ int smp_call_function_any(const struct cpumask *mask,
+ }
+ EXPORT_SYMBOL_GPL(smp_call_function_any);
+ 
+-/**
+- * smp_call_function_many(): Run a function on a set of other CPUs.
+- * @mask: The set of cpus to run on (only runs on online subset).
+- * @func: The function to run. This must be fast and non-blocking.
+- * @info: An arbitrary pointer to pass to the function.
+- * @wait: If true, wait (atomically) until function has completed
+- *        on other CPUs.
+- *
+- * If @wait is true, then returns once @func has returned.
+- *
+- * You must not call this function with disabled interrupts or from a
+- * hardware interrupt handler or from a bottom half handler. Preemption
+- * must be disabled when calling this function.
+- */
+-void smp_call_function_many(const struct cpumask *mask,
+-			    smp_call_func_t func, void *info, bool wait)
++static void smp_call_function_many_cond(const struct cpumask *mask,
++					smp_call_func_t func, void *info,
++					bool wait, smp_cond_func_t cond_func)
+ {
+ 	struct call_function_data *cfd;
+ 	int cpu, next_cpu, this_cpu = smp_processor_id();
+@@ -448,7 +435,8 @@ void smp_call_function_many(const struct cpumask *mask,
+ 
+ 	/* Fastpath: do that cpu by itself. */
+ 	if (next_cpu >= nr_cpu_ids) {
+-		smp_call_function_single(cpu, func, info, wait);
++		if (!cond_func || cond_func(cpu, info))
++			smp_call_function_single(cpu, func, info, wait);
+ 		return;
+ 	}
+ 
+@@ -465,6 +453,9 @@ void smp_call_function_many(const struct cpumask *mask,
+ 	for_each_cpu(cpu, cfd->cpumask) {
+ 		call_single_data_t *csd = per_cpu_ptr(cfd->csd, cpu);
+ 
++		if (cond_func && !cond_func(cpu, info))
++			continue;
++
+ 		csd_lock(csd);
+ 		if (wait)
+ 			csd->flags |= CSD_FLAG_SYNCHRONOUS;
+@@ -486,6 +477,26 @@ void smp_call_function_many(const struct cpumask *mask,
+ 		}
+ 	}
+ }
++
++/**
++ * smp_call_function_many(): Run a function on a set of other CPUs.
++ * @mask: The set of cpus to run on (only runs on online subset).
++ * @func: The function to run. This must be fast and non-blocking.
++ * @info: An arbitrary pointer to pass to the function.
++ * @wait: If true, wait (atomically) until function has completed
++ *        on other CPUs.
++ *
++ * If @wait is true, then returns once @func has returned.
++ *
++ * You must not call this function with disabled interrupts or from a
++ * hardware interrupt handler or from a bottom half handler. Preemption
++ * must be disabled when calling this function.
++ */
++void smp_call_function_many(const struct cpumask *mask,
++			    smp_call_func_t func, void *info, bool wait)
++{
++	smp_call_function_many_cond(mask, func, info, wait, NULL);
++}
+ EXPORT_SYMBOL(smp_call_function_many);
+ 
+ /**
+@@ -668,11 +679,6 @@ EXPORT_SYMBOL(on_each_cpu_mask);
+  * @info:	An arbitrary pointer to pass to both functions.
+  * @wait:	If true, wait (atomically) until function has
+  *		completed on other CPUs.
+- * @gfp_flags:	GFP flags to use when allocating the cpumask
+- *		used internally by the function.
+- *
+- * The function might sleep if the GFP flags indicates a non
+- * atomic allocation is allowed.
+  *
+  * Preemption is disabled to protect against CPUs going offline but not online.
+  * CPUs going online during the call will not be seen or sent an IPI.
+@@ -680,46 +686,27 @@ EXPORT_SYMBOL(on_each_cpu_mask);
+  * You must not call this function with disabled interrupts or
+  * from a hardware interrupt handler or from a bottom half handler.
+  */
+-void on_each_cpu_cond_mask(bool (*cond_func)(int cpu, void *info),
+-			smp_call_func_t func, void *info, bool wait,
+-			gfp_t gfp_flags, const struct cpumask *mask)
++void on_each_cpu_cond_mask(smp_cond_func_t cond_func, smp_call_func_t func,
++			   void *info, bool wait, const struct cpumask *mask)
+ {
+-	cpumask_var_t cpus;
+-	int cpu, ret;
+-
+-	might_sleep_if(gfpflags_allow_blocking(gfp_flags));
+-
+-	if (likely(zalloc_cpumask_var(&cpus, (gfp_flags|__GFP_NOWARN)))) {
+-		preempt_disable();
+-		for_each_cpu(cpu, mask)
+-			if (cond_func(cpu, info))
+-				__cpumask_set_cpu(cpu, cpus);
+-		on_each_cpu_mask(cpus, func, info, wait);
+-		preempt_enable();
+-		free_cpumask_var(cpus);
+-	} else {
+-		/*
+-		 * No free cpumask, bother. No matter, we'll
+-		 * just have to IPI them one by one.
+-		 */
+-		preempt_disable();
+-		for_each_cpu(cpu, mask)
+-			if (cond_func(cpu, info)) {
+-				ret = smp_call_function_single(cpu, func,
+-								info, wait);
+-				WARN_ON_ONCE(ret);
+-			}
+-		preempt_enable();
++	int cpu = get_cpu();
++
++	smp_call_function_many_cond(mask, func, info, wait, cond_func);
++	if (cpumask_test_cpu(cpu, mask) && cond_func(cpu, info)) {
++		unsigned long flags;
++
++		local_irq_save(flags);
++		func(info);
++		local_irq_restore(flags);
+ 	}
++	put_cpu();
+ }
+ EXPORT_SYMBOL(on_each_cpu_cond_mask);
+ 
+-void on_each_cpu_cond(bool (*cond_func)(int cpu, void *info),
+-			smp_call_func_t func, void *info, bool wait,
+-			gfp_t gfp_flags)
++void on_each_cpu_cond(smp_cond_func_t cond_func, smp_call_func_t func,
++		      void *info, bool wait)
+ {
+-	on_each_cpu_cond_mask(cond_func, func, info, wait, gfp_flags,
+-				cpu_online_mask);
++	on_each_cpu_cond_mask(cond_func, func, info, wait, cpu_online_mask);
+ }
+ EXPORT_SYMBOL(on_each_cpu_cond);
+ 
 diff --git a/kernel/softirq.c b/kernel/softirq.c
 index 0427a86743a4..d975a066d47d 100644
 --- a/kernel/softirq.c
@@ -20929,7 +21131,7 @@ index 70665934d53e..d08bd51a0fbc 100644
  	{
  		.procname	= "min_free_kbytes",
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index 7f31932216a1..f583000140c9 100644
+index 7f31932216a1..41cc1c8530d8 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
 @@ -1819,7 +1819,7 @@ static void __hrtimer_init_sleeper(struct hrtimer_sleeper *sl,
@@ -20941,20 +21143,6 @@ index 7f31932216a1..f583000140c9 100644
  			mode |= HRTIMER_MODE_HARD;
  	}
  
-@@ -1873,12 +1873,12 @@ static int __sched do_nanosleep(struct hrtimer_sleeper *t, enum hrtimer_mode mod
- 		if (likely(t->task))
- 			freezable_schedule();
- 
-+		__set_current_state(TASK_RUNNING);
- 		hrtimer_cancel(&t->timer);
- 		mode = HRTIMER_MODE_ABS;
- 
- 	} while (t->task && !signal_pending(current));
- 
--	__set_current_state(TASK_RUNNING);
- 
- 	if (!t->task)
- 		return 0;
 @@ -1982,6 +1982,38 @@ SYSCALL_DEFINE2(nanosleep_time32, struct old_timespec32 __user *, rqtp,
  }
  #endif
@@ -21511,10 +21699,10 @@ index 4820823515e9..d3054b5c7a51 100644
  	if (IS_ENABLED(CONFIG_NO_HZ_COMMON))
  		__run_timers(this_cpu_ptr(&timer_bases[BASE_DEF]));
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index d8bd9b1d8bce..402d43d3e288 100644
+index bcb72f102613..2ac0fd975735 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
-@@ -2335,6 +2335,7 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned short type,
+@@ -2341,6 +2341,7 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned short type,
  	struct task_struct *tsk = current;
  
  	entry->preempt_count		= pc & 0xff;
@@ -21522,7 +21710,7 @@ index d8bd9b1d8bce..402d43d3e288 100644
  	entry->pid			= (tsk) ? tsk->pid : 0;
  	entry->type			= type;
  	entry->flags =
-@@ -2346,8 +2347,11 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned short type,
+@@ -2352,8 +2353,11 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned short type,
  		((pc & NMI_MASK    ) ? TRACE_FLAG_NMI     : 0) |
  		((pc & HARDIRQ_MASK) ? TRACE_FLAG_HARDIRQ : 0) |
  		((pc & SOFTIRQ_OFFSET) ? TRACE_FLAG_SOFTIRQ : 0) |
@@ -21535,7 +21723,7 @@ index d8bd9b1d8bce..402d43d3e288 100644
  }
  EXPORT_SYMBOL_GPL(tracing_generic_entry_update);
  
-@@ -3573,14 +3577,17 @@ unsigned long trace_total_entries(struct trace_array *tr)
+@@ -3579,14 +3583,17 @@ unsigned long trace_total_entries(struct trace_array *tr)
  
  static void print_lat_help_header(struct seq_file *m)
  {
@@ -21561,7 +21749,7 @@ index d8bd9b1d8bce..402d43d3e288 100644
  }
  
  static void print_event_info(struct trace_buffer *buf, struct seq_file *m)
-@@ -3616,11 +3623,12 @@ static void print_func_help_header_irq(struct trace_buffer *buf, struct seq_file
+@@ -3622,11 +3629,12 @@ static void print_func_help_header_irq(struct trace_buffer *buf, struct seq_file
  
  	seq_printf(m, "#                          %.*s  _-----=> irqs-off\n", prec, space);
  	seq_printf(m, "#                          %.*s / _----=> need-resched\n", prec, space);
@@ -21579,7 +21767,7 @@ index d8bd9b1d8bce..402d43d3e288 100644
  }
  
  void
-@@ -3654,6 +3662,8 @@ print_trace_header(struct seq_file *m, struct trace_iterator *iter)
+@@ -3660,6 +3668,8 @@ print_trace_header(struct seq_file *m, struct trace_iterator *iter)
  		   "desktop",
  #elif defined(CONFIG_PREEMPT)
  		   "preempt",
@@ -21588,7 +21776,7 @@ index d8bd9b1d8bce..402d43d3e288 100644
  #else
  		   "unknown",
  #endif
-@@ -8916,7 +8926,6 @@ void ftrace_dump(enum ftrace_dump_mode oops_dump_mode)
+@@ -8927,7 +8937,6 @@ void ftrace_dump(enum ftrace_dump_mode oops_dump_mode)
  	tracing_off();
  
  	local_irq_save(flags);
@@ -21596,7 +21784,7 @@ index d8bd9b1d8bce..402d43d3e288 100644
  
  	/* Simulate the iterator */
  	trace_init_global_iter(&iter);
-@@ -8993,7 +9002,6 @@ void ftrace_dump(enum ftrace_dump_mode oops_dump_mode)
+@@ -9004,7 +9013,6 @@ void ftrace_dump(enum ftrace_dump_mode oops_dump_mode)
  		atomic_dec(&per_cpu_ptr(iter.trace_buffer->data, cpu)->disabled);
  	}
  	atomic_dec(&dump_running);
@@ -21686,6 +21874,37 @@ index d54ce252b05a..400447aa099e 100644
 +
  	return !trace_seq_has_overflowed(s);
  }
+ 
+diff --git a/kernel/up.c b/kernel/up.c
+index 862b460ab97a..53144d056252 100644
+--- a/kernel/up.c
++++ b/kernel/up.c
+@@ -68,9 +68,8 @@ EXPORT_SYMBOL(on_each_cpu_mask);
+  * Preemption is disabled here to make sure the cond_func is called under the
+  * same condtions in UP and SMP.
+  */
+-void on_each_cpu_cond_mask(bool (*cond_func)(int cpu, void *info),
+-			   smp_call_func_t func, void *info, bool wait,
+-			   gfp_t gfp_flags, const struct cpumask *mask)
++void on_each_cpu_cond_mask(smp_cond_func_t cond_func, smp_call_func_t func,
++			   void *info, bool wait, const struct cpumask *mask)
+ {
+ 	unsigned long flags;
+ 
+@@ -84,11 +83,10 @@ void on_each_cpu_cond_mask(bool (*cond_func)(int cpu, void *info),
+ }
+ EXPORT_SYMBOL(on_each_cpu_cond_mask);
+ 
+-void on_each_cpu_cond(bool (*cond_func)(int cpu, void *info),
+-		      smp_call_func_t func, void *info, bool wait,
+-		      gfp_t gfp_flags)
++void on_each_cpu_cond(smp_cond_func_t cond_func, smp_call_func_t func,
++		      void *info, bool wait)
+ {
+-	on_each_cpu_cond_mask(cond_func, func, info, wait, gfp_flags, NULL);
++	on_each_cpu_cond_mask(cond_func, func, info, wait, NULL);
+ }
+ EXPORT_SYMBOL(on_each_cpu_cond);
  
 diff --git a/kernel/workqueue.c b/kernel/workqueue.c
 index 649687622654..da3f03810d89 100644
@@ -24834,7 +25053,7 @@ index b2b01694dc43..e972b6e21c0c 100644
  #ifdef CONFIG_SLAB
  	struct list_head slabs_partial;	/* partial list first, better asm code */
 diff --git a/mm/slub.c b/mm/slub.c
-index e72e802fc569..77020de62fc6 100644
+index e72e802fc569..ff4ee1e3a4e6 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
 @@ -1176,7 +1176,7 @@ static noinline int free_debug_processing(
@@ -25037,10 +25256,11 @@ index e72e802fc569..77020de62fc6 100644
  
  static void flush_all(struct kmem_cache *s)
  {
+-	on_each_cpu_cond(has_cpu_slab, flush_cpu_slab, s, 1, GFP_ATOMIC);
 +	LIST_HEAD(tofree);
 +	int cpu;
 +
- 	on_each_cpu_cond(has_cpu_slab, flush_cpu_slab, s, 1, GFP_ATOMIC);
++	on_each_cpu_cond(has_cpu_slab, flush_cpu_slab, s, 1);
 +	for_each_online_cpu(cpu) {
 +		struct slub_free_list *f;
 +
