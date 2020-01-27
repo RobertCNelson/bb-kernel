@@ -1,9 +1,9 @@
-From 8d7bbde8bf3b710fd6c1fe2b90c688a84c76c565 Mon Sep 17 00:00:00 2001
+From 86c904d3169e07f8761cd98b7f804b8f5093707e Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 16 Jan 2020 14:51:56 -0600
+Date: Mon, 27 Jan 2020 10:46:53 -0600
 Subject: [PATCH] backports: counter: from: linux.git
 
-Reference: v5.5-rc6
+Reference: v5.5
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  drivers/bus/Kconfig                           |  14 +-
@@ -14,7 +14,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/bus/fsl-mc/fsl-mc-private.h           |  42 ++
  drivers/bus/hisi_lpc.c                        |   9 +-
  drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} |   0
- drivers/bus/ti-sysc.c                         | 113 ++---
+ drivers/bus/ti-sysc.c                         | 119 +++--
  drivers/counter/104-quad-8.c                  |  33 +-
  drivers/counter/Kconfig                       |  11 +
  drivers/counter/Makefile                      |   1 +
@@ -30,7 +30,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/counter.h                       |  76 +--
  include/linux/mfd/stm32-timers.h              |  12 +-
  include/linux/platform_data/ti-sysc.h         |   2 +
- 24 files changed, 829 insertions(+), 325 deletions(-)
+ 24 files changed, 833 insertions(+), 327 deletions(-)
  rename drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} (100%)
  create mode 100644 drivers/counter/ti-eqep.c
 
@@ -368,10 +368,41 @@ similarity index 100%
 rename from drivers/pwm/pwm-tipwmss.c
 rename to drivers/bus/ti-pwmss.c
 diff --git a/drivers/bus/ti-sysc.c b/drivers/bus/ti-sysc.c
-index 2b6670daf7fc..f4d1597df0a2 100644
+index 34bd9bf4e68a..ccb44fe790a7 100644
 --- a/drivers/bus/ti-sysc.c
 +++ b/drivers/bus/ti-sysc.c
-@@ -917,6 +917,9 @@ static int sysc_enable_module(struct device *dev)
+@@ -343,6 +343,12 @@ static int sysc_get_clocks(struct sysc *ddata)
+ 		return -EINVAL;
+ 	}
+ 
++	/* Always add a slot for main clocks fck and ick even if unused */
++	if (!nr_fck)
++		ddata->nr_clocks++;
++	if (!nr_ick)
++		ddata->nr_clocks++;
++
+ 	ddata->clocks = devm_kcalloc(ddata->dev,
+ 				     ddata->nr_clocks, sizeof(*ddata->clocks),
+ 				     GFP_KERNEL);
+@@ -421,7 +427,7 @@ static int sysc_enable_opt_clocks(struct sysc *ddata)
+ 	struct clk *clock;
+ 	int i, error;
+ 
+-	if (!ddata->clocks)
++	if (!ddata->clocks || ddata->nr_clocks < SYSC_OPTFCK0 + 1)
+ 		return 0;
+ 
+ 	for (i = SYSC_OPTFCK0; i < SYSC_MAX_CLOCKS; i++) {
+@@ -455,7 +461,7 @@ static void sysc_disable_opt_clocks(struct sysc *ddata)
+ 	struct clk *clock;
+ 	int i;
+ 
+-	if (!ddata->clocks)
++	if (!ddata->clocks || ddata->nr_clocks < SYSC_OPTFCK0 + 1)
+ 		return;
+ 
+ 	for (i = SYSC_OPTFCK0; i < SYSC_MAX_CLOCKS; i++) {
+@@ -917,6 +923,9 @@ static int sysc_enable_module(struct device *dev)
  		return -EINVAL;
  	}
  
@@ -381,7 +412,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	reg &= ~(SYSC_IDLE_MASK << regbits->midle_shift);
  	reg |= best_mode << regbits->midle_shift;
  	sysc_write(ddata, ddata->offsets[SYSC_SYSCONFIG], reg);
-@@ -978,6 +981,10 @@ static int sysc_disable_module(struct device *dev)
+@@ -978,6 +987,10 @@ static int sysc_disable_module(struct device *dev)
  		return ret;
  	}
  
@@ -392,7 +423,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	reg &= ~(SYSC_IDLE_MASK << regbits->midle_shift);
  	reg |= best_mode << regbits->midle_shift;
  	sysc_write(ddata, ddata->offsets[SYSC_SYSCONFIG], reg);
-@@ -1037,8 +1044,6 @@ static int __maybe_unused sysc_runtime_resume_legacy(struct device *dev,
+@@ -1037,8 +1050,6 @@ static int __maybe_unused sysc_runtime_resume_legacy(struct device *dev,
  	struct ti_sysc_platform_data *pdata;
  	int error;
  
@@ -401,7 +432,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	pdata = dev_get_platdata(ddata->dev);
  	if (!pdata)
  		return 0;
-@@ -1051,6 +1056,8 @@ static int __maybe_unused sysc_runtime_resume_legacy(struct device *dev,
+@@ -1051,6 +1062,8 @@ static int __maybe_unused sysc_runtime_resume_legacy(struct device *dev,
  		dev_err(dev, "%s: could not enable: %i\n",
  			__func__, error);
  
@@ -410,7 +441,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	return 0;
  }
  
-@@ -1104,8 +1111,6 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
+@@ -1104,8 +1117,6 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
  
  	sysc_clkdm_deny_idle(ddata);
  
@@ -419,7 +450,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	if (sysc_opt_clks_needed(ddata)) {
  		error = sysc_enable_opt_clocks(ddata);
  		if (error)
-@@ -1116,6 +1121,8 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
+@@ -1116,6 +1127,8 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
  	if (error)
  		goto err_opt_clocks;
  
@@ -428,7 +459,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	if (ddata->legacy_mode) {
  		error = sysc_runtime_resume_legacy(dev, ddata);
  		if (error)
-@@ -1236,6 +1243,8 @@ static const struct sysc_revision_quirk sysc_revision_quirks[] = {
+@@ -1236,6 +1249,8 @@ static const struct sysc_revision_quirk sysc_revision_quirks[] = {
  		   SYSC_QUIRK_SWSUP_SIDLE),
  
  	/* Quirks that need to be set based on detected module */
@@ -437,7 +468,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	SYSC_QUIRK("hdq1w", 0, 0, 0x14, 0x18, 0x00000006, 0xffffffff,
  		   SYSC_MODULE_QUIRK_HDQ1W),
  	SYSC_QUIRK("hdq1w", 0, 0, 0x14, 0x18, 0x0000000a, 0xffffffff,
-@@ -1251,6 +1260,10 @@ static const struct sysc_revision_quirk sysc_revision_quirks[] = {
+@@ -1251,6 +1266,10 @@ static const struct sysc_revision_quirk sysc_revision_quirks[] = {
  	SYSC_QUIRK("gpu", 0x50000000, 0x14, -1, -1, 0x00010201, 0xffffffff, 0),
  	SYSC_QUIRK("gpu", 0x50000000, 0xfe00, 0xfe10, -1, 0x40000000 , 0xffffffff,
  		   SYSC_MODULE_QUIRK_SGX),
@@ -448,7 +479,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	SYSC_QUIRK("wdt", 0, 0, 0x10, 0x14, 0x502a0500, 0xfffff0f0,
  		   SYSC_MODULE_QUIRK_WDT),
  	/* Watchdog on am3 and am4 */
-@@ -1260,7 +1273,6 @@ static const struct sysc_revision_quirk sysc_revision_quirks[] = {
+@@ -1260,7 +1279,6 @@ static const struct sysc_revision_quirk sysc_revision_quirks[] = {
  #ifdef DEBUG
  	SYSC_QUIRK("adc", 0, 0, 0x10, -1, 0x47300001, 0xffffffff, 0),
  	SYSC_QUIRK("atl", 0, 0, -1, -1, 0x0a070100, 0xffffffff, 0),
@@ -456,7 +487,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	SYSC_QUIRK("cm", 0, 0, -1, -1, 0x40000301, 0xffffffff, 0),
  	SYSC_QUIRK("control", 0, 0, 0x10, -1, 0x40000900, 0xffffffff, 0),
  	SYSC_QUIRK("cpgmac", 0, 0x1200, 0x1208, 0x1204, 0x4edb1902,
-@@ -1309,8 +1321,6 @@ static const struct sysc_revision_quirk sysc_revision_quirks[] = {
+@@ -1309,8 +1327,6 @@ static const struct sysc_revision_quirk sysc_revision_quirks[] = {
  	SYSC_QUIRK("usbhstll", 0, 0, 0x10, 0x14, 0x00000008, 0xffffffff, 0),
  	SYSC_QUIRK("usb_host_hs", 0, 0, 0x10, 0x14, 0x50700100, 0xffffffff, 0),
  	SYSC_QUIRK("usb_host_hs", 0, 0, 0x10, -1, 0x50700101, 0xffffffff, 0),
@@ -465,7 +496,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	SYSC_QUIRK("vfpe", 0, 0, 0x104, -1, 0x4d001200, 0xffffffff, 0),
  #endif
  };
-@@ -1394,6 +1404,14 @@ static void sysc_clk_enable_quirk_hdq1w(struct sysc *ddata)
+@@ -1394,6 +1410,14 @@ static void sysc_clk_enable_quirk_hdq1w(struct sysc *ddata)
  	sysc_write(ddata, offset, val);
  }
  
@@ -480,7 +511,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  /* I2C needs extra enable bit toggling for reset */
  static void sysc_clk_quirk_i2c(struct sysc *ddata, bool enable)
  {
-@@ -1476,6 +1494,9 @@ static void sysc_init_module_quirks(struct sysc *ddata)
+@@ -1476,6 +1500,9 @@ static void sysc_init_module_quirks(struct sysc *ddata)
  		return;
  	}
  
@@ -490,7 +521,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	if (ddata->cfg.quirks & SYSC_MODULE_QUIRK_SGX)
  		ddata->module_enable_quirk = sysc_module_enable_quirk_sgx;
  
-@@ -1532,37 +1553,6 @@ static int sysc_legacy_init(struct sysc *ddata)
+@@ -1532,37 +1559,6 @@ static int sysc_legacy_init(struct sysc *ddata)
  	return error;
  }
  
@@ -528,18 +559,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  /*
   * Note that the caller must ensure the interconnect target module is enabled
   * before calling reset. Otherwise reset will not complete.
-@@ -1594,6 +1584,10 @@ static int sysc_reset(struct sysc *ddata)
- 	sysc_val |= sysc_mask;
- 	sysc_write(ddata, sysc_offset, sysc_val);
- 
-+	if (ddata->cfg.srst_udelay)
-+		usleep_range(ddata->cfg.srst_udelay,
-+			     ddata->cfg.srst_udelay * 2);
-+
- 	if (ddata->clk_enable_quirk)
- 		ddata->clk_enable_quirk(ddata);
- 
-@@ -1625,15 +1619,6 @@ static int sysc_reset(struct sysc *ddata)
+@@ -1629,15 +1625,6 @@ static int sysc_reset(struct sysc *ddata)
  static int sysc_init_module(struct sysc *ddata)
  {
  	int error = 0;
@@ -555,7 +575,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  
  	error = sysc_clockdomain_init(ddata);
  	if (error)
-@@ -1654,7 +1639,7 @@ static int sysc_init_module(struct sysc *ddata)
+@@ -1658,7 +1645,7 @@ static int sysc_init_module(struct sysc *ddata)
  		goto err_opt_clocks;
  
  	if (!(ddata->cfg.quirks & SYSC_QUIRK_NO_RESET_ON_INIT)) {
@@ -564,7 +584,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  		if (error)
  			goto err_main_clocks;
  	}
-@@ -1666,28 +1651,32 @@ static int sysc_init_module(struct sysc *ddata)
+@@ -1670,28 +1657,32 @@ static int sysc_init_module(struct sysc *ddata)
  	if (ddata->legacy_mode) {
  		error = sysc_legacy_init(ddata);
  		if (error)
@@ -602,7 +622,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  		sysc_disable_opt_clocks(ddata);
  		sysc_clkdm_allow_idle(ddata);
  	}
-@@ -1794,9 +1783,8 @@ static int sysc_child_add_named_clock(struct sysc *ddata,
+@@ -1798,9 +1789,8 @@ static int sysc_child_add_named_clock(struct sysc *ddata,
  
  	clk = clk_get(child, name);
  	if (!IS_ERR(clk)) {
@@ -614,7 +634,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	}
  
  	clk = clk_get(ddata->dev, name);
-@@ -1806,7 +1794,7 @@ static int sysc_child_add_named_clock(struct sysc *ddata,
+@@ -1810,7 +1800,7 @@ static int sysc_child_add_named_clock(struct sysc *ddata,
  	l = clkdev_create(clk, name, dev_name(child));
  	if (!l)
  		error = -ENOMEM;
@@ -623,7 +643,7 @@ index 2b6670daf7fc..f4d1597df0a2 100644
  	clk_put(clk);
  
  	return error;
-@@ -2460,10 +2448,17 @@ static int sysc_probe(struct platform_device *pdev)
+@@ -2464,10 +2454,17 @@ static int sysc_probe(struct platform_device *pdev)
  		goto unprepare;
  	}
  

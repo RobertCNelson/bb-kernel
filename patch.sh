@@ -378,7 +378,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.5-rc6"
+	backport_tag="v5.5"
 
 	subsystem="exfat"
 	#regenerate="enable"
