@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2019 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -401,7 +401,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.99"
+	backport_tag="v4.19.102"
 
 	subsystem="greybus"
 	#regenerate="enable"
