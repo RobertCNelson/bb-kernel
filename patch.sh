@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2019 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -278,7 +278,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.5.x"
+	branch="v5.6.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -303,14 +303,14 @@ beagleboard_dtbs () {
 
 		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
-		device="am335x-abbbi.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		#device="am335x-abbbi.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
-		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -421,13 +421,10 @@ drivers () {
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/pwm'
 	dir 'drivers/spi'
-#	dir 'drivers/ssd1306'
 	dir 'drivers/tps65217'
 
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
-#	dir 'drivers/ti/eqep'
-	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
