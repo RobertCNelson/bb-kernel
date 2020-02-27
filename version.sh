@@ -35,12 +35,12 @@ toolchain="gcc_arm_gnueabihf_8"
 
 #Kernel
 KERNEL_REL=4.19
-KERNEL_TAG=${KERNEL_REL}.98
+KERNEL_TAG=${KERNEL_REL}.100
 #KERNEL_TAG=${KERNEL_REL}.103
-kernel_rt=".98-rt40"
+kernel_rt=".100-rt41"
 #kernel_rt=".103-rt42"
 #Kernel Build
-BUILD=${build_prefix}47.8
+BUILD=${build_prefix}47.9
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
