@@ -381,7 +381,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.6-rc2"
+	backport_tag="v5.6-rc3"
 
 	subsystem="exfat"
 	#regenerate="enable"
@@ -396,7 +396,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.5.4"
+	backport_tag="v5.5.7"
 
 	subsystem="greybus"
 	#regenerate="enable"
