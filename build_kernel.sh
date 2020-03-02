@@ -25,6 +25,11 @@ git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
 
+config_patch_build_salt () {
+	sed -i -e 's:CONFIG_BUILD_SALT:#CONFIG_BUILD_SALT:g' .config
+	echo "CONFIG_BUILD_SALT=\"\"" >> .config
+}
+
 config_use_lzo_if_no_lz4 () {
 	if [ ! -f /usr/bin/lz4 ] ; then
 		sed -i -e 's:CONFIG_KERNEL_LZ4=y:# CONFIG_KERNEL_LZ4 is not set:g' .config
