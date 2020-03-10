@@ -1,0 +1,349 @@
+From 188c66ec6ff2dc9a647de507a8c27e04c9e7d798 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Tue, 10 Mar 2020 16:18:36 -0500
+Subject: [PATCH] backports: bindeb-pkg: from: linux.git
+
+Reference: v5.2.21
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ scripts/package/Makefile | 12 +++++------
+ scripts/package/builddeb | 44 ++++++++++++++++++++++-----------------
+ scripts/package/buildtar |  4 ++--
+ scripts/package/mkdebian | 45 +++++++++++++++++++++++-----------------
+ scripts/package/mkspec   | 11 +++++-----
+ 5 files changed, 65 insertions(+), 51 deletions(-)
+
+diff --git a/scripts/package/Makefile b/scripts/package/Makefile
+index 73503ebce632..ca7f46b562a4 100644
+--- a/scripts/package/Makefile
++++ b/scripts/package/Makefile
+@@ -1,3 +1,4 @@
++# SPDX-License-Identifier: GPL-2.0-only
+ # Makefile for the different targets used to generate full packages of a kernel
+ # It uses the generic clean infrastructure of kbuild
+ 
+@@ -33,7 +34,6 @@ MKSPEC     := $(srctree)/scripts/package/mkspec
+ 
+ quiet_cmd_src_tar = TAR     $(2).tar.gz
+       cmd_src_tar = \
+-set -e; \
+ if test "$(objtree)" != "$(srctree)"; then \
+ 	echo >&2; \
+ 	echo >&2 "  ERROR:"; \
+@@ -60,7 +60,7 @@ rpm-pkg: FORCE
+ # binrpm-pkg
+ # ---------------------------------------------------------------------------
+ binrpm-pkg: FORCE
+-	$(MAKE) KBUILD_SRC=
++	$(MAKE) -f $(srctree)/Makefile
+ 	$(CONFIG_SHELL) $(MKSPEC) prebuilt > $(objtree)/binkernel.spec
+ 	+rpmbuild $(RPMOPTS) --define "_builddir $(objtree)" --target \
+ 		$(UTS_MACHINE) -bb $(objtree)/binkernel.spec
+@@ -73,11 +73,11 @@ deb-pkg: FORCE
+ 	$(call cmd,src_tar,$(KDEB_SOURCENAME))
+ 	origversion=$$(dpkg-parsechangelog -SVersion |sed 's/-[^-]*$$//');\
+ 		mv $(KDEB_SOURCENAME).tar.gz ../$(KDEB_SOURCENAME)_$${origversion}.orig.tar.gz
+-	+dpkg-buildpackage -r$(KBUILD_PKG_ROOTCMD) -a$$(cat debian/arch) -i.git -us -uc
++	+dpkg-buildpackage -r$(KBUILD_PKG_ROOTCMD) -a$$(cat debian/arch) $(DPKG_FLAGS) -i.git -us -uc
+ 
+ bindeb-pkg: FORCE
+ 	$(CONFIG_SHELL) $(srctree)/scripts/package/mkdebian
+-	+dpkg-buildpackage -r$(KBUILD_PKG_ROOTCMD) -a$$(cat debian/arch) -b -nc -uc
++	+dpkg-buildpackage -r$(KBUILD_PKG_ROOTCMD) -a$$(cat debian/arch) $(DPKG_FLAGS) -b -nc -uc
+ 
+ intdeb-pkg: FORCE
+ 	+$(CONFIG_SHELL) $(srctree)/scripts/package/builddeb
+@@ -103,8 +103,8 @@ clean-dirs += $(objtree)/snap/
+ # tarball targets
+ # ---------------------------------------------------------------------------
+ tar%pkg: FORCE
+-	$(MAKE) KBUILD_SRC=
+-	$(CONFIG_SHELL) $(srctree)/scripts/package/buildtar $@
++	$(MAKE) -f $(srctree)/Makefile
++	+$(CONFIG_SHELL) $(srctree)/scripts/package/buildtar $@
+ 
+ clean-dirs += $(objtree)/tar-install/
+ 
+diff --git a/scripts/package/builddeb b/scripts/package/builddeb
+index 0b31f4f1f92c..b03dd56a4782 100755
+--- a/scripts/package/builddeb
++++ b/scripts/package/builddeb
+@@ -12,6 +12,18 @@
+ 
+ set -e
+ 
++is_enabled() {
++	grep -q "^$1=y" include/config/auto.conf
++}
++
++if_enabled_echo() {
++	if is_enabled "$1"; then
++		echo -n "$2"
++	elif [ $# -ge 3 ]; then
++		echo -n "$3"
++	fi
++}
++
+ create_package() {
+ 	local pname="$1" pdir="$2"
+ 
+@@ -62,7 +74,7 @@ parisc|mips|powerpc)
+ 	installed_image_path="boot/vmlinuz-$version"
+ esac
+ 
+-BUILD_DEBUG="$(grep -s '^CONFIG_DEBUG_INFO=y' $KCONFIG_CONFIG || true)"
++BUILD_DEBUG=$(if_enabled_echo CONFIG_DEBUG_INFO Yes)
+ 
+ # Setup the directory structure
+ rm -rf "$tmpdir" "$kernel_headers_dir" "$libc_headers_dir" "$dbg_dir" $objtree/debian/files
+@@ -83,15 +95,15 @@ else
+ fi
+ cp "$($MAKE -s -f $srctree/Makefile image_name)" "$tmpdir/$installed_image_path"
+ 
+-if grep -q "^CONFIG_OF=y" $KCONFIG_CONFIG ; then
++if is_enabled CONFIG_OF_EARLY_FLATTREE; then
+ 	# Only some architectures with OF support have this target
+-	if grep -q dtbs_install "${srctree}/arch/$SRCARCH/Makefile"; then
+-		$MAKE KBUILD_SRC= INSTALL_DTBS_PATH="$tmpdir/usr/lib/$packagename" dtbs_install
++	if [ -d "${srctree}/arch/$SRCARCH/boot/dts" ]; then
++		$MAKE -f $srctree/Makefile INSTALL_DTBS_PATH="$tmpdir/usr/lib/$packagename" dtbs_install
+ 	fi
+ fi
+ 
+-if grep -q '^CONFIG_MODULES=y' $KCONFIG_CONFIG ; then
+-	INSTALL_MOD_PATH="$tmpdir" $MAKE KBUILD_SRC= modules_install
++if is_enabled CONFIG_MODULES; then
++	INSTALL_MOD_PATH="$tmpdir" $MAKE -f $srctree/Makefile modules_install
+ 	rm -f "$tmpdir/lib/modules/$version/build"
+ 	rm -f "$tmpdir/lib/modules/$version/source"
+ 	if [ "$ARCH" = "um" ] ; then
+@@ -111,16 +123,15 @@ if grep -q '^CONFIG_MODULES=y' $KCONFIG_CONFIG ; then
+ 		done
+ 
+ 		# resign stripped modules
+-		MODULE_SIG_ALL="$(grep -s '^CONFIG_MODULE_SIG_ALL=y' $KCONFIG_CONFIG || true)"
+-		if [ -n "$MODULE_SIG_ALL" ]; then
+-			INSTALL_MOD_PATH="$tmpdir" $MAKE KBUILD_SRC= modules_sign
++		if is_enabled CONFIG_MODULE_SIG_ALL; then
++			INSTALL_MOD_PATH="$tmpdir" $MAKE -f $srctree/Makefile modules_sign
+ 		fi
+ 	fi
+ fi
+ 
+ if [ "$ARCH" != "um" ]; then
+-	$MAKE headers_check KBUILD_SRC=
+-	$MAKE headers_install KBUILD_SRC= INSTALL_HDR_PATH="$libc_headers_dir/usr"
++	$MAKE -f $srctree/Makefile headers_check
++	$MAKE -f $srctree/Makefile headers_install INSTALL_HDR_PATH="$libc_headers_dir/usr"
+ fi
+ 
+ # Install the maintainer scripts
+@@ -129,11 +140,6 @@ fi
+ # make-kpkg sets $INITRD to indicate whether an initramfs is wanted, and
+ # so do we; recent versions of dracut and initramfs-tools will obey this.
+ debhookdir=${KDEB_HOOKDIR:-/etc/kernel}
+-if grep -q '^CONFIG_BLK_DEV_INITRD=y' $KCONFIG_CONFIG; then
+-	want_initrd=Yes
+-else
+-	want_initrd=No
+-fi
+ for script in postinst postrm preinst prerm ; do
+ 	mkdir -p "$tmpdir$debhookdir/$script.d"
+ 	cat <<EOF > "$tmpdir/DEBIAN/$script"
+@@ -145,7 +151,7 @@ set -e
+ export DEB_MAINT_PARAMS="\$*"
+ 
+ # Tell initramfs builder whether it's wanted
+-export INITRD=$want_initrd
++export INITRD=$(if_enabled_echo CONFIG_BLK_DEV_INITRD Yes No)
+ 
+ test -d $debhookdir/$script.d && run-parts --arg="$version" --arg="/$installed_image_path" $debhookdir/$script.d
+ exit 0
+@@ -158,11 +164,11 @@ done
+ (cd $srctree; find arch/*/include include scripts -type f -o -type l) >> "$objtree/debian/hdrsrcfiles"
+ (cd $srctree; find arch/$SRCARCH -name module.lds -o -name Kbuild.platforms -o -name Platform) >> "$objtree/debian/hdrsrcfiles"
+ (cd $srctree; find $(find arch/$SRCARCH -name include -o -name scripts -type d) -type f) >> "$objtree/debian/hdrsrcfiles"
+-if grep -q '^CONFIG_STACK_VALIDATION=y' $KCONFIG_CONFIG ; then
++if is_enabled CONFIG_STACK_VALIDATION; then
+ 	(cd $objtree; find tools/objtool -type f -executable) >> "$objtree/debian/hdrobjfiles"
+ fi
+ (cd $objtree; find arch/$SRCARCH/include Module.symvers include scripts -type f) >> "$objtree/debian/hdrobjfiles"
+-if grep -q '^CONFIG_GCC_PLUGINS=y' $KCONFIG_CONFIG ; then
++if is_enabled CONFIG_GCC_PLUGINS; then
+ 	(cd $objtree; find scripts/gcc-plugins -name \*.so -o -name gcc-common.h) >> "$objtree/debian/hdrobjfiles"
+ fi
+ destdir=$kernel_headers_dir/usr/src/linux-headers-$version
+diff --git a/scripts/package/buildtar b/scripts/package/buildtar
+index d624a07a4e77..2f66c81e4021 100755
+--- a/scripts/package/buildtar
++++ b/scripts/package/buildtar
+@@ -56,8 +56,8 @@ dirs=boot
+ #
+ # Try to install modules
+ #
+-if grep -q '^CONFIG_MODULES=y' "${KCONFIG_CONFIG}"; then
+-	make ARCH="${ARCH}" O="${objtree}" KBUILD_SRC= INSTALL_MOD_PATH="${tmpdir}" modules_install
++if grep -q '^CONFIG_MODULES=y' include/config/auto.conf; then
++	make ARCH="${ARCH}" -f ${srctree}/Makefile INSTALL_MOD_PATH="${tmpdir}" modules_install
+ 	dirs="$dirs lib"
+ fi
+ 
+diff --git a/scripts/package/mkdebian b/scripts/package/mkdebian
+index edcad61fe3cd..8351584cb24e 100755
+--- a/scripts/package/mkdebian
++++ b/scripts/package/mkdebian
+@@ -7,7 +7,7 @@
+ set -e
+ 
+ is_enabled() {
+-	grep -q "^CONFIG_$1=y" $KCONFIG_CONFIG
++	grep -q "^$1=y" include/config/auto.conf
+ }
+ 
+ if_enabled_echo() {
+@@ -31,23 +31,23 @@ set_debarch() {
+ 	x86_64)
+ 		debarch=amd64 ;;
+ 	sparc*)
+-		debarch=sparc$(if_enabled_echo 64BIT 64) ;;
++		debarch=sparc$(if_enabled_echo CONFIG_64BIT 64) ;;
+ 	s390*)
+ 		debarch=s390x ;;
+ 	ppc*)
+-		if is_enabled 64BIT; then
+-			debarch=ppc64$(if_enabled_echo CPU_LITTLE_ENDIAN el)
++		if is_enabled CONFIG_64BIT; then
++			debarch=ppc64$(if_enabled_echo CONFIG_CPU_LITTLE_ENDIAN el)
+ 		else
+-			debarch=powerpc$(if_enabled_echo SPE spe)
++			debarch=powerpc$(if_enabled_echo CONFIG_SPE spe)
+ 		fi
+ 		;;
+ 	parisc*)
+ 		debarch=hppa ;;
+ 	mips*)
+-		if is_enabled CPU_LITTLE_ENDIAN; then
+-			debarch=mips$(if_enabled_echo 64BIT 64)$(if_enabled_echo CPU_MIPSR6 r6)el
+-		elif is_enabled CPU_MIPSR6; then
+-			debarch=mips$(if_enabled_echo 64BIT 64)r6
++		if is_enabled CONFIG_CPU_LITTLE_ENDIAN; then
++			debarch=mips$(if_enabled_echo CONFIG_64BIT 64)$(if_enabled_echo CONFIG_CPU_MIPSR6 r6)el
++		elif is_enabled CONFIG_CPU_MIPSR6; then
++			debarch=mips$(if_enabled_echo CONFIG_64BIT 64)r6
+ 		else
+ 			debarch=mips
+ 		fi
+@@ -55,8 +55,8 @@ set_debarch() {
+ 	aarch64|arm64)
+ 		debarch=arm64 ;;
+ 	arm*)
+-		if is_enabled AEABI; then
+-			debarch=arm$(if_enabled_echo VFP hf el)
++		if is_enabled CONFIG_AEABI; then
++			debarch=arm$(if_enabled_echo CONFIG_VFP hf el)
+ 		else
+ 			debarch=arm
+ 		fi
+@@ -64,10 +64,10 @@ set_debarch() {
+ 	openrisc)
+ 		debarch=or1k ;;
+ 	sh)
+-		if is_enabled CPU_SH3; then
+-			debarch=sh3$(if_enabled_echo CPU_BIG_ENDIAN eb)
+-		elif is_enabled CPU_SH4; then
+-			debarch=sh4$(if_enabled_echo CPU_BIG_ENDIAN eb)
++		if is_enabled CONFIG_CPU_SH3; then
++			debarch=sh3$(if_enabled_echo CONFIG_CPU_BIG_ENDIAN eb)
++		elif is_enabled CONFIG_CPU_SH4; then
++			debarch=sh4$(if_enabled_echo CONFIG_CPU_BIG_ENDIAN eb)
+ 		fi
+ 		;;
+ 	esac
+@@ -132,8 +132,12 @@ else
+         echo >&2 "Install lsb-release or set \$KDEB_CHANGELOG_DIST explicitly"
+ fi
+ 
+-mkdir -p debian/
++mkdir -p debian/source/
++echo "1.0" > debian/source/format
++
+ echo $debarch > debian/arch
++extra_build_depends=", $(if_enabled_echo CONFIG_UNWINDER_ORC libelf-dev)"
++extra_build_depends="$extra_build_depends, $(if_enabled_echo CONFIG_SYSTEM_TRUSTED_KEYRING libssl-dev:native)"
+ 
+ # Generate a simple changelog template
+ cat <<EOF > debian/changelog
+@@ -170,7 +174,7 @@ Source: $sourcename
+ Section: kernel
+ Priority: optional
+ Maintainer: $maintainer
+-Build-Depends: bc, kmod, cpio
++Build-Depends: bc, kmod, cpio, bison, flex | flex:native $extra_build_depends
+ Homepage: http://www.kernel.org/
+ 
+ Package: $packagename
+@@ -205,13 +209,15 @@ EOF
+ cat <<EOF > debian/rules
+ #!$(command -v $MAKE) -f
+ 
++srctree ?= .
++
+ build:
+ 	\$(MAKE) KERNELRELEASE=${version} ARCH=${ARCH} \
+-	KBUILD_BUILD_VERSION=${revision} KBUILD_SRC=
++	KBUILD_BUILD_VERSION=${revision} -f \$(srctree)/Makefile
+ 
+ binary-arch:
+ 	\$(MAKE) KERNELRELEASE=${version} ARCH=${ARCH} \
+-	KBUILD_BUILD_VERSION=${revision} KBUILD_SRC= intdeb-pkg
++	KBUILD_BUILD_VERSION=${revision} -f \$(srctree)/Makefile intdeb-pkg
+ 
+ clean:
+ 	rm -rf debian/*tmp debian/files
+@@ -219,5 +225,6 @@ clean:
+ 
+ binary: binary-arch
+ EOF
++chmod +x debian/rules
+ 
+ exit 0
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index e05646dc24dc..009147d4718e 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -12,6 +12,7 @@
+ # how we were called determines which rpms we build and how we build them
+ if [ "$1" = prebuilt ]; then
+ 	S=DEL
++	MAKE="$MAKE -f $srctree/Makefile"
+ else
+ 	S=
+ fi
+@@ -78,19 +79,19 @@ $S	%prep
+ $S	%setup -q
+ $S
+ $S	%build
+-$S	make %{?_smp_mflags} KBUILD_BUILD_VERSION=%{release}
++$S	$MAKE %{?_smp_mflags} KBUILD_BUILD_VERSION=%{release}
+ $S
+ 	%install
+ 	mkdir -p %{buildroot}/boot
+ 	%ifarch ia64
+ 	mkdir -p %{buildroot}/boot/efi
+-	cp \$(make image_name) %{buildroot}/boot/efi/vmlinuz-$KERNELRELEASE
++	cp \$($MAKE image_name) %{buildroot}/boot/efi/vmlinuz-$KERNELRELEASE
+ 	ln -s efi/vmlinuz-$KERNELRELEASE %{buildroot}/boot/
+ 	%else
+-	cp \$(make image_name) %{buildroot}/boot/vmlinuz-$KERNELRELEASE
++	cp \$($MAKE image_name) %{buildroot}/boot/vmlinuz-$KERNELRELEASE
+ 	%endif
+-$M	make %{?_smp_mflags} INSTALL_MOD_PATH=%{buildroot} KBUILD_SRC= modules_install
+-	make %{?_smp_mflags} INSTALL_HDR_PATH=%{buildroot}/usr KBUILD_SRC= headers_install
++$M	$MAKE %{?_smp_mflags} INSTALL_MOD_PATH=%{buildroot} modules_install
++	$MAKE %{?_smp_mflags} INSTALL_HDR_PATH=%{buildroot}/usr headers_install
+ 	cp System.map %{buildroot}/boot/System.map-$KERNELRELEASE
+ 	cp .config %{buildroot}/boot/config-$KERNELRELEASE
+ 	bzip2 -9 --keep vmlinux
+-- 
+2.25.1
+
