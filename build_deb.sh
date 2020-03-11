@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2019 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,13 +25,6 @@ git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
 
-config_use_lzo_if_no_lz4 () {
-	if [ ! -f /usr/bin/lz4 ] ; then
-		sed -i -e 's:CONFIG_KERNEL_LZ4=y:# CONFIG_KERNEL_LZ4 is not set:g' .config
-		sed -i -e 's:# CONFIG_KERNEL_LZO is not set:CONFIG_KERNEL_LZO=y:g' .config
-	fi
-}
-
 patch_kernel () {
 	cd "${DIR}/KERNEL" || exit
 
@@ -55,8 +48,6 @@ copy_defconfig () {
 		make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" "${config}"
 		cp -v .config "${DIR}/patches/ref_${config}"
 		cp -v "${DIR}/patches/defconfig" .config
-		config_use_lzo_if_no_lz4
-		make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	else
 		make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" rcn-ee_defconfig
 	fi
@@ -65,6 +56,7 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
 		cp -v .config "${DIR}/patches/defconfig"
@@ -93,13 +85,11 @@ make_deb () {
 	echo "-----------------------------"
 	echo "make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg"
 	echo "-----------------------------"
-	fakeroot make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg
+	make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg
 
+	mv "${DIR}"/*.buildinfo "${DIR}/deploy/" || true
 	mv "${DIR}"/*.changes "${DIR}/deploy/" || true
 	mv "${DIR}"/*.deb "${DIR}/deploy/" || true
-	mv "${DIR}"/*.debian.tar.gz "${DIR}/deploy/" || true
-	mv "${DIR}"/*.dsc "${DIR}/deploy/" || true
-	mv "${DIR}"/*.orig.tar.gz "${DIR}/deploy/" || true
 
 	KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
 
@@ -118,27 +108,6 @@ fi
 
 if [ ! -f "${DIR}/system.sh" ] ; then
 	cp -v "${DIR}/system.sh.sample" "${DIR}/system.sh"
-fi
-
-if [ -f "${DIR}/branches.list" ] ; then
-	echo "-----------------------------"
-	echo "Please checkout one of the active branches:"
-	echo "-----------------------------"
-	cat "${DIR}/branches.list" | grep -v INACTIVE
-	echo "-----------------------------"
-	exit
-fi
-
-if [ -f "${DIR}/branch.expired" ] ; then
-	echo "-----------------------------"
-	echo "Support for this branch has expired."
-	unset response
-	echo -n "Do you wish to bypass this warning and support your self: (y/n)? "
-	read response
-	if [ "x${response}" != "xy" ] ; then
-		exit
-	fi
-	echo "-----------------------------"
 fi
 
 unset CC
