@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2018 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -56,6 +56,7 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
 		cp -v .config "${DIR}/patches/defconfig"
@@ -84,13 +85,11 @@ make_deb () {
 	echo "-----------------------------"
 	echo "make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg"
 	echo "-----------------------------"
-	fakeroot make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg
+	make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg
 
+	mv "${DIR}"/*.buildinfo "${DIR}/deploy/" || true
 	mv "${DIR}"/*.changes "${DIR}/deploy/" || true
 	mv "${DIR}"/*.deb "${DIR}/deploy/" || true
-	mv "${DIR}"/*.debian.tar.gz "${DIR}/deploy/" || true
-	mv "${DIR}"/*.dsc "${DIR}/deploy/" || true
-	mv "${DIR}"/*.orig.tar.gz "${DIR}/deploy/" || true
 
 	KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
 

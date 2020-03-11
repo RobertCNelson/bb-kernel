@@ -637,19 +637,25 @@ dir 'drivers/ti/spi_symlink'
 sgx
 
 packaging () {
-	echo "dir: packaging"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cp -v "${DIR}/3rdparty/packaging/Makefile" "${DIR}/KERNEL/scripts/package"
-		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
-		#Needed for v4.11.x and less
-		#patch -p1 < "${DIR}/patches/packaging/0002-Revert-deb-pkg-Remove-the-KBUILD_IMAGE-workaround.patch"
-		${git_bin} commit -a -m 'packaging: sync builddeb changes' -s
-		${git_bin} format-patch -1 -o "${DIR}/patches/packaging"
-		exit 2
-	else
-		${git} "${DIR}/patches/packaging/0001-packaging-sync-builddeb-changes.patch"
+	do_backport="enable"
+	if [ "x${do_backport}" = "xenable" ] ; then
+		backport_tag="v5.2.21"
+
+		subsystem="bindeb-pkg"
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			pre_backports
+
+			cp -v ~/linux-src/scripts/package/* ./scripts/package/
+
+			post_backports
+			exit 2
+		else
+			patch_backports
+		fi
 	fi
+
+	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
 }
 
 packaging
