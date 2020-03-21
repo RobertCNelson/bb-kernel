@@ -440,6 +440,7 @@ soc () {
 #	dir 'soc/imx/imx7'
 
 	dir 'soc/ti/panda'
+	dir 'bootup_hacks'
 }
 
 ###
@@ -458,7 +459,7 @@ packaging () {
 		if [ "x${regenerate}" = "xenable" ] ; then
 			pre_backports
 
-			cp -v ~/linux-src/scripts/package/* ./scripts/package/builddeb
+			cp -v ~/linux-src/scripts/package/* ./scripts/package/
 
 			post_backports
 			exit 2
