@@ -1,0 +1,611 @@
+From d7e4662ac46e2b652d8df90179c223f888b9970b Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Mon, 6 Apr 2020 16:04:59 -0500
+Subject: [PATCH] backports: brcm80211: from: linux.git
+
+Reference: v5.4.18
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ .../broadcom/brcm80211/brcmfmac/bcmsdh.c      | 53 ++++--------
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    | 81 ++-----------------
+ .../broadcom/brcm80211/brcmfmac/cfg80211.h    |  4 +-
+ .../broadcom/brcm80211/brcmfmac/chip.c        |  6 +-
+ .../broadcom/brcm80211/brcmfmac/feature.c     |  3 +-
+ .../broadcom/brcm80211/brcmfmac/feature.h     |  4 +-
+ .../broadcom/brcm80211/brcmfmac/fwil_types.h  | 13 ---
+ .../broadcom/brcm80211/brcmfmac/p2p.c         |  3 +-
+ .../broadcom/brcm80211/brcmfmac/pcie.c        |  2 +
+ .../broadcom/brcm80211/brcmfmac/pno.c         |  4 -
+ .../broadcom/brcm80211/brcmfmac/sdio.c        | 13 ++-
+ .../broadcom/brcm80211/brcmfmac/usb.c         |  1 -
+ .../broadcom/brcm80211/brcmsmac/channel.c     | 10 ++-
+ .../broadcom/brcm80211/brcmsmac/mac80211_if.c |  3 +-
+ .../broadcom/brcm80211/brcmsmac/main.c        | 16 +++-
+ .../broadcom/brcm80211/include/brcmu_wifi.h   |  2 -
+ 16 files changed, 57 insertions(+), 161 deletions(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
+index 96fd8e2bf773..fc12598b2dd3 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
+@@ -1108,8 +1108,7 @@ static int brcmf_ops_sdio_suspend(struct device *dev)
+ 	struct sdio_func *func;
+ 	struct brcmf_bus *bus_if;
+ 	struct brcmf_sdio_dev *sdiodev;
+-	mmc_pm_flag_t pm_caps, sdio_flags;
+-	int ret = 0;
++	mmc_pm_flag_t sdio_flags;
+ 
+ 	func = container_of(dev, struct sdio_func, dev);
+ 	brcmf_dbg(SDIO, "Enter: F%d\n", func->num);
+@@ -1120,33 +1119,19 @@ static int brcmf_ops_sdio_suspend(struct device *dev)
+ 	bus_if = dev_get_drvdata(dev);
+ 	sdiodev = bus_if->bus_priv.sdio;
+ 
+-	pm_caps = sdio_get_host_pm_caps(func);
+-
+-	if (pm_caps & MMC_PM_KEEP_POWER) {
+-		/* preserve card power during suspend */
+-		brcmf_sdiod_freezer_on(sdiodev);
+-		brcmf_sdio_wd_timer(sdiodev->bus, 0);
+-
+-		sdio_flags = MMC_PM_KEEP_POWER;
+-		if (sdiodev->wowl_enabled) {
+-			if (sdiodev->settings->bus.sdio.oob_irq_supported)
+-				enable_irq_wake(sdiodev->settings->bus.sdio.oob_irq_nr);
+-			else
+-				sdio_flags |= MMC_PM_WAKE_SDIO_IRQ;
+-		}
+-
+-		if (sdio_set_host_pm_flags(sdiodev->func1, sdio_flags))
+-			brcmf_err("Failed to set pm_flags %x\n", sdio_flags);
++	brcmf_sdiod_freezer_on(sdiodev);
++	brcmf_sdio_wd_timer(sdiodev->bus, 0);
+ 
+-	} else {
+-		/* power will be cut so remove device, probe again in resume */
+-		brcmf_sdiod_intr_unregister(sdiodev);
+-		ret = brcmf_sdiod_remove(sdiodev);
+-		if (ret)
+-			brcmf_err("Failed to remove device on suspend\n");
++	sdio_flags = MMC_PM_KEEP_POWER;
++	if (sdiodev->wowl_enabled) {
++		if (sdiodev->settings->bus.sdio.oob_irq_supported)
++			enable_irq_wake(sdiodev->settings->bus.sdio.oob_irq_nr);
++		else
++			sdio_flags |= MMC_PM_WAKE_SDIO_IRQ;
+ 	}
+-
+-	return ret;
++	if (sdio_set_host_pm_flags(sdiodev->func1, sdio_flags))
++		brcmf_err("Failed to set pm_flags %x\n", sdio_flags);
++	return 0;
+ }
+ 
+ static int brcmf_ops_sdio_resume(struct device *dev)
+@@ -1154,23 +1139,13 @@ static int brcmf_ops_sdio_resume(struct device *dev)
+ 	struct brcmf_bus *bus_if = dev_get_drvdata(dev);
+ 	struct brcmf_sdio_dev *sdiodev = bus_if->bus_priv.sdio;
+ 	struct sdio_func *func = container_of(dev, struct sdio_func, dev);
+-	mmc_pm_flag_t pm_caps = sdio_get_host_pm_caps(func);
+-	int ret = 0;
+ 
+ 	brcmf_dbg(SDIO, "Enter: F%d\n", func->num);
+ 	if (func->num != 2)
+ 		return 0;
+ 
+-	if (!(pm_caps & MMC_PM_KEEP_POWER)) {
+-		/* bus was powered off and device removed, probe again */
+-		ret = brcmf_sdiod_probe(sdiodev);
+-		if (ret)
+-			brcmf_err("Failed to probe device on resume\n");
+-	} else {
+-		brcmf_sdiod_freezer_off(sdiodev);
+-	}
+-
+-	return ret;
++	brcmf_sdiod_freezer_off(sdiodev);
++	return 0;
+ }
+ 
+ static const struct dev_pm_ops brcmf_sdio_pm_ops = {
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+index 5598bbd09b62..e3ebb7abbdae 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+@@ -1282,31 +1282,6 @@ static int brcmf_set_pmk(struct brcmf_if *ifp, const u8 *pmk_data, u16 pmk_len)
+ 	return err;
+ }
+ 
+-static int brcmf_set_sae_password(struct brcmf_if *ifp, const u8 *pwd_data,
+-				  u16 pwd_len)
+-{
+-	struct brcmf_pub *drvr = ifp->drvr;
+-	struct brcmf_wsec_sae_pwd_le sae_pwd;
+-	int err;
+-
+-	if (pwd_len > BRCMF_WSEC_MAX_SAE_PASSWORD_LEN) {
+-		bphy_err(drvr, "sae_password must be less than %d\n",
+-			 BRCMF_WSEC_MAX_SAE_PASSWORD_LEN);
+-		return -EINVAL;
+-	}
+-
+-	sae_pwd.key_len = cpu_to_le16(pwd_len);
+-	memcpy(sae_pwd.key, pwd_data, pwd_len);
+-
+-	err = brcmf_fil_iovar_data_set(ifp, "sae_password", &sae_pwd,
+-				       sizeof(sae_pwd));
+-	if (err < 0)
+-		bphy_err(drvr, "failed to set SAE password in firmware (len=%u)\n",
+-			 pwd_len);
+-
+-	return err;
+-}
+-
+ static void brcmf_link_down(struct brcmf_cfg80211_vif *vif, u16 reason)
+ {
+ 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(vif->wdev.wiphy);
+@@ -1530,8 +1505,6 @@ static s32 brcmf_set_wpa_version(struct net_device *ndev,
+ 		val = WPA_AUTH_PSK | WPA_AUTH_UNSPECIFIED;
+ 	else if (sme->crypto.wpa_versions & NL80211_WPA_VERSION_2)
+ 		val = WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED;
+-	else if (sme->crypto.wpa_versions & NL80211_WPA_VERSION_3)
+-		val = WPA3_AUTH_SAE_PSK;
+ 	else
+ 		val = WPA_AUTH_DISABLED;
+ 	brcmf_dbg(CONN, "setting wpa_auth to 0x%0x\n", val);
+@@ -1564,10 +1537,6 @@ static s32 brcmf_set_auth_type(struct net_device *ndev,
+ 		val = 1;
+ 		brcmf_dbg(CONN, "shared key\n");
+ 		break;
+-	case NL80211_AUTHTYPE_SAE:
+-		val = 3;
+-		brcmf_dbg(CONN, "SAE authentication\n");
+-		break;
+ 	default:
+ 		val = 2;
+ 		brcmf_dbg(CONN, "automatic, auth type (%d)\n", sme->auth_type);
+@@ -1678,7 +1647,6 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
+ 	u16 count;
+ 
+ 	profile->use_fwsup = BRCMF_PROFILE_FWSUP_NONE;
+-	profile->is_ft = false;
+ 
+ 	if (!sme->crypto.n_akm_suites)
+ 		return 0;
+@@ -1723,23 +1691,11 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
+ 			break;
+ 		case WLAN_AKM_SUITE_FT_8021X:
+ 			val = WPA2_AUTH_UNSPECIFIED | WPA2_AUTH_FT;
+-			profile->is_ft = true;
+ 			if (sme->want_1x)
+ 				profile->use_fwsup = BRCMF_PROFILE_FWSUP_1X;
+ 			break;
+ 		case WLAN_AKM_SUITE_FT_PSK:
+ 			val = WPA2_AUTH_PSK | WPA2_AUTH_FT;
+-			profile->is_ft = true;
+-			break;
+-		default:
+-			bphy_err(drvr, "invalid cipher group (%d)\n",
+-				 sme->crypto.cipher_group);
+-			return -EINVAL;
+-		}
+-	} else if (val & WPA3_AUTH_SAE_PSK) {
+-		switch (sme->crypto.akm_suites[0]) {
+-		case WLAN_AKM_SUITE_SAE:
+-			val = WPA3_AUTH_SAE_PSK;
+ 			break;
+ 		default:
+ 			bphy_err(drvr, "invalid cipher group (%d)\n",
+@@ -1817,8 +1773,7 @@ brcmf_set_sharedkey(struct net_device *ndev,
+ 	brcmf_dbg(CONN, "wpa_versions 0x%x cipher_pairwise 0x%x\n",
+ 		  sec->wpa_versions, sec->cipher_pairwise);
+ 
+-	if (sec->wpa_versions & (NL80211_WPA_VERSION_1 | NL80211_WPA_VERSION_2 |
+-				 NL80211_WPA_VERSION_3))
++	if (sec->wpa_versions & (NL80211_WPA_VERSION_1 | NL80211_WPA_VERSION_2))
+ 		return 0;
+ 
+ 	if (!(sec->cipher_pairwise &
+@@ -2025,13 +1980,7 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
+ 		goto done;
+ 	}
+ 
+-	if (sme->crypto.sae_pwd) {
+-		brcmf_dbg(INFO, "using SAE offload\n");
+-		profile->use_fwsup = BRCMF_PROFILE_FWSUP_SAE;
+-	}
+-
+-	if (sme->crypto.psk &&
+-	    profile->use_fwsup != BRCMF_PROFILE_FWSUP_SAE) {
++	if (sme->crypto.psk) {
+ 		if (WARN_ON(profile->use_fwsup != BRCMF_PROFILE_FWSUP_NONE)) {
+ 			err = -EINVAL;
+ 			goto done;
+@@ -2049,23 +1998,12 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
+ 		}
+ 	}
+ 
+-	if (profile->use_fwsup == BRCMF_PROFILE_FWSUP_PSK)
++	if (profile->use_fwsup == BRCMF_PROFILE_FWSUP_PSK) {
+ 		err = brcmf_set_pmk(ifp, sme->crypto.psk,
+ 				    BRCMF_WSEC_MAX_PSK_LEN);
+-	else if (profile->use_fwsup == BRCMF_PROFILE_FWSUP_SAE) {
+-		/* clean up user-space RSNE */
+-		if (brcmf_fil_iovar_data_set(ifp, "wpaie", NULL, 0)) {
+-			bphy_err(drvr, "failed to clean up user-space RSNE\n");
++		if (err)
+ 			goto done;
+-		}
+-		err = brcmf_set_sae_password(ifp, sme->crypto.sae_pwd,
+-					     sme->crypto.sae_pwd_len);
+-		if (!err && sme->crypto.psk)
+-			err = brcmf_set_pmk(ifp, sme->crypto.psk,
+-					    BRCMF_WSEC_MAX_PSK_LEN);
+ 	}
+-	if (err)
+-		goto done;
+ 
+ 	/* Join with specific BSSID and cached SSID
+ 	 * If SSID is zero join based on BSSID only
+@@ -5421,8 +5359,7 @@ static bool brcmf_is_linkup(struct brcmf_cfg80211_vif *vif,
+ 	if (event == BRCMF_E_SET_SSID && status == BRCMF_E_STATUS_SUCCESS) {
+ 		brcmf_dbg(CONN, "Processing set ssid\n");
+ 		memcpy(vif->profile.bssid, e->addr, ETH_ALEN);
+-		if (vif->profile.use_fwsup != BRCMF_PROFILE_FWSUP_PSK &&
+-		    vif->profile.use_fwsup != BRCMF_PROFILE_FWSUP_SAE)
++		if (vif->profile.use_fwsup != BRCMF_PROFILE_FWSUP_PSK)
+ 			return true;
+ 
+ 		set_bit(BRCMF_VIF_STATUS_ASSOC_SUCCESS, &vif->sme_state);
+@@ -5617,11 +5554,6 @@ brcmf_bss_roaming_done(struct brcmf_cfg80211_info *cfg,
+ 	cfg80211_roamed(ndev, &roam_info, GFP_KERNEL);
+ 	brcmf_dbg(CONN, "Report roaming result\n");
+ 
+-	if (profile->use_fwsup == BRCMF_PROFILE_FWSUP_1X && profile->is_ft) {
+-		cfg80211_port_authorized(ndev, profile->bssid, GFP_KERNEL);
+-		brcmf_dbg(CONN, "Report port authorized\n");
+-	}
+-
+ 	set_bit(BRCMF_VIF_STATUS_CONNECTED, &ifp->vif->sme_state);
+ 	brcmf_dbg(TRACE, "Exit\n");
+ 	return err;
+@@ -6732,9 +6664,6 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
+ 				      NL80211_EXT_FEATURE_4WAY_HANDSHAKE_STA_PSK);
+ 		wiphy_ext_feature_set(wiphy,
+ 				      NL80211_EXT_FEATURE_4WAY_HANDSHAKE_STA_1X);
+-		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_SAE))
+-			wiphy_ext_feature_set(wiphy,
+-					      NL80211_EXT_FEATURE_SAE_OFFLOAD);
+ 	}
+ 	wiphy->mgmt_stypes = brcmf_txrx_stypes;
+ 	wiphy->max_remain_on_channel_duration = 5000;
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.h
+index 6ce48f6275a4..14d5bbad1db1 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.h
+@@ -107,8 +107,7 @@ struct brcmf_cfg80211_security {
+ enum brcmf_profile_fwsup {
+ 	BRCMF_PROFILE_FWSUP_NONE,
+ 	BRCMF_PROFILE_FWSUP_PSK,
+-	BRCMF_PROFILE_FWSUP_1X,
+-	BRCMF_PROFILE_FWSUP_SAE
++	BRCMF_PROFILE_FWSUP_1X
+ };
+ 
+ /**
+@@ -123,7 +122,6 @@ struct brcmf_cfg80211_profile {
+ 	struct brcmf_cfg80211_security sec;
+ 	struct brcmf_wsec_key key[BRCMF_MAX_DEFAULT_KEYS];
+ 	enum brcmf_profile_fwsup use_fwsup;
+-	bool is_ft;
+ };
+ 
+ /**
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
+index a795d781b4c5..dd586a96b57a 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
+@@ -778,6 +778,7 @@ static int brcmf_chip_dmp_get_regaddr(struct brcmf_chip_priv *ci, u32 *eromaddr,
+ {
+ 	u8 desc;
+ 	u32 val, szdesc;
++	u8 mpnum = 0;
+ 	u8 stype, sztype, wraptype;
+ 
+ 	*regbase = 0;
+@@ -785,6 +786,7 @@ static int brcmf_chip_dmp_get_regaddr(struct brcmf_chip_priv *ci, u32 *eromaddr,
+ 
+ 	val = brcmf_chip_dmp_get_desc(ci, eromaddr, &desc);
+ 	if (desc == DMP_DESC_MASTER_PORT) {
++		mpnum = (val & DMP_MASTER_PORT_NUM) >> DMP_MASTER_PORT_NUM_S;
+ 		wraptype = DMP_SLAVE_TYPE_MWRAP;
+ 	} else if (desc == DMP_DESC_ADDRESS) {
+ 		/* revert erom address */
+@@ -852,7 +854,7 @@ int brcmf_chip_dmp_erom_scan(struct brcmf_chip_priv *ci)
+ 	u8 desc_type = 0;
+ 	u32 val;
+ 	u16 id;
+-	u8 nmw, nsw, rev;
++	u8 nmp, nsp, nmw, nsw, rev;
+ 	u32 base, wrap;
+ 	int err;
+ 
+@@ -878,6 +880,8 @@ int brcmf_chip_dmp_erom_scan(struct brcmf_chip_priv *ci)
+ 			return -EFAULT;
+ 
+ 		/* only look at cores with master port(s) */
++		nmp = (val & DMP_COMP_NUM_MPORT) >> DMP_COMP_NUM_MPORT_S;
++		nsp = (val & DMP_COMP_NUM_SPORT) >> DMP_COMP_NUM_SPORT_S;
+ 		nmw = (val & DMP_COMP_NUM_MWRAP) >> DMP_COMP_NUM_MWRAP_S;
+ 		nsw = (val & DMP_COMP_NUM_SWRAP) >> DMP_COMP_NUM_SWRAP_S;
+ 		rev = (val & DMP_COMP_REVISION) >> DMP_COMP_REVISION_S;
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+index 1c9c74cc958e..2c3526aeca6f 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+@@ -39,8 +39,7 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
+ 	{ BRCMF_FEAT_P2P, "p2p" },
+ 	{ BRCMF_FEAT_MONITOR, "monitor" },
+ 	{ BRCMF_FEAT_MONITOR_FMT_RADIOTAP, "rtap" },
+-	{ BRCMF_FEAT_DOT11H, "802.11h" },
+-	{ BRCMF_FEAT_SAE, "sae" },
++	{ BRCMF_FEAT_DOT11H, "802.11h" }
+ };
+ 
+ #ifdef DEBUG
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
+index 280a1f6412d4..736a8179f62f 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
+@@ -26,7 +26,6 @@
+  * MONITOR_FMT_RADIOTAP: firmware provides monitor packets with radiotap header
+  * MONITOR_FMT_HW_RX_HDR: firmware provides monitor packets with hw/ucode header
+  * DOT11H: firmware supports 802.11h
+- * SAE: simultaneous authentication of equals
+  */
+ #define BRCMF_FEAT_LIST \
+ 	BRCMF_FEAT_DEF(MBSS) \
+@@ -46,8 +45,7 @@
+ 	BRCMF_FEAT_DEF(MONITOR) \
+ 	BRCMF_FEAT_DEF(MONITOR_FMT_RADIOTAP) \
+ 	BRCMF_FEAT_DEF(MONITOR_FMT_HW_RX_HDR) \
+-	BRCMF_FEAT_DEF(DOT11H) \
+-	BRCMF_FEAT_DEF(SAE)
++	BRCMF_FEAT_DEF(DOT11H)
+ 
+ /*
+  * Quirks:
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
+index de0ef1b545c4..37c512036e0e 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
+@@ -61,8 +61,6 @@
+ #define BRCMF_WSEC_MAX_PSK_LEN		32
+ #define	BRCMF_WSEC_PASSPHRASE		BIT(0)
+ 
+-#define BRCMF_WSEC_MAX_SAE_PASSWORD_LEN 128
+-
+ /* primary (ie tx) key */
+ #define BRCMF_PRIMARY_KEY		(1 << 1)
+ #define DOT11_BSSTYPE_ANY		2
+@@ -520,17 +518,6 @@ struct brcmf_wsec_pmk_le {
+ 	u8 key[2 * BRCMF_WSEC_MAX_PSK_LEN + 1];
+ };
+ 
+-/**
+- * struct brcmf_wsec_sae_pwd_le - firmware SAE password material.
+- *
+- * @key_len: number of octets in key materials.
+- * @key: SAE password material.
+- */
+-struct brcmf_wsec_sae_pwd_le {
+-	__le16 key_len;
+-	u8 key[BRCMF_WSEC_MAX_SAE_PASSWORD_LEN];
+-};
+-
+ /* Used to get specific STA parameters */
+ struct brcmf_scb_val_le {
+ 	__le32 val;
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c
+index 1f5deea5a288..7ba9f6a68645 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c
+@@ -2092,8 +2092,7 @@ static struct wireless_dev *brcmf_p2p_create_p2pdev(struct brcmf_p2p_info *p2p,
+ 	/* firmware requires unique mac address for p2pdev interface */
+ 	if (addr && ether_addr_equal(addr, pri_ifp->mac_addr)) {
+ 		bphy_err(drvr, "discovery vif must be different from primary interface\n");
+-		err = -EINVAL;
+-		goto fail;
++		return ERR_PTR(-EINVAL);
+ 	}
+ 
+ 	brcmf_p2p_generate_bss_mac(p2p, addr);
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+index f64ce5074a55..3be60aef5465 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1024,6 +1024,8 @@ brcmf_pcie_init_dmabuffer_for_device(struct brcmf_pciedev_info *devinfo,
+ 			       address & 0xffffffff);
+ 	brcmf_pcie_write_tcm32(devinfo, tcm_dma_phys_addr + 4, address >> 32);
+ 
++	memset(ring, 0, size);
++
+ 	return (ring);
+ }
+ 
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pno.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pno.c
+index fabfbb0b40b0..14e530601ef3 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pno.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pno.c
+@@ -57,10 +57,6 @@ static int brcmf_pno_remove_request(struct brcmf_pno_info *pi, u64 reqid)
+ 
+ 	mutex_lock(&pi->req_lock);
+ 
+-	/* Nothing to do if we have no requests */
+-	if (pi->n_reqs == 0)
+-		goto done;
+-
+ 	/* find request */
+ 	for (i = 0; i < pi->n_reqs; i++) {
+ 		if (pi->reqs[i]->reqid == reqid)
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
+index a935993a3c51..264ad63232f8 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
+@@ -1935,7 +1935,6 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
+ 					       BRCMF_SDIO_FT_NORMAL)) {
+ 				rd->len = 0;
+ 				brcmu_pkt_buf_free_skb(pkt);
+-				continue;
+ 			}
+ 			bus->sdcnt.rx_readahead_cnt++;
+ 			if (rd->len != roundup(rd_new.len, 16)) {
+@@ -4226,12 +4225,6 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
+ 	}
+ 
+ 	if (err == 0) {
+-		/* Assign bus interface call back */
+-		sdiod->bus_if->dev = sdiod->dev;
+-		sdiod->bus_if->ops = &brcmf_sdio_bus_ops;
+-		sdiod->bus_if->chip = bus->ci->chip;
+-		sdiod->bus_if->chiprev = bus->ci->chiprev;
+-
+ 		/* Allow full data communication using DPC from now on. */
+ 		brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DATA);
+ 
+@@ -4248,6 +4241,12 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
+ 
+ 	sdio_release_host(sdiod->func1);
+ 
++	/* Assign bus interface call back */
++	sdiod->bus_if->dev = sdiod->dev;
++	sdiod->bus_if->ops = &brcmf_sdio_bus_ops;
++	sdiod->bus_if->chip = bus->ci->chip;
++	sdiod->bus_if->chiprev = bus->ci->chiprev;
++
+ 	err = brcmf_alloc(sdiod->dev, sdiod->settings);
+ 	if (err) {
+ 		brcmf_err("brcmf_alloc failed\n");
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
+index 575ed19e9195..7cdfde9b3dea 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
+@@ -430,7 +430,6 @@ brcmf_usbdev_qinit(struct list_head *q, int qsize)
+ 			usb_free_urb(req->urb);
+ 		list_del(q->next);
+ 	}
+-	kfree(reqs);
+ 	return NULL;
+ 
+ }
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmsmac/channel.c b/drivers/net/wireless/broadcom/brcm80211/brcmsmac/channel.c
+index 5a6d9c86552a..db783e94f929 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmsmac/channel.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmsmac/channel.c
+@@ -496,11 +496,13 @@ brcms_c_channel_reg_limits(struct brcms_cm_info *wlc_cm, u16 chanspec,
+ 	 * table and override CDD later
+ 	 */
+ 	if (li_mimo == &locale_bn) {
+-		maxpwr20 = QDB(16);
+-		maxpwr40 = 0;
++		if (li_mimo == &locale_bn) {
++			maxpwr20 = QDB(16);
++			maxpwr40 = 0;
+ 
+-		if (chan >= 3 && chan <= 11)
+-			maxpwr40 = QDB(16);
++			if (chan >= 3 && chan <= 11)
++				maxpwr40 = QDB(16);
++		}
+ 
+ 		for (i = 0; i < BRCMS_NUM_RATES_MCS_1_STREAM; i++) {
+ 			txpwr->mcs_20_siso[i] = (u8) maxpwr20;
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmsmac/mac80211_if.c b/drivers/net/wireless/broadcom/brcm80211/brcmsmac/mac80211_if.c
+index 8e8b685cfe09..6188275b17e5 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmsmac/mac80211_if.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmsmac/mac80211_if.c
+@@ -850,7 +850,8 @@ brcms_ops_ampdu_action(struct ieee80211_hw *hw,
+ 				     "START: tid %d is not agg\'able\n", tid);
+ 			return -EINVAL;
+ 		}
+-		return IEEE80211_AMPDU_TX_START_IMMEDIATE;
++		ieee80211_start_tx_ba_cb_irqsafe(vif, sta->addr, tid);
++		break;
+ 
+ 	case IEEE80211_AMPDU_TX_STOP_CONT:
+ 	case IEEE80211_AMPDU_TX_STOP_FLUSH:
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmsmac/main.c b/drivers/net/wireless/broadcom/brcm80211/brcmsmac/main.c
+index 3f09d89ba922..080e829da9b3 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmsmac/main.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmsmac/main.c
+@@ -838,8 +838,9 @@ brcms_c_dotxstatus(struct brcms_c_info *wlc, struct tx_status *txs)
+ 	struct dma_pub *dma = NULL;
+ 	struct d11txh *txh = NULL;
+ 	struct scb *scb = NULL;
+-	int tx_frame_count;
+-	uint supr_status;
++	bool free_pdu;
++	int tx_rts, tx_frame_count, tx_rts_count;
++	uint totlen, supr_status;
+ 	bool lastframe;
+ 	struct ieee80211_hdr *h;
+ 	u16 mcl;
+@@ -916,8 +917,11 @@ brcms_c_dotxstatus(struct brcms_c_info *wlc, struct tx_status *txs)
+ 			     CHSPEC_CHANNEL(wlc->default_bss->chanspec));
+ 	}
+ 
++	tx_rts = le16_to_cpu(txh->MacTxControlLow) & TXC_SENDRTS;
+ 	tx_frame_count =
+ 	    (txs->status & TX_STATUS_FRM_RTX_MASK) >> TX_STATUS_FRM_RTX_SHIFT;
++	tx_rts_count =
++	    (txs->status & TX_STATUS_RTS_RTX_MASK) >> TX_STATUS_RTS_RTX_SHIFT;
+ 
+ 	lastframe = !ieee80211_has_morefrags(h->frame_control);
+ 
+@@ -985,6 +989,9 @@ brcms_c_dotxstatus(struct brcms_c_info *wlc, struct tx_status *txs)
+ 			tx_info->flags |= IEEE80211_TX_STAT_ACK;
+ 	}
+ 
++	totlen = p->len;
++	free_pdu = true;
++
+ 	if (lastframe) {
+ 		/* remove PLCP & Broadcom tx descriptor header */
+ 		skb_pull(p, D11_PHY_HDR_LEN);
+@@ -1809,7 +1816,8 @@ void brcms_b_phy_reset(struct brcms_hardware *wlc_hw)
+ 	udelay(2);
+ 	brcms_b_core_phy_clk(wlc_hw, ON);
+ 
+-	wlc_phy_anacore(pih, ON);
++	if (pih)
++		wlc_phy_anacore(pih, ON);
+ }
+ 
+ /* switch to and initialize new band */
+@@ -7376,7 +7384,9 @@ static void brcms_c_update_beacon_hw(struct brcms_c_info *wlc,
+ 				     false, true);
+ 		/* mark beacon0 valid */
+ 		bcma_set32(core, D11REGOFFS(maccommand), MCMD_BCN1VLD);
++		return;
+ 	}
++	return;
+ }
+ 
+ /*
+diff --git a/drivers/net/wireless/broadcom/brcm80211/include/brcmu_wifi.h b/drivers/net/wireless/broadcom/brcm80211/include/brcmu_wifi.h
+index 7552bdb91991..7b31c212694d 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/include/brcmu_wifi.h
++++ b/drivers/net/wireless/broadcom/brcm80211/include/brcmu_wifi.h
+@@ -231,8 +231,6 @@ static inline bool ac_bitmap_tst(u8 bitmap, int prec)
+ #define WPA2_AUTH_FT		0x4000	/* Fast BSS Transition */
+ #define WPA2_AUTH_PSK_SHA256	0x8000	/* PSK with SHA256 key derivation */
+ 
+-#define WPA3_AUTH_SAE_PSK	0x40000	/* SAE with 4-way handshake */
+-
+ #define DOT11_DEFAULT_RTS_LEN		2347
+ #define DOT11_DEFAULT_FRAG_LEN		2346
+ 
+-- 
+2.25.1
+
