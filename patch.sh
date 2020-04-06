@@ -381,7 +381,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.6-rc5"
+	backport_tag="v5.6.2"
 
 	subsystem="exfat"
 	#regenerate="enable"
@@ -396,7 +396,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.5.8"
+	backport_tag="v5.5.15"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -431,6 +431,25 @@ backports () {
 		patch_backports
 	fi
 
+	backport_tag="v5.4.18"
+
+	subsystem="brcm80211"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/net/wireless/broadcom/brcm80211/* ./drivers/net/wireless/broadcom/brcm80211/
+		#cp -v ~/linux-src/include/linux/mmc/sdio_ids.h ./include/linux/mmc/sdio_ids.h
+		#cp -v ~/linux-src/include/linux/firmware.h ./include/linux/firmware.h
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	#regenerate="enable"
+	dir 'cypress/brcmfmac'
 }
 
 reverts () {
@@ -485,15 +504,14 @@ dir 'fixes'
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.6-rc4"
+		backport_tag="v5.6"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
 		if [ "x${regenerate}" = "xenable" ] ; then
 			pre_backports
 
-			cp -v ~/linux-src/scripts/package/builddeb ./scripts/package/builddeb
-			cp -v ~/linux-src/scripts/package/mkdebian ./scripts/package/mkdebian
+			cp -v ~/linux-src/scripts/package/* ./scripts/package/
 
 			post_backports
 			exit 2
