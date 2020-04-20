@@ -174,6 +174,57 @@ rt () {
 	dir 'rt'
 }
 
+wireguard_fail () {
+	echo "WireGuard failed"
+	exit 2
+}
+
+wireguard () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./WireGuard ] ; then
+			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+			cd ./WireGuard
+				wireguard_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./WireGuard || true
+			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+			cd ./WireGuard
+				wireguard_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+
+		#cd ./WireGuard/
+		#${git_bin}  revert --no-edit xyz
+		#cd ../
+
+		cd ./KERNEL/
+
+		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: WireGuard' -m "https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/WireGuard/
+		echo "WIREGUARD: https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" > ../patches/git/WIREGUARD
+
+		rm -rf ../WireGuard/ || true
+
+		${git_bin} reset --hard HEAD^
+
+		start_cleanup
+
+		${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
+
+		wdir="WireGuard"
+		number=1
+		cleanup
+	fi
+
+	dir 'WireGuard'
+}
+
 ti_pm_firmware () {
 	#http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y-next
 	#regenerate="enable"
@@ -291,6 +342,7 @@ local_patch () {
 #external_git
 can_isotp
 #rt
+wireguard
 ti_pm_firmware
 beagleboard_dtbs
 #local_patch
@@ -329,7 +381,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.6.2"
+	backport_tag="v5.6.5"
 
 	subsystem="exfat"
 	#regenerate="enable"
@@ -344,7 +396,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.5.15"
+	backport_tag="v5.5.18"
 
 	subsystem="greybus"
 	#regenerate="enable"
