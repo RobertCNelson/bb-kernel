@@ -290,7 +290,7 @@ local_patch () {
 
 #external_git
 can_isotp
-#rt
+rt
 ti_pm_firmware
 beagleboard_dtbs
 #local_patch
