@@ -205,6 +205,11 @@ wireguard () {
 		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
 
 		${git_bin} add .
+
+		#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=v5.4.34&id=f8c60f7a00516820589c4c9da5614e4b7f4d0b2f
+		sed -i -e 's:skb_reset_tc:skb_reset_redirect:g' ./net/wireguard/queueing.h
+		sed -i -e 's:skb_reset_tc:skb_reset_redirect:g' ./net/wireguard/compat/compat.h
+
 		${git_bin} commit -a -m 'merge: WireGuard' -m "https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/WireGuard/
 		echo "WIREGUARD: https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" > ../patches/git/WIREGUARD
@@ -381,7 +386,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.6.5"
+	backport_tag="v5.6.7"
 
 	subsystem="exfat"
 	#regenerate="enable"
@@ -396,7 +401,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.5.18"
+	backport_tag="v5.5.19"
 
 	subsystem="greybus"
 	#regenerate="enable"
