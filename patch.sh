@@ -531,6 +531,9 @@ reverts () {
 	#[    5.422573] bone_capemgr bone_capemgr: Failed to add slot #1
 
 	${git} "${DIR}/patches/reverts/0001-Revert-eeprom-at24-check-if-the-chip-is-functional-i.patch"
+	${git} "${DIR}/patches/reverts/0002-Revert-of-unittest-kmemleak-in-of_unittest_platform_.patch"
+	${git} "${DIR}/patches/reverts/0003-Revert-of-fix-missing-kobject-init-for-SYSFS-OF_DYNA.patch"
+
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
