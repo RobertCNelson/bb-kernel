@@ -1,0 +1,6406 @@
+From 2d77dccfca63a2e2670eeee6c7569172595ef186 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Thu, 30 Apr 2020 13:32:18 -0500
+Subject: [PATCH] Old Overlays Patch
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ .gitignore                                    |    4 +
+ .../sysfs-devices-platform-bone_capemgr       |   63 +
+ .../sysfs-firmware-devicetree-overlays        |   52 +
+ .../admin-guide/kernel-parameters.txt         |    2 +
+ .../devicetree/bindings/misc/bone_capemgr.txt |  111 +
+ .../devicetree/configfs-overlays.txt          |   31 +
+ Documentation/devicetree/overlay-notes.txt    |   22 +-
+ Documentation/misc-devices/bone_capemgr.txt   |   63 +
+ MAINTAINERS                                   |    8 +
+ arch/arm/boot/Makefile                        |    4 +
+ arch/arm/boot/dts/Makefile                    |    4 +
+ arch/arm/mach-omap2/omap_device.c             |   17 +-
+ drivers/misc/Kconfig                          |   19 +
+ drivers/misc/Makefile                         |    2 +
+ drivers/misc/bone_capemgr.c                   | 1898 +++++++++++++++++
+ drivers/misc/devovmgr.c                       | 1306 ++++++++++++
+ drivers/of/Kconfig                            |    7 +
+ drivers/of/Makefile                           |    1 +
+ drivers/of/base.c                             |   50 +-
+ drivers/of/configfs.c                         |  307 +++
+ drivers/of/dynamic.c                          |  339 ++-
+ drivers/of/of_private.h                       |   46 +-
+ drivers/of/overlay.c                          |  449 +++-
+ drivers/of/unittest-data/testcases.dts        |   10 +
+ drivers/of/unittest-data/tests-overlay.dtsi   |   63 +
+ drivers/of/unittest.c                         |  399 +++-
+ drivers/tty/serial/omap-serial.c              |   32 +-
+ include/linux/of.h                            |  356 ++++
+ 28 files changed, 5610 insertions(+), 55 deletions(-)
+ create mode 100644 Documentation/ABI/testing/sysfs-devices-platform-bone_capemgr
+ create mode 100644 Documentation/ABI/testing/sysfs-firmware-devicetree-overlays
+ create mode 100644 Documentation/devicetree/bindings/misc/bone_capemgr.txt
+ create mode 100644 Documentation/devicetree/configfs-overlays.txt
+ create mode 100644 Documentation/misc-devices/bone_capemgr.txt
+ create mode 100644 drivers/misc/bone_capemgr.c
+ create mode 100644 drivers/misc/devovmgr.c
+ create mode 100644 drivers/of/configfs.c
+
+diff --git a/.gitignore b/.gitignore
+index f6050b88e95b..f537dae4a949 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -122,3 +122,7 @@ all.config
+ 
+ # Kdevelop4
+ *.kdev4
++
++# dtb objects
++*.dtb
++*.dtbo
+diff --git a/Documentation/ABI/testing/sysfs-devices-platform-bone_capemgr b/Documentation/ABI/testing/sysfs-devices-platform-bone_capemgr
+new file mode 100644
+index 000000000000..e2df61358123
+--- /dev/null
++++ b/Documentation/ABI/testing/sysfs-devices-platform-bone_capemgr
+@@ -0,0 +1,63 @@
++What:		/sys/devices/platform/bone_capemgr/slots
++Date:		May 2015
++KernelVersion:	4.0
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		READ:
++		  Describe the state of all the slots of the beaglebone capemgr.
++		  Each line of the output describes a slot:
++		  The slot format is as following:
++		  <slot-id>: [P-][F-][O-][l-][L-][D-] \
++			  <overlay-id> <board-name>,<version>,
++			  <manufacturer>,<part-number>
++
++		Where the flags are:
++		P: Slot has been probed
++		F: Slot has failed probing (i.e. no EEPROM detected)
++		O: Slot has been overridden by the user
++		l: Slot is current loading
++		L: Slot has completed loading and is ready
++		D: Slot has been disabled
++
++		Example:
++		0: P---L-  -1 BeagleBone RS232 CAPE,00A1,Beagleboardtoys,BB-BONE-SERL-03
++		1: PF----  -1
++		2: PF----  -1
++		3: PF----  -1
++
++		WRITE:
++		  Writing a string of the form <part-number>[:version] issues a request to
++		  load a firmware blob containing an overlay. The name of the firmware blob
++		  is <part-number>-[version|00A0].dtbo. This act is defined as a slot override.
++
++		  Writing a negative slot id removes the slot if it was an overridden one, or
++		  unloads a slot that was probed.
++
++What:		/sys/devices/platform/bone_capemgr/baseboard/<eeprom-field>
++Date:		May 2015
++KernelVersion:	4.0
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:	Contains the probed base board EEPROM field; one of:
++		board-name		- board-name as stored in cape EEPROM
++		dc-supplied		- whether the cape draws or supplies DC
++		eeprom-format-revision	- EEPROM format rev, only 00A0 supported
++		header			- header; should be 'aa 55 33 ee'
++		manufacturer		- manufacturer string
++		part-number		- part-number of the cape
++		serial-number		- serial number of the cape
++		version			- version of the cape, i.e. 00A0
++		number-of-pins		- displayed but ignored
++		pin-usage		- displayed but ignored
++		sys-5v			- displayed but ignored
++		vdd-3v3exp		- displayed but ignored
++		vdd-5v			- displayed but ignored
++What:		/sys/devices/platform/bone_capemgr/slot-<n>/<eeprom-field>
++Date:		May 2015
++KernelVersion:	4.0
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:	Contains the probed cape's EEPROM field; the field is one of:
++		board-name		- baseboard name i.e. A335BNLT
++		header			- header; should be 'aa 55 33 ee'
++		revision		- baseboard revision
++		serial-number		- baseboard serial number
++		config-option		- displayed but ignored
+diff --git a/Documentation/ABI/testing/sysfs-firmware-devicetree-overlays b/Documentation/ABI/testing/sysfs-firmware-devicetree-overlays
+new file mode 100644
+index 000000000000..88d15498a21b
+--- /dev/null
++++ b/Documentation/ABI/testing/sysfs-firmware-devicetree-overlays
+@@ -0,0 +1,52 @@
++What:		/sys/firmware/devicetree/overlays/
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		This directory contains the applied device tree overlays of
++		the running system, as directories of the overlay id.
++
++What:		/sys/firmware/devicetree/overlays/enable
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		The master enable switch, by default is 1, and when
++		set to 0 it cannot be re-enabled for security reasons.
++
++		The discussion about this switch takes place in:
++		http://comments.gmane.org/gmane.linux.drivers.devicetree/101871
++
++		Kees Cook:
++		"Coming from the perspective of drawing a bright line between
++		kernel and the root user (which tends to start with disabling
++		kernel module loading), I would say that there at least needs
++		to be a high-level one-way "off" switch for the interface so
++		that systems that have this interface can choose to turn it off
++		during initial boot, etc."
++
++What:		/sys/firmware/devicetree/overlays/<id>
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		Each directory represents an applied overlay, containing
++		the following attribute files.
++
++What:		/sys/firmware/devicetree/overlays/<id>/can_remove
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		The attribute set to 1 means that the overlay can be removed,
++		while 0 means that the overlay is being overlapped therefore
++		removal is prohibited.
++
++What:		/sys/firmware/devicetree/overlays/<id>/<fragment-name>/
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		Each of these directories contain information about of the
++		particular overlay fragment.
++
++What:		/sys/firmware/devicetree/overlays/<id>/<fragment-name>/target
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		The full-path of the target of the fragment
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index ae51b1b7b67f..7513bb3431a1 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -2993,6 +2993,8 @@
+ 			This can be set from sysctl after boot.
+ 			See Documentation/sysctl/vm.txt for details.
+ 
++	of_overlay_disable	[OF] Disable device tree overlays at boot time.
++
+ 	ohci1394_dma=early	[HW] enable debugging via the ohci1394 driver.
+ 			See Documentation/debugging-via-ohci1394.txt for more
+ 			info.
+diff --git a/Documentation/devicetree/bindings/misc/bone_capemgr.txt b/Documentation/devicetree/bindings/misc/bone_capemgr.txt
+new file mode 100644
+index 000000000000..7e4fbc982cea
+--- /dev/null
++++ b/Documentation/devicetree/bindings/misc/bone_capemgr.txt
+@@ -0,0 +1,111 @@
++* Beaglebone cape manager driver
++
++Required properties:
++- compatible: "ti,bone-capemgr"
++- eeprom: phandle to the EEPROM baseboard.
++          The EEPROM framework interface is use to obtain the data.
++
++Required children nodes:
++
++- baseboardmaps: Contains nodes, which each of the them defines a mapping from
++		 the baseboard EEPROM board-name ID to a DT friendly compatible
++		 string.
++
++  - board-name:      The baseboard EEPROM board name, i.e. A335BONE for the
++                     original beaglebone white.
++  - compatible-name: The DT friendly compatible string to be used for matching
++		     compatible capes, i.e. "ti,beaglebone"
++
++
++ - nvmem-cells: Defines the phandles of the nvmem cells of the baseboard and the
++                slots.
++ - nvmem-cells: Defines the names of the nvmem cells. Required to have at
++                least a baseboard cell name.
++
++ - #slots:	Defines how many slots are there.
++
++- Example of a beaglebone cape-manager:
++
++bone_capemgr {
++	compatible = "ti,bone-capemgr";
++	status = "okay";
++
++	nvmem-cell = <&baseboard_data
++		      &cape0_data &cape1_data &cape2_data &cape3_data>;
++	nvmem-cell-names = "baseboard", "slot0", "slot1", "slot2", "slot3";
++
++	#slots = <4>;
++
++	/* map board revisions to compatible definitions */
++	baseboardmaps {
++		baseboard_beaglebone: board@0 {
++			board-name = "A335BONE";
++			compatible-name = "ti,beaglebone";
++		};
++
++		baseboard_beaglebone_black: board@1 {
++			board-name = "A335BNLT";
++			compatible-name = "ti,beaglebone-black";
++		};
++	};
++};
++
++The format of the cape to be loaded is in a standard overlay format with
++the following root properties that are interpreted by the cape manager:
++
++Required properties:
++ - compatible: Should be compatible to the baseboard according to the
++               baseboard map value, i.e. "ti,beaglebone".
++ - part-numer: Should contain the part-number as stored in the EEPROM.
++ - version:    Should contain a list of all the version that are supported
++               by the single cape dtbo, i.e. "00A1".
++
++Optional properties:
++ - exclusive-use: A string list which state the resources this cape requires.
++                  No processing or matching to anything regarding the internal
++		  kernel state is performed; it's purpose is to guard against
++		  conflicts with other capes.
++ - priority:      A priority to be assigned when loading a cape. A lower value
++                  has higher priority. The purpose of the priority is to control
++		  which cape is loaded first in case of a conflict.
++
++- Example of a serial cape:
++
++/dts-v1/;
++/plugin/;
++/ {
++        compatible = "ti,beaglebone", "ti,beaglebone-black";
++
++        /* identification */
++        part-number = "BB-BONE-SERL-03";
++        version = "00A1";
++
++        /* state the resources this cape uses */
++        exclusive-use =
++                /* the pin header uses */
++                "P9.21",        /* uart2_txd */
++                "P9.22",        /* uart2_rxd */
++                /* the hardware ip uses */
++                "uart2";
++
++        fragment@0 {
++                target = <&am33xx_pinmux>;
++                __overlay__ {
++                        bb_uart2_pins: pinmux_bb_uart2_pins {
++                                pinctrl-single,pins = <
++                                        0x150 0x21      /* spi0_sclk.uart2_rxd | MODE1 */
++                                        0x154 0x01      /* spi0_d0.uart2_txd | MODE1 */
++                                >;
++                        };
++                };
++        };
++
++        fragment@1 {
++                target = <&uart2>;
++                __overlay__ {
++                        status = "okay";
++                        pinctrl-names = "default";
++                        pinctrl-0 = <&bb_uart2_pins>;
++                };
++        };
++};
+diff --git a/Documentation/devicetree/configfs-overlays.txt b/Documentation/devicetree/configfs-overlays.txt
+new file mode 100644
+index 000000000000..5fa43e064307
+--- /dev/null
++++ b/Documentation/devicetree/configfs-overlays.txt
+@@ -0,0 +1,31 @@
++Howto use the configfs overlay interface.
++
++A device-tree configfs entry is created in /config/device-tree/overlays
++and and it is manipulated using standard file system I/O.
++Note that this is a debug level interface, for use by developers and
++not necessarily something accessed by normal users due to the
++security implications of having direct access to the kernel's device tree.
++
++* To create an overlay you mkdir the directory:
++
++	# mkdir /config/device-tree/overlays/foo
++
++* Either you echo the overlay firmware file to the path property file.
++
++	# echo foo.dtbo >/config/device-tree/overlays/foo/path
++
++* Or you cat the contents of the overlay to the dtbo file
++
++	# cat foo.dtbo >/config/device-tree/overlays/foo/dtbo
++
++The overlay file will be applied, and devices will be created/destroyed
++as required.
++
++To remove it simply rmdir the directory.
++
++	# rmdir /config/device-tree/overlays/foo
++
++The rationalle of the dual interface (firmware & direct copy) is that each is
++better suited to different use patterns. The firmware interface is what's
++intended to be used by hardware managers in the kernel, while the copy interface
++make sense for developers (since it avoids problems with namespaces).
+diff --git a/Documentation/devicetree/overlay-notes.txt b/Documentation/devicetree/overlay-notes.txt
+index eb7f2685fda1..d4ebb42ab3c8 100644
+--- a/Documentation/devicetree/overlay-notes.txt
++++ b/Documentation/devicetree/overlay-notes.txt
+@@ -98,6 +98,14 @@ Finally, if you need to remove all overlays in one-go, just call
+ of_overlay_destroy_all() which will remove every single one in the correct
+ order.
+ 
++If your board has multiple slots/places where a single overlay can work
++and each slot is defined by a node, you can use the
++of_overlay_create_target_index() method to select the target.
++
++For overlays on probeable busses, use the of_overlay_create_target_root() method
++in which you supply a device node as a target root, and which all target
++references in the overlay are performed relative to that node.
++
+ Overlay DTS Format
+ ------------------
+ 
+@@ -108,9 +116,11 @@ The DTS of an overlay should have the following format:
+ 
+ 	fragment@0 {	/* first child node */
+ 
+-		target=<phandle>;	/* phandle target of the overlay */
++		/* phandle target of the overlay */
++		target=<phandle> [, <phandle>, ...];
+ 	or
+-		target-path="/path";	/* target path of the overlay */
++		/* target path of the overlay */
++		target-path="/path" [ , "/path", ...];
+ 
+ 		__overlay__ {
+ 			property-a;	/* add property-a to the target */
+@@ -129,3 +139,11 @@ Using the non-phandle based target method allows one to use a base DT which does
+ not contain a __symbols__ node, i.e. it was not compiled with the -@ option.
+ The __symbols__ node is only required for the target=<phandle> method, since it
+ contains the information required to map from a phandle to a tree location.
++
++Using a target index requires the use of a selector target on the call to
++of_overlay_create_target_index(). I.e. passing an index of 0 will select the
++target in the foo node, an index of 1 the bar node, etc.
++
++Note that when using the target root create method all target references must
++lie under the target root node. I.e. the overlay is not allowed to 'break' out
++of the root.
+diff --git a/Documentation/misc-devices/bone_capemgr.txt b/Documentation/misc-devices/bone_capemgr.txt
+new file mode 100644
+index 000000000000..2a8c766b4898
+--- /dev/null
++++ b/Documentation/misc-devices/bone_capemgr.txt
+@@ -0,0 +1,63 @@
++---------------------------
++  Beaglebone Cape-Manager
++---------------------------
++
++The beaglebone cape manager driver allows the automatic use of external
++peripheral capes to be automatically supported by Linux without any manual
++setup required by the user.
++
++Each beaglebone cape should contain an EEPROM that describes
++it in a fixed I2C address on the i2c2 bus of the baseboard.
++The format of the EEPROM is defined in the beaglebone reference
++manual at:
++http://beagleboard.org/static/beaglebone/latest/Docs/Hardware/BONE_SRM.pdf
++
++Reading the part number and revision information the manager
++requests a firmware file formatted as a device tree overlay blob.
++
++Applying the overlay the devices are instantiated and the cape is
++ready to be used.
++
++For instance if the part-number is BB-BONE-SERL-03 and the version is 00A1
++the firmware file requested will be BB-BONE-SERL-03-00A1-00A1.dtbo
++It will be located by the in-kernel firmware
++loader in the usual place, i.e.  /lib/firmware/`uname -r`, /lib/firmware etc.
++
++The driver supports the following parameters (either as part of the kernel
++command line or supplied at module insertion time).
++
++disable_partno:   A comma delimited list of PART-NUMBER[:REV] of
++                  disabled capes.
++enable_partno:    A comma delimited list of PART-NUMBER[:REV[:PRIO]] of
++                  enabled capes.
++boot_scan_period: The boot scan period in ms. When the cape manager is built-in
++                  the kernel image, the firmware loader cannot find the files
++		  before the rootfs is mounted. This parameter controls the
++		  period with which the boot state is checked in that case.
++
++There's a sysfs control interface which is defined at the ABI documentation
++area.
++
++Theory of operation:
++--------------------
++
++On driver probe the I2C EEPROM of the baseboard is read and information about
++the current baseboard is retrieved. This information includes the mapping from
++baseboard board name to DT friendly compatible string. I.e. the "A335BONE" board
++name from EEPROM is mapped to the "ti,beaglebone" compatible string which should
++be present in the dtbo to be loaded.
++
++Afterwards the EEPROMs declared in each slot are probed, and the EEPROMs found
++are decoded keeping track the cape part-number and version data.
++
++Using the part-number and version a firmware file is requested (the firmware
++file requested is <part-number>-<version>.dtbo).
++
++The dtbo is unflattend and the resulting device tree is matched against a
++compatible baseboard, and in case of multiple parallel loading capes the
++priorities defined are honored.  That means that when there are multiple capes
++being loaded in parallel the ones with the lowest priority number are loaded
++first.
++
++Applying the device tree overlay makes the cape operational, as if it was part
++of the kernel's booting device tree.
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 9c2a0ea56065..60949b95f131 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -2595,6 +2595,14 @@ L:	netdev@vger.kernel.org
+ S:	Maintained
+ F:	drivers/net/ethernet/ec_bhf.c
+ 
++BEAGLEBONE CAPEMANAGER
++M:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++S:	Maintained
++F:	drivers/misc/beaglebone-capemgr.c
++F:	Documentation/misc-devices/bone_capemgr.txt
++F:	Documentation/devicetree/bindings/misc/bone_capemgr.txt
++F:	Documentation/ABI/testing/sysfs-devices-platform-bone_capemgr
++
+ BEFS FILE SYSTEM
+ M:	Luis de Bethencourt <luisbg@kernel.org>
+ M:	Salah Triki <salah.triki@gmail.com>
+diff --git a/arch/arm/boot/Makefile b/arch/arm/boot/Makefile
+index 50f8d1be7fcb..2c30c4491679 100644
+--- a/arch/arm/boot/Makefile
++++ b/arch/arm/boot/Makefile
+@@ -29,6 +29,10 @@ export ZRELADDR INITRD_PHYS PARAMS_PHYS
+ 
+ targets := Image zImage xipImage bootpImage uImage
+ 
++ifeq ($(CONFIG_OF_OVERLAY),y)
++DTC_FLAGS += -@
++endif
++
+ ifeq ($(CONFIG_XIP_KERNEL),y)
+ 
+ $(obj)/xipImage: vmlinux FORCE
+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
+index eff87a344566..0dc067eb43ed 100644
+--- a/arch/arm/boot/dts/Makefile
++++ b/arch/arm/boot/dts/Makefile
+@@ -1,6 +1,10 @@
+ # SPDX-License-Identifier: GPL-2.0
+ ifeq ($(CONFIG_OF),y)
+ 
++ifeq ($(CONFIG_OF_OVERLAY),y)
++DTC_FLAGS += -@
++endif
++
+ dtb-$(CONFIG_ARCH_ALPINE) += \
+ 	alpine-db.dtb
+ dtb-$(CONFIG_MACH_ARTPEC6) += \
+diff --git a/arch/arm/mach-omap2/omap_device.c b/arch/arm/mach-omap2/omap_device.c
+index acbede082b5b..c8f1a7d895b1 100644
+--- a/arch/arm/mach-omap2/omap_device.c
++++ b/arch/arm/mach-omap2/omap_device.c
+@@ -206,12 +206,21 @@ static int _omap_device_notifier_call(struct notifier_block *nb,
+ {
+ 	struct platform_device *pdev = to_platform_device(dev);
+ 	struct omap_device *od;
+-	int err;
++	int i, err;
+ 
+ 	switch (event) {
+ 	case BUS_NOTIFY_REMOVED_DEVICE:
+-		if (pdev->archdata.od)
+-			omap_device_delete(pdev->archdata.od);
++		od = to_omap_device(pdev);
++		if (!od)
++			break;
++
++		for (i = 0; i < od->hwmods_cnt; i++) {
++			/* shutdown hwmods */
++			omap_hwmod_shutdown(od->hwmods[i]);
++			/* we don't remove clocks cause there's no API to do so */
++			/* no harm done, since they will not be created next time */
++		}
++		omap_device_delete(od);
+ 		break;
+ 	case BUS_NOTIFY_UNBOUND_DRIVER:
+ 		od = to_omap_device(pdev);
+@@ -783,6 +792,8 @@ int omap_device_idle(struct platform_device *pdev)
+ 	struct omap_device *od;
+ 
+ 	od = to_omap_device(pdev);
++	if (!od)
++		return 0;
+ 
+ 	if (od->_state != OMAP_DEVICE_STATE_ENABLED) {
+ 		dev_warn(&pdev->dev,
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index 8136dc7e863d..715480c23db0 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -506,6 +506,25 @@ config PCI_ENDPOINT_TEST
+            Enable this configuration option to enable the host side test driver
+            for PCI Endpoint.
+ 
++config BONE_CAPEMGR
++	tristate "Beaglebone cape manager"
++	depends on ARCH_OMAP2PLUS && OF
++	select EEPROM
++	select OF_OVERLAY
++	help
++	  Say Y here to include support for automatic loading of
++	  beaglebone capes. Select M to build as a module which
++	  will be named bone_capemgr.
++
++config DEV_OVERLAYMGR
++	tristate "Device overlay manager"
++	depends on OF
++	select OF_OVERLAY
++	default n
++	help
++	  Say Y here to include support for the automagical dev
++	  overlay manager.
++
+ source "drivers/misc/c2port/Kconfig"
+ source "drivers/misc/eeprom/Kconfig"
+ source "drivers/misc/cb710/Kconfig"
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index 76f6a4f628b3..1d15a5120ac7 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -43,6 +43,8 @@ obj-y				+= ti-st/
+ obj-y				+= lis3lv02d/
+ obj-$(CONFIG_USB_SWITCH_FSA9480) += fsa9480.o
+ obj-$(CONFIG_ALTERA_STAPL)	+=altera-stapl/
++obj-$(CONFIG_BONE_CAPEMGR)	+= bone_capemgr.o
++obj-$(CONFIG_DEV_OVERLAYMGR)	+= devovmgr.o
+ obj-$(CONFIG_INTEL_MEI)		+= mei/
+ obj-$(CONFIG_VMWARE_VMCI)	+= vmw_vmci/
+ obj-$(CONFIG_LATTICE_ECP3_CONFIG)	+= lattice-ecp3-config.o
+diff --git a/drivers/misc/bone_capemgr.c b/drivers/misc/bone_capemgr.c
+new file mode 100644
+index 000000000000..0262a46f2a91
+--- /dev/null
++++ b/drivers/misc/bone_capemgr.c
+@@ -0,0 +1,1898 @@
++/*
++ * TI Beaglebone cape manager
++ *
++ * Copyright (C) 2012 Texas Instruments Inc.
++ * Copyright (C) 2012-2015 Konsulko Group.
++ * Author: Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++ * GNU General Public License for more details.
++ */
++
++#include <linux/module.h>
++#include <linux/delay.h>
++#include <linux/err.h>
++#include <linux/interrupt.h>
++#include <linux/completion.h>
++#include <linux/platform_device.h>
++#include <linux/clk.h>
++#include <linux/io.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/of_fdt.h>
++#include <linux/slab.h>
++#include <linux/pm_runtime.h>
++#include <linux/pinctrl/consumer.h>
++#include <linux/firmware.h>
++#include <linux/err.h>
++#include <linux/ctype.h>
++#include <linux/string.h>
++#include <linux/memory.h>
++#include <linux/kthread.h>
++#include <linux/wait.h>
++#include <linux/file.h>
++#include <linux/fs.h>
++#include <linux/nvmem-consumer.h>
++#include <linux/sched/signal.h>
++/* disabled capes */
++static char *disable_partno;
++module_param(disable_partno, charp, 0444);
++MODULE_PARM_DESC(disable_partno,
++		"Comma delimited list of PART-NUMBER[:REV] of disabled capes");
++
++/* enable capes */
++static char *enable_partno;
++module_param(enable_partno, charp, 0444);
++MODULE_PARM_DESC(enable_partno,
++		"Comma delimited list of PART-NUMBER[:REV] of enabled capes");
++
++/* delay to scan on boot until rootfs appears */
++static int boot_scan_period = 1000;
++module_param(boot_scan_period, int, 0444);
++MODULE_PARM_DESC(boot_scan_period,
++		"boot scan period until rootfs firmware is available");
++
++static int uboot_capemgr_enabled = 0;
++module_param(uboot_capemgr_enabled, int, 0444);
++MODULE_PARM_DESC(uboot_capemgr_enabled,
++		 "U-Boot Cape Manager is enabled (0=Kernel Cape Manager [default], 1=Disable Kernel Cape Manager)");
++
++struct capemgr_info;
++
++struct slot_ee_attribute {
++	struct device_attribute devattr;
++	unsigned int field;
++	struct bone_cape_slot *slot;	/* this is filled when instantiated */
++};
++#define to_slot_ee_attribute(x) \
++	container_of((x), struct slot_ee_attribute, devattr)
++
++struct bbrd_ee_attribute {
++	struct device_attribute devattr;
++	unsigned int field;
++};
++#define to_bbrd_ee_attribute(x) \
++	container_of((x), struct bbrd_ee_attribute, devattr)
++
++struct bone_cape_slot {
++	struct list_head	node;
++	struct capemgr_info	*info;
++	int			slotno;
++	struct nvmem_cell	*nvmem_cell;
++
++	char			text_id[256];
++	char			signature[256];
++	/* quick access */
++	char			board_name[32+1];
++	char			version[4+1];
++	char			manufacturer[16+1];
++	char			part_number[16+1];
++
++	/* attribute group */
++	char			*ee_attr_name;
++	int			ee_attrs_count;
++	struct slot_ee_attribute *ee_attrs;
++	struct attribute	**ee_attrs_tab;
++	struct attribute_group	attrgroup;
++
++	/* state flags */
++	unsigned int		probed : 1;
++	unsigned int		probe_failed : 1;
++	unsigned int		override : 1;
++	unsigned int		loading : 1;
++	unsigned int		loaded : 1;
++	unsigned int		retry_loading : 1;
++	unsigned int		disabled : 1;
++
++	char			*dtbo;
++	const struct firmware	*fw;
++	struct device_node	*overlay;
++	int			overlay_id;
++
++	/* loader thread */
++	struct task_struct	*loader_thread;
++
++	/* load priority */
++	int priority;
++};
++
++struct bone_baseboard {
++
++	/* from the matched boardmap node */
++	char			*compatible_name;
++
++	/* filled in by reading the eeprom */
++	char			signature[256];
++	char			text_id[64+1];
++
++	/* quick access */
++	char			board_name[8+1];
++	char			revision[4+1];
++	char			serial_number[12+1];
++
++	/* access to the eeprom */
++	struct nvmem_cell	*nvmem_cell;
++};
++
++struct capemgr_info {
++	struct platform_device	*pdev;
++
++	atomic_t next_slot_nr;
++	struct list_head	slot_list;
++	struct mutex		slots_list_mutex;
++
++	/* baseboard EEPROM data */
++	struct bone_baseboard	baseboard;
++
++	/* wait queue for keeping the priorities straight */
++	wait_queue_head_t	load_wq;
++};
++
++static int bone_slot_fill_override(struct bone_cape_slot *slot,
++		const char *part_number, const char *version);
++static struct bone_cape_slot *capemgr_add_slot(
++		struct capemgr_info *info, const char *slot_name,
++		const char *part_number, const char *version, int prio);
++static int capemgr_remove_slot_no_lock(struct bone_cape_slot *slot);
++static int capemgr_remove_slot(struct bone_cape_slot *slot);
++static int capemgr_load_slot(struct bone_cape_slot *slot);
++static int capemgr_unload_slot(struct bone_cape_slot *slot);
++
++/* baseboard EEPROM field definition */
++#define BBRD_EE_FIELD_HEADER		0
++#define BBRD_EE_FIELD_BOARD_NAME	1
++#define BBRD_EE_FIELD_REVISION		2
++#define BBRD_EE_FIELD_SERIAL_NUMBER	3
++#define BBRD_EE_FIELD_CONFIG_OPTION	4
++#define BBRD_EE_FILED_RSVD1		5
++#define BBRD_EE_FILED_RSVD2		6
++#define BBRD_EE_FILED_RSVD3		7
++
++/* cape EEPROM field definitions */
++#define CAPE_EE_FIELD_HEADER		0
++#define CAPE_EE_FIELD_EEPROM_REV	1
++#define CAPE_EE_FIELD_BOARD_NAME	2
++#define CAPE_EE_FIELD_VERSION		3
++#define CAPE_EE_FIELD_MANUFACTURER	4
++#define CAPE_EE_FIELD_PART_NUMBER	5
++#define CAPE_EE_FIELD_NUMBER_OF_PINS	6
++#define CAPE_EE_FIELD_SERIAL_NUMBER	7
++#define CAPE_EE_FIELD_PIN_USAGE		8
++#define CAPE_EE_FIELD_VDD_3V3EXP	9
++#define CAPE_EE_FIELD_VDD_5V		10
++#define CAPE_EE_FIELD_SYS_5V		11
++#define CAPE_EE_FIELD_DC_SUPPLIED	12
++#define CAPE_EE_FIELD_FIELDS_NR		13
++
++#define EE_FIELD_MAKE_HEADER(p)	\
++	({ \
++		const u8 *_p = (p); \
++		(((u32)_p[0] << 24) | ((u32)_p[1] << 16) | \
++		 ((u32)_p[2] <<  8) |  (u32)_p[3]); \
++	})
++
++#define EE_FIELD_HEADER_VALID	0xaa5533ee
++
++struct ee_field {
++	const char	*name;
++	int		start;
++	int		size;
++	unsigned int	ascii : 1;
++	unsigned int	strip_trailing_dots : 1;
++	const char	*override;
++};
++
++/* baseboard EEPROM definitions */
++static const struct ee_field bbrd_sig_fields[] = {
++	[BBRD_EE_FIELD_HEADER] = {
++		.name		= "header",
++		.start		= 0,
++		.size		= 4,
++		.ascii		= 0,
++		.override	= "\xaa\x55\x33\xee",	/* AA 55 33 EE */
++	},
++	[BBRD_EE_FIELD_BOARD_NAME] = {
++		.name		= "board-name",
++		.start		= 4,
++		.size		= 8,
++		.ascii		= 1,
++		.strip_trailing_dots = 1,
++		.override	= "Board Name",
++	},
++	[BBRD_EE_FIELD_REVISION] = {
++		.name		= "revision",
++		.start		= 12,
++		.size		= 4,
++		.ascii		= 1,
++		.override	= "00A0",
++	},
++	[BBRD_EE_FIELD_SERIAL_NUMBER] = {
++		.name		= "serial-number",
++		.start		= 16,
++		.size		= 12,
++		.ascii		= 1,
++		.override	= "0000000000",
++	},
++	[BBRD_EE_FIELD_CONFIG_OPTION] = {
++		.name		= "config-option",
++		.start		= 28,
++		.size		= 32,
++	},
++};
++
++/* cape EEPROM definitions */
++static const struct ee_field cape_sig_fields[] = {
++	[CAPE_EE_FIELD_HEADER] = {
++		.name		= "header",
++		.start		= 0,
++		.size		= 4,
++		.ascii		= 0,
++		.override	= "\xaa\x55\x33\xee",	/* AA 55 33 EE */
++	},
++	[CAPE_EE_FIELD_EEPROM_REV] = {
++		.name		= "eeprom-format-revision",
++		.start		= 4,
++		.size		= 2,
++		.ascii		= 1,
++		.override	= "A0",
++	},
++	[CAPE_EE_FIELD_BOARD_NAME] = {
++		.name		= "board-name",
++		.start		= 6,
++		.size		= 32,
++		.ascii		= 1,
++		.strip_trailing_dots = 1,
++		.override	= "Override Board Name",
++	},
++	[CAPE_EE_FIELD_VERSION] = {
++		.name		= "version",
++		.start		= 38,
++		.size		= 4,
++		.ascii		= 1,
++		.override	= "00A0",
++	},
++	[CAPE_EE_FIELD_MANUFACTURER] = {
++		.name		= "manufacturer",
++		.start		= 42,
++		.size		= 16,
++		.ascii		= 1,
++		.strip_trailing_dots = 1,
++		.override	= "Override Manuf",
++	},
++	[CAPE_EE_FIELD_PART_NUMBER] = {
++		.name		= "part-number",
++		.start		= 58,
++		.size		= 16,
++		.ascii		= 1,
++		.strip_trailing_dots = 1,
++		.override	= "Override Part#",
++	},
++	[CAPE_EE_FIELD_NUMBER_OF_PINS] = {
++		.name		= "number-of-pins",
++		.start		= 74,
++		.size		= 2,
++		.ascii		= 0,
++		.override	= NULL,
++	},
++	[CAPE_EE_FIELD_SERIAL_NUMBER] = {
++		.name		= "serial-number",
++		.start		= 76,
++		.size		= 12,
++		.ascii		= 1,
++		.override	= "0000000000",
++	},
++	[CAPE_EE_FIELD_PIN_USAGE] = {
++		.name		= "pin-usage",
++		.start		= 88,
++		.size		= 140,
++		.ascii		= 0,
++		.override	= NULL,
++	},
++	[CAPE_EE_FIELD_VDD_3V3EXP] = {
++		.name		= "vdd-3v3exp",
++		.start		= 228,
++		.size		= 2,
++		.ascii		= 0,
++		.override	= NULL,
++	},
++	[CAPE_EE_FIELD_VDD_5V] = {
++		.name		= "vdd-5v",
++		.start		= 230,
++		.size		= 2,
++		.ascii		= 0,
++		.override	= NULL,
++	},
++	[CAPE_EE_FIELD_SYS_5V] = {
++		.name		= "sys-5v",
++		.start		= 232,
++		.size		= 2,
++		.ascii		= 0,
++		.override	= NULL,
++	},
++	[CAPE_EE_FIELD_DC_SUPPLIED] = {
++		.name		= "dc-supplied",
++		.start		= 234,
++		.size		= 2,
++		.ascii		= 0,
++		.override	= NULL,
++	},
++};
++
++static char *ee_field_get(const struct ee_field *sig_field,
++		const void *data, int field, char *buf, int bufsz)
++{
++	int len;
++
++	/* enough space? */
++	if (bufsz < sig_field->size + sig_field->ascii)
++		return NULL;
++
++	memcpy(buf, (char *)data + sig_field->start, sig_field->size);
++
++	/* terminate ascii field */
++	if (sig_field->ascii)
++		buf[sig_field->size] = '\0';
++
++	if (sig_field->strip_trailing_dots) {
++		len = strlen(buf);
++		while (len > 1 && buf[len - 1] == '.')
++			buf[--len] = '\0';
++	}
++
++	return buf;
++}
++
++char *bbrd_ee_field_get(const void *data,
++		int field, char *buf, int bufsz)
++{
++	if ((unsigned int)field >= ARRAY_SIZE(bbrd_sig_fields))
++		return NULL;
++
++	return ee_field_get(&bbrd_sig_fields[field], data, field, buf, bufsz);
++}
++
++char *cape_ee_field_get(const void *data,
++		int field, char *buf, int bufsz)
++{
++	if ((unsigned int)field >= ARRAY_SIZE(cape_sig_fields))
++		return NULL;
++
++	return ee_field_get(&cape_sig_fields[field], data, field, buf, bufsz);
++}
++
++#ifdef CONFIG_OF
++static const struct of_device_id capemgr_of_match[] = {
++	{
++		.compatible = "ti,bone-capemgr",
++	},
++	{ },
++};
++MODULE_DEVICE_TABLE(of, capemgr_of_match);
++
++#endif
++
++static int bone_baseboard_scan(struct bone_baseboard *bbrd)
++{
++	struct capemgr_info *info = container_of(bbrd,
++			struct capemgr_info, baseboard);
++	const u8 *p;
++	int ret;
++	size_t len;
++
++	p = nvmem_cell_read(bbrd->nvmem_cell, &len);
++	if (IS_ERR(p)) {
++		ret = PTR_ERR(p);
++		dev_err(&info->pdev->dev,
++			"Cannot read cell (ret=%d)\n", ret);
++		return ret;
++	}
++	if (len < sizeof(bbrd->signature)) {
++		dev_info(&info->pdev->dev,
++			"Short read %d (should be >= %d bytes)\n",
++			len, sizeof(bbrd->signature));
++		return -EINVAL;
++	}
++	memcpy(bbrd->signature, p, sizeof(bbrd->signature));
++
++	p = bbrd->signature;
++	if (EE_FIELD_MAKE_HEADER(p) != EE_FIELD_HEADER_VALID) {
++		dev_err(&info->pdev->dev, "Invalid board signature '%08x'\n",
++			EE_FIELD_MAKE_HEADER(p));
++		return -ENODEV;
++	}
++
++	bbrd_ee_field_get(bbrd->signature,
++			BBRD_EE_FIELD_BOARD_NAME,
++			bbrd->board_name, sizeof(bbrd->board_name));
++	bbrd_ee_field_get(bbrd->signature,
++			BBRD_EE_FIELD_REVISION,
++			bbrd->revision, sizeof(bbrd->revision));
++	bbrd_ee_field_get(bbrd->signature,
++			BBRD_EE_FIELD_SERIAL_NUMBER,
++			bbrd->serial_number, sizeof(bbrd->serial_number));
++
++	/* board_name,version,manufacturer,part_number */
++	snprintf(bbrd->text_id, sizeof(bbrd->text_id) - 1,
++			"%s,%s,%s", bbrd->board_name, bbrd->revision,
++			bbrd->serial_number);
++
++	/* terminate always */
++	bbrd->text_id[sizeof(bbrd->text_id) - 1] = '\0';
++
++	return 0;
++}
++
++static int bone_slot_scan(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	const u8 *p;
++	int r;
++	ssize_t len;
++
++	/* need to read EEPROM? */
++	if (slot->probed)
++		goto slot_fail_check;
++
++	if (uboot_capemgr_enabled)
++		goto slot_fail_check;
++
++	slot->probed = 1;
++
++	if (!slot->override) {
++
++		p = nvmem_cell_read(slot->nvmem_cell, &len);
++		if (IS_ERR(p)) {
++			r = PTR_ERR(p);
++			slot->probe_failed = 1;
++
++			/* timeout is normal when no cape is present */
++			if (r != -ETIMEDOUT)
++				dev_err(&info->pdev->dev,
++					"Cannot read cell (ret=%d)\n", r);
++			return r;
++		}
++		if (len < sizeof(slot->signature)) {
++			dev_info(&info->pdev->dev,
++				"Short read %d (should be >= %d bytes)\n",
++				len, sizeof(slot->signature));
++			return -EINVAL;
++		}
++		memcpy(slot->signature, p, sizeof(slot->signature));
++
++	} else
++		dev_info(&info->pdev->dev,
++			"Using override eeprom data at slot %d\n",
++			slot->slotno);
++
++	p = slot->signature;
++	if (EE_FIELD_MAKE_HEADER(p) != EE_FIELD_HEADER_VALID) {
++		dev_err(&info->pdev->dev,
++			"Invalid signature '%08x' at slot %d\n",
++			EE_FIELD_MAKE_HEADER(p), slot->slotno);
++		slot->probe_failed = 1;
++		return -ENODEV;
++	}
++
++	cape_ee_field_get(slot->signature,
++			CAPE_EE_FIELD_BOARD_NAME,
++			slot->board_name, sizeof(slot->board_name));
++	cape_ee_field_get(slot->signature,
++			CAPE_EE_FIELD_VERSION,
++			slot->version, sizeof(slot->version));
++	cape_ee_field_get(slot->signature,
++			CAPE_EE_FIELD_MANUFACTURER,
++			slot->manufacturer, sizeof(slot->manufacturer));
++	cape_ee_field_get(slot->signature,
++			CAPE_EE_FIELD_PART_NUMBER,
++			slot->part_number, sizeof(slot->part_number));
++
++	/* board_name,version,manufacturer,part_number */
++	snprintf(slot->text_id, sizeof(slot->text_id) - 1,
++			"%s,%s,%s,%s", slot->board_name, slot->version,
++			slot->manufacturer, slot->part_number);
++
++	/* terminate always */
++	slot->text_id[sizeof(slot->text_id) - 1] = '\0';
++
++slot_fail_check:
++	/* slot has failed and we don't support hotpluging */
++	if (slot->probe_failed)
++		return -ENODEV;
++
++	return 0;
++}
++
++/* return 0 if not matched,, 1 if matched */
++static int bone_match_cape(const char *match,
++		const char *part_number, const char *version)
++{
++	char *tmp_part_number, *tmp_version;
++	char *buf, *s, *e, *sn;
++	int found;
++
++	if (match == NULL || part_number == NULL)
++		return 0;
++
++	/* copy the argument to work on it */
++	buf = kstrdup(match, GFP_KERNEL);
++
++	/* no memory, too bad... */
++	if (buf == NULL)
++		return 0;
++
++	found = 0;
++	s = buf;
++	e = s + strlen(s);
++	while (s < e) {
++		/* find comma separator */
++		sn = strchr(s, ',');
++		if (sn != NULL)
++			*sn++ = '\0';
++		else
++			sn = e;
++		tmp_part_number = s;
++		tmp_version = strchr(tmp_part_number, ':');
++		if (tmp_version != NULL)
++			*tmp_version++ = '\0';
++		s = sn;
++
++		/* the part names must match */
++		if (strcmp(tmp_part_number, part_number) != 0)
++			continue;
++
++		/* if there's no version, match any */
++		if (version == NULL || tmp_version == NULL ||
++			strcmp(version, tmp_version) == 0) {
++			found = 1;
++			break;
++		}
++	}
++
++	kfree(buf);
++
++	return found;
++}
++
++/* helper method */
++static int of_multi_prop_cmp(const struct property *prop, const char *value)
++{
++	const char *cp;
++	int cplen, vlen, l;
++
++	/* check if it's directly compatible */
++	cp = prop->value;
++	cplen = prop->length;
++	vlen = strlen(value);
++
++	while (cplen > 0) {
++		/* compatible? */
++		if (of_compat_cmp(cp, value, vlen) == 0)
++			return 0;
++		l = strlen(cp) + 1;
++		cp += l;
++		cplen -= l;
++	}
++	return -1;
++}
++
++static ssize_t slot_ee_attr_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct slot_ee_attribute *ee_attr = to_slot_ee_attribute(attr);
++	struct bone_cape_slot *slot = ee_attr->slot;
++	const struct ee_field *sig_field;
++	int i, len;
++	char *p, *s;
++	u16 val;
++
++	/* add newline for ascii fields */
++	sig_field = &cape_sig_fields[ee_attr->field];
++
++	len = sig_field->size + sig_field->ascii;
++	p = kmalloc(len, GFP_KERNEL);
++	if (p == NULL)
++		return -ENOMEM;
++
++	s = cape_ee_field_get(slot->signature, ee_attr->field, p, len);
++	if (s == NULL)
++		return -EINVAL;
++
++	/* add newline for ascii fields and return */
++	if (sig_field->ascii) {
++		len = sprintf(buf, "%s\n", s);
++		goto out;
++	}
++
++	/* case by case handling */
++	switch (ee_attr->field) {
++	case CAPE_EE_FIELD_HEADER:
++		len = sprintf(buf, "%02x %02x %02x %02x\n",
++				s[0], s[1], s[2], s[3]);
++		break;
++
++		/* 2 bytes */
++	case CAPE_EE_FIELD_NUMBER_OF_PINS:
++	case CAPE_EE_FIELD_VDD_3V3EXP:
++	case CAPE_EE_FIELD_VDD_5V:
++	case CAPE_EE_FIELD_SYS_5V:
++	case CAPE_EE_FIELD_DC_SUPPLIED:
++		/* the bone is LE */
++		val = s[0] & (s[1] << 8);
++		len = sprintf(buf, "%u\n", (unsigned int)val & 0xffff);
++		break;
++
++	case CAPE_EE_FIELD_PIN_USAGE:
++
++		len = 0;
++		for (i = 0; i < sig_field->size / 2; i++) {
++			/* the bone is LE */
++			val = s[0] & (s[1] << 8);
++			sprintf(buf, "%04x\n", val);
++			buf += 5;
++			len += 5;
++			s += 2;
++		}
++
++		break;
++
++	default:
++		*buf = '\0';
++		len = 0;
++		break;
++	}
++
++out:
++	kfree(p);
++
++	return len;
++}
++
++#define SLOT_EE_ATTR(_name, _field) \
++	{ \
++		.devattr = __ATTR(_name, S_IRUGO, slot_ee_attr_show, NULL), \
++		.field = CAPE_EE_FIELD_##_field, \
++		.slot = NULL, \
++	}
++
++static const struct slot_ee_attribute slot_ee_attrs[] = {
++	SLOT_EE_ATTR(header, HEADER),
++	SLOT_EE_ATTR(eeprom-format-revision, EEPROM_REV),
++	SLOT_EE_ATTR(board-name, BOARD_NAME),
++	SLOT_EE_ATTR(version, VERSION),
++	SLOT_EE_ATTR(manufacturer, MANUFACTURER),
++	SLOT_EE_ATTR(part-number, PART_NUMBER),
++	SLOT_EE_ATTR(number-of-pins, NUMBER_OF_PINS),
++	SLOT_EE_ATTR(serial-number, SERIAL_NUMBER),
++	SLOT_EE_ATTR(pin-usage, PIN_USAGE),
++	SLOT_EE_ATTR(vdd-3v3exp, VDD_3V3EXP),
++	SLOT_EE_ATTR(vdd-5v, VDD_5V),
++	SLOT_EE_ATTR(sys-5v, SYS_5V),
++	SLOT_EE_ATTR(dc-supplied, DC_SUPPLIED),
++};
++
++static int bone_cape_slot_sysfs_register(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	struct device *dev = &info->pdev->dev;
++	struct slot_ee_attribute *ee_attr;
++	struct attribute_group *attrgroup;
++	int i, err, sz;
++
++	slot->ee_attr_name = kasprintf(GFP_KERNEL, "slot-%d", slot->slotno);
++	if (slot->ee_attr_name == NULL) {
++		dev_err(dev, "slot #%d: Failed to allocate ee_attr_name\n",
++				slot->slotno);
++		err = -ENOMEM;
++		goto err_fail_no_ee_attr_name;
++	}
++
++	slot->ee_attrs_count = ARRAY_SIZE(slot_ee_attrs);
++
++	sz = slot->ee_attrs_count * sizeof(*slot->ee_attrs);
++	slot->ee_attrs = kmalloc(sz, GFP_KERNEL);
++	if (slot->ee_attrs == NULL) {
++		dev_err(dev, "slot #%d: Failed to allocate ee_attrs\n",
++				slot->slotno);
++		err = -ENOMEM;
++		goto err_fail_no_ee_attrs;
++	}
++
++	attrgroup = &slot->attrgroup;
++	memset(attrgroup, 0, sizeof(*attrgroup));
++	attrgroup->name = slot->ee_attr_name;
++
++	sz = sizeof(*slot->ee_attrs_tab) * (slot->ee_attrs_count + 1);
++	attrgroup->attrs = kmalloc(sz, GFP_KERNEL);
++	if (attrgroup->attrs == NULL) {
++		dev_err(dev, "slot #%d: Failed to allocate ee_attrs_tab\n",
++				slot->slotno);
++		err = -ENOMEM;
++		goto err_fail_no_ee_attrs_tab;
++	}
++	/* copy everything over */
++	memcpy(slot->ee_attrs, slot_ee_attrs, sizeof(slot_ee_attrs));
++
++	/* bind this attr to the slot */
++	for (i = 0; i < slot->ee_attrs_count; i++) {
++		ee_attr = &slot->ee_attrs[i];
++		ee_attr->slot = slot;
++		attrgroup->attrs[i] = &ee_attr->devattr.attr;
++	}
++	attrgroup->attrs[i] = NULL;
++
++	/* make lockdep happy */
++	for (i = 0; i < slot->ee_attrs_count; i++) {
++		ee_attr = &slot->ee_attrs[i];
++		sysfs_attr_init(&ee_attr->devattr.attr);
++	}
++
++	err = sysfs_create_group(&dev->kobj, attrgroup);
++	if (err != 0) {
++		dev_err(dev, "slot #%d: Failed to allocate ee_attrs_tab\n",
++				slot->slotno);
++		err = -ENOMEM;
++		goto err_fail_no_ee_attrs_group;
++	}
++
++	return 0;
++
++err_fail_no_ee_attrs_group:
++	kfree(slot->ee_attrs_tab);
++err_fail_no_ee_attrs_tab:
++	kfree(slot->ee_attrs);
++err_fail_no_ee_attrs:
++	kfree(slot->ee_attr_name);
++err_fail_no_ee_attr_name:
++	return err;
++}
++
++static void bone_cape_slot_sysfs_unregister(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	struct device *dev = &info->pdev->dev;
++
++	sysfs_remove_group(&dev->kobj, &slot->attrgroup);
++	kfree(slot->ee_attrs_tab);
++	kfree(slot->ee_attrs);
++	kfree(slot->ee_attr_name);
++}
++
++static ssize_t bbrd_ee_attr_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct bbrd_ee_attribute *ee_attr = to_bbrd_ee_attribute(attr);
++	struct platform_device *pdev = to_platform_device(dev);
++	struct capemgr_info *info = platform_get_drvdata(pdev);
++	struct bone_baseboard *bbrd = &info->baseboard;
++	const struct ee_field *sig_field;
++	u16 val;
++	int i, len;
++	char *p, *s;
++
++	/* add newline for ascii fields */
++	sig_field = &bbrd_sig_fields[ee_attr->field];
++
++	len = sig_field->size + sig_field->ascii;
++	p = kmalloc(len, GFP_KERNEL);
++	if (p == NULL)
++		return -ENOMEM;
++
++	s = bbrd_ee_field_get(bbrd->signature, ee_attr->field, p, len);
++	if (s == NULL)
++		return -EINVAL;
++
++	/* add newline for ascii fields and return */
++	if (sig_field->ascii) {
++		len = sprintf(buf, "%s\n", s);
++		goto out;
++	}
++
++	/* case by case handling */
++	switch (ee_attr->field) {
++	case BBRD_EE_FIELD_HEADER:
++		len = sprintf(buf, "%02x %02x %02x %02x\n",
++				s[0], s[1], s[2], s[3]);
++		break;
++
++	case BBRD_EE_FIELD_CONFIG_OPTION:
++		len = 0;
++		for (i = 0; i < sig_field->size / 2; i++) {
++			/* the bone is LE */
++			val = s[0] & (s[1] << 8);
++			sprintf(buf, "%04x\n", val);
++			buf += 5;
++			len += 5;
++			s += 2;
++		}
++		break;
++
++	default:
++		*buf = '\0';
++		len = 0;
++		break;
++	}
++
++out:
++	kfree(p);
++
++	return len;
++}
++
++#define BBRD_EE_ATTR(_name, _field) \
++	{ \
++		.devattr = __ATTR(_name, 0440, bbrd_ee_attr_show, NULL), \
++		.field = BBRD_EE_FIELD_##_field, \
++	}
++
++static struct bbrd_ee_attribute bbrd_ee_attrs[] = {
++	BBRD_EE_ATTR(header, HEADER),
++	BBRD_EE_ATTR(board-name, BOARD_NAME),
++	BBRD_EE_ATTR(revision, REVISION),
++	BBRD_EE_ATTR(serial-number, SERIAL_NUMBER),
++	BBRD_EE_ATTR(config-option, CONFIG_OPTION),
++};
++
++static struct attribute *bbrd_attrs_flat[] = {
++	&bbrd_ee_attrs[BBRD_EE_FIELD_HEADER].devattr.attr,
++	&bbrd_ee_attrs[BBRD_EE_FIELD_BOARD_NAME].devattr.attr,
++	&bbrd_ee_attrs[BBRD_EE_FIELD_REVISION].devattr.attr,
++	&bbrd_ee_attrs[BBRD_EE_FIELD_SERIAL_NUMBER].devattr.attr,
++	&bbrd_ee_attrs[BBRD_EE_FIELD_CONFIG_OPTION].devattr.attr,
++	NULL,
++};
++
++static const struct attribute_group bbrd_attr_group = {
++	.name	= "baseboard",
++	.attrs	= bbrd_attrs_flat,
++};
++
++static ssize_t slots_show(struct device *dev, struct device_attribute *attr,
++		char *buf);
++static ssize_t slots_store(struct device *dev, struct device_attribute *attr,
++		 const char *buf, size_t count);
++
++static DEVICE_ATTR(slots, 0644, slots_show, slots_store);
++
++static struct attribute *root_attrs_flat[] = {
++	&dev_attr_slots.attr,
++	NULL,
++};
++
++static const struct attribute_group root_attr_group = {
++	.attrs = root_attrs_flat,
++};
++
++static const struct attribute_group *attr_groups[] = {
++	&root_attr_group,
++	&bbrd_attr_group,
++	NULL,
++};
++
++static ssize_t slots_show(struct device *dev, struct device_attribute *attr,
++		char *buf)
++{
++	struct platform_device *pdev = to_platform_device(dev);
++	struct capemgr_info *info = platform_get_drvdata(pdev);
++	struct bone_cape_slot *slot;
++	ssize_t len, sz;
++
++	mutex_lock(&info->slots_list_mutex);
++	sz = 0;
++	list_for_each_entry(slot, &info->slot_list, node) {
++
++		len = sprintf(buf, "%2d: %c%c%c%c%c%c %3d %s\n",
++				slot->slotno,
++				slot->probed       ? 'P' : '-',
++				slot->probe_failed ? 'F' : '-',
++				slot->override     ? 'O' : '-',
++				slot->loading	   ? 'l' : '-',
++				slot->loaded	   ? 'L' : '-',
++				slot->disabled     ? 'D' : '-',
++				slot->overlay_id, slot->text_id);
++
++		buf += len;
++		sz += len;
++	}
++	mutex_unlock(&info->slots_list_mutex);
++
++	return sz;
++}
++
++static ssize_t slots_store(struct device *dev, struct device_attribute *attr,
++		 const char *buf, size_t count)
++{
++	struct platform_device *pdev = to_platform_device(dev);
++	struct capemgr_info *info = platform_get_drvdata(pdev);
++	struct bone_cape_slot *slot;
++	struct device_node *pnode, *node;
++	char *s, *part_number, *version;
++	int ret;
++	int slotno;
++
++	/* check for remove slot */
++	if (strlen(buf) > 0 && buf[0] == '-') {
++		ret = kstrtoint(buf + 1, 10, &slotno);
++		if (ret != 0)
++			return ret;
++
++		/* now load each (take lock to be sure */
++		mutex_lock(&info->slots_list_mutex);
++		list_for_each_entry(slot, &info->slot_list, node) {
++			if (slotno == slot->slotno)
++				goto found;
++		}
++
++		mutex_unlock(&info->slots_list_mutex);
++		return -ENODEV;
++found:
++		/* the hardware slots just get unloaded */
++		if (!slot->override) {
++			ret = capemgr_unload_slot(slot);
++			if (ret == 0)
++				dev_info(&pdev->dev,
++					"Unloaded slot #%d\n", slotno);
++			else
++				dev_err(&pdev->dev,
++					"Failed to unload slot #%d\n", slotno);
++		} else {
++			ret = capemgr_remove_slot_no_lock(slot);
++			if (ret == 0)
++				dev_info(&pdev->dev,
++					"Removed slot #%d\n", slotno);
++			else
++				dev_err(&pdev->dev,
++					"Failed to remove slot #%d\n", slotno);
++		}
++		mutex_unlock(&info->slots_list_mutex);
++
++		return ret == 0 ? strlen(buf) : ret;
++	}
++
++	part_number = kstrdup(buf, GFP_KERNEL);
++	if (part_number == NULL)
++		return -ENOMEM;
++
++	/* remove trailing spaces dots and newlines */
++	s = part_number + strlen(part_number);
++	while (s > part_number &&
++			(isspace(s[-1]) || s[-1] == '\n' || s[-1] == '.'))
++		*--s = '\0';
++
++	version = strchr(part_number, ':');
++	if (version != NULL)
++		*version++ = '\0';
++
++	dev_info(&pdev->dev, "part_number '%s', version '%s'\n",
++			part_number, version ? version : "N/A");
++
++	pnode = pdev->dev.of_node;
++	node = NULL;
++	slot = NULL;
++	ret = 0;
++
++	/* no specific slot found, try immediate */
++	slot = capemgr_add_slot(info, NULL, part_number, version, 0);
++
++	if (IS_ERR_OR_NULL(slot)) {
++		dev_err(&pdev->dev, "Failed to add slot #%d\n",
++			atomic_read(&info->next_slot_nr) - 1);
++		ret = slot ? PTR_ERR(slot) : -ENODEV;
++		slot = NULL;
++		goto err_fail;
++	}
++
++	kfree(part_number);
++
++	ret = capemgr_load_slot(slot);
++	if (ret != 0)
++		capemgr_remove_slot(slot);
++
++	return ret == 0 ? strlen(buf) : ret;
++err_fail:
++	of_node_put(node);
++	kfree(part_number);
++	return ret;
++}
++
++/* verify the overlay */
++static int capemgr_verify_overlay(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	struct device *dev = &info->pdev->dev;
++	struct bone_baseboard *bbrd = &info->baseboard;
++	struct device_node *node = slot->overlay;
++	struct property *prop;
++	struct bone_cape_slot *slotn;
++	int err, counta, countb, i, j;
++	const char *ra, *rb;
++
++	/* validate */
++	if (node == NULL) {
++		dev_err(dev, "slot #%d: No overlay for '%s'\n",
++				slot->slotno, slot->part_number);
++		return -EINVAL;
++	}
++
++	/* check if the slot is compatible with the board */
++	prop = of_find_property(node, "compatible", NULL);
++
++	/* no compatible property? */
++	if (prop == NULL) {
++		dev_err(dev, "slot #%d: No compatible property for '%s'\n",
++				slot->slotno, slot->part_number);
++		return -EINVAL;
++	}
++
++	/* verify that the cape is baseboard compatible */
++	if (of_multi_prop_cmp(prop, bbrd->compatible_name) != 0) {
++		dev_err(dev, "slot #%d: Incompatible with baseboard for '%s'\n",
++				slot->slotno, slot->part_number);
++		return -EINVAL;
++	}
++
++	/* count the strings */
++	counta = of_property_count_strings(node, "exclusive-use");
++	/* no valid property, or no resources; no matter, it's OK */
++	if (counta <= 0)
++		return 0;
++
++	/* and now check if there's a resource conflict */
++	err = 0;
++	mutex_lock(&info->slots_list_mutex);
++	for (i = 0; i < counta; i++) {
++
++		ra = NULL;
++		err = of_property_read_string_index(node, "exclusive-use",
++				i, &ra);
++		if (err != 0) {
++			dev_err(dev, "slot #%d: Could not read string #%d\n",
++					slot->slotno, i);
++			break;
++		}
++
++		list_for_each_entry(slotn, &info->slot_list, node) {
++
++			/* don't check against self */
++			if (slot == slotn)
++				continue;
++
++			/* only check against loaded or loading slots */
++			if (!slotn->loaded && !slotn->loading)
++				continue;
++
++			countb = of_property_count_strings(slotn->overlay,
++					"exclusive-use");
++			/* no valid property, or resources; it's OK */
++			if (countb <= 0)
++				continue;
++
++
++			for (j = 0; j < countb; j++) {
++
++				/* count the resources */
++				rb = NULL;
++				err = of_property_read_string_index(
++					slotn->overlay, "exclusive-use",
++						j, &rb);
++				if (err != 0) {
++					/* error, but we don't care */
++					err = 0;
++					break;
++				}
++
++				/* ignore case; just in case ;) */
++				if (strcasecmp(ra, rb) == 0) {
++
++					/* resource conflict */
++					err = -EEXIST;
++					dev_err(dev,
++						"slot #%d: %s conflict %s (#%d:%s)\n",
++						slot->slotno,
++						slot->part_number, ra,
++						slotn->slotno,
++						slotn->part_number);
++					goto out;
++				}
++			}
++		}
++	}
++out:
++	mutex_unlock(&info->slots_list_mutex);
++
++	return err;
++}
++
++static int capemgr_load_slot(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	struct device *dev = &info->pdev->dev;
++	const char *dtbo;
++	int err;
++
++	if (slot->probe_failed) {
++		dev_err(dev, "slot #%d: probe failed for '%s'\n",
++			slot->slotno, slot->part_number);
++		return -ENODEV;
++	}
++
++	if (slot->loaded) {
++		dev_err(dev, "slot #%d: already loaded for '%s'\n",
++			slot->slotno, slot->part_number);
++		return -EAGAIN;
++	}
++
++	/* make sure we don't leak this on repeated calls */
++	kfree(slot->dtbo);
++	slot->dtbo = NULL;
++
++	dev_dbg(dev, "slot #%d: Requesting part number/version based '%s-%s.dtbo\n",
++			slot->slotno, slot->part_number, slot->version);
++
++	/* request the part number + .dtbo*/
++	slot->dtbo = kasprintf(GFP_KERNEL, "%s-%s.dtbo",
++			slot->part_number, slot->version);
++	if (slot->dtbo == NULL) {
++		dev_err(dev, "slot #%d: Failed to get dtbo '%s'\n",
++				slot->slotno, dtbo);
++		return -ENOMEM;
++	}
++
++	dev_dbg(dev, "slot #%d: Requesting firmware '%s' for board-name '%s', version '%s'%s\n",
++			slot->slotno,
++			slot->dtbo, slot->board_name, slot->version,
++			system_state == SYSTEM_BOOTING ? " - booting" : "");
++
++	err = request_firmware_direct(&slot->fw, slot->dtbo, dev);
++	if (err != 0) {
++		dev_dbg(dev, "failed to load firmware '%s'\n", slot->dtbo);
++		goto err_fail_no_fw;
++	}
++
++	dev_dbg(dev, "slot #%d: dtbo '%s' loaded; converting to live tree\n",
++			slot->slotno, slot->dtbo);
++
++	of_fdt_unflatten_tree((unsigned long *)slot->fw->data, NULL,
++			&slot->overlay);
++	if (slot->overlay == NULL) {
++		dev_err(dev, "slot #%d: Failed to unflatten\n",
++				slot->slotno);
++		err = -EINVAL;
++		goto err_fail;
++	}
++
++	/* mark it as detached */
++	of_node_set_flag(slot->overlay, OF_DETACHED);
++
++	/* perform resolution */
++	err = of_resolve_phandles(slot->overlay);
++	if (err != 0) {
++		dev_err(dev, "slot #%d: Failed to resolve tree\n",
++				slot->slotno);
++		goto err_fail;
++	}
++
++	err = capemgr_verify_overlay(slot);
++	if (err != 0) {
++		dev_err(dev, "slot #%d: Failed verification\n",
++				slot->slotno);
++		goto err_fail;
++	}
++
++	err = of_overlay_create(slot->overlay);
++	if (err < 0) {
++		dev_err(dev, "slot #%d: Failed to create overlay\n",
++				slot->slotno);
++		goto err_fail;
++	}
++	slot->overlay_id = err;
++
++	slot->loading = 0;
++	slot->loaded = 1;
++
++	dev_info(dev, "slot #%d: dtbo '%s' loaded; overlay id #%d\n",
++			slot->slotno, slot->dtbo, slot->overlay_id);
++
++	return 0;
++
++err_fail:
++
++	/* TODO: free the overlay, we can't right now cause
++	 * the unflatten method does not track it */
++	slot->overlay = NULL;
++
++	release_firmware(slot->fw);
++	slot->fw = NULL;
++
++err_fail_no_fw:
++	slot->loading = 0;
++	return err;
++}
++
++static int capemgr_unload_slot(struct bone_cape_slot *slot)
++{
++	if (!slot->loaded || slot->overlay_id == -1)
++		return -EINVAL;
++
++	of_overlay_destroy(slot->overlay_id);
++	slot->overlay_id = -1;
++
++	slot->loaded = 0;
++
++	return 0;
++
++}
++
++/* slots_list_mutex must be taken */
++static int capemgr_remove_slot_no_lock(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	struct device *dev = &info->pdev->dev;
++	int ret;
++
++	if (slot == NULL)
++		return 0;
++
++	if (slot->loaded && slot->overlay_id >= 0) {
++		/* unload just in case */
++		ret = capemgr_unload_slot(slot);
++		if (ret != 0) {
++			dev_err(dev, "Unable to unload slot #%d\n",
++				slot->slotno);
++			return ret;
++		}
++	}
++
++	/* if probed OK, remove the sysfs nodes */
++	if (slot->probed && !slot->probe_failed)
++		bone_cape_slot_sysfs_unregister(slot);
++
++	/* remove it from the list */
++	list_del(&slot->node);
++
++	if (slot->nvmem_cell)
++		nvmem_cell_put(slot->nvmem_cell);
++	devm_kfree(dev, slot);
++	return 0;
++}
++
++static int capemgr_remove_slot(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	int ret;
++
++	mutex_lock(&info->slots_list_mutex);
++	ret = capemgr_remove_slot_no_lock(slot);
++	mutex_unlock(&info->slots_list_mutex);
++
++	return ret;
++}
++
++static int bone_slot_fill_override(struct bone_cape_slot *slot,
++		const char *part_number, const char *version)
++{
++	const struct ee_field *sig_field;
++	int i, len, has_part_number;
++	char *p;
++
++	slot->probe_failed = 0;
++	slot->probed = 0;
++
++	/* zero out signature */
++	memset(slot->signature, 0,
++			sizeof(slot->signature));
++
++	/* first, fill in all with override defaults */
++	for (i = 0; i < ARRAY_SIZE(cape_sig_fields); i++) {
++
++		sig_field = &cape_sig_fields[i];
++
++		/* point to the entry */
++		p = slot->signature + sig_field->start;
++
++		if (sig_field->override)
++			memcpy(p, sig_field->override,
++					sig_field->size);
++		else
++			memset(p, 0, sig_field->size);
++	}
++
++	/* if a part_number is supplied use it */
++	len = part_number ? strlen(part_number) : 0;
++	if (len > 0) {
++		sig_field = &cape_sig_fields[CAPE_EE_FIELD_PART_NUMBER];
++
++		/* point to the entry */
++		p = slot->signature + sig_field->start;
++
++		/* copy and zero out any remainder */
++		if (len > sig_field->size)
++			len = sig_field->size;
++		memcpy(p, part_number, len);
++		if (len < sig_field->size)
++			memset(p + len, 0, sig_field->size - len);
++
++		has_part_number = 1;
++	}
++
++	/* if a version is supplied use it */
++	len = version ? strlen(version) : 0;
++	if (len > 0) {
++		sig_field = &cape_sig_fields[CAPE_EE_FIELD_VERSION];
++
++		/* point to the entry */
++		p = slot->signature + sig_field->start;
++
++		/* copy and zero out any remainder */
++		if (len > sig_field->size)
++			len = sig_field->size;
++		memcpy(p, version, len);
++		if (len < sig_field->size)
++			memset(p + len, 0, sig_field->size - len);
++	}
++
++	/* we must have a part number */
++	if (!has_part_number)
++		return -EINVAL;
++
++	slot->override = 1;
++
++	return 0;
++}
++
++static struct bone_cape_slot *
++capemgr_add_slot(struct capemgr_info *info, const char *slot_name,
++		const char *part_number, const char *version, int prio)
++{
++	struct bone_cape_slot *slot;
++	struct device *dev = &info->pdev->dev;
++	int slotno;
++	int ret;
++
++	slotno = atomic_inc_return(&info->next_slot_nr) - 1;
++
++	slot = devm_kzalloc(dev, sizeof(*slot), GFP_KERNEL);
++	if (slot == NULL)
++		return ERR_PTR(-ENOMEM);
++
++	slot->info = info;
++	slot->slotno = slotno;
++	slot->priority = prio;
++	slot->overlay_id = -1;
++
++	if (slot_name) {
++		slot->nvmem_cell = nvmem_cell_get(dev, slot_name);
++		if (IS_ERR(slot->nvmem_cell)) {
++			ret = PTR_ERR(slot->nvmem_cell);
++			if (ret != -EPROBE_DEFER)
++				dev_info(dev, "Failed to get slot eeprom cell\n");
++			slot->nvmem_cell = NULL;
++			goto err_out;
++		}
++	} else {
++		dev_info(dev, "slot #%d: override\n", slotno);
++
++		/* fill in everything with defaults first */
++		ret = bone_slot_fill_override(slot, part_number, version);
++		if (ret != 0) {
++			dev_info(dev, "slot #%d: override failed\n", slotno);
++			goto err_out;
++		}
++	}
++
++	ret = bone_slot_scan(slot);
++	if (ret != 0) {
++
++		if (!slot->probe_failed) {
++			dev_info(dev, "slot #%d: scan failed\n",
++					slotno);
++			goto err_out;
++		}
++
++		dev_info(dev, "slot #%d: No cape found\n", slotno);
++		/* but all is fine */
++	} else {
++		if (uboot_capemgr_enabled == 0) {
++			dev_info(dev, "slot #%d: '%s'\n",
++					slotno, slot->text_id);
++
++			ret = bone_cape_slot_sysfs_register(slot);
++			if (ret != 0) {
++				dev_info(dev, "slot #%d: sysfs register failed\n",
++						slotno);
++				goto err_out;
++			}
++		} else {
++			dev_info(dev, "slot #%d: auto loading handled by U-Boot\n", slotno);
++		}
++	}
++
++	/* add to the slot list */
++	mutex_lock(&info->slots_list_mutex);
++	list_add_tail(&slot->node, &info->slot_list);
++	mutex_unlock(&info->slots_list_mutex);
++
++	return slot;
++
++err_out:
++	if (slot->nvmem_cell)
++		nvmem_cell_put(slot->nvmem_cell);
++	devm_kfree(dev, slot);
++	return ERR_PTR(ret);
++}
++
++/* return 1 if it makes sense to retry loading */
++static int retry_loading_condition(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	struct device *dev = &info->pdev->dev;
++	struct bone_cape_slot *slotn;
++	int ret;
++
++	dev_dbg(dev, "loader: retry_loading slot-%d %s:%s (prio %d)\n",
++			slot->slotno, slot->part_number, slot->version,
++			slot->priority);
++
++	mutex_lock(&info->slots_list_mutex);
++	ret = 0;
++	list_for_each_entry(slotn, &info->slot_list, node) {
++		/* if same slot or not loading skip */
++		if (!slotn->loading || slotn->retry_loading)
++			continue;
++		/* at least one cape is still loading (without retrying) */
++		ret = 1;
++	}
++	mutex_unlock(&info->slots_list_mutex);
++	return ret;
++}
++
++/* return 1 if this slot is clear to try to load now */
++static int clear_to_load_condition(struct bone_cape_slot *slot)
++{
++	struct capemgr_info *info = slot->info;
++	int my_prio = slot->priority;
++	struct device *dev = &info->pdev->dev;
++	int ret;
++
++	dev_dbg(dev, "loader: check slot-%d %s:%s (prio %d)\n", slot->slotno,
++			slot->part_number, slot->version, slot->priority);
++
++	mutex_lock(&info->slots_list_mutex);
++	ret = 1;
++	list_for_each_entry(slot, &info->slot_list, node) {
++		/* if any slot is loading with lowest priority */
++		if (!slot->loading)
++			continue;
++		if (slot->priority < my_prio) {
++			ret = 0;
++			break;
++		}
++	}
++	mutex_unlock(&info->slots_list_mutex);
++	return ret;
++}
++
++static int capemgr_loader(void *data)
++{
++	struct bone_cape_slot *slot = data;
++	struct capemgr_info *info = slot->info;
++	struct device *dev = &info->pdev->dev;
++	int ret, done, other_loading, booting;
++
++	done = 0;
++
++	slot->retry_loading = 0;
++
++	dev_dbg(dev, "loader: before slot-%d %s:%s (prio %d)\n", slot->slotno,
++			slot->part_number, slot->version, slot->priority);
++
++	/*
++	 * We have a basic priority based arbitration system
++	 * Slots have priorities, so the lower priority ones
++	 * should start loading first. So each time we end up
++	 * here.
++	 */
++	ret = wait_event_interruptible(info->load_wq,
++			clear_to_load_condition(slot));
++	if (ret < 0) {
++		dev_warn(dev, "loader, Signal pending\n");
++		return ret;
++	}
++
++	dev_dbg(dev, "loader: after slot-%d %s:%s (prio %d)\n", slot->slotno,
++			slot->part_number, slot->version, slot->priority);
++
++	/* using the return value */
++	ret = capemgr_load_slot(slot);
++
++	/* wake up all just in case */
++	wake_up_interruptible_all(&info->load_wq);
++
++	if (ret == 0)
++		goto done;
++
++	dev_dbg(dev, "loader: retrying slot-%d %s:%s (prio %d)\n", slot->slotno,
++			slot->part_number, slot->version, slot->priority);
++
++	/* first attempt has failed; now try each time there's any change */
++	slot->retry_loading = 1;
++
++	for (;;) {
++		booting = (system_state == SYSTEM_BOOTING);
++		other_loading = retry_loading_condition(slot);
++		if (!booting && !other_loading)
++			break;
++
++		/* simple wait for someone to kick us */
++		if (other_loading) {
++			DEFINE_WAIT(__wait);
++
++			prepare_to_wait(&info->load_wq, &__wait,
++					TASK_INTERRUPTIBLE);
++			finish_wait(&info->load_wq, &__wait);
++		} else {
++			/* always delay when booting */
++			msleep(boot_scan_period);
++		}
++
++		if (signal_pending(current)) {
++			dev_warn(dev, "loader, Signal pending\n");
++			ret = -ERESTARTSYS;
++			goto done;
++		}
++
++		/* using the return value */
++		ret = capemgr_load_slot(slot);
++		if (ret == 0)
++			goto done;
++
++		/* wake up all just in case */
++		wake_up_interruptible_all(&info->load_wq);
++	}
++
++done:
++	slot->loading = 0;
++	slot->retry_loading = 0;
++
++	if (ret == 0) {
++		dev_dbg(dev, "loader: done slot-%d %s:%s (prio %d)\n",
++			slot->slotno, slot->part_number, slot->version,
++			slot->priority);
++	} else {
++		dev_err(dev, "loader: failed to load slot-%d %s:%s (prio %d)\n",
++			slot->slotno, slot->part_number, slot->version,
++			slot->priority);
++
++		/* if it's a override slot remove it */
++		if (slot->override)
++			capemgr_remove_slot(slot);
++	}
++
++	return ret;
++}
++
++static int
++capemgr_probe(struct platform_device *pdev)
++{
++	struct capemgr_info *info;
++	struct bone_baseboard *bbrd;
++	struct bone_cape_slot *slot;
++	struct device_node *pnode = pdev->dev.of_node;
++	struct device_node *baseboardmaps_node;
++	struct device_node *node;
++	const char *part_number;
++	const char *version;
++	const char *board_name;
++	const char *compatible_name;
++	char slot_name[16];
++	u32 slots_nr;
++	int i, ret, len, prio;
++	long val;
++	char *wbuf, *s, *p, *e;
++
++	if (uboot_capemgr_enabled)
++		return 0;
++
++	/* we don't use platform_data at all; we require OF */
++	if (pnode == NULL)
++		return -ENOTSUPP;
++
++	info = devm_kzalloc(&pdev->dev,
++			sizeof(struct capemgr_info), GFP_KERNEL);
++	if (!info)
++		return -ENOMEM;
++
++	info->pdev = pdev;
++	platform_set_drvdata(pdev, info);
++
++	atomic_set(&info->next_slot_nr, 0);
++	INIT_LIST_HEAD(&info->slot_list);
++	mutex_init(&info->slots_list_mutex);
++
++	init_waitqueue_head(&info->load_wq);
++
++	baseboardmaps_node = NULL;
++
++	/* find the baseboard */
++	bbrd = &info->baseboard;
++
++	baseboardmaps_node = of_get_child_by_name(pnode, "baseboardmaps");
++	if (baseboardmaps_node == NULL) {
++		dev_err(&pdev->dev, "Failed to get baseboardmaps node");
++		ret = -ENODEV;
++		goto err_exit;
++	}
++
++	bbrd->nvmem_cell = nvmem_cell_get(&pdev->dev, "baseboard");
++	if (IS_ERR(bbrd->nvmem_cell)) {
++		ret = PTR_ERR(bbrd->nvmem_cell);
++		if (ret != -EPROBE_DEFER)
++			dev_err(&pdev->dev, "Failed to get baseboard eeprom cell\n");
++		bbrd->nvmem_cell = NULL;
++		goto err_exit;
++	}
++
++	ret = bone_baseboard_scan(bbrd);
++	if (ret != 0) {
++		dev_err(&pdev->dev, "Failed to scan baseboard eeprom\n");
++		goto err_exit;
++	}
++
++	dev_info(&pdev->dev, "Baseboard: '%s'\n", bbrd->text_id);
++
++	board_name = NULL;
++	compatible_name = NULL;
++	for_each_child_of_node(baseboardmaps_node, node) {
++		/* there must be board-name */
++		if (of_property_read_string(node, "board-name",
++					&board_name) != 0 ||
++		    of_property_read_string(node, "compatible-name",
++					&compatible_name) != 0)
++			continue;
++
++		if (strcmp(bbrd->board_name, board_name) == 0)
++			break;
++	}
++	of_node_put(baseboardmaps_node);
++	baseboardmaps_node = NULL;
++
++	if (node == NULL) {
++		dev_err(&pdev->dev, "Failed to find compatible map for %s\n",
++				bbrd->board_name);
++		ret = -ENODEV;
++		goto err_exit;
++	}
++	bbrd->compatible_name = kstrdup(compatible_name, GFP_KERNEL);
++	if (bbrd->compatible_name == NULL) {
++		ret = -ENOMEM;
++		goto err_exit;
++	}
++	of_node_put(node);
++
++	/* get slot number */
++	ret = of_property_read_u32(pnode, "#slots", &slots_nr);
++	if (ret != 0)
++		slots_nr = 0;
++
++	dev_info(&pdev->dev, "compatible-baseboard=%s - #slots=%d\n",
++			bbrd->compatible_name, slots_nr);
++
++	for (i = 0; i < slots_nr; i++) {
++		snprintf(slot_name, sizeof(slot_name), "slot%d", i);
++		slot = capemgr_add_slot(info, slot_name, NULL, NULL, 0);
++		if (IS_ERR(slot)) {
++			dev_err(&pdev->dev, "Failed to add slot #%d\n",
++				atomic_read(&info->next_slot_nr));
++			ret = PTR_ERR(slot);
++			goto err_exit;
++		}
++	}
++
++	/* iterate over enable_partno (if there) */
++	if (enable_partno && strlen(enable_partno) > 0) {
++
++		/* allocate a temporary buffer */
++		wbuf = devm_kzalloc(&pdev->dev, PAGE_SIZE, GFP_KERNEL);
++		if (wbuf == NULL) {
++			ret = -ENOMEM;
++			goto err_exit;
++		}
++
++		/* add any enable_partno capes */
++		s = enable_partno;
++		while (*s) {
++			/* form is PART[:REV[:PRIO]],PART.. */
++			p = strchr(s, ',');
++			if (p == NULL)
++				e = s + strlen(s);
++			else
++				e = p;
++
++			/* copy to temp buffer */
++			len = e - s;
++			if (len >= PAGE_SIZE - 1)
++				len = PAGE_SIZE - 1;
++			memcpy(wbuf, s, len);
++			wbuf[len] = '\0';
++
++			/* move to the next */
++			s = *e ? e + 1 : e;
++
++			part_number = wbuf;
++
++			/* default version is NULL & prio is 0 */
++			version = NULL;
++			prio = 0;
++
++			/* now split the rev & prio part */
++			p = strchr(wbuf, ':');
++			if (p != NULL) {
++				*p++ = '\0';
++				if (*p != ':')
++					version = p;
++				p = strchr(p, ':');
++				if (p != NULL) {
++					*p++ = '\0';
++					ret = kstrtol(p, 10, &val);
++					if (ret == 0)
++						prio = val;
++				}
++			}
++
++			dev_info(&pdev->dev,
++				"enabled_partno PARTNO '%s' VER '%s' PR '%d'\n",
++					part_number,
++					version ? version : "N/A", prio);
++
++			/* only immediate slots are allowed here */
++			slot = capemgr_add_slot(info, NULL,
++					part_number, version, prio);
++
++			/* we continue even in case of an error */
++			if (IS_ERR_OR_NULL(slot)) {
++				dev_warn(&pdev->dev, "Failed to add slot #%d\n",
++					atomic_read(&info->next_slot_nr) - 1);
++			}
++		}
++
++		devm_kfree(&pdev->dev, wbuf);
++	}
++
++	pm_runtime_enable(&pdev->dev);
++	ret = pm_runtime_get_sync(&pdev->dev);
++	if (IS_ERR_VALUE(ret)) {
++		dev_err(&pdev->dev, "Failed to pm_runtime_get_sync()\n");
++		goto err_exit;
++	}
++
++	pm_runtime_put(&pdev->dev);
++
++	/* it is safe to create the attribute groups */
++	ret = sysfs_create_groups(&pdev->dev.kobj, attr_groups);
++	if (ret != 0) {
++		dev_err(&pdev->dev, "Failed to create sysfs attributes\n");
++		goto err_exit;
++	}
++	/* automatically cleared by driver core now */
++	pdev->dev.groups = attr_groups;
++
++	/* now load each (take lock to be sure */
++	mutex_lock(&info->slots_list_mutex);
++
++	list_for_each_entry(slot, &info->slot_list, node) {
++
++		/* if matches the disabled ones skip */
++		if (bone_match_cape(disable_partno, slot->part_number,
++					slot->version)) {
++			dev_info(&pdev->dev,
++				"Skipping loading of disabled cape with part# %s\n",
++				slot->part_number);
++			slot->disabled = 1;
++			continue;
++		}
++
++		if (!slot->probe_failed && !slot->loaded)
++			slot->loading = 1;
++	}
++
++	/* now start the loader thread(s) (all at once) */
++	list_for_each_entry(slot, &info->slot_list, node) {
++
++		if (!slot->loading)
++			continue;
++
++		slot->loader_thread = kthread_run(capemgr_loader,
++				slot, "capemgr-loader-%d",
++				slot->slotno);
++		if (IS_ERR(slot->loader_thread)) {
++			dev_warn(&pdev->dev, "slot #%d: Failed to start loader\n",
++					slot->slotno);
++			slot->loader_thread = NULL;
++		}
++	}
++	mutex_unlock(&info->slots_list_mutex);
++
++	dev_info(&pdev->dev, "initialized OK.\n");
++
++	return 0;
++
++err_exit:
++	if (bbrd->nvmem_cell)
++		nvmem_cell_put(bbrd->nvmem_cell);
++	of_node_put(baseboardmaps_node);
++	platform_set_drvdata(pdev, NULL);
++	devm_kfree(&pdev->dev, info);
++
++	return ret;
++}
++
++static int capemgr_remove(struct platform_device *pdev)
++{
++	struct capemgr_info *info = platform_get_drvdata(pdev);
++	struct bone_baseboard *bbrd = &info->baseboard;
++	struct bone_cape_slot *slot, *slotn;
++	int ret;
++
++	mutex_lock(&info->slots_list_mutex);
++	list_for_each_entry_safe(slot, slotn, &info->slot_list, node)
++		capemgr_remove_slot_no_lock(slot);
++	mutex_unlock(&info->slots_list_mutex);
++
++	platform_set_drvdata(pdev, NULL);
++
++	ret = pm_runtime_get_sync(&pdev->dev);
++	if (IS_ERR_VALUE(ret))
++		return ret;
++
++	pm_runtime_put(&pdev->dev);
++	pm_runtime_disable(&pdev->dev);
++
++	if (bbrd->nvmem_cell)
++		nvmem_cell_put(bbrd->nvmem_cell);
++	devm_kfree(&pdev->dev, info);
++
++	return 0;
++}
++
++static struct platform_driver capemgr_driver = {
++	.probe		= capemgr_probe,
++	.remove		= capemgr_remove,
++	.driver		= {
++		.name	= "bone_capemgr",
++		.owner	= THIS_MODULE,
++		.of_match_table = of_match_ptr(capemgr_of_match),
++	},
++};
++
++module_platform_driver(capemgr_driver);
++
++MODULE_AUTHOR("Pantelis Antoniou");
++MODULE_DESCRIPTION("Beaglebone cape manager");
++MODULE_LICENSE("GPL");
++MODULE_ALIAS("platform:bone_capemgr");
+diff --git a/drivers/misc/devovmgr.c b/drivers/misc/devovmgr.c
+new file mode 100644
+index 000000000000..d5c8d1db58a7
+--- /dev/null
++++ b/drivers/misc/devovmgr.c
+@@ -0,0 +1,1306 @@
++/*
++ * Device overlay manager
++ *
++ * Copyright (C) 2015 Konsulko Group
++ * Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version
++ * 2 of the License, or (at your option) any later version.
++ */
++#include <linux/ctype.h>
++#include <linux/cpu.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_fdt.h>
++#include <linux/spinlock.h>
++#include <linux/sizes.h>
++#include <linux/slab.h>
++#include <linux/proc_fs.h>
++#include <linux/configfs.h>
++#include <linux/types.h>
++#include <linux/stat.h>
++#include <linux/limits.h>
++#include <linux/file.h>
++#include <linux/vmalloc.h>
++#include <linux/firmware.h>
++#include <linux/pci.h>
++#include <linux/usb.h>
++#include <linux/mod_devicetable.h>
++#include <linux/workqueue.h>
++#include <linux/firmware.h>
++
++enum dovmgr_type {
++	ITEM_PCI,
++	ITEM_USB
++};
++
++struct dovmgr_item;
++
++struct dovmgr_dev_item {
++	struct dovmgr_item *item;
++	struct list_head node;
++	struct device *dev;
++	const struct firmware *fw;
++	struct device_node *overlay;
++	int overlay_id;
++	struct work_struct work;
++};
++
++struct dovmgr_item {
++	struct config_item item;
++	char *path;
++	bool enable;
++	char *overlay_name;
++	struct mutex dev_item_mutex;
++	struct list_head dev_item_list;
++	enum dovmgr_type type;
++	union {
++		struct pci_device_id pci;
++		struct usb_device_id usb;
++	};
++};
++
++struct config_group dovmgr_pci_group;
++struct config_group dovmgr_usb_group;
++
++static inline struct dovmgr_item *to_dovmgr_item(struct config_item *cfsitem)
++{
++	if (!cfsitem)
++		return NULL;
++
++	return container_of(cfsitem, struct dovmgr_item, item);
++}
++
++static int dovmgr_notifier_action(struct config_group *group,
++		unsigned long action, struct device *dev,
++		int (*do_match)(struct dovmgr_item *item, struct device *dev),
++		int (*do_action)(struct dovmgr_item *item, unsigned long action,
++			struct device *dev))
++{
++	struct config_item *cfsitem;
++	struct dovmgr_item *item;
++	int ret;
++
++	/* only handle device notifiers */
++	if (action != BUS_NOTIFY_ADD_DEVICE &&
++		action != BUS_NOTIFY_DEL_DEVICE &&
++		action != BUS_NOTIFY_REMOVED_DEVICE)
++		return 0;
++
++	ret = 0;
++	list_for_each_entry(cfsitem, &group->cg_children, ci_entry) {
++		item = to_dovmgr_item(cfsitem);
++		if (!item->enable || !(*do_match)(item, dev))
++			continue;
++
++		ret = (*do_action)(item, action, dev);
++		if (ret != 0)
++			break;
++	}
++	return ret;
++}
++
++#if IS_ENABLED(CONFIG_PCI)
++/* copy of drivers/pci/pci.h */
++static inline const struct pci_device_id *
++pci_match_one_device(const struct pci_device_id *id, const struct pci_dev *dev)
++{
++	if ((id->vendor == PCI_ANY_ID || id->vendor == dev->vendor) &&
++	    (id->device == PCI_ANY_ID || id->device == dev->device) &&
++	    (id->subvendor == PCI_ANY_ID ||
++		id->subvendor == dev->subsystem_vendor) &&
++	    (id->subdevice == PCI_ANY_ID ||
++		id->subdevice == dev->subsystem_device) &&
++	    !((id->class ^ dev->class) & id->class_mask))
++		return id;
++	return NULL;
++}
++
++static int dovmgr_pci_item_match(struct dovmgr_item *item, struct device *dev)
++{
++	struct pci_dev *pdev;
++
++	BUG_ON(item->type != ITEM_PCI);
++	pdev = to_pci_dev(dev);
++
++	return pci_match_one_device(&item->pci, pdev) != NULL;
++}
++#endif
++
++#if IS_ENABLED(CONFIG_USB)
++/* in drivers/usb/core/driver.c */
++extern int usb_match_device(struct usb_device *dev,
++		const struct usb_device_id *id);
++
++static int dovmgr_usb_item_match(struct dovmgr_item *item, struct device *dev)
++{
++	struct usb_device *udev;
++
++	BUG_ON(item->type != ITEM_USB);
++	udev = to_usb_device(dev);
++
++	return usb_match_device(udev, &item->usb);
++}
++#endif
++
++static struct dovmgr_dev_item *dovmgr_lookup_dev_item(struct dovmgr_item *item,
++		struct device *dev)
++{
++	struct dovmgr_dev_item *ditem;
++
++	list_for_each_entry(ditem, &item->dev_item_list, node)
++		if (ditem->dev == dev)
++			return ditem;
++	return NULL;
++}
++
++static void dovmgr_item_work_func(struct work_struct *work)
++{
++	struct dovmgr_dev_item *ditem = container_of(work,
++			struct dovmgr_dev_item, work);
++	struct dovmgr_item *item = ditem->item;
++	struct device *dev;
++	struct device_node *np;
++	int err;
++
++	mutex_lock(&item->dev_item_mutex);
++
++	dev = ditem->dev;
++	np = dev->of_node;
++	if (!dev || !np || !item->overlay_name || ditem->overlay_id >= 0)
++		goto out_unlock;
++
++	pr_info("%s: %s %s\n", __func__,
++		kobject_name(&dev->kobj), of_node_full_name(np));
++
++	err = request_firmware_direct(&ditem->fw, item->overlay_name, dev);
++	if (err != 0) {
++		pr_err("%s: %s failed to load firmware '%s'\n", __func__,
++			kobject_name(&dev->kobj), item->overlay_name);
++		goto out_unlock;
++	}
++
++	of_fdt_unflatten_tree((void *)ditem->fw->data, &ditem->overlay);
++	if (ditem->overlay == NULL) {
++		pr_err("%s: %s failed to load firmware '%s'\n", __func__,
++			kobject_name(&dev->kobj), item->overlay_name);
++		goto out_release_fw;
++	}
++
++	/* mark it as detached */
++	of_node_set_flag(ditem->overlay, OF_DETACHED);
++
++	/* perform resolution */
++	err = of_resolve_phandles(ditem->overlay);
++	if (err != 0) {
++		pr_err("%s: %s failed to resolve tree\n", __func__,
++			kobject_name(&dev->kobj));
++		goto out_release_overlay;
++	}
++
++	err = of_overlay_create_target_root(ditem->overlay, np);
++	if (err < 0) {
++		pr_err("%s: %s failed to create overlay\n", __func__,
++			kobject_name(&dev->kobj));
++		goto out_release_overlay;
++	}
++	ditem->overlay_id = err;
++
++out_unlock:
++	mutex_unlock(&item->dev_item_mutex);
++	return;
++
++out_release_overlay:
++	/* TODO: free the overlay, we can't right now cause
++	 * the unflatten method does not track it */
++	ditem->overlay = NULL;
++out_release_fw:
++	release_firmware(ditem->fw);
++	ditem->fw = NULL;
++	goto out_unlock;
++}
++
++/* dev item list mutex lock must be held */
++static int dovmgr_add_dev_item(struct dovmgr_item *item, struct device *dev)
++{
++	struct dovmgr_dev_item *ditem;
++
++	/* first make sure there's no duplicate */
++	if (dovmgr_lookup_dev_item(item, dev))
++		return -EEXIST;
++
++	/* add the device item */
++	ditem = kzalloc(sizeof(*ditem), GFP_KERNEL);
++	if (!ditem)
++		return -ENOMEM;
++	ditem->overlay_id = -1;
++	ditem->dev = get_device(dev);
++	INIT_WORK(&ditem->work, dovmgr_item_work_func);
++	ditem->item = item;
++
++	list_add_tail(&ditem->node, &item->dev_item_list);
++
++	pr_info("%s: added device %s from item's %s list\n", __func__,
++			kobject_name(&dev->kobj),
++			config_item_name(&item->item));
++
++	/* now schedule the overlay application */
++	if (item->overlay_name)
++		schedule_work(&ditem->work);
++
++	return 0;
++}
++
++static int dovmgr_remove_dev_item(struct dovmgr_item *item, struct device *dev)
++{
++	struct dovmgr_dev_item *ditem;
++
++	/* find it */
++	ditem = dovmgr_lookup_dev_item(item, dev);
++	if (!ditem)
++		return -ENODEV;
++
++	if (work_pending(&ditem->work))
++		cancel_work_sync(&ditem->work);
++
++	if (ditem->overlay_id >= 0) {
++		of_overlay_destroy(ditem->overlay_id);
++		ditem->overlay_id = -1;
++
++	}
++
++	if (ditem->overlay) {
++		/* TODO: free the overlay, we can't right now cause
++		* the unflatten method does not track it */
++		ditem->overlay = NULL;
++	}
++
++	if (ditem->fw) {
++		/* TODO release_firmware(ditem->fw); */
++		release_firmware(ditem->fw);
++		ditem->fw = NULL;
++	}
++
++	put_device(ditem->dev);
++	list_del(&ditem->node);
++
++	kfree(ditem);
++
++	pr_info("%s: removed device %s from item's %s list\n", __func__,
++			kobject_name(&dev->kobj),
++			config_item_name(&item->item));
++
++	return 0;
++}
++
++static int dovmgr_item_notify(struct dovmgr_item *item,
++		unsigned long action, struct device *dev)
++{
++	int ret;
++
++	ret = 0;
++	mutex_lock(&item->dev_item_mutex);
++
++	switch (action) {
++	case BUS_NOTIFY_ADD_DEVICE:
++		pr_info("%s: BUS_NOTIFY_ADD_DEVICE for %s\n", __func__,
++				kobject_name(&dev->kobj));
++
++		ret = dovmgr_add_dev_item(item, dev);
++		if (ret != 0)
++			goto out_unlock;
++
++		break;
++
++	case BUS_NOTIFY_DEL_DEVICE:
++		pr_info("%s: BUS_NOTIFY_DEL_DEVICE for %s\n", __func__,
++				kobject_name(&dev->kobj));
++		break;
++
++	case BUS_NOTIFY_REMOVED_DEVICE:
++		pr_info("%s: BUS_NOTIFY_REMOVE_DEVICE for %s\n", __func__,
++				kobject_name(&dev->kobj));
++
++		ret = dovmgr_remove_dev_item(item, dev);
++		if (ret != 0)
++			goto out_unlock;
++
++		break;
++	}
++
++out_unlock:
++	mutex_unlock(&item->dev_item_mutex);
++
++	return ret;
++}
++
++#if IS_ENABLED(CONFIG_PCI)
++static int dovmgr_pci_add_iterator(struct device *dev, void *data)
++{
++	struct dovmgr_item *item = data;
++
++	/* do add match */
++	if (!item->enable || !dovmgr_pci_item_match(item, dev))
++		return 0;
++
++	pr_info("%s: dev=%s\n", __func__, kobject_name(&dev->kobj));
++
++	return dovmgr_item_notify(item, BUS_NOTIFY_ADD_DEVICE, dev);
++}
++
++static int dovmgr_pci_removed_iterator(struct device *dev, void *data)
++{
++	struct dovmgr_item *item = data;
++
++	/* do add match */
++	if (item->enable || !dovmgr_pci_item_match(item, dev))
++		return 0;
++
++	pr_info("%s: dev=%s\n", __func__, kobject_name(&dev->kobj));
++
++	return dovmgr_item_notify(item, BUS_NOTIFY_REMOVED_DEVICE, dev);
++}
++#endif
++
++#if IS_ENABLED(CONFIG_USB)
++static int dovmgr_usb_add_iterator(struct device *dev, void *data)
++{
++	struct dovmgr_item *item = data;
++
++	/* do add match */
++	if (item->enable || !dovmgr_usb_item_match(item, dev))
++		return 0;
++
++	pr_info("%s: dev=%s\n", __func__, kobject_name(&dev->kobj));
++
++	return dovmgr_item_notify(item, BUS_NOTIFY_ADD_DEVICE, dev);
++}
++
++static int dovmgr_usb_removed_iterator(struct device *dev, void *data)
++{
++	struct dovmgr_item *item = data;
++
++	/* do add match */
++	if (!item->enable || !dovmgr_usb_item_match(item, dev))
++		return 0;
++
++	pr_info("%s: dev=%s\n", __func__, kobject_name(&dev->kobj));
++
++	return dovmgr_item_notify(item, BUS_NOTIFY_REMOVED_DEVICE, dev);
++}
++#endif
++
++static int dovmgr_item_set_enable(struct dovmgr_item *item, bool new_enable)
++{
++	int ret;
++
++	if (new_enable == item->enable)
++		return 0;
++
++	item->enable = new_enable;
++	switch (item->type) {
++#if IS_ENABLED(CONFIG_PCI)
++	case ITEM_PCI:
++		ret = bus_for_each_dev(&pci_bus_type, NULL, item,
++			new_enable ? dovmgr_pci_add_iterator :
++					dovmgr_pci_removed_iterator);
++		if (ret != 0)
++			return ret;
++		break;
++#endif
++#if IS_ENABLED(CONFIG_USB)
++	case ITEM_USB:
++		ret = bus_for_each_dev(&usb_bus_type, NULL, item,
++			new_enable ? dovmgr_usb_add_iterator :
++					dovmgr_usb_removed_iterator);
++		if (ret != 0)
++			return ret;
++		break;
++#endif
++	default:
++		break;
++	}
++	return 0;
++}
++
++
++static ssize_t dovmgr_item_str_show(struct dovmgr_item *item,
++		char *page, char **strp)
++{
++	return snprintf(page, PAGE_SIZE, "%s\n",
++			*strp ? *strp : "");
++}
++
++static ssize_t dovmgr_item_str_store(struct dovmgr_item *item,
++		const char *page, size_t count, char **strp)
++{
++	const char *s;
++	int len;
++
++	/* copy to path buffer (and make sure it's always zero terminated */
++	len = strnlen(page, PAGE_SIZE);
++	if (len >= PAGE_SIZE)
++		return -EINVAL;
++	s = page + len;
++	while (len > 0 && *--s == '\n')
++		len--;
++	if (len == 0)
++		return -EINVAL;
++
++	if (*strp)
++		kfree(*strp);
++	*strp = kmalloc(len + 1, GFP_KERNEL);
++	if (!*strp)
++		return -ENOMEM;
++	memcpy(*strp, page, len);
++	(*strp)[len + 1] = '\0';
++
++	return count;
++}
++
++static ssize_t dovmgr_item_path_show(struct config_item *citem, char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return dovmgr_item_str_show(item, page, &item->path);
++}
++
++static ssize_t dovmgr_item_path_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return dovmgr_item_str_store(item, page, count, &item->path);
++}
++
++static ssize_t dovmgr_item_enable_show(struct config_item *citem, char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "%u\n", !!item->enable);
++}
++
++static ssize_t dovmgr_item_enable_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++
++	ret = dovmgr_item_set_enable(item, !!val);
++	if (ret != 0)
++		return ret;
++
++	return count;
++}
++
++static ssize_t dovmgr_item_overlay_show(struct config_item *citem, char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	ssize_t ret;
++
++	mutex_lock(&item->dev_item_mutex);
++	ret = snprintf(page, PAGE_SIZE, "%s\n", item->overlay_name ?
++			item->overlay_name : "");
++	mutex_unlock(&item->dev_item_mutex);
++	return ret;
++};
++
++
++static ssize_t dovmgr_item_overlay_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	ssize_t ret;
++
++	mutex_lock(&item->dev_item_mutex);
++	kfree(item->overlay_name);
++	item->overlay_name = kstrndup(page, PAGE_SIZE, GFP_KERNEL);
++	if (!item->overlay_name)
++		ret = -ENOMEM;
++	else
++		ret = count;
++	mutex_unlock(&item->dev_item_mutex);
++	return ret;
++}
++
++static ssize_t dovmgr_item_status_show(struct config_item *citem, char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	struct dovmgr_dev_item *ditem;
++	char *p, *e;
++	int len;
++
++	p = page;
++	e = page + PAGE_SIZE;
++
++	mutex_lock(&item->dev_item_mutex);
++	list_for_each_entry(ditem, &item->dev_item_list, node) {
++		len = snprintf(p, e - p, "%s:%s:%d\n",
++			kobject_name(&ditem->dev->kobj),
++			of_node_full_name(ditem->dev->of_node),
++			ditem->overlay_id);
++		p += len;
++		if (p >= e - 1)
++			break;
++	}
++	mutex_unlock(&item->dev_item_mutex);
++
++	return p - page;
++}
++
++CONFIGFS_ATTR(dovmgr_item_, path);
++CONFIGFS_ATTR_RO(dovmgr_item_, status);
++CONFIGFS_ATTR(dovmgr_item_, enable);
++CONFIGFS_ATTR(dovmgr_item_, overlay);
++
++#if IS_ENABLED(CONFIG_PCI)
++static ssize_t dovmgr_item_pci_device_show(struct config_item *citem,
++		char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "0x%04x\n", item->pci.device);
++}
++
++static ssize_t dovmgr_item_pci_device_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++	item->pci.device = val;
++	return count;
++}
++
++static ssize_t dovmgr_item_pci_vendor_show(struct config_item *citem,
++		char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "0x%04x\n", item->pci.vendor);
++}
++
++static ssize_t dovmgr_item_pci_vendor_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	/* cannot modify when item is enabled */
++	if (item->enable)
++		return -EBUSY;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++	item->pci.vendor = val;
++	return count;
++}
++
++static ssize_t dovmgr_item_pci_subdevice_show(struct config_item *citem,
++		char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "0x%08x\n", item->pci.subdevice);
++}
++
++static ssize_t dovmgr_item_pci_subdevice_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	/* cannot modify when item is enabled */
++	if (item->enable)
++		return -EBUSY;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++	item->pci.subdevice = val;
++	return count;
++}
++
++static ssize_t dovmgr_item_pci_subvendor_show(struct config_item *citem,
++		char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "0x%08x\n", item->pci.subvendor);
++}
++
++static ssize_t dovmgr_item_pci_subvendor_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	/* cannot modify when item is enabled */
++	if (item->enable)
++		return -EBUSY;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++	item->pci.subvendor = val;
++	return count;
++}
++
++static ssize_t dovmgr_item_pci_class_show(struct config_item *citem, char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "0x%04x\n", item->pci.class);
++}
++
++static ssize_t dovmgr_item_pci_class_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	/* cannot modify when item is enabled */
++	if (item->enable)
++		return -EBUSY;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++	item->pci.class = val;
++	return count;
++}
++
++static ssize_t dovmgr_item_pci_class_mask_show(struct config_item *citem,
++		char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "0x%04x\n", item->pci.class_mask);
++}
++
++static ssize_t dovmgr_item_pci_class_mask_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	/* cannot modify when item is enabled */
++	if (item->enable)
++		return -EBUSY;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++	item->pci.class_mask = val;
++	return count;
++}
++
++CONFIGFS_ATTR(dovmgr_item_pci_, device);
++CONFIGFS_ATTR(dovmgr_item_pci_, vendor);
++CONFIGFS_ATTR(dovmgr_item_pci_, subdevice);
++CONFIGFS_ATTR(dovmgr_item_pci_, subvendor);
++CONFIGFS_ATTR(dovmgr_item_pci_, class);
++CONFIGFS_ATTR(dovmgr_item_pci_, class_mask);
++#endif
++
++#if IS_ENABLED(CONFIG_USB)
++static ssize_t dovmgr_item_usb_idProduct_show(struct config_item *citem,
++		char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "0x%04x\n",
++			item->usb.idProduct);
++}
++
++static ssize_t dovmgr_item_usb_idProduct_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	/* cannot modify when item is enabled */
++	if (item->enable)
++		return -EBUSY;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++	item->usb.idProduct = val;
++	return count;
++}
++
++static ssize_t dovmgr_item_usb_idVendor_show(struct config_item *citem,
++		char *page)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	return snprintf(page, PAGE_SIZE, "0x%04x\n",
++			item->usb.idVendor);
++}
++
++static ssize_t dovmgr_item_usb_idVendor_store(struct config_item *citem,
++		const char *page, size_t count)
++{
++	struct dovmgr_item *item = to_dovmgr_item(citem);
++	int ret;
++	unsigned int val;
++
++	/* cannot modify when item is enabled */
++	if (item->enable)
++		return -EBUSY;
++
++	ret = kstrtouint(page, 0, &val);
++	if (ret != 0)
++		return ret;
++	item->usb.idVendor = val;
++	return count;
++}
++
++CONFIGFS_ATTR(dovmgr_item_usb_, idProduct);
++CONFIGFS_ATTR(dovmgr_item_usb_, idVendor);
++#endif
++
++#if IS_ENABLED(CONFIG_PCI)
++static struct configfs_attribute *dovmgr_pci_attrs[] = {
++	&dovmgr_item_attr_path,
++	&dovmgr_item_attr_status,
++	&dovmgr_item_attr_enable,
++	&dovmgr_item_attr_overlay,
++	&dovmgr_item_pci_attr_device,
++	&dovmgr_item_pci_attr_vendor,
++	&dovmgr_item_pci_attr_subdevice,
++	&dovmgr_item_pci_attr_subvendor,
++	&dovmgr_item_pci_attr_class,
++	&dovmgr_item_pci_attr_class_mask,
++	NULL,
++};
++#endif
++
++#if IS_ENABLED(CONFIG_USB)
++static struct configfs_attribute *dovmgr_usb_attrs[] = {
++	&dovmgr_item_attr_path,
++	&dovmgr_item_attr_enable,
++	&dovmgr_item_attr_status,
++	&dovmgr_item_attr_overlay,
++	&dovmgr_item_usb_attr_idVendor,
++	&dovmgr_item_usb_attr_idProduct,
++	NULL,
++};
++#endif
++
++static void dovmgr_release(struct config_item *cfsitem)
++{
++	struct dovmgr_item *item = to_dovmgr_item(cfsitem);
++
++	/* disable item (this removes the overlay and all) */
++	dovmgr_item_set_enable(item, false);
++
++	kfree(item->path);
++	kfree(item);
++}
++
++static struct configfs_item_operations dovmgr_item_ops = {
++	.release		= dovmgr_release,
++};
++
++#if IS_ENABLED(CONFIG_PCI)
++static struct config_item_type dovmgr_pci_item_type = {
++	.ct_item_ops	= &dovmgr_item_ops,
++	.ct_attrs	= dovmgr_pci_attrs,
++	.ct_owner	= THIS_MODULE,
++};
++#endif
++
++#if IS_ENABLED(CONFIG_USB)
++static struct config_item_type dovmgr_usb_item_type = {
++	.ct_item_ops	= &dovmgr_item_ops,
++	.ct_attrs	= dovmgr_usb_attrs,
++	.ct_owner	= THIS_MODULE,
++};
++#endif
++
++static struct config_item *dovmgr_group_make_item(
++		struct config_group *group, const char *name,
++		enum dovmgr_type type)
++{
++	struct dovmgr_item *item;
++	struct config_item_type *item_type;
++
++	switch (type) {
++#if IS_ENABLED(CONFIG_PCI)
++	case ITEM_PCI:
++		item_type = &dovmgr_pci_item_type;
++		break;
++#endif
++#if IS_ENABLED(CONFIG_USB)
++	case ITEM_USB:
++		item_type = &dovmgr_usb_item_type;
++		break;
++#endif
++	default:
++		return ERR_PTR(-EINVAL);
++	};
++
++	item = kzalloc(sizeof(*item), GFP_KERNEL);
++	if (!item)
++		return ERR_PTR(-ENOMEM);
++
++	item->type = type;
++	item->enable = false;
++	mutex_init(&item->dev_item_mutex);
++	INIT_LIST_HEAD(&item->dev_item_list);
++
++	switch (type) {
++#if IS_ENABLED(CONFIG_PCI)
++	case ITEM_PCI:
++		/* default for matching device/vendor */
++		item->pci.vendor = PCI_ANY_ID;
++		item->pci.device = PCI_ANY_ID;
++		item->pci.subvendor = PCI_ANY_ID;
++		item->pci.subdevice = PCI_ANY_ID;
++		item->pci.class = 0;
++		item->pci.class_mask = 0;
++		break;
++#endif
++#if IS_ENABLED(CONFIG_USB)
++	case ITEM_USB:
++		/* default */
++		item->usb.match_flags = USB_DEVICE_ID_MATCH_DEVICE;
++		break;
++#endif
++	default:
++		return ERR_PTR(-EINVAL);
++	};
++
++	config_item_init_type_name(&item->item, name, item_type);
++	return &item->item;
++}
++
++#if IS_ENABLED(CONFIG_PCI)
++static struct config_item *dovmgr_group_pci_make_item(
++		struct config_group *group, const char *name)
++{
++	return dovmgr_group_make_item(group, name, ITEM_PCI);
++}
++#endif
++
++#if IS_ENABLED(CONFIG_USB)
++static struct config_item *dovmgr_group_usb_make_item(
++		struct config_group *group, const char *name)
++{
++	return dovmgr_group_make_item(group, name, ITEM_USB);
++}
++#endif
++
++static void dovmgr_group_drop_item(struct config_group *group,
++		struct config_item *cfsitem)
++{
++	struct dovmgr_item *item = to_dovmgr_item(cfsitem);
++
++	switch (item->type) {
++#if IS_ENABLED(CONFIG_PCI)
++	case ITEM_PCI:
++		break;
++#endif
++#if IS_ENABLED(CONFIG_USB)
++	case ITEM_USB:
++		break;
++#endif
++	default:
++		break;
++	}
++	config_item_put(&item->item);
++}
++
++#if IS_ENABLED(CONFIG_PCI)
++static struct configfs_group_operations dovmgr_pci_group_ops = {
++	.make_item	= dovmgr_group_pci_make_item,
++	.drop_item	= dovmgr_group_drop_item,
++};
++
++static struct config_item_type dovmgr_pci_type = {
++	.ct_group_ops   = &dovmgr_pci_group_ops,
++	.ct_owner       = THIS_MODULE,
++};
++#endif
++
++#if IS_ENABLED(CONFIG_USB)
++static struct configfs_group_operations dovmgr_usb_group_ops = {
++	.make_item	= dovmgr_group_usb_make_item,
++	.drop_item	= dovmgr_group_drop_item,
++};
++
++static struct config_item_type dovmgr_usb_type = {
++	.ct_group_ops   = &dovmgr_usb_group_ops,
++	.ct_owner       = THIS_MODULE,
++};
++#endif
++
++static struct configfs_group_operations dovmgr_ops = {
++	/* empty - we don't allow anything to be created */
++};
++
++static struct config_item_type dovmgr_type = {
++	.ct_group_ops   = &dovmgr_ops,
++	.ct_owner       = THIS_MODULE,
++};
++
++struct config_group *dovmgr_def_groups[] = {
++#if IS_ENABLED(CONFIG_PCI)
++	&dovmgr_pci_group,
++#endif
++#if IS_ENABLED(CONFIG_USB)
++	&dovmgr_usb_group,
++#endif
++	NULL
++};
++
++static struct configfs_subsystem dovmgr_subsys = {
++	.su_group = {
++		.cg_item = {
++			.ci_namebuf = "dovmgr",
++			.ci_type = &dovmgr_type,
++		},
++		.default_groups = dovmgr_def_groups,
++	},
++	.su_mutex = __MUTEX_INITIALIZER(dovmgr_subsys.su_mutex),
++};
++
++#if IS_ENABLED(CONFIG_PCI)
++static int pci_dev_instantiate(struct pci_dev *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device *bus_dev;
++	struct of_changeset cset;
++	struct device_node *np, *npb;
++	int ret;
++
++	npb = NULL;
++
++	/* already instantiated */
++	if (dev->of_node) {
++		pr_debug("%s: dev=%s of_node=%s\n", __func__,
++			kobject_name(&dev->kobj),
++			of_node_full_name(dev->of_node));
++		return 0;
++	}
++
++	bus_dev = &pdev->bus->dev;
++
++	pr_debug("%s: %s: %02x:%02x.%02x - node %s%s\n", __func__,
++			kobject_name(&dev->kobj),
++			pdev->bus->number, PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn),
++			bus_dev->of_node ? of_node_full_name(bus_dev->of_node) : "<NULL>",
++			pci_is_bridge(pdev) ? " bridge" : "");
++
++	/* to create the node, the bus must be present */
++	if (!bus_dev->of_node) {
++		pr_err("%s: No node for %s because no bus device node\n",
++			__func__, kobject_name(&dev->kobj));
++		return 0;
++	}
++
++	of_changeset_init(&cset);
++
++	np = of_changeset_create_device_node(&cset, bus_dev->of_node,
++		"%s/pci-%04x-%02x-%02x.%d",
++		of_node_full_name(bus_dev->of_node),
++		pci_domain_nr(pdev->bus), pdev->bus->number,
++		PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn));
++	if (IS_ERR(np)) {
++		ret = PTR_ERR(np);
++		goto out_cset_fail;
++	}
++
++	ret = of_changeset_add_property_stringf(&cset, np, "compatible",
++			"pciclass,%04x", (pdev->class >> 8) & 0xffffff);
++	if (ret != 0)
++		goto out_cset_fail;
++
++	ret = of_changeset_add_property_u32(&cset, np, "vendor",
++			pdev->vendor);
++	if (ret != 0)
++		goto out_cset_fail;
++
++	ret = of_changeset_add_property_u32(&cset, np, "device",
++			pdev->device);
++	if (ret != 0)
++		goto out_cset_fail;
++
++	ret = of_changeset_add_property_string(&cset, np, "status", "okay");
++	if (ret != 0)
++		goto out_cset_fail;
++
++	ret = of_changeset_add_property_bool(&cset, np, "auto-generated");
++	if (ret != 0)
++		goto out_cset_fail;
++
++	ret = of_changeset_attach_node(&cset, np);
++	if (ret != 0)
++		goto out_cset_fail;
++
++	/* are we creating a bridge; swell */
++	npb = NULL;
++	if (pci_is_bridge(pdev) && !pdev->subordinate->dev.of_node) {
++
++		pr_debug("%s: %s: bus->dev=%s subordinate=%s\n", __func__,
++			kobject_name(&dev->kobj),
++			kobject_name(&pdev->bus->dev.kobj),
++			kobject_name(&pdev->subordinate->dev.kobj));
++
++		npb = of_changeset_create_device_node(&cset, bus_dev->of_node,
++			"%s/pci-%04x-%02x",
++			of_node_full_name(bus_dev->of_node),
++			pci_domain_nr(pdev->subordinate),
++			pdev->subordinate->number);
++		if (IS_ERR(npb)) {
++			ret = PTR_ERR(npb);
++			goto out_cset_fail;
++		}
++
++		ret = of_changeset_add_property_string(&cset, npb, "compatible", "generic,pci-bus");
++		if (ret != 0)
++			goto out_cset_fail;
++
++		ret = of_changeset_add_property_string(&cset, npb, "device_type", "pci");
++		if (ret != 0)
++			goto out_cset_fail;
++
++		ret = of_changeset_add_property_string(&cset, npb, "status", "okay");
++		if (ret != 0)
++			goto out_cset_fail;
++
++		ret = of_changeset_add_property_bool(&cset, npb, "auto-generated");
++		if (ret != 0)
++			goto out_cset_fail;
++
++		ret = of_changeset_attach_node(&cset, npb);
++		if (ret != 0)
++			goto out_cset_fail;
++	}
++
++	ret = of_changeset_apply(&cset);
++	if (ret != 0)
++		goto out_cset_fail;
++
++	/* permanently commit */
++	of_changeset_destroy(&cset);
++
++	/* bind the node to the device */
++	dev->of_node = np;
++	ret = sysfs_create_link(&dev->kobj, &dev->of_node->kobj,
++			"of_node");
++	if (ret)
++		pr_warn("%s: %s Error %d creating of_node link\n",
++				__func__, kobject_name(&dev->kobj), ret);
++
++	if (npb) {
++		pdev->subordinate->dev.of_node = npb;
++		ret = sysfs_create_link(&pdev->subordinate->dev.kobj, &npb->kobj,
++				"of_node");
++		if (ret)
++			pr_warn("%s: %s Error %d creating of_node link\n",
++					__func__, kobject_name(&dev->kobj), ret);
++	}
++
++
++	return 0;
++
++out_cset_fail:
++	pr_err("%s: %s Failed to apply changeset (err=%d)\n", __func__,
++		kobject_name(&dev->kobj), ret);
++	of_changeset_destroy(&cset);
++	return ret;
++}
++
++static int pci_dev_uninstantiate(struct pci_dev *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *np, *npb;
++	struct of_changeset cset;
++	int ret;
++
++	/* device node must exist */
++	np = dev->of_node;
++	if (!np)
++		return 0;
++
++	/* and the auto-generated property */
++	if (!of_property_read_bool(np, "auto-generated"))
++		return 0;
++
++	of_changeset_init(&cset);
++
++	ret = of_changeset_detach_node(&cset, np);
++	if (ret != 0)
++		goto out_cset_fail;
++
++	npb = NULL;
++	if (pci_is_bridge(pdev))
++		npb = pdev->subordinate->dev.of_node;
++
++	if (npb != NULL) {
++		ret = of_changeset_detach_node(&cset, npb);
++		if (ret != 0)
++			goto out_cset_fail;
++	}
++
++	ret = of_changeset_apply(&cset);
++	if (ret != 0)
++		goto out_cset_fail;
++
++	dev->of_node = NULL;
++	if (npb != NULL)
++		pdev->subordinate->dev.of_node = NULL;
++
++	pr_debug("%s: %s: %02x:%02x.%02x\n", __func__,
++			kobject_name(&dev->kobj),
++			pdev->bus->number, PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn));
++
++	/* TODO iterate over the properties and free */
++
++	return 0;
++
++out_cset_fail:
++	of_changeset_destroy(&cset);
++
++	return ret;
++}
++
++static int dovmgr_pci_notify(struct notifier_block *nb,
++				unsigned long action, void *arg)
++{
++	int ret;
++
++	if (action == BUS_NOTIFY_ADD_DEVICE)
++		pci_dev_instantiate(to_pci_dev(arg));
++
++	ret = dovmgr_notifier_action(&dovmgr_pci_group, action, arg,
++			dovmgr_pci_item_match, dovmgr_item_notify);
++
++	if (action == BUS_NOTIFY_REMOVED_DEVICE)
++		pci_dev_uninstantiate(to_pci_dev(arg));
++
++	return ret;
++}
++
++static struct notifier_block dovmgr_pci_notifier = {
++	.notifier_call = dovmgr_pci_notify,
++};
++
++static int pci_instantiate_iterator(struct device *dev, void *data)
++{
++	return pci_dev_instantiate(to_pci_dev(dev));
++}
++
++static int dovmgr_pci_init(void)
++{
++	int ret;
++
++	config_group_init_type_name(&dovmgr_pci_group, "pci", &dovmgr_pci_type);
++	ret = bus_register_notifier(&pci_bus_type, &dovmgr_pci_notifier);
++	if (ret != 0) {
++		pr_err("%s: bus_register_notifier() failed\n", __func__);
++		return ret;
++	}
++
++	ret = bus_for_each_dev(&pci_bus_type, NULL, NULL,
++			pci_instantiate_iterator);
++	if (ret != 0) {
++		pr_err("%s: bus_for_each_dev() failed\n", __func__);
++		return ret;
++	}
++
++	return 0;
++}
++
++static void dovmgr_pci_cleanup(void)
++{
++	bus_unregister_notifier(&pci_bus_type, &dovmgr_pci_notifier);
++}
++#endif
++
++#if IS_ENABLED(CONFIG_USB)
++static int dovmgr_usb_notify(struct notifier_block *nb,
++				unsigned long action, void *arg)
++{
++	return dovmgr_notifier_action(&dovmgr_usb_group, action, arg,
++			dovmgr_usb_item_match, dovmgr_item_notify);
++}
++
++static struct notifier_block dovmgr_usb_notifier = {
++	.notifier_call = dovmgr_usb_notify,
++};
++
++static int dovmgr_usb_init(void)
++{
++	int ret;
++
++	config_group_init_type_name(&dovmgr_usb_group, "usb", &dovmgr_usb_type);
++	ret = bus_register_notifier(&usb_bus_type, &dovmgr_usb_notifier);
++	if (ret != 0) {
++		pr_err("%s: bus_register_notifier() failed\n", __func__);
++		return ret;
++	}
++	return 0;
++}
++
++static void dovmgr_usb_cleanup(void)
++{
++	bus_unregister_notifier(&usb_bus_type, &dovmgr_usb_notifier);
++}
++#endif
++
++static int __init dovmgr_init(void)
++{
++	int ret;
++
++	config_group_init(&dovmgr_subsys.su_group);
++#if IS_ENABLED(CONFIG_PCI)
++	configfs_add_default_group(&dovmgr_pci_group,
++			&dovmgr_subsys.su_group);
++#endif
++#if IS_ENABLED(CONFIG_USB)
++	configfs_add_default_group(&dovmgr_usb_group,
++			&dovmgr_subsys.su_group);
++#endif
++
++#if IS_ENABLED(CONFIG_PCI)
++	ret = dovmgr_pci_init();
++	if (ret != 0)
++		goto err_no_pci_init;
++#endif
++#if IS_ENABLED(CONFIG_USB)
++	ret = dovmgr_usb_init();
++	if (ret != 0)
++		goto err_no_usb_init;
++#endif
++
++	ret = configfs_register_subsystem(&dovmgr_subsys);
++	if (ret != 0) {
++		pr_err("%s: failed to register subsys\n", __func__);
++		goto err_no_configfs;
++	}
++	pr_info("%s: OK\n", __func__);
++	return 0;
++
++err_no_configfs:
++#if IS_ENABLED(CONFIG_USB)
++	dovmgr_usb_cleanup();
++err_no_usb_init:
++#endif
++#if IS_ENABLED(CONFIG_PCI)
++	dovmgr_pci_cleanup();
++err_no_pci_init:
++#endif
++	return ret;
++}
++late_initcall(dovmgr_init);
+diff --git a/drivers/of/Kconfig b/drivers/of/Kconfig
+index 6b8646db110c..796ea7533afd 100644
+--- a/drivers/of/Kconfig
++++ b/drivers/of/Kconfig
+@@ -116,4 +116,11 @@ config OF_DMA_DEFAULT_COHERENT
+ 	# arches should select this if DMA is coherent by default for OF devices
+ 	bool
+ 
++config OF_CONFIGFS
++	bool "Device Tree Overlay ConfigFS interface"
++	select CONFIGFS_FS
++	depends on OF_OVERLAY
++	help
++	  Enable a simple user-space driven DT overlay interface.
++
+ endif # OF
+diff --git a/drivers/of/Makefile b/drivers/of/Makefile
+index 8f19d342eed8..7afce596322d 100644
+--- a/drivers/of/Makefile
++++ b/drivers/of/Makefile
+@@ -1,5 +1,6 @@
+ # SPDX-License-Identifier: GPL-2.0
+ obj-y = base.o device.o platform.o property.o
++obj-$(CONFIG_OF_CONFIGFS) += configfs.o
+ obj-$(CONFIG_OF_DYNAMIC) += dynamic.o
+ obj-$(CONFIG_OF_FLATTREE) += fdt.o
+ obj-$(CONFIG_OF_EARLY_FLATTREE) += fdt_address.o
+diff --git a/drivers/of/base.c b/drivers/of/base.c
+index 41b254be0295..9e4741c24ef9 100644
+--- a/drivers/of/base.c
++++ b/drivers/of/base.c
+@@ -31,6 +31,7 @@
+ #include <linux/slab.h>
+ #include <linux/string.h>
+ #include <linux/proc_fs.h>
++#include <linux/rhashtable.h>
+ 
+ #include "of_private.h"
+ 
+@@ -45,6 +46,18 @@ static const char *of_stdout_options;
+ 
+ struct kset *of_kset;
+ 
++const struct rhashtable_params of_phandle_ht_params = {
++	.key_offset = offsetof(struct device_node, phandle), /* base offset */
++	.key_len = sizeof(phandle),
++	.head_offset = offsetof(struct device_node, ht_node),
++	.automatic_shrinking = true,
++};
++
++struct rhashtable *of_phandle_ht;
++
++/* default is false */
++bool of_phandle_ht_is_disabled;
++
+ /*
+  * Used to protect the of_aliases, to hold off addition of nodes to sysfs.
+  * This mutex must be held whenever modifications are being made to the
+@@ -162,13 +175,19 @@ int __of_add_property_sysfs(struct device_node *np, struct property *pp)
+ 	return rc;
+ }
+ 
+-int __of_attach_node_sysfs(struct device_node *np)
++int __of_attach_node_post(struct device_node *np)
+ {
+ 	const char *name;
+ 	struct kobject *parent;
+ 	struct property *pp;
+ 	int rc;
+ 
++	if (of_phandle_ht_available()) {
++		rc = of_phandle_ht_insert(np);
++		WARN(rc, "insert to phandle hash fail @%s\n",
++				of_node_full_name(np));
++	}
++
+ 	if (!IS_ENABLED(CONFIG_SYSFS))
+ 		return 0;
+ 
+@@ -200,6 +219,18 @@ int __of_attach_node_sysfs(struct device_node *np)
+ void __init of_core_init(void)
+ {
+ 	struct device_node *np;
++	int ret;
++
++	of_phandle_ht = kzalloc(sizeof(*of_phandle_ht), GFP_KERNEL);
++	if (!of_phandle_ht) {
++		pr_warn("devicetree: Failed to allocate hashtable\n");
++		return;
++	}
++	ret = rhashtable_init(of_phandle_ht, &of_phandle_ht_params);
++	if (ret) {
++		pr_warn("devicetree: Failed to initialize hashtable\n");
++		return;
++	}
+ 
+ 	/* Create the kset, and register existing nodes */
+ 	mutex_lock(&of_mutex);
+@@ -210,12 +241,16 @@ void __init of_core_init(void)
+ 		return;
+ 	}
+ 	for_each_of_allnodes(np)
+-		__of_attach_node_sysfs(np);
++		__of_attach_node_post(np);
+ 	mutex_unlock(&of_mutex);
+ 
+ 	/* Symlink in /proc as required by userspace ABI */
+ 	if (of_root)
+ 		proc_symlink("device-tree", NULL, "/sys/firmware/devicetree/base");
++
++	ret = of_overlay_init();
++	if (ret != 0)
++		pr_warn("of_init: of_overlay_init failed!\n");
+ }
+ 
+ static struct property *__of_find_property(const struct device_node *np,
+@@ -1133,9 +1168,14 @@ struct device_node *of_find_node_by_phandle(phandle handle)
+ 		return NULL;
+ 
+ 	raw_spin_lock_irqsave(&devtree_lock, flags);
+-	for_each_of_allnodes(np)
+-		if (np->phandle == handle)
+-			break;
++	/* when we're ready use the hash table (and not disabled) */
++	if (of_phandle_ht_available() && !of_phandle_ht_is_disabled)
++		np = of_phandle_ht_lookup(handle);
++	else { /* fallback */
++		for_each_of_allnodes(np)
++			if (np->phandle == handle)
++				break;
++	}
+ 	of_node_get(np);
+ 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+ 	return np;
+diff --git a/drivers/of/configfs.c b/drivers/of/configfs.c
+new file mode 100644
+index 000000000000..c7e999c9d56f
+--- /dev/null
++++ b/drivers/of/configfs.c
+@@ -0,0 +1,307 @@
++/*
++ * Configfs entries for device-tree
++ *
++ * Copyright (C) 2013 - Pantelis Antoniou <panto@antoniou-consulting.com>
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version
++ * 2 of the License, or (at your option) any later version.
++ */
++#include <linux/ctype.h>
++#include <linux/cpu.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_fdt.h>
++#include <linux/spinlock.h>
++#include <linux/sizes.h>
++#include <linux/slab.h>
++#include <linux/proc_fs.h>
++#include <linux/configfs.h>
++#include <linux/types.h>
++#include <linux/stat.h>
++#include <linux/limits.h>
++#include <linux/file.h>
++#include <linux/vmalloc.h>
++#include <linux/firmware.h>
++
++#include "of_private.h"
++
++struct cfs_overlay_item {
++	struct config_item	item;
++
++	char			path[PATH_MAX];
++
++	const struct firmware	*fw;
++	struct device_node	*overlay;
++	int			ov_id;
++
++	void			*dtbo;
++	int			dtbo_size;
++};
++
++static int create_overlay(struct cfs_overlay_item *overlay, void *blob)
++{
++	int err;
++
++	/* unflatten the tree */
++	of_fdt_unflatten_tree(blob, NULL, &overlay->overlay);
++	if (overlay->overlay == NULL) {
++		pr_err("%s: failed to unflatten tree\n", __func__);
++		err = -EINVAL;
++		goto out_err;
++	}
++	pr_debug("%s: unflattened OK\n", __func__);
++
++	/* mark it as detached */
++	of_node_set_flag(overlay->overlay, OF_DETACHED);
++
++	/* perform resolution */
++	err = of_resolve_phandles(overlay->overlay);
++	if (err != 0) {
++		pr_err("%s: Failed to resolve tree\n", __func__);
++		goto out_err;
++	}
++	pr_debug("%s: resolved OK\n", __func__);
++
++	err = of_overlay_create(overlay->overlay);
++	if (err < 0) {
++		pr_err("%s: Failed to create overlay (err=%d)\n",
++				__func__, err);
++		goto out_err;
++	}
++	overlay->ov_id = err;
++
++out_err:
++	return err;
++}
++
++static inline struct cfs_overlay_item *to_cfs_overlay_item(
++		struct config_item *item)
++{
++	return item ? container_of(item, struct cfs_overlay_item, item) : NULL;
++}
++
++static ssize_t cfs_overlay_item_path_show(struct config_item *item, char *page)
++{
++	return sprintf(page, "%s\n", to_cfs_overlay_item(item)->path);
++}
++
++static ssize_t cfs_overlay_item_path_store(struct config_item *item,
++		const char *page, size_t count)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++	const char *p = page;
++	char *s;
++	int err;
++
++	/* if it's set do not allow changes */
++	if (overlay->path[0] != '\0' || overlay->dtbo_size > 0)
++		return -EPERM;
++
++	/* copy to path buffer (and make sure it's always zero terminated */
++	count = snprintf(overlay->path, sizeof(overlay->path) - 1, "%s", p);
++	overlay->path[sizeof(overlay->path) - 1] = '\0';
++
++	/* strip trailing newlines */
++	s = overlay->path + strlen(overlay->path);
++	while (s > overlay->path && *--s == '\n')
++		*s = '\0';
++
++	pr_debug("%s: path is '%s'\n", __func__, overlay->path);
++
++	err = request_firmware(&overlay->fw, overlay->path, NULL);
++	if (err != 0)
++		goto out_err;
++
++	err = create_overlay(overlay, (void *)overlay->fw->data);
++	if (err < 0)
++		goto out_err;
++
++	return count;
++
++out_err:
++
++	release_firmware(overlay->fw);
++	overlay->fw = NULL;
++
++	overlay->path[0] = '\0';
++	return err;
++}
++
++static ssize_t cfs_overlay_item_status_show(struct config_item *item,
++		char *page)
++{
++	return sprintf(page, "%s\n", to_cfs_overlay_item(item)->ov_id >= 0 ?
++					"applied" : "unapplied");
++}
++
++CONFIGFS_ATTR(cfs_overlay_item_, path);
++CONFIGFS_ATTR_RO(cfs_overlay_item_, status);
++
++static struct configfs_attribute *cfs_overlay_attrs[] = {
++	&cfs_overlay_item_attr_path,
++	&cfs_overlay_item_attr_status,
++	NULL,
++};
++
++ssize_t cfs_overlay_item_dtbo_read(struct config_item *item, void *buf,
++		size_t max_count)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++
++	pr_debug("%s: buf=%p max_count=%u\n", __func__,
++			buf, max_count);
++
++	if (overlay->dtbo == NULL)
++		return 0;
++
++	/* copy if buffer provided */
++	if (buf != NULL) {
++		/* the buffer must be large enough */
++		if (overlay->dtbo_size > max_count)
++			return -ENOSPC;
++
++		memcpy(buf, overlay->dtbo, overlay->dtbo_size);
++	}
++
++	return overlay->dtbo_size;
++}
++
++ssize_t cfs_overlay_item_dtbo_write(struct config_item *item, const void *buf,
++		size_t count)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++	int err;
++
++	/* if it's set do not allow changes */
++	if (overlay->path[0] != '\0' || overlay->dtbo_size > 0)
++		return -EPERM;
++
++	/* copy the contents */
++	overlay->dtbo = kmemdup(buf, count, GFP_KERNEL);
++	if (overlay->dtbo == NULL)
++		return -ENOMEM;
++
++	overlay->dtbo_size = count;
++
++	err = create_overlay(overlay, overlay->dtbo);
++	if (err < 0)
++		goto out_err;
++
++	return count;
++
++out_err:
++	kfree(overlay->dtbo);
++	overlay->dtbo = NULL;
++	overlay->dtbo_size = 0;
++
++	return err;
++}
++
++CONFIGFS_BIN_ATTR(cfs_overlay_item_, dtbo, NULL, SZ_1M);
++
++static struct configfs_bin_attribute *cfs_overlay_bin_attrs[] = {
++	&cfs_overlay_item_attr_dtbo,
++	NULL,
++};
++
++static void cfs_overlay_release(struct config_item *item)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++
++	if (overlay->ov_id >= 0)
++		of_overlay_destroy(overlay->ov_id);
++	if (overlay->fw)
++		release_firmware(overlay->fw);
++	/* kfree with NULL is safe */
++	kfree(overlay->dtbo);
++	kfree(overlay);
++}
++
++static struct configfs_item_operations cfs_overlay_item_ops = {
++	.release		= cfs_overlay_release,
++};
++
++static struct config_item_type cfs_overlay_type = {
++	.ct_item_ops	= &cfs_overlay_item_ops,
++	.ct_attrs	= cfs_overlay_attrs,
++	.ct_bin_attrs	= cfs_overlay_bin_attrs,
++	.ct_owner	= THIS_MODULE,
++};
++
++static struct config_item *cfs_overlay_group_make_item(
++		struct config_group *group, const char *name)
++{
++	struct cfs_overlay_item *overlay;
++
++	overlay = kzalloc(sizeof(*overlay), GFP_KERNEL);
++	if (!overlay)
++		return ERR_PTR(-ENOMEM);
++	overlay->ov_id = -1;
++
++	config_item_init_type_name(&overlay->item, name, &cfs_overlay_type);
++	return &overlay->item;
++}
++
++static void cfs_overlay_group_drop_item(struct config_group *group,
++		struct config_item *item)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++
++	config_item_put(&overlay->item);
++}
++
++static struct configfs_group_operations overlays_ops = {
++	.make_item	= cfs_overlay_group_make_item,
++	.drop_item	= cfs_overlay_group_drop_item,
++};
++
++static struct config_item_type overlays_type = {
++	.ct_group_ops   = &overlays_ops,
++	.ct_owner       = THIS_MODULE,
++};
++
++static struct configfs_group_operations of_cfs_ops = {
++	/* empty - we don't allow anything to be created */
++};
++
++static struct config_item_type of_cfs_type = {
++	.ct_group_ops   = &of_cfs_ops,
++	.ct_owner       = THIS_MODULE,
++};
++
++struct config_group of_cfs_overlay_group;
++
++static struct configfs_subsystem of_cfs_subsys = {
++	.su_group = {
++		.cg_item = {
++			.ci_namebuf = "device-tree",
++			.ci_type = &of_cfs_type,
++		},
++	},
++	.su_mutex = __MUTEX_INITIALIZER(of_cfs_subsys.su_mutex),
++};
++
++static int __init of_cfs_init(void)
++{
++	int ret;
++
++	pr_info("%s\n", __func__);
++
++	config_group_init(&of_cfs_subsys.su_group);
++	config_group_init_type_name(&of_cfs_overlay_group, "overlays",
++			&overlays_type);
++	configfs_add_default_group(&of_cfs_overlay_group,
++			&of_cfs_subsys.su_group);
++
++	ret = configfs_register_subsystem(&of_cfs_subsys);
++	if (ret != 0) {
++		pr_err("%s: failed to register subsys\n", __func__);
++		goto out;
++	}
++	pr_info("%s: OK\n", __func__);
++out:
++	return ret;
++}
++late_initcall(of_cfs_init);
+diff --git a/drivers/of/dynamic.c b/drivers/of/dynamic.c
+index 301b6db2b48d..15d22758234a 100644
+--- a/drivers/of/dynamic.c
++++ b/drivers/of/dynamic.c
+@@ -13,6 +13,7 @@
+ #include <linux/slab.h>
+ #include <linux/string.h>
+ #include <linux/proc_fs.h>
++#include <linux/rhashtable.h>
+ 
+ #include "of_private.h"
+ 
+@@ -43,9 +44,16 @@ void of_node_put(struct device_node *node)
+ }
+ EXPORT_SYMBOL(of_node_put);
+ 
+-void __of_detach_node_sysfs(struct device_node *np)
++void __of_detach_node_post(struct device_node *np)
+ {
+ 	struct property *pp;
++	int rc;
++
++	if (of_phandle_ht_available()) {
++		rc = of_phandle_ht_remove(np);
++		WARN(rc, "remove from phandle hash fail @%s\n",
++				of_node_full_name(np));
++	}
+ 
+ 	if (!IS_ENABLED(CONFIG_SYSFS))
+ 		return;
+@@ -253,7 +261,7 @@ int of_attach_node(struct device_node *np)
+ 	__of_attach_node(np);
+ 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+ 
+-	__of_attach_node_sysfs(np);
++	__of_attach_node_post(np);
+ 	mutex_unlock(&of_mutex);
+ 
+ 	of_reconfig_notify(OF_RECONFIG_ATTACH_NODE, &rd);
+@@ -306,7 +314,7 @@ int of_detach_node(struct device_node *np)
+ 	__of_detach_node(np);
+ 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+ 
+-	__of_detach_node_sysfs(np);
++	__of_detach_node_post(np);
+ 	mutex_unlock(&of_mutex);
+ 
+ 	of_reconfig_notify(OF_RECONFIG_DETACH_NODE, &rd);
+@@ -396,8 +404,9 @@ struct property *__of_prop_dup(const struct property *prop, gfp_t allocflags)
+ }
+ 
+ /**
+- * __of_node_dup() - Duplicate or create an empty device node dynamically.
+- * @fmt: Format string (plus vargs) for new full name of the device node
++ * __of_node_dupv() - Duplicate or create an empty device node dynamically.
++ * @fmt: Format string for new full name of the device node
++ * @vargs: va_list containing the arugments for the node full name
+  *
+  * Create an device tree node, either by duplicating an empty node or by allocating
+  * an empty one suitable for further modification.  The node data are
+@@ -405,17 +414,15 @@ struct property *__of_prop_dup(const struct property *prop, gfp_t allocflags)
+  * OF_DETACHED bits set. Returns the newly allocated node or NULL on out of
+  * memory error.
+  */
+-struct device_node *__of_node_dup(const struct device_node *np, const char *fmt, ...)
++struct device_node *__of_node_dupv(const struct device_node *np,
++		const char *fmt, va_list vargs)
+ {
+-	va_list vargs;
+ 	struct device_node *node;
+ 
+ 	node = kzalloc(sizeof(*node), GFP_KERNEL);
+ 	if (!node)
+ 		return NULL;
+-	va_start(vargs, fmt);
+ 	node->full_name = kvasprintf(GFP_KERNEL, fmt, vargs);
+-	va_end(vargs);
+ 	if (!node->full_name) {
+ 		kfree(node);
+ 		return NULL;
+@@ -447,6 +454,24 @@ struct device_node *__of_node_dup(const struct device_node *np, const char *fmt,
+ 	return NULL;
+ }
+ 
++/**
++ * __of_node_dup() - Duplicate or create an empty device node dynamically.
++ * @fmt: Format string (plus vargs) for new full name of the device node
++ *
++ * See: __of_node_dupv()
++ */
++struct device_node *__of_node_dup(const struct device_node *np,
++		const char *fmt, ...)
++{
++	va_list vargs;
++	struct device_node *node;
++
++	va_start(vargs, fmt);
++	node = __of_node_dupv(np, fmt, vargs);
++	va_end(vargs);
++	return node;
++}
++
+ static void __of_changeset_entry_destroy(struct of_changeset_entry *ce)
+ {
+ 	of_node_put(ce->np);
+@@ -613,10 +638,10 @@ static int __of_changeset_entry_apply(struct of_changeset_entry *ce)
+ 
+ 	switch (ce->action) {
+ 	case OF_RECONFIG_ATTACH_NODE:
+-		__of_attach_node_sysfs(ce->np);
++		__of_attach_node_post(ce->np);
+ 		break;
+ 	case OF_RECONFIG_DETACH_NODE:
+-		__of_detach_node_sysfs(ce->np);
++		__of_detach_node_post(ce->np);
+ 		break;
+ 	case OF_RECONFIG_ADD_PROPERTY:
+ 		/* ignore duplicate names */
+@@ -812,3 +837,295 @@ int of_changeset_action(struct of_changeset *ocs, unsigned long action,
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(of_changeset_action);
++
++/* changeset helpers */
++
++/**
++ * of_changeset_create_device_node - Create an empty device node
++ *
++ * @ocs:	changeset pointer
++ * @parent:	parent device node
++ * @fmt:	format string for the node's full_name
++ * @args:	argument list for the format string
++ *
++ * Create an empty device node, marking it as detached and allocated.
++ *
++ * Returns a device node on success, an error encoded pointer otherwise
++ */
++struct device_node *of_changeset_create_device_nodev(
++	struct of_changeset *ocs, struct device_node *parent,
++	const char *fmt, va_list vargs)
++{
++	struct device_node *node;
++
++	node = __of_node_dupv(NULL, fmt, vargs);
++	if (!node)
++		return ERR_PTR(-ENOMEM);
++
++	node->parent = parent;
++	return node;
++}
++EXPORT_SYMBOL_GPL(of_changeset_create_device_nodev);
++
++/**
++ * of_changeset_create_device_node - Create an empty device node
++ *
++ * @ocs:	changeset pointer
++ * @parent:	parent device node
++ * @fmt:	Format string for the node's full_name
++ * ...		Arguments
++ *
++ * Create an empty device node, marking it as detached and allocated.
++ *
++ * Returns a device node on success, an error encoded pointer otherwise
++ */
++__printf(3, 4) struct device_node *
++of_changeset_create_device_node(struct of_changeset *ocs,
++	struct device_node *parent, const char *fmt, ...)
++{
++	va_list vargs;
++	struct device_node *node;
++
++	va_start(vargs, fmt);
++	node = of_changeset_create_device_nodev(ocs, parent, fmt, vargs);
++	va_end(vargs);
++	return node;
++}
++EXPORT_SYMBOL_GPL(of_changeset_create_device_node);
++
++/**
++ * __of_changeset_add_property_copy - Create/update a new property copying
++ *                                    name & value
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @value:	pointer to the value data
++ * @length:	length of the value in bytes
++ * @update:	True on update operation
++ *
++ * Adds/updates a property to the changeset by making copies of the name & value
++ * entries. The @update parameter controls whether an add or update takes place.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++int __of_changeset_add_update_property_copy(struct of_changeset *ocs,
++		struct device_node *np, const char *name, const void *value,
++		int length, bool update)
++{
++	struct property *prop;
++	char *new_name;
++	void *new_value;
++	int ret = -ENOMEM;
++
++	prop = kzalloc(sizeof(*prop), GFP_KERNEL);
++	if (!prop)
++		return -ENOMEM;
++
++	new_name = kstrdup(name, GFP_KERNEL);
++	if (!new_name)
++		goto out_err;
++
++	/*
++	 * NOTE: There is no check for zero length value.
++	 * In case of a boolean property, this will allocate a value
++	 * of zero bytes. We do this to work around the use
++	 * of of_get_property() calls on boolean values.
++	 */
++	new_value = kmemdup(value, length, GFP_KERNEL);
++	if (!new_value)
++		goto out_err;
++
++	of_property_set_flag(prop, OF_DYNAMIC);
++
++	prop->name = new_name;
++	prop->value = new_value;
++	prop->length = length;
++
++	if (!update)
++		ret = of_changeset_add_property(ocs, np, prop);
++	else
++		ret = of_changeset_update_property(ocs, np, prop);
++
++	if (!ret)
++		return 0;
++
++out_err:
++	kfree(prop->value);
++	kfree(prop->name);
++	kfree(prop);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(__of_changeset_add_update_property_copy);
++
++/**
++ * of_changeset_add_property_stringf - Create a new formatted string property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @fmt:	format of string property
++ * ...		arguments of the format string
++ *
++ * Adds a string property to the changeset by making copies of the name
++ * and the formatted value.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++__printf(4, 5) int of_changeset_add_property_stringf(
++		struct of_changeset *ocs, struct device_node *np,
++		const char *name, const char *fmt, ...)
++{
++	va_list vargs;
++	int ret;
++
++	va_start(vargs, fmt);
++	ret = __of_changeset_add_update_property_stringv(ocs, np, name, fmt,
++			vargs, false);
++	va_end(vargs);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(of_changeset_add_property_stringf);
++
++/**
++ * of_changeset_update_property_stringf - Update formatted string property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @fmt:	format of string property
++ * ...		arguments of the format string
++ *
++ * Updates a string property to the changeset by making copies of the name
++ * and the formatted value.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++int of_changeset_update_property_stringf(
++	struct of_changeset *ocs, struct device_node *np,
++	const char *name, const char *fmt, ...)
++{
++	va_list vargs;
++	int ret;
++
++	va_start(vargs, fmt);
++	ret = __of_changeset_add_update_property_stringv(ocs, np, name, fmt,
++			vargs, true);
++	va_end(vargs);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(of_changeset_update_property_stringf);
++
++/**
++ * __of_changeset_add_update_property_string_list - Create/update a string
++ *                                                  list property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @strs:	pointer to the string list
++ * @count:	string count
++ * @update:	True on update operation
++ *
++ * Adds a string list property to the changeset.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++int __of_changeset_add_update_property_string_list(
++		struct of_changeset *ocs, struct device_node *np,
++		const char *name, const char **strs, int count, bool update)
++{
++	int total = 0, i, ret;
++	char *value, *s;
++
++	for (i = 0; i < count; i++) {
++		/* check if  it's NULL */
++		if (!strs[i])
++			return -EINVAL;
++		total += strlen(strs[i]) + 1;
++	}
++
++	value = kmalloc(total, GFP_KERNEL);
++	if (!value)
++		return -ENOMEM;
++
++	for (i = 0, s = value; i < count; i++) {
++		/* no need to check for NULL, check above */
++		strcpy(s, strs[i]);
++		s += strlen(strs[i]) + 1;
++	}
++
++	ret = __of_changeset_add_update_property_copy(ocs, np, name, value,
++			total, update);
++
++	kfree(value);
++
++	return ret;
++}
++EXPORT_SYMBOL_GPL(__of_changeset_add_update_property_string_list);
++
++static struct device_node *
++__of_changeset_node_move_one(struct of_changeset *ocs,
++		struct device_node *np, struct device_node *new_parent)
++{
++	struct device_node *np2;
++	const char *unitname;
++	int err;
++
++	err = of_changeset_detach_node(ocs, np);
++	if (err)
++		return ERR_PTR(err);
++
++	unitname = strrchr(np->full_name, '/');
++	if (!unitname)
++		unitname = np->full_name;
++
++	np2 = __of_node_dup(np, "%s/%s",
++			new_parent->full_name, unitname);
++	if (!np2)
++		return ERR_PTR(-ENOMEM);
++	np2->parent = new_parent;
++
++	err = of_changeset_attach_node(ocs, np2);
++	if (err)
++		return ERR_PTR(err);
++
++	return np2;
++}
++
++/**
++ * of_changeset_node_move_to - Moves a subtree to a new place in
++ *                             the tree
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer to be moved
++ * @to:		device node of the new parent
++ *
++ * Moves a subtree to a new place in the tree.
++ * Note that a move is a safe operation because the phandles
++ * remain valid.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++int of_changeset_node_move(struct of_changeset *ocs,
++		struct device_node *np, struct device_node *new_parent)
++{
++	struct device_node *npc, *nppc;
++
++	/* move the root first */
++	nppc = __of_changeset_node_move_one(ocs, np, new_parent);
++	if (IS_ERR(nppc))
++		return PTR_ERR(nppc);
++
++	/* move the subtrees next */
++	for_each_child_of_node(np, npc) {
++		nppc = __of_changeset_node_move_one(ocs, npc, nppc);
++		if (IS_ERR(nppc)) {
++			of_node_put(npc);
++			return PTR_ERR(nppc);
++		}
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(of_changeset_node_move);
+diff --git a/drivers/of/of_private.h b/drivers/of/of_private.h
+index 3ae12ffbf547..7c2b2aeda44a 100644
+--- a/drivers/of/of_private.h
++++ b/drivers/of/of_private.h
+@@ -93,9 +93,9 @@ extern int __of_update_property(struct device_node *np,
+ extern void __of_update_property_sysfs(struct device_node *np,
+ 		struct property *newprop, struct property *oldprop);
+ 
+-extern int __of_attach_node_sysfs(struct device_node *np);
++extern int __of_attach_node_post(struct device_node *np);
+ extern void __of_detach_node(struct device_node *np);
+-extern void __of_detach_node_sysfs(struct device_node *np);
++extern void __of_detach_node_post(struct device_node *np);
+ 
+ extern void __of_sysfs_remove_bin_file(struct device_node *np,
+ 				       struct property *prop);
+@@ -109,4 +109,46 @@ extern void __of_sysfs_remove_bin_file(struct device_node *np,
+ #define for_each_transaction_entry_reverse(_oft, _te) \
+ 	list_for_each_entry_reverse(_te, &(_oft)->te_list, node)
+ 
++#if defined(CONFIG_OF_OVERLAY)
++extern int of_overlay_init(void);
++#else
++static inline int of_overlay_init(void)
++{
++	return 0;
++}
++#endif
++
++extern const struct rhashtable_params of_phandle_ht_params;
++extern struct rhashtable *of_phandle_ht;
++
++/* for unittest use */
++extern bool of_phandle_ht_is_disabled;
++
++static inline bool of_phandle_ht_available(void)
++{
++	return of_phandle_ht != NULL;
++}
++
++static inline int of_phandle_ht_insert(struct device_node *np)
++{
++	if (!np || !np->phandle)
++		return 0;
++	return rhashtable_insert_fast(of_phandle_ht,
++		&np->ht_node, of_phandle_ht_params);
++}
++
++static inline int of_phandle_ht_remove(struct device_node *np)
++{
++	if (!np || !np->phandle)
++		return 0;
++	return rhashtable_remove_fast(of_phandle_ht,
++		&np->ht_node, of_phandle_ht_params);
++}
++
++static inline struct device_node *of_phandle_ht_lookup(phandle handle)
++{
++	return rhashtable_lookup_fast(of_phandle_ht,
++			&handle, of_phandle_ht_params);
++}
++
+ #endif /* _LINUX_OF_PRIVATE_H */
+diff --git a/drivers/of/overlay.c b/drivers/of/overlay.c
+index 8ecfee31ab6d..7f8cc5c1f426 100644
+--- a/drivers/of/overlay.c
++++ b/drivers/of/overlay.c
+@@ -21,11 +21,28 @@
+ #include <linux/slab.h>
+ #include <linux/err.h>
+ #include <linux/idr.h>
++#include <linux/sysfs.h>
++#include <linux/atomic.h>
+ 
+ #include "of_private.h"
+ 
++/* fwd. decl */
++struct of_overlay;
++struct of_overlay_info;
++
++/* an attribute for each fragment */
++struct fragment_attribute {
++	struct attribute attr;
++	ssize_t (*show)(struct kobject *kobj, struct fragment_attribute *fattr,
++			char *buf);
++	ssize_t (*store)(struct kobject *kobj, struct fragment_attribute *fattr,
++			 const char *buf, size_t count);
++	struct of_overlay_info *ovinfo;
++};
++
+ /**
+  * struct of_overlay_info - Holds a single overlay info
++ * @info:	info node that contains the target and overlay
+  * @target:	target of the overlay operation
+  * @overlay:	pointer to the overlay contents node
+  *
+@@ -33,8 +50,13 @@
+  * records.
+  */
+ struct of_overlay_info {
++	struct of_overlay *ov;
++	struct device_node *info;
+ 	struct device_node *target;
+ 	struct device_node *overlay;
++	struct attribute_group attr_group;
++	struct attribute *attrs[2];
++	struct fragment_attribute target_attr;
+ 	bool is_symbols_node;
+ };
+ 
+@@ -52,12 +74,27 @@ struct of_overlay {
+ 	struct list_head node;
+ 	int count;
+ 	struct of_overlay_info *ovinfo_tab;
++	const struct attribute_group **attr_groups;
+ 	struct of_changeset cset;
++	struct kobject kobj;
++	int target_index;
++	struct device_node *target_root;
+ };
+ 
++/* master enable switch; once set to 0 can't be re-enabled */
++static atomic_t ov_enable = ATOMIC_INIT(1);
++
++static int __init of_overlay_disable_setup(char *str __always_unused)
++{
++	atomic_set(&ov_enable, 0);
++	return 1;
++}
++__setup("of_overlay_disable", of_overlay_disable_setup);
++
+ static int of_overlay_apply_one(struct of_overlay *ov,
+ 		struct device_node *target, const struct device_node *overlay,
+ 		bool is_symbols_node);
++static int overlay_removal_is_ok(struct of_overlay *ov);
+ 
+ static BLOCKING_NOTIFIER_HEAD(of_overlay_chain);
+ 
+@@ -309,30 +346,92 @@ static int of_overlay_apply(struct of_overlay *ov)
+ 
+ /*
+  * Find the target node using a number of different strategies
+- * in order of preference
++ * in order of preference. Respects the target index if available.
+  *
+  * "target" property containing the phandle of the target
+  * "target-path" property containing the path of the target
+  */
+-static struct device_node *find_target_node(struct device_node *info_node)
++static struct device_node *find_target_node(struct of_overlay *ov,
++		struct device_node *info_node, int index)
+ {
++	struct device_node *target = NULL, *np;
+ 	const char *path;
++	char *newpath;
+ 	u32 val;
+ 	int ret;
+ 
+ 	/* first try to go by using the target as a phandle */
+-	ret = of_property_read_u32(info_node, "target", &val);
+-	if (ret == 0)
+-		return of_find_node_by_phandle(val);
++	ret = of_property_read_u32_index(info_node, "target", index, &val);
++	if (ret == 0) {
++		target = of_find_node_by_phandle(val);
++		if (!target) {
++			pr_err("%s: Could not find target phandle 0x%x\n",
++					__func__, val);
++			return NULL;
++		}
++		goto check_root;
++	}
+ 
+-	/* now try to locate by path */
+-	ret = of_property_read_string(info_node, "target-path", &path);
+-	if (ret == 0)
+-		return of_find_node_by_path(path);
++	/* failed, try to locate by path */
++	ret = of_property_read_string_index(info_node, "target-path", index,
++			&path);
++	if (ret == 0) {
++
++		if (!ov->target_root) {
++			target = of_find_node_by_path(path);
++			if (!target)
++				pr_err("%s: Could not find target path \"%s\"\n",
++						__func__, path);
++			return target;
++		}
++
++		/* remove preceding '/' from path; relative path */
++		if (*path == '/') {
++			while (*path == '/')
++				path++;
++
++			newpath = kasprintf(GFP_KERNEL, "%s%s%s",
++					of_node_full_name(ov->target_root),
++					*path ? "/" : "", path);
++			if (!newpath) {
++				pr_err("%s: Could not allocate \"%s%s%s\"\n",
++					__func__,
++					of_node_full_name(ov->target_root),
++					*path ? "/" : "", path);
++				return NULL;
++			}
++			target = of_find_node_by_path(newpath);
++			kfree(newpath);
++
++			return target;
++
++		}
++		/* target is an alias, need to check */
++		target = of_find_node_by_path(path);
++		if (!target) {
++			pr_err("%s: Could not find alias \"%s\"\n",
++					__func__, path);
++			return NULL;
++		}
++		goto check_root;
++	}
++
++	return NULL;
+ 
+-	pr_err("Failed to find target for node %p (%s)\n",
+-		info_node, info_node->name);
++check_root:
++	if (!ov->target_root)
++		return target;
+ 
++	/* got a target, but we have to check it's under target root */
++	for (np = target; np; np = np->parent) {
++		if (np == ov->target_root)
++			return target;
++	}
++	pr_err("%s: target \"%s\" not under target_root \"%s\"\n",
++			__func__, of_node_full_name(target),
++			of_node_full_name(ov->target_root));
++	/* target is not under target_root */
++	of_node_put(target);
+ 	return NULL;
+ }
+ 
+@@ -357,10 +456,12 @@ static int of_fill_overlay_info(struct of_overlay *ov,
+ 	if (ovinfo->overlay == NULL)
+ 		goto err_fail;
+ 
+-	ovinfo->target = find_target_node(info_node);
++	ovinfo->target = find_target_node(ov, info_node, ov->target_index);
+ 	if (ovinfo->target == NULL)
+ 		goto err_fail;
+ 
++	ovinfo->info = of_node_get(info_node);
++
+ 	return 0;
+ 
+ err_fail:
+@@ -371,6 +472,17 @@ static int of_fill_overlay_info(struct of_overlay *ov,
+ 	return -EINVAL;
+ }
+ 
++static ssize_t target_show(struct kobject *kobj,
++		struct fragment_attribute *fattr, char *buf)
++{
++	struct of_overlay_info *ovinfo = fattr->ovinfo;
++
++	return snprintf(buf, PAGE_SIZE, "%s\n",
++			of_node_full_name(ovinfo->target));
++}
++
++static const struct fragment_attribute target_template_attr = __ATTR_RO(target);
++
+ /**
+  * of_build_overlay_info() - Build an overlay info array
+  * @ov		Overlay to build
+@@ -388,7 +500,7 @@ static int of_build_overlay_info(struct of_overlay *ov,
+ {
+ 	struct device_node *node;
+ 	struct of_overlay_info *ovinfo;
+-	int cnt, err;
++	int i, cnt, err;
+ 
+ 	/* worst case; every child is a node */
+ 	cnt = 0;
+@@ -425,14 +537,45 @@ static int of_build_overlay_info(struct of_overlay *ov,
+ 
+ 	/* if nothing filled, return error */
+ 	if (cnt == 0) {
+-		kfree(ovinfo);
+-		return -ENODEV;
++		err = -ENODEV;
++		goto err_free_ovinfo;
+ 	}
+ 
+ 	ov->count = cnt;
+ 	ov->ovinfo_tab = ovinfo;
+ 
++	ov->attr_groups = kcalloc(cnt + 1,
++			sizeof(struct attribute_group *), GFP_KERNEL);
++	if (ov->attr_groups == NULL) {
++		err = -ENOMEM;
++		goto err_free_ovinfo;
++	}
++
++	for (i = 0; i < cnt; i++) {
++		ovinfo = &ov->ovinfo_tab[i];
++
++		ov->attr_groups[i] = &ovinfo->attr_group;
++
++		ovinfo->target_attr = target_template_attr;
++		/* make lockdep happy */
++		sysfs_attr_init(&ovinfo->target_attr.attr);
++		ovinfo->target_attr.ovinfo = ovinfo;
++
++		ovinfo->attrs[0] = &ovinfo->target_attr.attr;
++		ovinfo->attrs[1] = NULL;
++
++		/* NOTE: direct reference to the full_name */
++		ovinfo->attr_group.name = kbasename(ovinfo->info->full_name);
++		ovinfo->attr_group.attrs = ovinfo->attrs;
++
++	}
++	ov->attr_groups[i] = NULL;
++
+ 	return 0;
++
++err_free_ovinfo:
++	kfree(ovinfo);
++	return err;
+ }
+ 
+ /**
+@@ -449,46 +592,201 @@ static int of_free_overlay_info(struct of_overlay *ov)
+ 	struct of_overlay_info *ovinfo;
+ 	int i;
+ 
++	/* free attribute groups space */
++	kfree(ov->attr_groups);
++
+ 	/* do it in reverse */
+ 	for (i = ov->count - 1; i >= 0; i--) {
+ 		ovinfo = &ov->ovinfo_tab[i];
+ 
+ 		of_node_put(ovinfo->target);
+ 		of_node_put(ovinfo->overlay);
++		of_node_put(ovinfo->info);
+ 	}
+ 	kfree(ov->ovinfo_tab);
+ 
+ 	return 0;
+ }
+ 
++static int of_overlay_add_symbols(
++		struct device_node *tree,
++		struct of_overlay *ov)
++{
++	struct of_overlay_info *ovinfo;
++	struct device_node *root_sym = NULL;
++	struct device_node *child = NULL;
++	struct property *prop;
++	const char *path, *s;
++	char *new_path;
++	int i, len, err;
++
++	/* both may fail (if no fixups are required) */
++	root_sym = of_find_node_by_path("/__symbols__");
++	child = of_get_child_by_name(tree, "__symbols__");
++
++	err = 0;
++	/* do nothing if either is NULL */
++	if (!root_sym || !child)
++		goto out;
++
++	for_each_property_of_node(child, prop) {
++
++		/* skip properties added automatically */
++		if (of_prop_cmp(prop->name, "name") == 0)
++			continue;
++
++		err = of_property_read_string(child,
++				prop->name, &path);
++		if (err != 0) {
++			pr_err("Could not find symbol '%s'\n", prop->name);
++			continue;
++		}
++
++		/* now find fragment index */
++		s = path;
++
++		/* compare paths to find fragment index */
++		for (i = 0, ovinfo = NULL, len = -1; i < ov->count; i++) {
++			ovinfo = &ov->ovinfo_tab[i];
++
++			pr_debug("#%d: overlay->name=%s target->name=%s\n",
++					i, ovinfo->overlay->full_name,
++					ovinfo->target->full_name);
++
++			len = strlen(ovinfo->overlay->full_name);
++			if (strncasecmp(path, ovinfo->overlay->full_name,
++						len) == 0 && path[len] == '/')
++				break;
++		}
++
++		if (i >= ov->count)
++			continue;
++
++		pr_debug("found target at #%d\n", i);
++		new_path = kasprintf(GFP_KERNEL, "%s%s",
++				ovinfo->target->full_name,
++				path + len);
++		if (!new_path) {
++			pr_err("Failed to allocate propname for \"%s\"\n",
++					prop->name);
++			err = -ENOMEM;
++			break;
++		}
++
++		err = of_changeset_add_property_string(&ov->cset, root_sym,
++				prop->name, new_path);
++
++		/* free always */
++		kfree(new_path);
++
++		if (err) {
++			pr_err("Failed to add property for \"%s\"\n",
++					prop->name);
++			break;
++		}
++	}
++
++out:
++	of_node_put(child);
++	of_node_put(root_sym);
++
++	return err;
++}
++
+ static LIST_HEAD(ov_list);
+ static DEFINE_IDR(ov_idr);
+ 
+-/**
+- * of_overlay_create() - Create and apply an overlay
+- * @tree:	Device node containing all the overlays
+- *
+- * Creates and applies an overlay while also keeping track
+- * of the overlay in a list. This list can be used to prevent
+- * illegal overlay removals.
+- *
+- * Returns the id of the created overlay, or a negative error number
+- */
+-int of_overlay_create(struct device_node *tree)
++static inline struct of_overlay *kobj_to_overlay(struct kobject *kobj)
++{
++	return container_of(kobj, struct of_overlay, kobj);
++}
++
++void of_overlay_release(struct kobject *kobj)
++{
++	struct of_overlay *ov = kobj_to_overlay(kobj);
++
++	of_node_put(ov->target_root);
++	kfree(ov);
++}
++
++static ssize_t enable_show(struct kobject *kobj,
++		struct kobj_attribute *attr, char *buf)
++{
++	return snprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&ov_enable));
++}
++
++static ssize_t enable_store(struct kobject *kobj,
++		struct kobj_attribute *attr, const char *buf, size_t count)
++{
++	int ret;
++	bool new_enable;
++
++	ret = strtobool(buf, &new_enable);
++	if (ret != 0)
++		return ret;
++	/* if we've disabled it, no going back */
++	if (atomic_read(&ov_enable) == 0)
++		return -EPERM;
++	atomic_set(&ov_enable, (int)new_enable);
++	return count;
++}
++
++static struct kobj_attribute enable_attr = __ATTR_RW(enable);
++
++static const struct attribute *overlay_global_attrs[] = {
++	&enable_attr.attr,
++	NULL
++};
++
++static ssize_t can_remove_show(struct kobject *kobj,
++		struct kobj_attribute *attr, char *buf)
++{
++	struct of_overlay *ov = kobj_to_overlay(kobj);
++
++	return snprintf(buf, PAGE_SIZE, "%d\n", overlay_removal_is_ok(ov));
++}
++
++static struct kobj_attribute can_remove_attr = __ATTR_RO(can_remove);
++
++static struct attribute *overlay_attrs[] = {
++	&can_remove_attr.attr,
++	NULL
++};
++
++static struct kobj_type of_overlay_ktype = {
++	.release = of_overlay_release,
++	.sysfs_ops = &kobj_sysfs_ops,	/* default kobj sysfs ops */
++	.default_attrs = overlay_attrs,
++};
++
++static struct kset *ov_kset;
++
++static int __of_overlay_create(struct device_node *tree,
++		int target_index, struct device_node *target_root)
+ {
+ 	struct of_overlay *ov;
+ 	int err, id;
+ 
++	/* administratively disabled */
++	if (!atomic_read(&ov_enable))
++		return -EPERM;
++
+ 	/* allocate the overlay structure */
+ 	ov = kzalloc(sizeof(*ov), GFP_KERNEL);
+ 	if (ov == NULL)
+ 		return -ENOMEM;
+ 	ov->id = -1;
+ 
++	ov->target_index = target_index;
++	ov->target_root = of_node_get(target_root);
++
+ 	INIT_LIST_HEAD(&ov->node);
+ 
+ 	of_changeset_init(&ov->cset);
+ 
++	/* initialize kobject */
++	kobject_init(&ov->kobj, &of_overlay_ktype);
++
+ 	mutex_lock(&of_mutex);
+ 
+ 	id = idr_alloc(&ov_idr, ov, 0, 0, GFP_KERNEL);
+@@ -518,11 +816,32 @@ int of_overlay_create(struct device_node *tree)
+ 	if (err)
+ 		goto err_abort_trans;
+ 
++	err = of_overlay_add_symbols(tree, ov);
++	if (err) {
++		pr_err("%s: of_overlay_add_symbols() failed for tree@%s\n",
++				__func__, tree->full_name);
++		goto err_abort_trans;
++	}
++
+ 	/* apply the changeset */
+ 	err = __of_changeset_apply(&ov->cset);
+ 	if (err)
+ 		goto err_revert_overlay;
+ 
++	err = sysfs_create_groups(&ov->kobj, ov->attr_groups);
++	if (err != 0) {
++		pr_err("%s: sysfs_create_groups() failed for tree@%s\n",
++				__func__, tree->full_name);
++		goto err_remove_kobj;
++	}
++
++	ov->kobj.kset = ov_kset;
++	err = kobject_add(&ov->kobj, NULL, "%d", id);
++	if (err != 0) {
++		pr_err("%s: kobject_add() failed for tree@%s\n",
++				__func__, tree->full_name);
++		goto err_cancel_overlay;
++	}
+ 
+ 	/* add to the tail of the overlay list */
+ 	list_add_tail(&ov->node, &ov_list);
+@@ -533,6 +852,10 @@ int of_overlay_create(struct device_node *tree)
+ 
+ 	return id;
+ 
++err_remove_kobj:
++	kobject_put(&ov->kobj);
++err_cancel_overlay:
++	of_changeset_revert(&ov->cset);
+ err_revert_overlay:
+ err_abort_trans:
+ 	of_free_overlay_info(ov);
+@@ -540,13 +863,66 @@ int of_overlay_create(struct device_node *tree)
+ 	idr_remove(&ov_idr, ov->id);
+ err_destroy_trans:
+ 	of_changeset_destroy(&ov->cset);
++	of_node_put(ov->target_root);
+ 	kfree(ov);
+ 	mutex_unlock(&of_mutex);
+ 
+ 	return err;
+ }
++
++/**
++ * of_overlay_create() - Create and apply an overlay
++ * @tree:	Device node containing all the overlays
++ *
++ * Creates and applies an overlay while also keeping track
++ * of the overlay in a list. This list can be used to prevent
++ * illegal overlay removals.
++ *
++ * Returns the id of the created overlay, or a negative error number
++ */
++int of_overlay_create(struct device_node *tree)
++{
++	return __of_overlay_create(tree, 0, NULL);
++}
+ EXPORT_SYMBOL_GPL(of_overlay_create);
+ 
++/**
++ * of_overlay_create_target_index() - Create and apply an overlay
++ * @tree:	Device node containing all the overlays
++ * @index:	Index to use in the target properties
++ *
++ * Creates and applies an overlay while also keeping track
++ * of the overlay in a list. This list can be used to prevent
++ * illegal overlay removals.
++ *
++ * Returns the id of the created overlay, or a negative error number
++ */
++int of_overlay_create_target_index(struct device_node *tree, int index)
++{
++	return __of_overlay_create(tree, index, NULL);
++}
++EXPORT_SYMBOL_GPL(of_overlay_create_target_index);
++
++/**
++ * of_overlay_create_target_root() - Create and apply an overlay
++ *			under which will be limited to target_root
++ * @tree:		Device node containing all the overlays
++ * @target_root:	Target root for the overlay.
++ *
++ * Creates and applies an overlay while also keeping track
++ * of the overlay in a list. This list can be used to prevent
++ * illegal overlay removals. The overlay is only allowed to
++ * target nodes under the target_root node.
++ *
++ * Returns the id of the created overlay, or an negative error number
++ */
++int of_overlay_create_target_root(struct device_node *tree,
++		struct device_node *target_root)
++{
++	return __of_overlay_create(tree, 0, target_root);
++}
++EXPORT_SYMBOL_GPL(of_overlay_create_target_root);
++
+ /* check whether the given node, lies under the given tree */
+ static int overlay_subtree_check(struct device_node *tree,
+ 		struct device_node *dn)
+@@ -646,12 +1022,14 @@ int of_overlay_destroy(int id)
+ 
+ 	of_overlay_notify(ov, OF_OVERLAY_PRE_REMOVE);
+ 	list_del(&ov->node);
++	sysfs_remove_groups(&ov->kobj, ov->attr_groups);
+ 	__of_changeset_revert(&ov->cset);
+ 	of_overlay_notify(ov, OF_OVERLAY_POST_REMOVE);
+ 	of_free_overlay_info(ov);
+ 	idr_remove(&ov_idr, id);
+ 	of_changeset_destroy(&ov->cset);
+-	kfree(ov);
++
++	kobject_put(&ov->kobj);
+ 
+ 	err = 0;
+ 
+@@ -681,7 +1059,7 @@ int of_overlay_destroy_all(void)
+ 		__of_changeset_revert(&ov->cset);
+ 		of_free_overlay_info(ov);
+ 		idr_remove(&ov_idr, ov->id);
+-		kfree(ov);
++		kobject_put(&ov->kobj);
+ 	}
+ 
+ 	mutex_unlock(&of_mutex);
+@@ -689,3 +1067,18 @@ int of_overlay_destroy_all(void)
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(of_overlay_destroy_all);
++
++/* called from of_init() */
++int of_overlay_init(void)
++{
++	int rc;
++
++	ov_kset = kset_create_and_add("overlays", NULL, &of_kset->kobj);
++	if (!ov_kset)
++		return -ENOMEM;
++
++	rc = sysfs_create_files(&ov_kset->kobj, overlay_global_attrs);
++	WARN(rc, "%s: error adding global attributes\n", __func__);
++
++	return rc;
++}
+diff --git a/drivers/of/unittest-data/testcases.dts b/drivers/of/unittest-data/testcases.dts
+index ce49463d9d32..65b3250d09a3 100644
+--- a/drivers/of/unittest-data/testcases.dts
++++ b/drivers/of/unittest-data/testcases.dts
+@@ -76,5 +76,15 @@
+ 				target = <0x00000000>;
+ 			};
+ 		};
++		overlay16 {
++			fragment@0 {
++				target = <0x00000000 0x00000004>;
++			};
++		};
++		overlay18 {
++			fragment@0 {
++				target = <0x00000000>;
++			};
++		};
+ 	};
+ }; };
+diff --git a/drivers/of/unittest-data/tests-overlay.dtsi b/drivers/of/unittest-data/tests-overlay.dtsi
+index 7b8001ab9f3a..8b8876d1e86b 100644
+--- a/drivers/of/unittest-data/tests-overlay.dtsi
++++ b/drivers/of/unittest-data/tests-overlay.dtsi
+@@ -111,6 +111,30 @@
+ 						};
+ 					};
+ 				};
++
++				unittest16: test-unittest16 {
++					compatible = "unittest";
++					status = "disabled";
++					reg = <16>;
++				};
++
++				unittest17: test-unittest17 {
++					compatible = "unittest";
++					status = "disabled";
++					reg = <17>;
++				};
++
++				unittest18: test-unittest18 {
++					compatible = "unittest";
++					status = "disabled";
++					reg = <18>;
++				};
++
++				unittest19: test-unittest19 {
++					compatible = "unittest";
++					status = "disabled";
++					reg = <19>;
++				};
+ 			};
+ 		};
+ 
+@@ -326,5 +350,44 @@
+ 			};
+ 		};
+ 
++		/* test enable using indirect functionality */
++		overlay16 {
++			fragment@0 {
++				target = <&unittest17>, <&unittest16>;
++				__overlay__ {
++					status = "okay";
++				};
++			};
++		};
++
++		/* test enable using target root (relative path) */
++		overlay17 {
++			fragment@0 {
++				target-path = "/";
++				__overlay__ {
++					status = "okay";
++				};
++			};
++		};
++
++		/* test enable using target phandle */
++		overlay18 {
++			fragment@0 {
++				target = <&unittest18>;
++				__overlay__ {
++					status = "okay";
++				};
++			};
++		};
++
++		/* test trying to enable out of root (should fail) */
++		overlay19 {
++			fragment@0 {
++				target = <&unittest19>;
++				__overlay__ {
++					status = "okay";
++				};
++			};
++		};
+ 	};
+ };
+diff --git a/drivers/of/unittest.c b/drivers/of/unittest.c
+index 4bf6a9db6ac0..08b052894fcc 100644
+--- a/drivers/of/unittest.c
++++ b/drivers/of/unittest.c
+@@ -25,6 +25,9 @@
+ 
+ #include <linux/bitops.h>
+ 
++#include <linux/timekeeping.h>
++#include <linux/random.h>
++
+ #include "of_private.h"
+ 
+ static struct unittest_results {
+@@ -608,6 +611,59 @@ static void __init of_unittest_changeset(void)
+ #endif
+ }
+ 
++static void __init of_unittest_changeset_helper(void)
++{
++#ifdef CONFIG_OF_DYNAMIC
++	struct device_node *n1, *n2, *n21, *parent, *np;
++	struct of_changeset chgset;
++
++	of_changeset_init(&chgset);
++
++	parent = of_find_node_by_path("/testcase-data/changeset");
++
++	unittest(parent, "testcase setup failure\n");
++	n1 = of_changeset_create_device_node(&chgset,
++			parent, "/testcase-data/changeset/n1");
++	unittest(n1, "testcase setup failure\n");
++	n2 = of_changeset_create_device_node(&chgset,
++			parent, "/testcase-data/changeset/n2");
++	unittest(n2, "testcase setup failure\n");
++	n21 = of_changeset_create_device_node(&chgset, n2, "%s/%s",
++			"/testcase-data/changeset/n2", "n21");
++	unittest(n21, "testcase setup failure\n");
++
++	unittest(!of_changeset_add_property_string(&chgset, parent,
++				"prop-add", "foo"), "fail add prop\n");
++
++	unittest(!of_changeset_attach_node(&chgset, n1), "fail n1 attach\n");
++	unittest(!of_changeset_attach_node(&chgset, n2), "fail n2 attach\n");
++	unittest(!of_changeset_attach_node(&chgset, n21), "fail n21 attach\n");
++
++	unittest(!of_changeset_apply(&chgset), "apply failed\n");
++
++	/* Make sure node names are constructed correctly */
++	np = of_find_node_by_path("/testcase-data/changeset/n1");
++	unittest(np, "'%s' not added\n", n1->full_name);
++	of_node_put(np);
++
++	/* Make sure node names are constructed correctly */
++	np = of_find_node_by_path("/testcase-data/changeset/n2");
++	unittest(np, "'%s' not added\n", n2->full_name);
++	of_node_put(np);
++
++	np = of_find_node_by_path("/testcase-data/changeset/n2/n21");
++	unittest(np, "'%s' not added\n", n21->full_name);
++	of_node_put(np);
++
++	unittest(!of_changeset_revert(&chgset), "revert failed\n");
++
++	of_changeset_destroy(&chgset);
++
++	of_node_put(parent);
++#endif
++}
++
++
+ static void __init of_unittest_parse_interrupts(void)
+ {
+ 	struct device_node *np;
+@@ -987,7 +1043,7 @@ static void attach_node_and_children(struct device_node *np)
+ 	of_node_clear_flag(np, OF_DETACHED);
+ 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+ 
+-	__of_attach_node_sysfs(np);
++	__of_attach_node_post(np);
+ 	mutex_unlock(&of_mutex);
+ 
+ 	while (child) {
+@@ -1044,7 +1100,7 @@ static int __init unittest_data_add(void)
+ 	if (!of_root) {
+ 		of_root = unittest_data_node;
+ 		for_each_of_allnodes(np)
+-			__of_attach_node_sysfs(np);
++			__of_attach_node_post(np);
+ 		of_aliases = of_find_node_by_path("/aliases");
+ 		of_chosen = of_find_node_by_path("/chosen");
+ 		return 0;
+@@ -1963,6 +2019,273 @@ static inline void of_unittest_overlay_i2c_15(void) { }
+ 
+ #endif
+ 
++static void of_unittest_overlay_16(void)
++{
++	int ret;
++	int overlay_nr = 16;
++	int unittest_nr = 16;
++	enum overlay_type ovtype = PDEV_OVERLAY;
++	int before = 0;
++	int after = 1;
++	struct device_node *np = NULL;
++	int id = -1;
++
++	/* unittest device must not be in before state */
++	if (of_unittest_device_exists(unittest_nr, ovtype) != before) {
++		unittest(0, "overlay @\"%s\" with device @\"%s\" %s\n",
++				overlay_path(overlay_nr),
++				unittest_path(unittest_nr, ovtype),
++				!before ? "enabled" : "disabled");
++		return;
++	}
++
++	np = of_find_node_by_path(overlay_path(overlay_nr));
++	if (np == NULL) {
++		unittest(0, "could not find overlay node @\"%s\"\n",
++				overlay_path(overlay_nr));
++		ret = -EINVAL;
++		goto out;
++	}
++
++	/* unittest16 is at index #1 */
++	ret = of_overlay_create_target_index(np, 1);
++	if (ret < 0) {
++		unittest(0, "could not create overlay from \"%s\"\n",
++				overlay_path(overlay_nr));
++		goto out;
++	}
++	id = ret;
++	of_unittest_track_overlay(id);
++
++	ret = 0;
++
++out:
++	of_node_put(np);
++
++	if (ret)
++		return;
++
++	/* unittest device must be to set to after state */
++	if (of_unittest_device_exists(unittest_nr, ovtype) != after) {
++		unittest(0, "overlay @\"%s\" failed to create @\"%s\" %s\n",
++				overlay_path(overlay_nr),
++				unittest_path(unittest_nr, ovtype),
++				!after ? "enabled" : "disabled");
++		return;
++	}
++
++	unittest(1, "overlay test %d passed\n", 16);
++}
++
++static void of_unittest_overlay_17(void)
++{
++	int ret;
++	int overlay_nr = 17;
++	int unittest_nr = 17;
++	enum overlay_type ovtype = PDEV_OVERLAY;
++	int before = 0;
++	int after = 1;
++	const char *root_path;
++	struct device_node *np = NULL, *target_root = NULL;
++	int id = -1;
++
++	/* unittest device must not be in before state */
++	if (of_unittest_device_exists(unittest_nr, ovtype) != before) {
++		unittest(0, "overlay @\"%s\" with device @\"%s\" %s\n",
++				overlay_path(overlay_nr),
++				unittest_path(unittest_nr, ovtype),
++				!before ? "enabled" : "disabled");
++		return;
++	}
++
++	np = of_find_node_by_path(overlay_path(overlay_nr));
++	if (np == NULL) {
++		unittest(0, "could not find overlay node @\"%s\"\n",
++				overlay_path(overlay_nr));
++		ret = -EINVAL;
++		goto out;
++	}
++
++	root_path = "/testcase-data/overlay-node/test-bus/test-unittest17";
++	target_root = of_find_node_by_path(root_path);
++	if (!target_root) {
++		unittest(0, "could not find target_root node @\"%s\"\n",
++				root_path);
++		ret = -EINVAL;
++		goto out;
++	}
++
++	ret = of_overlay_create_target_root(np, target_root);
++	of_node_put(target_root);
++
++	if (ret < 0) {
++		unittest(0, "could not create overlay from \"%s\"\n",
++				overlay_path(overlay_nr));
++		goto out;
++	}
++	id = ret;
++	of_unittest_track_overlay(id);
++
++	ret = 0;
++
++out:
++	of_node_put(np);
++
++	if (ret)
++		return;
++
++	/* unittest device must be to set to after state */
++	if (of_unittest_device_exists(unittest_nr, ovtype) != after) {
++		unittest(0, "overlay @\"%s\" failed to create @\"%s\" %s\n",
++				overlay_path(overlay_nr),
++				unittest_path(unittest_nr, ovtype),
++				!after ? "enabled" : "disabled");
++		return;
++	}
++
++	unittest(1, "overlay test %d passed\n", 17);
++}
++
++static void of_unittest_overlay_18(void)
++{
++	int ret;
++	int overlay_nr = 18;
++	int unittest_nr = 18;
++	enum overlay_type ovtype = PDEV_OVERLAY;
++	int before = 0;
++	int after = 1;
++	const char *root_path;
++	struct device_node *np = NULL, *target_root = NULL;
++	int id = -1;
++
++	/* unittest device must not be in before state */
++	if (of_unittest_device_exists(unittest_nr, ovtype) != before) {
++		unittest(0, "overlay @\"%s\" with device @\"%s\" %s\n",
++				overlay_path(overlay_nr),
++				unittest_path(unittest_nr, ovtype),
++				!before ? "enabled" : "disabled");
++		return;
++	}
++
++	np = of_find_node_by_path(overlay_path(overlay_nr));
++	if (np == NULL) {
++		unittest(0, "could not find overlay node @\"%s\"\n",
++				overlay_path(overlay_nr));
++		ret = -EINVAL;
++		goto out;
++	}
++
++	root_path = "/testcase-data/overlay-node/test-bus/test-unittest18";
++	target_root = of_find_node_by_path(root_path);
++	if (!target_root) {
++		unittest(0, "could not find target_root node @\"%s\"\n",
++				root_path);
++		ret = -EINVAL;
++		goto out;
++	}
++
++	ret = of_overlay_create_target_root(np, target_root);
++	of_node_put(target_root);
++
++	if (ret < 0) {
++		unittest(0, "could not create overlay from \"%s\"\n",
++				overlay_path(overlay_nr));
++		goto out;
++	}
++	id = ret;
++	of_unittest_track_overlay(id);
++
++	ret = 0;
++
++out:
++	of_node_put(np);
++
++	if (ret)
++		return;
++
++	/* unittest device must be to set to after state */
++	if (of_unittest_device_exists(unittest_nr, ovtype) != after) {
++		unittest(0, "overlay @\"%s\" failed to create @\"%s\" %s\n",
++				overlay_path(overlay_nr),
++				unittest_path(unittest_nr, ovtype),
++				!after ? "enabled" : "disabled");
++		return;
++	}
++
++	unittest(1, "overlay test %d passed\n", 18);
++}
++
++static void of_unittest_overlay_19(void)
++{
++	int ret;
++	int overlay_nr = 19;
++	int unittest_nr = 19;
++	enum overlay_type ovtype = PDEV_OVERLAY;
++	int before = 0;
++	int after = 0;
++	const char *root_path;
++	struct device_node *np = NULL, *target_root = NULL;
++	int id = -1;
++
++	/* unittest device must not be in before state */
++	if (of_unittest_device_exists(unittest_nr, ovtype) != before) {
++		unittest(0, "overlay @\"%s\" with device @\"%s\" %s\n",
++				overlay_path(overlay_nr),
++				unittest_path(unittest_nr, ovtype),
++				!before ? "enabled" : "disabled");
++		return;
++	}
++
++	np = of_find_node_by_path(overlay_path(overlay_nr));
++	if (np == NULL) {
++		unittest(0, "could not find overlay node @\"%s\"\n",
++				overlay_path(overlay_nr));
++		ret = -EINVAL;
++		goto out;
++	}
++
++	root_path = "/testcase-data/overlay-node/test-bus/test-unittest19";
++	target_root = of_find_node_by_path(root_path);
++	if (!target_root) {
++		unittest(0, "could not find target_root node @\"%s\"\n",
++				root_path);
++		ret = -EINVAL;
++		goto out;
++	}
++
++	ret = of_overlay_create_target_root(np, target_root);
++	of_node_put(target_root);
++
++	if (ret >= 0) {
++		unittest(0, "created overlay from \"%s\" while we shouldn't\n",
++				overlay_path(overlay_nr));
++		id = ret;
++		of_unittest_track_overlay(id);
++		ret = -EINVAL;
++		goto out;
++	}
++
++	ret = 0;
++
++out:
++	of_node_put(np);
++
++	if (ret)
++		return;
++
++	/* unittest device must be to set to after state */
++	if (of_unittest_device_exists(unittest_nr, ovtype) != after) {
++		unittest(0, "overlay @\"%s\" failed to create @\"%s\" %s\n",
++				overlay_path(overlay_nr),
++				unittest_path(unittest_nr, ovtype),
++				!after ? "enabled" : "disabled");
++		return;
++	}
++
++	unittest(1, "overlay test %d passed\n", 16);
++}
++
++
+ static void __init of_unittest_overlay(void)
+ {
+ 	struct device_node *bus_np = NULL;
+@@ -2013,6 +2336,12 @@ static void __init of_unittest_overlay(void)
+ 	of_unittest_overlay_10();
+ 	of_unittest_overlay_11();
+ 
++	of_unittest_overlay_16();
++
++	of_unittest_overlay_17();
++	of_unittest_overlay_18();
++	of_unittest_overlay_19();
++
+ #if IS_BUILTIN(CONFIG_I2C)
+ 	if (unittest(of_unittest_overlay_i2c_init() == 0, "i2c init failed\n"))
+ 		goto out;
+@@ -2359,6 +2688,70 @@ static inline __init void of_unittest_overlay_high_level(void) {}
+ 
+ #endif
+ 
++#define PHANDLE_LOOKUPS	1000
++
++static void __init of_unittest_phandle_hash(void)
++{
++	struct device_node *node;
++	phandle max_phandle;
++	u32 ph;
++	unsigned long flags;
++	int i, j, total;
++	ktime_t start, end;
++	s64 dur[2];
++	int dec, frac;
++
++	/* test only available when hashing is available */
++	if (!of_phandle_ht_available()) {
++		pr_warn("phandle hash test requires hash to be initialized\n");
++		return;
++	}
++
++	/* find the maximum phandle of the tree */
++	raw_spin_lock_irqsave(&devtree_lock, flags);
++	max_phandle = 0;
++	total = 0;
++	for_each_of_allnodes(node) {
++		if (node->phandle != (phandle)-1U &&
++				node->phandle > max_phandle)
++			max_phandle = node->phandle;
++		total++;
++	}
++	raw_spin_unlock_irqrestore(&devtree_lock, flags);
++	max_phandle++;
++
++	pr_debug("phandle: max-phandle #%u, #%d total nodes\n",
++			(u32)max_phandle, total);
++
++	/* perform random lookups using the hash */
++	for (j = 0; j < 2; j++) {
++
++		/* disabled for pass #0, enabled for pass #1 */
++		of_phandle_ht_is_disabled = j == 0;
++
++		start = ktime_get_raw();
++		for (i = 0; i < PHANDLE_LOOKUPS; i++) {
++			ph = prandom_u32() % max_phandle;
++			node = of_find_node_by_phandle(ph);
++			of_node_put(node);
++		}
++		end = ktime_get_raw();
++
++		dur[j] = ktime_to_us(end) - ktime_to_us(start);
++		pr_debug("#%d lookups in %lld us (%s)\n",
++				PHANDLE_LOOKUPS, dur[j],
++				j == 0 ? "original" : "hashed");
++	}
++
++	unittest(dur[0] > dur[1], "Non hashing phandles are faster!?");
++
++	dec = (int)div64_s64(dur[0] * 10 + 5, dur[1]);
++	frac = dec % 10;
++	dec /= 10;
++	pr_info("the hash method is %d.%d times faster than the original\n",
++			dec, frac);
++}
++
+ static int __init of_unittest(void)
+ {
+ 	struct device_node *np;
+@@ -2388,11 +2781,13 @@ static int __init of_unittest(void)
+ 	of_unittest_property_string();
+ 	of_unittest_property_copy();
+ 	of_unittest_changeset();
++	of_unittest_changeset_helper();
+ 	of_unittest_parse_interrupts();
+ 	of_unittest_parse_interrupts_extended();
+ 	of_unittest_match_node();
+ 	of_unittest_platform_populate();
+ 	of_unittest_overlay();
++	of_unittest_phandle_hash();
+ 
+ 	/* Double check linkage after removing testcase data */
+ 	of_unittest_check_tree_linkage();
+diff --git a/drivers/tty/serial/omap-serial.c b/drivers/tty/serial/omap-serial.c
+index 26a22b100df1..24bae2eaa07f 100644
+--- a/drivers/tty/serial/omap-serial.c
++++ b/drivers/tty/serial/omap-serial.c
+@@ -1652,6 +1652,31 @@ static int serial_omap_probe_rs485(struct uart_omap_port *up,
+ 	return 0;
+ }
+ 
++static int serial_omap_of_get_port_line(struct device_node *np)
++{
++	unsigned long val;
++	const char *hwmod;
++	int ret;
++
++	/* first try the serial alias */
++	ret = of_alias_get_id(np, "serial");
++	if (ret >= 0)
++		return ret;
++
++	/* no? calculate it from hwmods */
++	ret = of_property_read_string(np, "ti,hwmods", &hwmod);
++	if (ret != 0 || strncmp(hwmod, "uart", 4) ||
++			kstrtoul(hwmod + 4, 10, &val))
++		return -ENODEV;
++
++	/* numbering of hwmods is +1 */
++	ret = (int)val - 1;
++	if (ret < 0)
++		return -ENODEV;
++
++	return ret;
++}
++
+ static int serial_omap_probe(struct platform_device *pdev)
+ {
+ 	struct omap_uart_port_info *omap_up_info = dev_get_platdata(&pdev->dev);
+@@ -1669,7 +1694,10 @@ static int serial_omap_probe(struct platform_device *pdev)
+ 			return -EPROBE_DEFER;
+ 		wakeirq = irq_of_parse_and_map(pdev->dev.of_node, 1);
+ 		omap_up_info = of_get_uart_port_info(&pdev->dev);
+-		pdev->dev.platform_data = omap_up_info;
++		ret = platform_device_add_data(pdev, omap_up_info,
++				sizeof(*omap_up_info));
++		if (ret != 0)
++			return ret;
+ 	} else {
+ 		uartirq = platform_get_irq(pdev, 0);
+ 		if (uartirq < 0)
+@@ -1695,7 +1723,7 @@ static int serial_omap_probe(struct platform_device *pdev)
+ 	up->port.ops = &serial_omap_pops;
+ 
+ 	if (pdev->dev.of_node)
+-		ret = of_alias_get_id(pdev->dev.of_node, "serial");
++		ret = serial_omap_of_get_port_line(pdev->dev.of_node);
+ 	else
+ 		ret = pdev->id;
+ 
+diff --git a/include/linux/of.h b/include/linux/of.h
+index 3c108f9be5e7..1894018e9598 100644
+--- a/include/linux/of.h
++++ b/include/linux/of.h
+@@ -25,6 +25,8 @@
+ #include <linux/notifier.h>
+ #include <linux/property.h>
+ #include <linux/list.h>
++#include <linux/rhashtable.h>
++#include <linux/slab.h>
+ 
+ #include <asm/byteorder.h>
+ #include <asm/errno.h>
+@@ -52,6 +54,7 @@ struct device_node {
+ 	phandle phandle;
+ 	const char *full_name;
+ 	struct fwnode_handle fwnode;
++	struct rhash_head ht_node;
+ 
+ 	struct	property *properties;
+ 	struct	property *deadprops;	/* removed properties */
+@@ -1227,6 +1230,8 @@ enum of_reconfig_change {
+ };
+ 
+ #ifdef CONFIG_OF_DYNAMIC
++#include <linux/slab.h>
++
+ extern int of_reconfig_notifier_register(struct notifier_block *);
+ extern int of_reconfig_notifier_unregister(struct notifier_block *);
+ extern int of_reconfig_notify(unsigned long, struct of_reconfig_data *rd);
+@@ -1270,6 +1275,26 @@ static inline int of_changeset_update_property(struct of_changeset *ocs,
+ {
+ 	return of_changeset_action(ocs, OF_RECONFIG_UPDATE_PROPERTY, np, prop);
+ }
++
++struct device_node *of_changeset_create_device_nodev(
++	struct of_changeset *ocs, struct device_node *parent,
++	const char *fmt, va_list vargs);
++
++__printf(3, 4) struct device_node *
++of_changeset_create_device_node(struct of_changeset *ocs,
++	struct device_node *parent, const char *fmt, ...);
++
++int __of_changeset_add_update_property_copy(struct of_changeset *ocs,
++		struct device_node *np, const char *name, const void *value,
++		int length, bool update);
++
++int __of_changeset_add_update_property_string_list(
++		struct of_changeset *ocs, struct device_node *np,
++		const char *name, const char **strs, int count, bool update);
++
++int of_changeset_node_move(struct of_changeset *ocs,
++	struct device_node *np, struct device_node *new_parent);
++
+ #else /* CONFIG_OF_DYNAMIC */
+ static inline int of_reconfig_notifier_register(struct notifier_block *nb)
+ {
+@@ -1289,8 +1314,323 @@ static inline int of_reconfig_get_state_change(unsigned long action,
+ {
+ 	return -EINVAL;
+ }
++
++static inline struct device_node *of_changeset_create_device_nodev(
++	struct of_changeset *ocs, struct device_node *parent,
++	const char *fmt, va_list vargs)
++{
++	return ERR_PTR(-EINVAL);
++}
++
++static inline __printf(3, 4) struct device_node *
++of_changeset_create_device_node(struct of_changeset *ocs,
++	struct device_node *parent, const char *fmt, ...)
++{
++	return ERR_PTR(-EINVAL);
++}
++
++static inline int __of_changeset_add_update_property_copy(
++	struct of_changeset *ocs, struct device_node *np,
++	const char *name, const void *value, int length, bool update)
++{
++	return -EINVAL;
++}
++
++static inline __printf(4, 5) int of_changeset_add_property_stringf(
++		struct of_changeset *ocs, struct device_node *np,
++		const char *name, const char *fmt, ...)
++{
++	return -EINVAL;
++}
++
++static inline int of_changeset_update_property_stringf(
++	struct of_changeset *ocs, struct device_node *np,
++	const char *name, const char *fmt, ...)
++{
++	return -EINVAL;
++}
++
++static inline int __of_changeset_add_update_property_string_list(
++		struct of_changeset *ocs, struct device_node *np,
++		const char *name, const char **strs, int count, bool update)
++{
++	return -EINVAL;
++}
++
++static inline int of_changeset_node_move(struct of_changeset *ocs,
++		struct device_node *np, struct device_node *new_parent)
++{
++	return -EINVAL;
++}
++
+ #endif /* CONFIG_OF_DYNAMIC */
+ 
++/**
++ * of_changeset_add_property_copy - Create a new property copying name & value
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @value:	pointer to the value data
++ * @length:	length of the value in bytes
++ *
++ * Adds a property to the changeset by making copies of the name & value
++ * entries.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_add_property_copy(struct of_changeset *ocs,
++	struct device_node *np, const char *name,
++	const void *value, int length)
++{
++	return __of_changeset_add_update_property_copy(ocs, np, name, value,
++			length, false);
++}
++
++/**
++ * of_changeset_update_property_copy - Update a property copying name & value
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @value:	pointer to the value data
++ * @length:	length of the value in bytes
++ *
++ * Update a property to the changeset by making copies of the name & value
++ * entries.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_update_property_copy(struct of_changeset *ocs,
++	struct device_node *np, const char *name,
++	const void *value, int length)
++{
++	return __of_changeset_add_update_property_copy(ocs, np, name, value,
++			length, true);
++}
++
++/**
++ * __of_changeset_add_update_property_string - Create/update a string property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @str:	string property value
++ * @update:	True on update operation
++ *
++ * Adds/updates a string property to the changeset by making copies of the name
++ * and the given value. The @update parameter controls whether an add or
++ * update takes place.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int __of_changeset_add_update_property_string(
++	struct of_changeset *ocs, struct device_node *np, const char *name,
++	const char *str, bool update)
++{
++	return __of_changeset_add_update_property_copy(ocs, np, name, str,
++			strlen(str) + 1, update);
++}
++
++/**
++ * __of_changeset_add_update_property_stringv - Create/update a formatted
++ *						string property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @fmt:	format of string property
++ * @vargs:	arguments of the format string
++ * @update:	True on update operation
++ *
++ * Adds/updates a string property to the changeset by making copies of the name
++ * and the formatted value. The @update parameter controls whether an add or
++ * update takes place.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int __of_changeset_add_update_property_stringv(
++	struct of_changeset *ocs, struct device_node *np, const char *name,
++	const char *fmt, va_list vargs, bool update)
++{
++	char *str;
++	int ret;
++
++	str = kvasprintf(GFP_KERNEL, fmt, vargs);
++	if (!str)
++		return -ENOMEM;
++	ret = __of_changeset_add_update_property_string(ocs, np, name, str,
++			update);
++	kfree(str);
++
++	return ret;
++}
++
++/**
++ * of_changeset_add_property_string_list - Create a new string list property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @strs:	pointer to the string list
++ * @count:	string count
++ *
++ * Adds a string list property to the changeset.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_add_property_string_list(
++	struct of_changeset *ocs, struct device_node *np, const char *name,
++	const char **strs, int count)
++{
++	return __of_changeset_add_update_property_string_list(ocs, np, name,
++			strs, count, false);
++}
++
++/**
++ * of_changeset_update_property_string_list - Update string list property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @strs:	pointer to the string list
++ * @count:	string count
++ *
++ * Updates a string list property to the changeset.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_update_property_string_list(
++	struct of_changeset *ocs, struct device_node *np,
++	const char *name, const char **strs, int count)
++{
++	return __of_changeset_add_update_property_string_list(ocs, np, name,
++			strs, count, true);
++}
++
++/**
++ * of_changeset_add_property_string - Adds a string property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @str:	string property
++ *
++ * Adds a string property to the changeset by making copies of the name
++ * and the string value.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_add_property_string(
++	struct of_changeset *ocs, struct device_node *np,
++	const char *name, const char *str)
++{
++	return __of_changeset_add_update_property_string(ocs, np, name, str,
++			false);
++}
++
++/**
++ * of_changeset_update_property_string - Update a string property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @str:	string property
++ *
++ * Updates a string property to the changeset by making copies of the name
++ * and the string value.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_update_property_string(
++	struct of_changeset *ocs, struct device_node *np,
++	const char *name, const char *str)
++{
++	return __of_changeset_add_update_property_string(ocs, np, name, str,
++			true);
++}
++
++/**
++ * of_changeset_add_property_u32 - Create a new u32 property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @val:	value in host endian format
++ *
++ * Adds a u32 property to the changeset.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_add_property_u32(struct of_changeset *ocs,
++		struct device_node *np, const char *name, u32 val)
++{
++	val = cpu_to_be32(val);
++	return __of_changeset_add_update_property_copy(ocs, np, name, &val,
++			sizeof(val), false);
++}
++
++/**
++ * of_changeset_update_property_u32 - Update u32 property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ * @val:	value in host endian format
++ *
++ * Updates a u32 property to the changeset.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_update_property_u32(
++	struct of_changeset *ocs, struct device_node *np,
++	const char *name, u32 val)
++{
++	val = cpu_to_be32(val);
++	return __of_changeset_add_update_property_copy(ocs, np, name, &val,
++			sizeof(val), true);
++}
++
++/**
++ * of_changeset_add_property_bool - Create a new u32 property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ *
++ * Adds a bool property to the changeset. Note that there is
++ * no option to set the value to false, since the property
++ * existing sets it to true.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_add_property_bool(
++	struct of_changeset *ocs, struct device_node *np, const char *name)
++{
++	return __of_changeset_add_update_property_copy(ocs, np, name, "", 0,
++			false);
++}
++
++/**
++ * of_changeset_update_property_bool - Update a bool property
++ *
++ * @ocs:	changeset pointer
++ * @np:		device node pointer
++ * @name:	name of the property
++ *
++ * Updates a property to the changeset. Note that there is
++ * no option to set the value to false, since the property
++ * existing sets it to true.
++ *
++ * Returns zero on success, a negative error value otherwise.
++ */
++static inline int of_changeset_update_property_bool(struct of_changeset *ocs,
++		struct device_node *np, const char *name)
++{
++	return __of_changeset_add_update_property_copy(ocs, np, name, "", 0,
++			true);
++}
++
+ /* CONFIG_OF_RESOLVE api */
+ extern int of_resolve_phandles(struct device_node *tree);
+ 
+@@ -1331,6 +1671,10 @@ int of_overlay_destroy_all(void);
+ int of_overlay_notifier_register(struct notifier_block *nb);
+ int of_overlay_notifier_unregister(struct notifier_block *nb);
+ 
++int of_overlay_create_target_index(struct device_node *tree, int index);
++int of_overlay_create_target_root(struct device_node *tree,
++		struct device_node *target_root);
++
+ #else
+ 
+ static inline int of_overlay_create(struct device_node *tree)
+@@ -1358,6 +1702,18 @@ static inline int of_overlay_notifier_unregister(struct notifier_block *nb)
+ 	return 0;
+ }
+ 
++static inline int of_overlay_create_target_index(struct device_node *tree,
++		int index)
++{
++	return -ENOTSUPP;
++}
++
++static inline int of_overlay_create_target_root(struct device_node *tree,
++		struct device_node *target_root)
++{
++	return -ENOTSUPP;
++}
++
+ #endif
+ 
+ #endif /* _LINUX_OF_H */
+-- 
+2.26.2
+

@@ -1,15 +1,15 @@
-From 8c5718a8366cf556c7fc098a77312a2f83efe75f Mon Sep 17 00:00:00 2001
+From 4ad04bd0aad770b0a76c66f685a5c8389ee428d4 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 29 Jan 2018 13:20:10 -0600
-Subject: [PATCH] ar1021_i2c: add invert/swap options
+Date: Thu, 30 Apr 2020 13:29:07 -0500
+Subject: [PATCH] ar1021_i2c.c fixes
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/input/touchscreen/ar1021_i2c.c | 45 ++++++++++++++++++++++++++++++----
- 1 file changed, 40 insertions(+), 5 deletions(-)
+ drivers/input/touchscreen/ar1021_i2c.c | 81 ++++++++++++++++++++++++--
+ 1 file changed, 76 insertions(+), 5 deletions(-)
 
 diff --git a/drivers/input/touchscreen/ar1021_i2c.c b/drivers/input/touchscreen/ar1021_i2c.c
-index b35b640fdadf..5c6fe0440399 100644
+index b35b640fdadf..9e93d88a5264 100644
 --- a/drivers/input/touchscreen/ar1021_i2c.c
 +++ b/drivers/input/touchscreen/ar1021_i2c.c
 @@ -18,6 +18,7 @@
@@ -20,7 +20,7 @@ index b35b640fdadf..5c6fe0440399 100644
  
  #define AR1021_CMD	0x55
  
-@@ -27,6 +28,9 @@ struct ar1021_i2c {
+@@ -27,8 +28,29 @@ struct ar1021_i2c {
  	struct i2c_client *client;
  	struct input_dev *input;
  	u8 data[AR1021_TOCUH_PKG_SIZE];
@@ -29,8 +29,28 @@ index b35b640fdadf..5c6fe0440399 100644
 +	bool swap_xy;
  };
  
++static bool ar1021_get_prop_u32(struct device *dev,
++				     const char *property,
++				     unsigned int default_value,
++				     unsigned int *value)
++{
++	u32 val;
++	int error;
++
++	error = device_property_read_u32(dev, property, &val);
++	if (error) {
++		*value = default_value;
++		return false;
++	}
++
++	*value = val;
++	return true;
++}
++
  static irqreturn_t ar1021_i2c_irq(int irq, void *dev_id)
-@@ -50,9 +54,22 @@ static irqreturn_t ar1021_i2c_irq(int irq, void *dev_id)
+ {
+ 	struct ar1021_i2c *ar1021 = dev_id;
+@@ -50,9 +72,22 @@ static irqreturn_t ar1021_i2c_irq(int irq, void *dev_id)
  	x = ((data[2] & 0x1f) << 7) | (data[1] & 0x7f);
  	y = ((data[4] & 0x1f) << 7) | (data[3] & 0x7f);
  
@@ -55,13 +75,38 @@ index b35b640fdadf..5c6fe0440399 100644
  	input_sync(input);
  
  out:
-@@ -117,10 +134,28 @@ static int ar1021_i2c_probe(struct i2c_client *client,
+@@ -94,6 +129,8 @@ static int ar1021_i2c_probe(struct i2c_client *client,
+ 	struct ar1021_i2c *ar1021;
+ 	struct input_dev *input;
+ 	int error;
++	unsigned int offset_x, offset_y;
++	bool data_present;
+ 
+ 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+ 		dev_err(&client->dev, "i2c_check_functionality error\n");
+@@ -117,10 +154,44 @@ static int ar1021_i2c_probe(struct i2c_client *client,
  	input->open = ar1021_i2c_open;
  	input->close = ar1021_i2c_close;
  
 +	ar1021->invert_x = device_property_read_bool(&client->dev, "touchscreen-inverted-x");
 +	ar1021->invert_y = device_property_read_bool(&client->dev, "touchscreen-inverted-y");
 +	ar1021->swap_xy = device_property_read_bool(&client->dev, "touchscreen-swapped-x-y");
++
++	data_present = ar1021_get_prop_u32(&client->dev,
++						"touchscreen-offset-x",
++						0,
++						&offset_x);
++
++	if (data_present)
++		dev_info(&client->dev, "touchscreen-offset-x: %d\n", offset_x);
++
++	data_present = ar1021_get_prop_u32(&client->dev,
++						"touchscreen-offset-y",
++						0,
++						&offset_y);
++
++	if (data_present)
++		dev_info(&client->dev, "touchscreen-offset-y: %d\n", offset_y);
 +
  	__set_bit(INPUT_PROP_DIRECT, input->propbit);
 -	input_set_capability(input, EV_KEY, BTN_TOUCH);
@@ -79,8 +124,8 @@ index b35b640fdadf..5c6fe0440399 100644
 +	}
 +	else
 +	{
-+		input_set_abs_params(input, ABS_X, 0, AR1021_MAX_X, 0, 0);
-+		input_set_abs_params(input, ABS_Y, 0, AR1021_MAX_Y, 0, 0);
++		input_set_abs_params(input, ABS_X, offset_x, AR1021_MAX_X-offset_x, 0, 0);
++		input_set_abs_params(input, ABS_Y, offset_y, AR1021_MAX_Y-offset_y, 0, 0);
 +	}
 +
 +	input_set_abs_params(input, ABS_PRESSURE, 0, AR1021_MAX_PRESSURE, 0, 0);
@@ -88,5 +133,5 @@ index b35b640fdadf..5c6fe0440399 100644
  	input_set_drvdata(input, ar1021);
  
 -- 
-2.15.1
+2.26.2
 
