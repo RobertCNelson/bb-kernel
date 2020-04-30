@@ -534,7 +534,6 @@ reverts () {
 	${git} "${DIR}/patches/reverts/0002-Revert-of-unittest-kmemleak-in-of_unittest_platform_.patch"
 	${git} "${DIR}/patches/reverts/0003-Revert-of-fix-missing-kobject-init-for-SYSFS-OF_DYNA.patch"
 
-
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
 		number=1
