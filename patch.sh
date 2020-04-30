@@ -390,17 +390,22 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-#		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
+		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
-#		device="am335x-abbbi.dtb" ; dtb_makefile_append
+		device="am335x-abbbi.dtb" ; dtb_makefile_append
 
-#		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
-#		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
-#		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
-#		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
-#		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
-#		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-sancloud-bbe.dtb" ; dtb_makefile_append
+		device="am335x-olimex-som.dtb" ; dtb_makefile_append
+
+		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
+
+		device="am335x-pocketbeagle.dtb" ; dtb_makefile_append
 
 #		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 #		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
@@ -562,77 +567,8 @@ soc () {
 #	dir 'soc/imx/udoo'
 #	dir 'soc/imx/wandboard'
 #	dir 'soc/imx'
-	dir 'soc/ti'
-	dir 'soc/ti/bone_common'
-	dir 'soc/ti/uboot'
-	dir 'soc/ti/blue'
-	dir 'soc/ti/sancloud'
 	dir 'soc/ti/abbbi'
-	dir 'soc/ti/am335x_olimex_som'
-	dir 'soc/ti/beaglebone_capes'
-	dir 'soc/ti/pocketbeagle'
 	dir 'bootup_hacks'
-}
-
-dtb_makefile_append () {
-	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
-beaglebone () {
-	#This has to be last...
-	echo "dir: beaglebone/dtbs"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		patch -p1 < "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
-		exit 2
-	fi
-
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	${git} "${DIR}/patches/beaglebone/dtbs/0001-sync-am335x-peripheral-pinmux.patch"
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		number=1
-		cleanup
-	fi
-
-	####
-	#dtb makefile
-	echo "dir: beaglebone/generated"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-
-#		device="am335x-boneblack-roboticscape.dtb" ; dtb_makefile_append
-#		device="am335x-boneblack-wireless-roboticscape.dtb" ; dtb_makefile_append
-
-		device="am335x-sancloud-bbe.dtb" ; dtb_makefile_append
-
-		device="am335x-abbbi.dtb" ; dtb_makefile_append
-
-		device="am335x-olimex-som.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-wl1835mod.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-bbbmini.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-bbb-exp-c.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-bbb-exp-r.dtb" ; dtb_makefile_append
-
-		device="am335x-boneblack-audio.dtb" ; dtb_makefile_append
-
-		device="am335x-pocketbeagle.dtb" ; dtb_makefile_append
-
-		git commit -a -m 'auto generated: capes: add dtbs to makefile' -s
-		git format-patch -1 -o ../patches/beaglebone/generated/
-		exit 2
-	else
-		${git} "${DIR}/patches/beaglebone/generated/0001-auto-generated-capes-add-dtbs-to-makefile.patch"
-	fi
 }
 
 sgx () {
@@ -661,9 +597,7 @@ backports
 reverts
 drivers
 soc
-beaglebone
 #dir 'fixes'
-dir 'drivers/ti/spi_symlink'
 sgx
 
 packaging () {
