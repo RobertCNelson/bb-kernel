@@ -386,7 +386,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.6.7"
+	backport_tag="v5.6.11"
 
 	subsystem="exfat"
 	#regenerate="enable"
@@ -479,6 +479,7 @@ reverts () {
 drivers () {
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/pwm'
+	dir 'drivers/sound'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
@@ -492,18 +493,19 @@ drivers () {
 }
 
 soc () {
-	dir 'soc/imx/udoo'
-	dir 'soc/imx/wandboard'
-	dir 'soc/imx/imx7'
+#	dir 'soc/imx/udoo'
+#	dir 'soc/imx/wandboard'
+#	dir 'soc/imx/imx7'
 
-	dir 'soc/ti/panda'
+#	dir 'soc/ti/panda'
+	dir 'bootup_hacks'
 }
 
 ###
 backports
 #reverts
 drivers
-#soc
+soc
 dir 'fixes'
 
 packaging () {
