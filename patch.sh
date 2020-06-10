@@ -408,6 +408,8 @@ beagleboard_dtbs () {
 
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
+		device="am5729-beagleboneai.dtb" ; dtb_makefile_append_am5
+
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
 		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $branch" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
@@ -553,7 +555,6 @@ reverts () {
 drivers () {
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/btrfs'
-	dir 'drivers/pwm'
 	dir 'drivers/sound'
 	dir 'drivers/spi'
 	dir 'drivers/ssd1306'
