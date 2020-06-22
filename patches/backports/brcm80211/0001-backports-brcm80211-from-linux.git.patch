@@ -1,19 +1,19 @@
-From e0aa6c350c447be1d195fcae77f6b425120363cf Mon Sep 17 00:00:00 2001
+From cd708d2fed9efd44f85fc75cf5048931c50324f7 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 19 Jun 2020 10:03:45 -0500
+Date: Mon, 22 Jun 2020 09:43:27 -0500
 Subject: [PATCH] backports: brcm80211: from: linux.git
 
 Reference: v5.4.18
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  .../broadcom/brcm80211/brcmfmac/bcmsdh.c      |  71 ++---
- .../broadcom/brcm80211/brcmfmac/cfg80211.c    | 248 +++---------------
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    | 250 +++---------------
  .../broadcom/brcm80211/brcmfmac/cfg80211.h    |   4 +-
  .../broadcom/brcm80211/brcmfmac/chip.c        |  61 +----
  .../broadcom/brcm80211/brcmfmac/chip.h        |   1 -
  .../broadcom/brcm80211/brcmfmac/core.c        |  79 +-----
  .../broadcom/brcm80211/brcmfmac/core.h        |   2 -
- .../broadcom/brcm80211/brcmfmac/feature.c     |   4 +-
+ .../broadcom/brcm80211/brcmfmac/feature.c     |   7 +-
  .../broadcom/brcm80211/brcmfmac/feature.h     |   6 +-
  .../broadcom/brcm80211/brcmfmac/firmware.h    |   2 +-
  .../broadcom/brcm80211/brcmfmac/fweh.c        |   2 +-
@@ -33,7 +33,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../broadcom/brcm80211/include/brcm_hw_ids.h  |   2 -
  .../broadcom/brcm80211/include/brcmu_wifi.h   |   2 -
  include/linux/mmc/sdio_ids.h                  |   2 -
- 27 files changed, 157 insertions(+), 563 deletions(-)
+ 27 files changed, 159 insertions(+), 566 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
 index b684a5b6d9044..fc12598b2dd3f 100644
@@ -183,7 +183,7 @@ index b684a5b6d9044..fc12598b2dd3f 100644
  
  static const struct dev_pm_ops brcmf_sdio_pm_ops = {
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
-index 2ba165330038e..e3ebb7abbdaed 100644
+index bacd762cdf3e0..e3ebb7abbdaed 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
 @@ -11,7 +11,6 @@
@@ -361,7 +361,7 @@ index 2ba165330038e..e3ebb7abbdaed 100644
  
  	if (!sme->crypto.n_akm_suites)
  		return 0;
-@@ -1802,23 +1691,11 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
+@@ -1802,27 +1691,11 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
  			break;
  		case WLAN_AKM_SUITE_FT_8021X:
  			val = WPA2_AUTH_UNSPECIFIED | WPA2_AUTH_FT;
@@ -382,10 +382,14 @@ index 2ba165330038e..e3ebb7abbdaed 100644
 -		switch (sme->crypto.akm_suites[0]) {
 -		case WLAN_AKM_SUITE_SAE:
 -			val = WPA3_AUTH_SAE_PSK;
+-			if (sme->crypto.sae_pwd) {
+-				brcmf_dbg(INFO, "using SAE offload\n");
+-				profile->use_fwsup = BRCMF_PROFILE_FWSUP_SAE;
+-			}
  			break;
  		default:
  			bphy_err(drvr, "invalid cipher group (%d)\n",
-@@ -1896,8 +1773,7 @@ brcmf_set_sharedkey(struct net_device *ndev,
+@@ -1900,8 +1773,7 @@ brcmf_set_sharedkey(struct net_device *ndev,
  	brcmf_dbg(CONN, "wpa_versions 0x%x cipher_pairwise 0x%x\n",
  		  sec->wpa_versions, sec->cipher_pairwise);
  
@@ -395,22 +399,17 @@ index 2ba165330038e..e3ebb7abbdaed 100644
  		return 0;
  
  	if (!(sec->cipher_pairwise &
-@@ -2104,13 +1980,7 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
+@@ -2108,8 +1980,7 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
  		goto done;
  	}
  
--	if (sme->crypto.sae_pwd) {
--		brcmf_dbg(INFO, "using SAE offload\n");
--		profile->use_fwsup = BRCMF_PROFILE_FWSUP_SAE;
--	}
--
 -	if (sme->crypto.psk &&
 -	    profile->use_fwsup != BRCMF_PROFILE_FWSUP_SAE) {
 +	if (sme->crypto.psk) {
  		if (WARN_ON(profile->use_fwsup != BRCMF_PROFILE_FWSUP_NONE)) {
  			err = -EINVAL;
  			goto done;
-@@ -2128,23 +1998,12 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
+@@ -2127,23 +1998,12 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
  		}
  	}
  
@@ -436,7 +435,7 @@ index 2ba165330038e..e3ebb7abbdaed 100644
  
  	/* Join with specific BSSID and cached SSID
  	 * If SSID is zero join based on BSSID only
-@@ -2953,7 +2812,7 @@ static s32 brcmf_inform_single_bss(struct brcmf_cfg80211_info *cfg,
+@@ -2952,7 +2812,7 @@ static s32 brcmf_inform_single_bss(struct brcmf_cfg80211_info *cfg,
  
  	if (le32_to_cpu(bi->length) > WL_BSS_INFO_MAX) {
  		bphy_err(drvr, "Bss info is larger than buffer. Discarding\n");
@@ -445,7 +444,7 @@ index 2ba165330038e..e3ebb7abbdaed 100644
  	}
  
  	if (!bi->ctl_ch) {
-@@ -5442,7 +5301,6 @@ struct brcmf_cfg80211_vif *brcmf_alloc_vif(struct brcmf_cfg80211_info *cfg,
+@@ -5441,7 +5301,6 @@ struct brcmf_cfg80211_vif *brcmf_alloc_vif(struct brcmf_cfg80211_info *cfg,
  	struct brcmf_cfg80211_vif *vif_walk;
  	struct brcmf_cfg80211_vif *vif;
  	bool mbss;
@@ -453,7 +452,7 @@ index 2ba165330038e..e3ebb7abbdaed 100644
  
  	brcmf_dbg(TRACE, "allocating virtual interface (size=%zu)\n",
  		  sizeof(*vif));
-@@ -5455,8 +5313,7 @@ struct brcmf_cfg80211_vif *brcmf_alloc_vif(struct brcmf_cfg80211_info *cfg,
+@@ -5454,8 +5313,7 @@ struct brcmf_cfg80211_vif *brcmf_alloc_vif(struct brcmf_cfg80211_info *cfg,
  
  	brcmf_init_prof(&vif->profile);
  
@@ -463,7 +462,16 @@ index 2ba165330038e..e3ebb7abbdaed 100644
  		mbss = false;
  		list_for_each_entry(vif_walk, &cfg->vif_list, list) {
  			if (vif_walk->wdev.iftype == NL80211_IFTYPE_AP) {
-@@ -5502,8 +5359,7 @@ static bool brcmf_is_linkup(struct brcmf_cfg80211_vif *vif,
+@@ -5494,16 +5352,14 @@ static bool brcmf_is_linkup(struct brcmf_cfg80211_vif *vif,
+ 	u32 event = e->event_code;
+ 	u32 status = e->status;
+ 
+-	if ((vif->profile.use_fwsup == BRCMF_PROFILE_FWSUP_PSK ||
+-	     vif->profile.use_fwsup == BRCMF_PROFILE_FWSUP_SAE) &&
++	if (vif->profile.use_fwsup == BRCMF_PROFILE_FWSUP_PSK &&
+ 	    event == BRCMF_E_PSK_SUP &&
+ 	    status == BRCMF_E_STATUS_FWSUP_COMPLETED)
+ 		set_bit(BRCMF_VIF_STATUS_EAP_SUCCESS, &vif->sme_state);
  	if (event == BRCMF_E_SET_SSID && status == BRCMF_E_STATUS_SUCCESS) {
  		brcmf_dbg(CONN, "Processing set ssid\n");
  		memcpy(vif->profile.bssid, e->addr, ETH_ALEN);
@@ -945,7 +953,7 @@ index 33b2ab3b54b09..6699637d3bf8c 100644
  int __init brcmf_core_init(void);
  void __exit brcmf_core_exit(void);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
-index 5da0dda0d8992..2c3526aeca6fc 100644
+index 0dcefbd0c0003..2c3526aeca6fc 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
 @@ -38,10 +38,8 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
@@ -960,6 +968,22 @@ index 5da0dda0d8992..2c3526aeca6fc 100644
  };
  
  #ifdef DEBUG
+@@ -285,14 +283,13 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
+ 	if (!err)
+ 		ifp->drvr->feat_flags |= BIT(BRCMF_FEAT_SCAN_RANDOM_MAC);
+ 
+-	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_FWSUP, "sup_wpa");
+-
+ 	if (drvr->settings->feature_disable) {
+ 		brcmf_dbg(INFO, "Features: 0x%02x, disable: 0x%02x\n",
+ 			  ifp->drvr->feat_flags,
+ 			  drvr->settings->feature_disable);
+ 		ifp->drvr->feat_flags &= ~drvr->settings->feature_disable;
+ 	}
++	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_FWSUP, "sup_wpa");
+ 
+ 	brcmf_feat_firmware_overrides(drvr);
+ 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
 index cda3fc1bab7f3..736a8179f62f6 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
