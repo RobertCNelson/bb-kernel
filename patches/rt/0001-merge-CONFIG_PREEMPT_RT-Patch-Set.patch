@@ -1,9 +1,9 @@
-From 86ba65fed481eb620efdfdf07bf7a51454559a6a Mon Sep 17 00:00:00 2001
+From 908f18779a175942440ec95a85f7f0313be7e19a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 10 Jun 2020 11:13:04 -0500
+Date: Thu, 25 Jun 2020 10:37:01 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-4.19.127-rt54.patch.xz
+patch-4.19.127-rt55.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -183,7 +183,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/nfs/unlink.c                               |  35 +-
  fs/ntfs/aops.c                                |  10 +-
  fs/proc/array.c                               |   4 +-
- fs/proc/base.c                                |   2 +-
+ fs/proc/base.c                                |   3 +-
  fs/proc/proc_sysctl.c                         |   2 +-
  fs/squashfs/decompressor_multi_percpu.c       |  16 +-
  fs/timerfd.c                                  |   6 +-
@@ -336,7 +336,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/sched/swork.c                          | 173 ++++
  kernel/sched/topology.c                       |   1 +
  kernel/signal.c                               | 114 ++-
- kernel/softirq.c                              | 738 ++++++++++++--
+ kernel/softirq.c                              | 744 ++++++++++++--
  kernel/stop_machine.c                         |   7 +-
  kernel/time/alarmtimer.c                      |   2 +-
  kernel/time/hrtimer.c                         | 126 ++-
@@ -379,7 +379,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  mm/page_alloc.c                               | 196 +++-
  mm/slab.c                                     |  94 +-
  mm/slab.h                                     |   2 +-
- mm/slub.c                                     | 139 ++-
+ mm/slub.c                                     | 136 ++-
  mm/swap.c                                     |  74 +-
  mm/vmalloc.c                                  |  13 +-
  mm/vmstat.c                                   |  12 +
@@ -406,7 +406,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  security/apparmor/lsm.c                       |   2 +-
  virt/kvm/arm/arch_timer.c                     |   6 +-
  virt/kvm/arm/arm.c                            |   6 +-
- 399 files changed, 9587 insertions(+), 2285 deletions(-)
+ 399 files changed, 9591 insertions(+), 2285 deletions(-)
  create mode 100644 drivers/clocksource/timer-atmel-tcb.c
  create mode 100644 include/linux/locallock.h
  create mode 100644 include/linux/mutex_rt.h
@@ -7458,10 +7458,18 @@ index 9eb99a43f849a..e4d0cfebaac5b 100644
  
  static inline void task_core_dumping(struct seq_file *m, struct mm_struct *mm)
 diff --git a/fs/proc/base.c b/fs/proc/base.c
-index 5c2ddf46ebff8..d3528ccd40f1a 100644
+index 5c2ddf46ebff8..d315888034248 100644
 --- a/fs/proc/base.c
 +++ b/fs/proc/base.c
-@@ -1890,7 +1890,7 @@ bool proc_fill_cache(struct file *file, struct dir_context *ctx,
+@@ -95,6 +95,7 @@
+ #include <linux/flex_array.h>
+ #include <linux/posix-timers.h>
+ #include <trace/events/oom.h>
++#include <linux/swait.h>
+ #include "internal.h"
+ #include "fd.h"
+ 
+@@ -1890,7 +1891,7 @@ bool proc_fill_cache(struct file *file, struct dir_context *ctx,
  
  	child = d_hash_and_lookup(dir, &qname);
  	if (!child) {
@@ -19213,7 +19221,7 @@ index 6a56921181393..45748993f7777 100644
  	} else {
  		/*
 diff --git a/kernel/softirq.c b/kernel/softirq.c
-index 6f584861d329b..73dae64bfc9c2 100644
+index 6f584861d329b..9bad7a16dc61b 100644
 --- a/kernel/softirq.c
 +++ b/kernel/softirq.c
 @@ -21,11 +21,14 @@
@@ -19893,7 +19901,7 @@ index 6f584861d329b..73dae64bfc9c2 100644
  void open_softirq(int nr, void (*action)(struct softirq_action *))
  {
  	softirq_vec[nr].action = action;
-@@ -475,11 +934,42 @@ static void __tasklet_schedule_common(struct tasklet_struct *t,
+@@ -475,11 +934,44 @@ static void __tasklet_schedule_common(struct tasklet_struct *t,
  	unsigned long flags;
  
  	local_irq_save(flags);
@@ -19914,10 +19922,12 @@ index 6f584861d329b..73dae64bfc9c2 100644
 +	 * is locked before adding it to the list.
 +	 */
 +	if (test_bit(TASKLET_STATE_SCHED, &t->state)) {
++#if defined(CONFIG_SMP) || defined(CONFIG_PREEMPT_RT_FULL)
 +		if (test_and_set_bit(TASKLET_STATE_CHAINED, &t->state)) {
 +			tasklet_unlock(t);
 +			return;
 +		}
++#endif
 +		t->next = NULL;
 +		*head->tail = t;
 +		head->tail = &(t->next);
@@ -19940,7 +19950,7 @@ index 6f584861d329b..73dae64bfc9c2 100644
  	local_irq_restore(flags);
  }
  
-@@ -497,11 +987,21 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
+@@ -497,11 +989,21 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
  }
  EXPORT_SYMBOL(__tasklet_hi_schedule);
  
@@ -19962,7 +19972,7 @@ index 6f584861d329b..73dae64bfc9c2 100644
  
  	local_irq_disable();
  	list = tl_head->head;
-@@ -513,25 +1013,56 @@ static void tasklet_action_common(struct softirq_action *a,
+@@ -513,25 +1015,60 @@ static void tasklet_action_common(struct softirq_action *a,
  		struct tasklet_struct *t = list;
  
  		list = list->next;
@@ -19976,6 +19986,8 @@ index 6f584861d329b..73dae64bfc9c2 100644
 +			WARN_ON(1);
 +			continue;
 +		}
++
++		t->next = NULL;
  
 -		if (tasklet_trylock(t)) {
 -			if (!atomic_read(&t->count)) {
@@ -19983,8 +19995,6 @@ index 6f584861d329b..73dae64bfc9c2 100644
 -							&t->state))
 -					BUG();
 -				t->func(t->data);
-+		t->next = NULL;
-+
 +		if (unlikely(atomic_read(&t->count))) {
 +out_disabled:
 +			/* implicit unlock: */
@@ -20003,7 +20013,11 @@ index 6f584861d329b..73dae64bfc9c2 100644
 +again:
 +		t->func(t->data);
 +
++#if defined(CONFIG_SMP) || defined(CONFIG_PREEMPT_RT_FULL)
 +		while (cmpxchg(&t->state, TASKLET_STATEF_RC, 0) != TASKLET_STATEF_RC) {
++#else
++		while (!tasklet_tryunlock(t)) {
++#endif
 +			/*
 +			 * If it got disabled meanwhile, bail out:
 +			 */
@@ -20034,7 +20048,7 @@ index 6f584861d329b..73dae64bfc9c2 100644
  	}
  }
  
-@@ -563,7 +1094,7 @@ void tasklet_kill(struct tasklet_struct *t)
+@@ -563,7 +1100,7 @@ void tasklet_kill(struct tasklet_struct *t)
  
  	while (test_and_set_bit(TASKLET_STATE_SCHED, &t->state)) {
  		do {
@@ -20043,7 +20057,7 @@ index 6f584861d329b..73dae64bfc9c2 100644
  		} while (test_bit(TASKLET_STATE_SCHED, &t->state));
  	}
  	tasklet_unlock_wait(t);
-@@ -637,25 +1168,26 @@ void __init softirq_init(void)
+@@ -637,25 +1174,26 @@ void __init softirq_init(void)
  	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
  }
  
@@ -20085,7 +20099,7 @@ index 6f584861d329b..73dae64bfc9c2 100644
  }
  
  #ifdef CONFIG_HOTPLUG_CPU
-@@ -722,17 +1254,31 @@ static int takeover_tasklets(unsigned int cpu)
+@@ -722,17 +1260,31 @@ static int takeover_tasklets(unsigned int cpu)
  
  static struct smp_hotplug_thread softirq_threads = {
  	.store			= &ksoftirqd,
@@ -24629,7 +24643,7 @@ index 9632772e14beb..d6b01d61f7686 100644
  #ifdef CONFIG_SLAB
  	struct list_head slabs_partial;	/* partial list first, better asm code */
 diff --git a/mm/slub.c b/mm/slub.c
-index d8116a43a2874..d243c6ef7fc9d 100644
+index d8116a43a2874..a9473bbb13384 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
 @@ -1167,7 +1167,7 @@ static noinline int free_debug_processing(
@@ -24809,7 +24823,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  				oldpage = NULL;
  				pobjects = 0;
  				pages = 0;
-@@ -2298,7 +2334,22 @@ static bool has_cpu_slab(int cpu, void *info)
+@@ -2298,7 +2334,19 @@ static bool has_cpu_slab(int cpu, void *info)
  
  static void flush_all(struct kmem_cache *s)
  {
@@ -24820,9 +24834,6 @@ index d8116a43a2874..d243c6ef7fc9d 100644
 +	for_each_online_cpu(cpu) {
 +		struct slub_free_list *f;
 +
-+		if (!has_cpu_slab(cpu, s))
-+			continue;
-+
 +		f = &per_cpu(slub_free_list, cpu);
 +		raw_spin_lock_irq(&f->lock);
 +		list_splice_init(&f->list, &tofree);
@@ -24832,7 +24843,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  }
  
  /*
-@@ -2353,10 +2404,10 @@ static unsigned long count_partial(struct kmem_cache_node *n,
+@@ -2353,10 +2401,10 @@ static unsigned long count_partial(struct kmem_cache_node *n,
  	unsigned long x = 0;
  	struct page *page;
  
@@ -24845,7 +24856,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	return x;
  }
  #endif /* CONFIG_SLUB_DEBUG || CONFIG_SYSFS */
-@@ -2496,8 +2547,10 @@ static inline void *get_freelist(struct kmem_cache *s, struct page *page)
+@@ -2496,8 +2544,10 @@ static inline void *get_freelist(struct kmem_cache *s, struct page *page)
   * already disabled (which is the case for bulk allocation).
   */
  static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
@@ -24857,7 +24868,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	void *freelist;
  	struct page *page;
  
-@@ -2563,6 +2616,13 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
+@@ -2563,6 +2613,13 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
  	VM_BUG_ON(!c->page->frozen);
  	c->freelist = get_freepointer(s, freelist);
  	c->tid = next_tid(c->tid);
@@ -24871,7 +24882,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	return freelist;
  
  new_slab:
-@@ -2578,7 +2638,7 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
+@@ -2578,7 +2635,7 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
  
  	if (unlikely(!freelist)) {
  		slab_out_of_memory(s, gfpflags, node);
@@ -24880,7 +24891,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	}
  
  	page = c->page;
-@@ -2591,7 +2651,7 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
+@@ -2591,7 +2648,7 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
  		goto new_slab;	/* Slab failed checks. Next slab needed */
  
  	deactivate_slab(s, page, get_freepointer(s, freelist), c);
@@ -24889,7 +24900,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  }
  
  /*
-@@ -2603,6 +2663,7 @@ static void *__slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
+@@ -2603,6 +2660,7 @@ static void *__slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
  {
  	void *p;
  	unsigned long flags;
@@ -24897,7 +24908,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  
  	local_irq_save(flags);
  #ifdef CONFIG_PREEMPT
-@@ -2614,8 +2675,9 @@ static void *__slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
+@@ -2614,8 +2672,9 @@ static void *__slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
  	c = this_cpu_ptr(s->cpu_slab);
  #endif
  
@@ -24908,7 +24919,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	return p;
  }
  
-@@ -2801,7 +2863,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
+@@ -2801,7 +2860,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
  
  	do {
  		if (unlikely(n)) {
@@ -24917,7 +24928,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  			n = NULL;
  		}
  		prior = page->freelist;
-@@ -2833,7 +2895,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
+@@ -2833,7 +2892,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
  				 * Otherwise the list_lock will synchronize with
  				 * other processors updating the list of slabs.
  				 */
@@ -24926,7 +24937,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  
  			}
  		}
-@@ -2875,7 +2937,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
+@@ -2875,7 +2934,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
  		add_partial(n, page, DEACTIVATE_TO_TAIL);
  		stat(s, FREE_ADD_PARTIAL);
  	}
@@ -24935,7 +24946,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	return;
  
  slab_empty:
-@@ -2890,7 +2952,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
+@@ -2890,7 +2949,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
  		remove_full(s, n, page);
  	}
  
@@ -24944,7 +24955,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	stat(s, FREE_SLAB);
  	discard_slab(s, page);
  }
-@@ -3095,6 +3157,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
+@@ -3095,6 +3154,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
  			  void **p)
  {
  	struct kmem_cache_cpu *c;
@@ -24952,7 +24963,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	int i;
  
  	/* memcg and kmem_cache debug support */
-@@ -3127,7 +3190,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
+@@ -3127,7 +3187,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
  			 * of re-populating per CPU c->freelist
  			 */
  			p[i] = ___slab_alloc(s, flags, NUMA_NO_NODE,
@@ -24961,7 +24972,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  			if (unlikely(!p[i]))
  				goto error;
  
-@@ -3139,6 +3202,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
+@@ -3139,6 +3199,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
  	}
  	c->tid = next_tid(c->tid);
  	local_irq_enable();
@@ -24969,7 +24980,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  
  	/* Clear memory outside IRQ disabled fastpath loop */
  	if (unlikely(flags & __GFP_ZERO)) {
-@@ -3153,6 +3217,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
+@@ -3153,6 +3214,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
  	return i;
  error:
  	local_irq_enable();
@@ -24977,7 +24988,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	slab_post_alloc_hook(s, flags, i, p);
  	__kmem_cache_free_bulk(s, i, p);
  	return 0;
-@@ -3288,7 +3353,7 @@ static void
+@@ -3288,7 +3350,7 @@ static void
  init_kmem_cache_node(struct kmem_cache_node *n)
  {
  	n->nr_partial = 0;
@@ -24986,7 +24997,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	INIT_LIST_HEAD(&n->partial);
  #ifdef CONFIG_SLUB_DEBUG
  	atomic_long_set(&n->nr_slabs, 0);
-@@ -3641,6 +3706,11 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
+@@ -3641,6 +3703,11 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
  							const char *text)
  {
  #ifdef CONFIG_SLUB_DEBUG
@@ -24998,7 +25009,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	void *addr = page_address(page);
  	void *p;
  	unsigned long *map = kcalloc(BITS_TO_LONGS(page->objects),
-@@ -3662,6 +3732,7 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
+@@ -3662,6 +3729,7 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
  	slab_unlock(page);
  	kfree(map);
  #endif
@@ -25006,7 +25017,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  }
  
  /*
-@@ -3675,7 +3746,7 @@ static void free_partial(struct kmem_cache *s, struct kmem_cache_node *n)
+@@ -3675,7 +3743,7 @@ static void free_partial(struct kmem_cache *s, struct kmem_cache_node *n)
  	struct page *page, *h;
  
  	BUG_ON(irqs_disabled());
@@ -25015,7 +25026,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	list_for_each_entry_safe(page, h, &n->partial, lru) {
  		if (!page->inuse) {
  			remove_partial(n, page);
-@@ -3685,7 +3756,7 @@ static void free_partial(struct kmem_cache *s, struct kmem_cache_node *n)
+@@ -3685,7 +3753,7 @@ static void free_partial(struct kmem_cache *s, struct kmem_cache_node *n)
  			"Objects remaining in %s on __kmem_cache_shutdown()");
  		}
  	}
@@ -25024,7 +25035,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  
  	list_for_each_entry_safe(page, h, &discard, lru)
  		discard_slab(s, page);
-@@ -3958,7 +4029,7 @@ int __kmem_cache_shrink(struct kmem_cache *s)
+@@ -3958,7 +4026,7 @@ int __kmem_cache_shrink(struct kmem_cache *s)
  		for (i = 0; i < SHRINK_PROMOTE_MAX; i++)
  			INIT_LIST_HEAD(promote + i);
  
@@ -25033,7 +25044,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  
  		/*
  		 * Build lists of slabs to discard or promote.
-@@ -3989,7 +4060,7 @@ int __kmem_cache_shrink(struct kmem_cache *s)
+@@ -3989,7 +4057,7 @@ int __kmem_cache_shrink(struct kmem_cache *s)
  		for (i = SHRINK_PROMOTE_MAX - 1; i >= 0; i--)
  			list_splice(promote + i, &n->partial);
  
@@ -25042,7 +25053,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  
  		/* Release empty slabs */
  		list_for_each_entry_safe(page, t, &discard, lru)
-@@ -4202,6 +4273,12 @@ void __init kmem_cache_init(void)
+@@ -4202,6 +4270,12 @@ void __init kmem_cache_init(void)
  {
  	static __initdata struct kmem_cache boot_kmem_cache,
  		boot_kmem_cache_node;
@@ -25055,7 +25066,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  
  	if (debug_guardpage_minorder())
  		slub_max_order = 0;
-@@ -4403,7 +4480,7 @@ static int validate_slab_node(struct kmem_cache *s,
+@@ -4403,7 +4477,7 @@ static int validate_slab_node(struct kmem_cache *s,
  	struct page *page;
  	unsigned long flags;
  
@@ -25064,7 +25075,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  
  	list_for_each_entry(page, &n->partial, lru) {
  		validate_slab_slab(s, page, map);
-@@ -4425,7 +4502,7 @@ static int validate_slab_node(struct kmem_cache *s,
+@@ -4425,7 +4499,7 @@ static int validate_slab_node(struct kmem_cache *s,
  		       s->name, count, atomic_long_read(&n->nr_slabs));
  
  out:
@@ -25073,7 +25084,7 @@ index d8116a43a2874..d243c6ef7fc9d 100644
  	return count;
  }
  
-@@ -4615,12 +4692,12 @@ static int list_locations(struct kmem_cache *s, char *buf,
+@@ -4615,12 +4689,12 @@ static int list_locations(struct kmem_cache *s, char *buf,
  		if (!atomic_long_read(&n->nr_slabs))
  			continue;
  
@@ -26726,5 +26737,5 @@ index d982650deb33f..efe2d6c0201cb 100644
  		ret = handle_exit(vcpu, run, ret);
  	}
 -- 
-2.26.2
+2.27.0
 
