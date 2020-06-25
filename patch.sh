@@ -392,7 +392,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.6.17"
+	backport_tag="v5.6.19"
 
 	subsystem="exfat"
 	#regenerate="enable"
@@ -407,8 +407,6 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.5.19"
-
 	subsystem="greybus"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -422,6 +420,8 @@ backports () {
 	else
 		patch_backports
 	fi
+
+	backport_tag="v5.5.19"
 
 	subsystem="counter"
 	#regenerate="enable"
