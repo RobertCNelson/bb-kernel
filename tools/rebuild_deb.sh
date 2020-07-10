@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,6 @@
 # THE SOFTWARE.
 
 DIR=$PWD
-CORES=$(getconf _NPROCESSORS_ONLN)
 git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
@@ -30,7 +29,7 @@ patch_kernel () {
 	cd "${DIR}/KERNEL" || exit
 
 	export DIR
-	/bin/sh -e "${DIR}/patch.sh" || { ${git_bin} add . ; exit 1 ; }
+	/bin/bash -e "${DIR}/patch.sh" || { ${git_bin} add . ; exit 1 ; }
 
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
 		if [ ! "${RUN_BISECT}" ] ; then
@@ -57,6 +56,7 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
 		cp -v .config "${DIR}/patches/defconfig"
@@ -83,13 +83,20 @@ make_deb () {
 	build_opts="${build_opts} KDEB_SOURCENAME=linux-upstream"
 
 	echo "-----------------------------"
-	echo "make ${build_opts} CROSS_COMPILE="${CC}" deb-pkg"
-	echo "-----------------------------"
-	fakeroot make ${build_opts} CROSS_COMPILE="${CC}" deb-pkg
+	if grep -q bindeb-pkg "${DIR}/KERNEL/scripts/package/Makefile"; then
+		echo "make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg"
+		echo "-----------------------------"
+		fakeroot make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg
+	else
+		echo "make ${build_opts} CROSS_COMPILE="${CC}" deb-pkg"
+		echo "-----------------------------"
+		fakeroot make ${build_opts} CROSS_COMPILE="${CC}" deb-pkg
+	fi
+
+	mv "${DIR}"/*.changes "${DIR}/deploy/" || true
 	mv "${DIR}"/*.deb "${DIR}/deploy/" || true
 	mv "${DIR}"/*.debian.tar.gz "${DIR}/deploy/" || true
 	mv "${DIR}"/*.dsc "${DIR}/deploy/" || true
-	mv "${DIR}"/*.changes "${DIR}/deploy/" || true
 	mv "${DIR}"/*.orig.tar.gz "${DIR}/deploy/" || true
 
 	KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
@@ -127,6 +134,10 @@ fi
 
 . "${DIR}/version.sh"
 export LINUX_GIT
+
+if [ ! "${CORES}" ] ; then
+	CORES=$(getconf _NPROCESSORS_ONLN)
+fi
 
 unset FULL_REBUILD
 #FULL_REBUILD=1

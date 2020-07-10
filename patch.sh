@@ -1,6 +1,6 @@
-#!/bin/sh -e
+#!/bin/bash -e
 #
-# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,8 @@
 # THE SOFTWARE.
 
 # Split out, so build_kernel.sh and build_deb.sh can share..
+
+shopt -s nullglob
 
 . ${DIR}/version.sh
 if [ -f ${DIR}/system.sh ] ; then
@@ -64,6 +66,28 @@ cleanup () {
 	exit 2
 }
 
+dir () {
+	wdir="$1"
+	if [ -d "${DIR}/patches/$wdir" ]; then
+		echo "dir: $wdir"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		number=
+		for p in "${DIR}/patches/$wdir/"*.patch; do
+			${git} "$p"
+			number=$(( $number + 1 ))
+		done
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			cleanup
+		fi
+	fi
+	unset wdir
+}
+
 cherrypick () {
 	if [ ! -d ../patches/${cherrypick_dir} ] ; then
 		mkdir -p ../patches/${cherrypick_dir}
@@ -76,6 +100,7 @@ external_git () {
 	git_tag=""
 	echo "pulling: ${git_tag}"
 	${git_bin} pull --no-edit ${git_patchset} ${git_tag}
+	${git_bin} describe
 }
 
 aufs_fail () {
@@ -114,7 +139,7 @@ aufs4 () {
 		${git_bin} format-patch -4 -o ../patches/aufs4/
 
 		cd ../
-		if [ ! -f ./aufs4-standalone ] ; then
+		if [ ! -d ./aufs4-standalone ] ; then
 			${git_bin} clone https://github.com/sfjro/aufs4-standalone
 			cd ./aufs4-standalone
 			${git_bin} checkout origin/aufs${KERNEL_REL} -b tmp
@@ -138,6 +163,8 @@ aufs4 () {
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs4' -s
 		${git_bin} format-patch -5 -o ../patches/aufs4/
+
+		rm -rf ../aufs4-standalone || true
 
 		exit 2
 	fi
