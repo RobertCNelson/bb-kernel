@@ -1,6 +1,6 @@
-From 6cb129f80c2feedc13837e55f6ded79a5cdc79a7 Mon Sep 17 00:00:00 2001
+From 6af2286d0ca03b57dd7ec0112d3c0e8bda75ec3c Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 25 Jun 2020 10:26:23 -0500
+Date: Wed, 22 Jul 2020 15:46:26 -0500
 Subject: [PATCH] backports: counter: from: linux.git
 
 Reference: v5.5.19
@@ -14,7 +14,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/bus/fsl-mc/fsl-mc-private.h           |  42 ++
  drivers/bus/hisi_lpc.c                        |   9 +-
  drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} |   0
- drivers/bus/ti-sysc.c                         |  82 +--
+ drivers/bus/ti-sysc.c                         |  97 ++--
  drivers/counter/104-quad-8.c                  | 227 ++-------
  drivers/counter/Kconfig                       |  11 +
  drivers/counter/Makefile                      |   1 +
@@ -26,18 +26,20 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/pwm/Kconfig                           |   9 -
  drivers/pwm/Makefile                          |   1 -
  drivers/pwm/pwm-bcm2835.c                     |   1 -
+ drivers/pwm/pwm-img.c                         |   8 +-
+ drivers/pwm/pwm-jz4740.c                      |   9 +-
  drivers/pwm/pwm-rcar.c                        |  10 +-
  drivers/pwm/pwm-renesas-tpu.c                 |   9 +-
  drivers/pwm/pwm-stm32.c                       | 112 +++--
  drivers/pwm/pwm-sun4i.c                       |   1 -
  include/linux/counter.h                       |  76 +--
  include/linux/mfd/stm32-timers.h              |  12 +-
- 26 files changed, 839 insertions(+), 492 deletions(-)
+ 28 files changed, 848 insertions(+), 515 deletions(-)
  rename drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} (100%)
  create mode 100644 drivers/counter/ti-eqep.c
 
 diff --git a/drivers/bus/Kconfig b/drivers/bus/Kconfig
-index 47c2bb444ab4a..6095b6df8a81f 100644
+index 47c2bb444ab4..6095b6df8a81 100644
 --- a/drivers/bus/Kconfig
 +++ b/drivers/bus/Kconfig
 @@ -41,8 +41,9 @@ config MOXTET
@@ -69,7 +71,7 @@ index 47c2bb444ab4a..6095b6df8a81f 100644
  	bool "TI sysc interconnect target module driver"
  	depends on ARCH_OMAP2PLUS
 diff --git a/drivers/bus/Makefile b/drivers/bus/Makefile
-index 16b43d3468c67..1320bcf9fa9dc 100644
+index 16b43d3468c6..1320bcf9fa9d 100644
 --- a/drivers/bus/Makefile
 +++ b/drivers/bus/Makefile
 @@ -27,6 +27,7 @@ obj-$(CONFIG_SUNXI_RSB)		+= sunxi-rsb.o
@@ -81,7 +83,7 @@ index 16b43d3468c67..1320bcf9fa9dc 100644
  obj-$(CONFIG_TS_NBUS)		+= ts-nbus.o
  obj-$(CONFIG_UNIPHIER_SYSTEM_BUS)	+= uniphier-system-bus.o
 diff --git a/drivers/bus/fsl-mc/dprc-driver.c b/drivers/bus/fsl-mc/dprc-driver.c
-index 52c7e15143d6d..c8b1c3842c1ad 100644
+index 52c7e15143d6..c8b1c3842c1a 100644
 --- a/drivers/bus/fsl-mc/dprc-driver.c
 +++ b/drivers/bus/fsl-mc/dprc-driver.c
 @@ -104,10 +104,8 @@ static int __fsl_mc_device_match(struct device *dev, void *data)
@@ -98,7 +100,7 @@ index 52c7e15143d6d..c8b1c3842c1ad 100644
  	struct device *dev;
  
 diff --git a/drivers/bus/fsl-mc/dprc.c b/drivers/bus/fsl-mc/dprc.c
-index 0fe3f52ae0de8..602f030d84eb8 100644
+index 0fe3f52ae0de..602f030d84eb 100644
 --- a/drivers/bus/fsl-mc/dprc.c
 +++ b/drivers/bus/fsl-mc/dprc.c
 @@ -554,3 +554,56 @@ int dprc_get_container_id(struct fsl_mc_io *mc_io,
@@ -159,7 +161,7 @@ index 0fe3f52ae0de8..602f030d84eb8 100644
 +	return 0;
 +}
 diff --git a/drivers/bus/fsl-mc/fsl-mc-bus.c b/drivers/bus/fsl-mc/fsl-mc-bus.c
-index 5c9bf2e065520..c78d10ea641fb 100644
+index 5c9bf2e06552..c78d10ea641f 100644
 --- a/drivers/bus/fsl-mc/fsl-mc-bus.c
 +++ b/drivers/bus/fsl-mc/fsl-mc-bus.c
 @@ -166,42 +166,52 @@ EXPORT_SYMBOL_GPL(fsl_mc_bus_type);
@@ -256,7 +258,7 @@ index 5c9bf2e065520..c78d10ea641fb 100644
  			   int *paddr_cells,
  			   int *mc_addr_cells,
 diff --git a/drivers/bus/fsl-mc/fsl-mc-private.h b/drivers/bus/fsl-mc/fsl-mc-private.h
-index 020fcc04ec8bc..21ca8c756ee77 100644
+index 020fcc04ec8b..21ca8c756ee7 100644
 --- a/drivers/bus/fsl-mc/fsl-mc-private.h
 +++ b/drivers/bus/fsl-mc/fsl-mc-private.h
 @@ -105,6 +105,8 @@ int dpmcp_reset(struct fsl_mc_io *mc_io,
@@ -328,7 +330,7 @@ index 020fcc04ec8bc..21ca8c756ee77 100644
 +
  #endif /* _FSL_MC_PRIVATE_H_ */
 diff --git a/drivers/bus/hisi_lpc.c b/drivers/bus/hisi_lpc.c
-index 20c957185af20..8101df901830e 100644
+index 20c957185af2..8101df901830 100644
 --- a/drivers/bus/hisi_lpc.c
 +++ b/drivers/bus/hisi_lpc.c
 @@ -74,7 +74,7 @@ struct hisi_lpc_dev {
@@ -370,10 +372,47 @@ similarity index 100%
 rename from drivers/pwm/pwm-tipwmss.c
 rename to drivers/bus/ti-pwmss.c
 diff --git a/drivers/bus/ti-sysc.c b/drivers/bus/ti-sysc.c
-index f0bc0841cbc40..c42447d5d5a8e 100644
+index 553c0e279621..c42447d5d5a8 100644
 --- a/drivers/bus/ti-sysc.c
 +++ b/drivers/bus/ti-sysc.c
-@@ -1050,8 +1050,6 @@ static int __maybe_unused sysc_runtime_resume_legacy(struct device *dev,
+@@ -880,13 +880,10 @@ static int sysc_enable_module(struct device *dev)
+ 	regbits = ddata->cap->regbits;
+ 	reg = sysc_read(ddata, ddata->offsets[SYSC_SYSCONFIG]);
+ 
+-	/*
+-	 * Set CLOCKACTIVITY, we only use it for ick. And we only configure it
+-	 * based on the SYSC_QUIRK_USE_CLOCKACT flag, not based on the hardware
+-	 * capabilities. See the old HWMOD_SET_DEFAULT_CLOCKACT flag.
+-	 */
++	/* Set CLOCKACTIVITY, we only use it for ick */
+ 	if (regbits->clkact_shift >= 0 &&
+-	    (ddata->cfg.quirks & SYSC_QUIRK_USE_CLOCKACT))
++	    (ddata->cfg.quirks & SYSC_QUIRK_USE_CLOCKACT ||
++	     ddata->cfg.sysc_val & BIT(regbits->clkact_shift)))
+ 		reg |= SYSC_CLOCACT_ICK << regbits->clkact_shift;
+ 
+ 	/* Set SIDLE mode */
+@@ -941,9 +938,6 @@ static int sysc_enable_module(struct device *dev)
+ 		sysc_write(ddata, ddata->offsets[SYSC_SYSCONFIG], reg);
+ 	}
+ 
+-	/* Flush posted write */
+-	sysc_read(ddata, ddata->offsets[SYSC_SYSCONFIG]);
+-
+ 	if (ddata->module_enable_quirk)
+ 		ddata->module_enable_quirk(ddata);
+ 
+@@ -1024,9 +1018,6 @@ static int sysc_disable_module(struct device *dev)
+ 		reg |= 1 << regbits->autoidle_shift;
+ 	sysc_write(ddata, ddata->offsets[SYSC_SYSCONFIG], reg);
+ 
+-	/* Flush posted write */
+-	sysc_read(ddata, ddata->offsets[SYSC_SYSCONFIG]);
+-
+ 	return 0;
+ }
+ 
+@@ -1059,8 +1050,6 @@ static int __maybe_unused sysc_runtime_resume_legacy(struct device *dev,
  	struct ti_sysc_platform_data *pdata;
  	int error;
  
@@ -382,7 +421,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  	pdata = dev_get_platdata(ddata->dev);
  	if (!pdata)
  		return 0;
-@@ -1064,6 +1062,8 @@ static int __maybe_unused sysc_runtime_resume_legacy(struct device *dev,
+@@ -1073,6 +1062,8 @@ static int __maybe_unused sysc_runtime_resume_legacy(struct device *dev,
  		dev_err(dev, "%s: could not enable: %i\n",
  			__func__, error);
  
@@ -391,7 +430,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  	return 0;
  }
  
-@@ -1117,8 +1117,6 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
+@@ -1126,8 +1117,6 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
  
  	sysc_clkdm_deny_idle(ddata);
  
@@ -400,7 +439,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  	if (sysc_opt_clks_needed(ddata)) {
  		error = sysc_enable_opt_clocks(ddata);
  		if (error)
-@@ -1129,6 +1127,8 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
+@@ -1138,6 +1127,8 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
  	if (error)
  		goto err_opt_clocks;
  
@@ -409,7 +448,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  	if (ddata->legacy_mode) {
  		error = sysc_runtime_resume_legacy(dev, ddata);
  		if (error)
-@@ -1565,37 +1565,6 @@ static int sysc_legacy_init(struct sysc *ddata)
+@@ -1574,37 +1565,6 @@ static int sysc_legacy_init(struct sysc *ddata)
  	return error;
  }
  
@@ -447,7 +486,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  /*
   * Note that the caller must ensure the interconnect target module is enabled
   * before calling reset. Otherwise reset will not complete.
-@@ -1662,15 +1631,6 @@ static int sysc_reset(struct sysc *ddata)
+@@ -1671,15 +1631,6 @@ static int sysc_reset(struct sysc *ddata)
  static int sysc_init_module(struct sysc *ddata)
  {
  	int error = 0;
@@ -463,7 +502,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  
  	error = sysc_clockdomain_init(ddata);
  	if (error)
-@@ -1691,7 +1651,7 @@ static int sysc_init_module(struct sysc *ddata)
+@@ -1700,7 +1651,7 @@ static int sysc_init_module(struct sysc *ddata)
  		goto err_opt_clocks;
  
  	if (!(ddata->cfg.quirks & SYSC_QUIRK_NO_RESET_ON_INIT)) {
@@ -472,7 +511,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  		if (error)
  			goto err_main_clocks;
  	}
-@@ -1703,28 +1663,32 @@ static int sysc_init_module(struct sysc *ddata)
+@@ -1712,28 +1663,32 @@ static int sysc_init_module(struct sysc *ddata)
  	if (ddata->legacy_mode) {
  		error = sysc_legacy_init(ddata);
  		if (error)
@@ -510,7 +549,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  		sysc_disable_opt_clocks(ddata);
  		sysc_clkdm_allow_idle(ddata);
  	}
-@@ -1831,9 +1795,8 @@ static int sysc_child_add_named_clock(struct sysc *ddata,
+@@ -1840,9 +1795,8 @@ static int sysc_child_add_named_clock(struct sysc *ddata,
  
  	clk = clk_get(child, name);
  	if (!IS_ERR(clk)) {
@@ -522,7 +561,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  	}
  
  	clk = clk_get(ddata->dev, name);
-@@ -1843,7 +1806,7 @@ static int sysc_child_add_named_clock(struct sysc *ddata,
+@@ -1852,7 +1806,7 @@ static int sysc_child_add_named_clock(struct sysc *ddata,
  	l = clkdev_create(clk, name, dev_name(child));
  	if (!l)
  		error = -ENOMEM;
@@ -531,7 +570,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  	clk_put(clk);
  
  	return error;
-@@ -2497,10 +2460,17 @@ static int sysc_probe(struct platform_device *pdev)
+@@ -2506,10 +2460,17 @@ static int sysc_probe(struct platform_device *pdev)
  		goto unprepare;
  	}
  
@@ -552,7 +591,7 @@ index f0bc0841cbc40..c42447d5d5a8e 100644
  
  	ddata->dev->type = &sysc_device_type;
 diff --git a/drivers/counter/104-quad-8.c b/drivers/counter/104-quad-8.c
-index 5c23a9a56921b..17e67a84777d3 100644
+index 5c23a9a56921..17e67a84777d 100644
 --- a/drivers/counter/104-quad-8.c
 +++ b/drivers/counter/104-quad-8.c
 @@ -42,7 +42,6 @@ MODULE_PARM_DESC(base, "ACCES 104-QUAD-8 base addresses");
@@ -1167,7 +1206,7 @@ index 5c23a9a56921b..17e67a84777d3 100644
  	outb(QUAD8_CHAN_OP_RESET_COUNTERS, base[id] + QUAD8_REG_CHAN_OP);
  	/* Set initial configuration for all counters */
 diff --git a/drivers/counter/Kconfig b/drivers/counter/Kconfig
-index 2967d0a9ff910..c80fa76bb5311 100644
+index 2967d0a9ff91..c80fa76bb531 100644
 --- a/drivers/counter/Kconfig
 +++ b/drivers/counter/Kconfig
 @@ -49,6 +49,17 @@ config STM32_LPTIMER_CNT
@@ -1189,7 +1228,7 @@ index 2967d0a9ff910..c80fa76bb5311 100644
  	tristate "Flex Timer Module Quadrature decoder driver"
  	depends on HAS_IOMEM && OF
 diff --git a/drivers/counter/Makefile b/drivers/counter/Makefile
-index 40d35522937de..55142d1f4c436 100644
+index 40d35522937d..55142d1f4c43 100644
 --- a/drivers/counter/Makefile
 +++ b/drivers/counter/Makefile
 @@ -8,4 +8,5 @@ obj-$(CONFIG_COUNTER) += counter.o
@@ -1199,7 +1238,7 @@ index 40d35522937de..55142d1f4c436 100644
 +obj-$(CONFIG_TI_EQEP)		+= ti-eqep.o
  obj-$(CONFIG_FTM_QUADDEC)	+= ftm-quaddec.o
 diff --git a/drivers/counter/counter.c b/drivers/counter/counter.c
-index 106bc7180cd84..6a683d0860087 100644
+index 106bc7180cd8..6a683d086008 100644
 --- a/drivers/counter/counter.c
 +++ b/drivers/counter/counter.c
 @@ -220,86 +220,6 @@ ssize_t counter_device_enum_available_read(struct counter_device *counter,
@@ -1350,7 +1389,7 @@ index 106bc7180cd84..6a683d0860087 100644
  		return err;
  
 diff --git a/drivers/counter/ftm-quaddec.c b/drivers/counter/ftm-quaddec.c
-index 4046aa9f92344..c2b3fdfd8b772 100644
+index 4046aa9f9234..c2b3fdfd8b77 100644
 --- a/drivers/counter/ftm-quaddec.c
 +++ b/drivers/counter/ftm-quaddec.c
 @@ -178,31 +178,25 @@ static const enum counter_count_function ftm_quaddec_count_functions[] = {
@@ -1390,7 +1429,7 @@ index 4046aa9f92344..c2b3fdfd8b772 100644
  		return -EINVAL;
  	}
 diff --git a/drivers/counter/stm32-lptimer-cnt.c b/drivers/counter/stm32-lptimer-cnt.c
-index bbc930a5962c6..8e276eb655f58 100644
+index bbc930a5962c..8e276eb655f5 100644
 --- a/drivers/counter/stm32-lptimer-cnt.c
 +++ b/drivers/counter/stm32-lptimer-cnt.c
 @@ -347,7 +347,7 @@ static const struct iio_chan_spec stm32_lptim_cnt_channels = {
@@ -1422,7 +1461,7 @@ index bbc930a5962c6..8e276eb655f58 100644
  	return 0;
  }
 diff --git a/drivers/counter/stm32-timer-cnt.c b/drivers/counter/stm32-timer-cnt.c
-index 644ba18a72ad5..3eafccec3beb1 100644
+index 644ba18a72ad..3eafccec3beb 100644
 --- a/drivers/counter/stm32-timer-cnt.c
 +++ b/drivers/counter/stm32-timer-cnt.c
 @@ -28,7 +28,7 @@ struct stm32_timer_cnt {
@@ -1487,7 +1526,7 @@ index 644ba18a72ad5..3eafccec3beb1 100644
  				   TIM_CR1_CEN);
 diff --git a/drivers/counter/ti-eqep.c b/drivers/counter/ti-eqep.c
 new file mode 100644
-index 0000000000000..1ff07faef27f3
+index 000000000000..1ff07faef27f
 --- /dev/null
 +++ b/drivers/counter/ti-eqep.c
 @@ -0,0 +1,466 @@
@@ -1958,7 +1997,7 @@ index 0000000000000..1ff07faef27f3
 +MODULE_DESCRIPTION("TI eQEP counter driver");
 +MODULE_LICENSE("GPL v2");
 diff --git a/drivers/pwm/Kconfig b/drivers/pwm/Kconfig
-index e3a2518503ed3..bd21655c37a68 100644
+index e3a2518503ed..bd21655c37a6 100644
 --- a/drivers/pwm/Kconfig
 +++ b/drivers/pwm/Kconfig
 @@ -508,15 +508,6 @@ config  PWM_TIEHRPWM
@@ -1978,7 +2017,7 @@ index e3a2518503ed3..bd21655c37a68 100644
  	tristate "TWL4030/6030 PWM support"
  	depends on TWL4030_CORE
 diff --git a/drivers/pwm/Makefile b/drivers/pwm/Makefile
-index 26326adf71d7b..9a475073dafcb 100644
+index 26326adf71d7..9a475073dafc 100644
 --- a/drivers/pwm/Makefile
 +++ b/drivers/pwm/Makefile
 @@ -50,7 +50,6 @@ obj-$(CONFIG_PWM_SUN4I)		+= pwm-sun4i.o
@@ -1990,7 +2029,7 @@ index 26326adf71d7b..9a475073dafcb 100644
  obj-$(CONFIG_PWM_TWL_LED)	+= pwm-twl-led.o
  obj-$(CONFIG_PWM_VT8500)	+= pwm-vt8500.o
 diff --git a/drivers/pwm/pwm-bcm2835.c b/drivers/pwm/pwm-bcm2835.c
-index d78f86f8e4621..91e24f01b54ed 100644
+index d78f86f8e462..91e24f01b54e 100644
 --- a/drivers/pwm/pwm-bcm2835.c
 +++ b/drivers/pwm/pwm-bcm2835.c
 @@ -166,7 +166,6 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
@@ -2001,8 +2040,66 @@ index d78f86f8e4621..91e24f01b54ed 100644
  	pc->chip.npwm = 2;
  	pc->chip.of_xlate = of_pwm_xlate_with_flags;
  	pc->chip.of_pwm_n_cells = 3;
+diff --git a/drivers/pwm/pwm-img.c b/drivers/pwm/pwm-img.c
+index 599a0f66a384..c9e57bd109fb 100644
+--- a/drivers/pwm/pwm-img.c
++++ b/drivers/pwm/pwm-img.c
+@@ -129,10 +129,8 @@ static int img_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
+ 	duty = DIV_ROUND_UP(timebase * duty_ns, period_ns);
+ 
+ 	ret = pm_runtime_get_sync(chip->dev);
+-	if (ret < 0) {
+-		pm_runtime_put_autosuspend(chip->dev);
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 	val = img_pwm_readl(pwm_chip, PWM_CTRL_CFG);
+ 	val &= ~(PWM_CTRL_CFG_DIV_MASK << PWM_CTRL_CFG_DIV_SHIFT(pwm->hwpwm));
+@@ -333,10 +331,8 @@ static int img_pwm_remove(struct platform_device *pdev)
+ 	int ret;
+ 
+ 	ret = pm_runtime_get_sync(&pdev->dev);
+-	if (ret < 0) {
+-		pm_runtime_put(&pdev->dev);
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 	for (i = 0; i < pwm_chip->chip.npwm; i++) {
+ 		val = img_pwm_readl(pwm_chip, PWM_CTRL_CFG);
+diff --git a/drivers/pwm/pwm-jz4740.c b/drivers/pwm/pwm-jz4740.c
+index 77c28313e95f..9d78cc21cb12 100644
+--- a/drivers/pwm/pwm-jz4740.c
++++ b/drivers/pwm/pwm-jz4740.c
+@@ -92,12 +92,11 @@ static int jz4740_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
+ {
+ 	struct jz4740_pwm_chip *jz4740 = to_jz4740(pwm->chip);
+ 	unsigned long long tmp;
+-	unsigned long rate, period, duty;
++	unsigned long period, duty;
+ 	unsigned int prescaler = 0;
+ 	uint16_t ctrl;
+ 
+-	rate = clk_get_rate(jz4740->clk);
+-	tmp = rate * state->period;
++	tmp = (unsigned long long)clk_get_rate(jz4740->clk) * state->period;
+ 	do_div(tmp, 1000000000);
+ 	period = tmp;
+ 
+@@ -109,8 +108,8 @@ static int jz4740_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
+ 	if (prescaler == 6)
+ 		return -EINVAL;
+ 
+-	tmp = (unsigned long long)rate * state->duty_cycle;
+-	do_div(tmp, NSEC_PER_SEC);
++	tmp = (unsigned long long)period * state->duty_cycle;
++	do_div(tmp, state->period);
+ 	duty = period - tmp;
+ 
+ 	if (duty >= period)
 diff --git a/drivers/pwm/pwm-rcar.c b/drivers/pwm/pwm-rcar.c
-index b98ec8847b488..852eb2347954d 100644
+index b98ec8847b48..852eb2347954 100644
 --- a/drivers/pwm/pwm-rcar.c
 +++ b/drivers/pwm/pwm-rcar.c
 @@ -228,28 +228,24 @@ static int rcar_pwm_probe(struct platform_device *pdev)
@@ -2038,7 +2135,7 @@ index b98ec8847b488..852eb2347954d 100644
  
  static const struct of_device_id rcar_pwm_of_table[] = {
 diff --git a/drivers/pwm/pwm-renesas-tpu.c b/drivers/pwm/pwm-renesas-tpu.c
-index 8032acc84161a..4a855a21b782d 100644
+index 8032acc84161..4a855a21b782 100644
 --- a/drivers/pwm/pwm-renesas-tpu.c
 +++ b/drivers/pwm/pwm-renesas-tpu.c
 @@ -415,17 +415,16 @@ static int tpu_probe(struct platform_device *pdev)
@@ -2076,7 +2173,7 @@ index 8032acc84161a..4a855a21b782d 100644
  
  #ifdef CONFIG_OF
 diff --git a/drivers/pwm/pwm-stm32.c b/drivers/pwm/pwm-stm32.c
-index 359b08596d9e3..7ff48c14fae80 100644
+index 359b08596d9e..7ff48c14fae8 100644
 --- a/drivers/pwm/pwm-stm32.c
 +++ b/drivers/pwm/pwm-stm32.c
 @@ -12,6 +12,7 @@
@@ -2270,7 +2367,7 @@ index 359b08596d9e3..7ff48c14fae80 100644
  };
  module_platform_driver(stm32_pwm_driver);
 diff --git a/drivers/pwm/pwm-sun4i.c b/drivers/pwm/pwm-sun4i.c
-index 05273725a9fff..581d232873331 100644
+index 05273725a9ff..581d23287333 100644
 --- a/drivers/pwm/pwm-sun4i.c
 +++ b/drivers/pwm/pwm-sun4i.c
 @@ -156,7 +156,6 @@ static int sun4i_pwm_calculate(struct sun4i_pwm_chip *sun4i_pwm,
@@ -2282,7 +2379,7 @@ index 05273725a9fff..581d232873331 100644
  		 * When not using any prescaler, the clock period in nanoseconds
  		 * is not an integer so round it half up instead of
 diff --git a/include/linux/counter.h b/include/linux/counter.h
-index a061cdcdef7c5..9dbd5df4cd34d 100644
+index a061cdcdef7c..9dbd5df4cd34 100644
 --- a/include/linux/counter.h
 +++ b/include/linux/counter.h
 @@ -290,53 +290,22 @@ struct counter_device_state {
@@ -2402,7 +2499,7 @@ index a061cdcdef7c5..9dbd5df4cd34d 100644
  void counter_unregister(struct counter_device *const counter);
  int devm_counter_register(struct device *dev,
 diff --git a/include/linux/mfd/stm32-timers.h b/include/linux/mfd/stm32-timers.h
-index 067d14655c28b..f8db83aedb2b5 100644
+index 067d14655c28..f8db83aedb2b 100644
 --- a/include/linux/mfd/stm32-timers.h
 +++ b/include/linux/mfd/stm32-timers.h
 @@ -70,14 +70,11 @@

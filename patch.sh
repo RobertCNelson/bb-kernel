@@ -392,20 +392,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.6.19"
-
-	subsystem="exfat"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
+	backport_tag="v5.7.10"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -414,6 +401,21 @@ backports () {
 
 		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
 		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	backport_tag="v5.6.19"
+
+	subsystem="exfat"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
 
 		post_backports
 		exit 2
