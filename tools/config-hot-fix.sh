@@ -70,4 +70,11 @@ cd ${DIR}/KERNEL/
 config="CONFIG_HAVE_NET_DSA" ; config_disable
 config="CONFIG_NET_DSA" ; config_disable
 
+#SC16IS7XX breaks SERIAL_DEV_CTRL_TTYPORT, which breaks Bluetooth on wl18xx
+config="CONFIG_SERIAL_SC16IS7XX_CORE" ; config_disable
+config="CONFIG_SERIAL_SC16IS7XX" ; config_disable
+config="CONFIG_SERIAL_SC16IS7XX_I2C" ; config_disable
+config="CONFIG_SERIAL_SC16IS7XX_SPI" ; config_disable
+config="CONFIG_SERIAL_DEV_CTRL_TTYPORT" ; config_enable
+
 cd ${DIR}/
