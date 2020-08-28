@@ -483,7 +483,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.138"
+	backport_tag="v4.19.142"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -499,7 +499,7 @@ backports () {
 		${git} "${DIR}/patches/backports/greybus/0002-greybus-drivers-staging-greybus-module.c-no-struct_s.patch"
 	fi
 
-	backport_tag="v5.4.57"
+	backport_tag="v5.4.61"
 
 	subsystem="wiznet"
 	#regenerate="enable"
