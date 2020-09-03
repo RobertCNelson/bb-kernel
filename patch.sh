@@ -289,10 +289,10 @@ local_patch () {
 }
 
 #external_git
-can_isotp
+#can_isotp
 #rt
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
