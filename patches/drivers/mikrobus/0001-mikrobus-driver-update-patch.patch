@@ -1,54 +1,48 @@
-From e4ab599755fdaf0b76e418013ce6bf2ad2e9ff56 Mon Sep 17 00:00:00 2001
+From 3d0959e5ebaa1d082bf9ba2e5a4d86054c266d64 Mon Sep 17 00:00:00 2001
 From: Vaishnav M A <vaishnav@beagleboard.org>
-Date: Mon, 20 Jul 2020 17:41:57 +0000
-Subject: [RFC PATCH v2] RFC : mikroBUS driver for add-on boards
+Date: Thu, 15 Oct 2020 17:05:50 +0530
+Subject: [PATCH] mikrobus driver update patch
+
+This Patch series is an update to the mikroBUS driver
+with support for serdev devices and fixed regulator.
+
+RFC v1 Patch : https://lkml.org/lkml/2020/7/24/518 .
+The mikrobus driver is updated to add mikrobus ports from device-tree
+overlays, the debug interfaces for adding mikrobus ports through sysFS
+is removed, and the driver considers the extended usage of mikrobus
+port pins from their standard purposes.
 
 change log:
-- v2:   remove debug interfaces for adding and deleting mikrobus
-  ports, add mikrobus ports via device-tree, handle pinmux, consider
-  extended usage of mikrobus pins from normal configuration
+        v2: support for adding mikroBUS ports from DT overlays,
+        remove debug sysFS interface for adding mikrobus ports,
+        consider extended pin usage/deviations from mikrobus standard
+        specifications,
+        use greybus CPort protocol enum instead of new protcol enums
+        Fix cases of wrong indendation, ignoring return values, freeing
+        allocated resources in case of errors and other style suggestions
+        in v1 review.
 
 Signed-off-by: Vaishnav M A <vaishnav@beagleboard.org>
 ---
- MAINTAINERS                               |   6 +
  drivers/misc/Kconfig                      |   1 +
  drivers/misc/Makefile                     |   1 +
  drivers/misc/mikrobus/Kconfig             |  16 +
- drivers/misc/mikrobus/Makefile            |   7 +
- drivers/misc/mikrobus/mikrobus_core.c     | 694 ++++++++++++++++++++++
- drivers/misc/mikrobus/mikrobus_core.h     | 190 ++++++
- drivers/misc/mikrobus/mikrobus_manifest.c | 440 ++++++++++++++
+ drivers/misc/mikrobus/Makefile            |   5 +
+ drivers/misc/mikrobus/mikrobus_core.c     | 880 ++++++++++++++++++++++
+ drivers/misc/mikrobus/mikrobus_core.h     | 197 +++++
+ drivers/misc/mikrobus/mikrobus_manifest.c | 475 ++++++++++++
  drivers/misc/mikrobus/mikrobus_manifest.h |  20 +
- drivers/misc/mikrobus/mikrobus_port.c     | 179 ++++++
- include/linux/greybus/greybus_manifest.h  |  47 ++
- 11 files changed, 1601 insertions(+)
+ include/linux/greybus/greybus_manifest.h  |  49 ++
+ 9 files changed, 1644 insertions(+)
  create mode 100644 drivers/misc/mikrobus/Kconfig
  create mode 100644 drivers/misc/mikrobus/Makefile
  create mode 100644 drivers/misc/mikrobus/mikrobus_core.c
  create mode 100644 drivers/misc/mikrobus/mikrobus_core.h
  create mode 100644 drivers/misc/mikrobus/mikrobus_manifest.c
  create mode 100644 drivers/misc/mikrobus/mikrobus_manifest.h
- create mode 100644 drivers/misc/mikrobus/mikrobus_port.c
 
-diff --git a/MAINTAINERS b/MAINTAINERS
-index d53db30d1365..9a049746203f 100644
---- a/MAINTAINERS
-+++ b/MAINTAINERS
-@@ -11402,6 +11402,12 @@ M:	Oliver Neukum <oliver@neukum.org>
- S:	Maintained
- F:	drivers/usb/image/microtek.*
- 
-+MIKROBUS ADDON BOARD DRIVER
-+M:	Vaishnav M A <vaishnav@beagleboard.org>
-+S:	Maintained
-+W:	https://elinux.org/Mikrobus
-+F:	drivers/misc/mikrobus/
-+
- MIPS
- M:	Thomas Bogendoerfer <tsbogend@alpha.franken.de>
- L:	linux-mips@vger.kernel.org
 diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
-index e1b1ba5e2b92..334f0c39d56b 100644
+index ce136d685d14..cb1539f39b30 100644
 --- a/drivers/misc/Kconfig
 +++ b/drivers/misc/Kconfig
 @@ -472,4 +472,5 @@ source "drivers/misc/ocxl/Kconfig"
@@ -93,24 +87,22 @@ index 000000000000..5f42bc4e9410
 +	  will be called mikrobus.ko
 diff --git a/drivers/misc/mikrobus/Makefile b/drivers/misc/mikrobus/Makefile
 new file mode 100644
-index 000000000000..af7256510310
+index 000000000000..982bdec90c09
 --- /dev/null
 +++ b/drivers/misc/mikrobus/Makefile
-@@ -0,0 +1,7 @@
+@@ -0,0 +1,5 @@
 +# SPDX-License-Identifier: GPL-2.0
 +# mikroBUS Core
 +
-+mikrobus-y :=	mikrobus_core.o	mikrobus_manifest.o
-+mikrobus_port-y :=	mikrobus_port.o
 +obj-$(CONFIG_MIKROBUS) += mikrobus.o
-+obj-$(CONFIG_MIKROBUS) += mikrobus_port.o
++mikrobus-y :=	mikrobus_core.o	mikrobus_manifest.o
 \ No newline at end of file
 diff --git a/drivers/misc/mikrobus/mikrobus_core.c b/drivers/misc/mikrobus/mikrobus_core.c
 new file mode 100644
-index 000000000000..f1ccd4b4d5a2
+index 000000000000..7e342e2b079b
 --- /dev/null
 +++ b/drivers/misc/mikrobus/mikrobus_core.c
-@@ -0,0 +1,694 @@
+@@ -0,0 +1,880 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * mikroBUS driver for instantiating add-on
@@ -145,6 +137,9 @@ index 000000000000..f1ccd4b4d5a2
 +#include <linux/pinctrl/pinctrl.h>
 +#include <linux/pinctrl/pinmux.h>
 +#include <linux/pinctrl/consumer.h>
++#include <linux/regulator/fixed.h>
++#include <linux/regulator/machine.h>
++#include <linux/clk-provider.h>
 +#include <linux/greybus/greybus_manifest.h>
 +
 +#include "mikrobus_core.h"
@@ -490,11 +485,14 @@ index 000000000000..f1ccd4b4d5a2
 +					struct board_device_info *dev, char *board_name)
 +{
 +	struct i2c_board_info *i2c;
-+	struct spi_board_info *spi;
++	struct spi_device *spi;
++	struct serdev_device *serdev;
 +	struct platform_device *pdev;
 +	struct gpiod_lookup_table *lookup;
++	struct regulator_consumer_supply regulator;
 +	char devname[MIKROBUS_NAME_SIZE];
 +	int i;
++	u64 *val;
 +
 +	dev_info(&port->dev, "registering device : %s", dev->drv_name);
 +
@@ -520,24 +518,54 @@ index 000000000000..f1ccd4b4d5a2
 +			lookup->table[i].chip_hwnum =
 +			mikrobus_gpio_hwnum_get(port,
 +						lookup->table[i].chip_hwnum);
-+			lookup->table[i].flags = GPIO_ACTIVE_HIGH;
 +		}
 +		gpiod_add_lookup_table(lookup);
 +	}
++	if (dev->regulators) {
++		if (dev->protocol == GREYBUS_PROTOCOL_SPI) {
++			snprintf(devname, sizeof(devname), "%s.%u",
++				dev_name(&port->spi_mstr->dev),
++				port->chip_select[dev->reg]);
++			regulator.dev_name  = kmemdup(devname, MIKROBUS_NAME_SIZE, GFP_KERNEL);
++		} else if (dev->protocol == GREYBUS_PROTOCOL_RAW) {
++			snprintf(devname, sizeof(devname), "%s.%u",
++				 dev->drv_name, dev->reg);
++			regulator.dev_name  = kmemdup(devname, MIKROBUS_NAME_SIZE, GFP_KERNEL);
++		} else
++			regulator.dev_name  = dev->drv_name;
++
++		for (i = 0; i < dev->num_regulators; i++) {
++			val = dev->regulators[i].value.u64_data;
++			regulator.supply = kmemdup(dev->regulators[i].name, MIKROBUS_NAME_SIZE, GFP_KERNEL);
++			dev_info(&port->dev, " adding fixed regulator %llu uv, %s for %s\n",
++				*val, regulator.supply, regulator.dev_name);
++			regulator_register_always_on(0, dev->regulators[i].name, &regulator,
++				     1, *val);
++		}
++	}
 +	switch (dev->protocol) {
 +	case GREYBUS_PROTOCOL_SPI:
-+		spi = kzalloc(sizeof(*spi), GFP_KERNEL);
++		spi = spi_alloc_device(port->spi_mstr);
 +		if (!spi)
 +			return -ENOMEM;
 +		strncpy(spi->modalias, dev->drv_name, sizeof(spi->modalias) - 1);
 +		if (dev->irq)
 +			spi->irq = mikrobus_irq_get(port, dev->irq, dev->irq_type);
 +		if (dev->properties)
-+			spi->properties = dev->properties;
++			device_add_properties(&spi->dev, dev->properties);
 +		spi->chip_select = port->chip_select[dev->reg];
 +		spi->max_speed_hz = dev->max_speed_hz;
 +		spi->mode = dev->mode;
-+		dev->dev_client = (void *) spi_new_device(port->spi_mstr, spi);
++		if (dev->clocks) {
++			for (i = 0; i < dev->num_clocks; i++) {
++				val = dev->clocks[i].value.u64_data;
++				dev_info(&port->dev, " adding fixed clock %s, %llu hz\n",
++					dev->clocks[i].name, *val);
++				//failing: under debug
++				clk_register_fixed_rate(&spi->dev, dev->clocks[i].name, devname, 0, *val);
++			}
++		}
++		dev->dev_client = (void *) spi_add_device(spi);
 +		break;
 +	case GREYBUS_PROTOCOL_I2C:
 +		i2c = kzalloc(sizeof(*i2c), GFP_KERNEL);
@@ -561,7 +589,15 @@ index 000000000000..f1ccd4b4d5a2
 +		platform_device_add(dev->dev_client);
 +		break;
 +	case GREYBUS_PROTOCOL_UART:
-+		dev_info(&port->dev, "serdev devices support not yet added");
++		serdev = serdev_device_alloc(port->ser_ctrl);
++		if (!serdev)
++			return -ENOMEM;
++		strncpy(serdev->modalias, dev->drv_name, sizeof(serdev->modalias) - 1);
++		if (dev->properties)
++			device_add_properties(&serdev->dev, dev->properties);
++		dev->dev_client = serdev;
++		serdev_device_add(serdev);
++		break;
 +	break;
 +	default:
 +	return -EINVAL;
@@ -589,7 +625,7 @@ index 000000000000..f1ccd4b4d5a2
 +		platform_device_unregister((struct platform_device  *)dev->dev_client);
 +		break;
 +	case GREYBUS_PROTOCOL_UART:
-+		dev_err(&port->dev, "serdev devices support not yet added");
++		serdev_device_remove((struct serdev_device  *)dev->dev_client);
 +		break;
 +	}
 +}
@@ -764,6 +800,144 @@ index 000000000000..f1ccd4b4d5a2
 +}
 +EXPORT_SYMBOL_GPL(mikrobus_port_delete);
 +
++static int mikrobus_port_probe_pinctrl_setup(struct mikrobus_port *port)
++{
++	struct pinctrl_state *state;
++	struct device *dev = port->dev.parent;
++	int retval, i;
++
++	state = pinctrl_lookup_state(port->pinctrl, PINCTRL_STATE_DEFAULT);
++	if (!IS_ERR(state)) {
++		retval = pinctrl_select_state(port->pinctrl, state);
++		if (retval != 0) {
++			dev_err(dev, "Failed to select state %s\n",
++				PINCTRL_STATE_DEFAULT);
++			return retval;
++		}
++	} else {
++		dev_err(dev, "failed to find state %s\n",
++			PINCTRL_STATE_DEFAULT);
++		return PTR_ERR(state);
++	}
++
++	for (i = 0; i < MIKROBUS_NUM_PINCTRL_STATE; i++) {
++		port->pinctrl_selected[i] =
++				kmalloc(MIKROBUS_PINCTRL_NAME_SIZE, GFP_KERNEL);
++		sprintf(port->pinctrl_selected[i], "%s_%s",
++			MIKROBUS_PINCTRL_STR[i], PINCTRL_STATE_DEFAULT);
++	}
++
++	retval = mikrobus_port_pinctrl_select(port);
++	if (retval)
++		dev_err(dev, "failed to select pinctrl states [%d]", retval);
++	return retval;
++}
++
++static int mikrobus_port_probe(struct platform_device *pdev)
++{
++	struct mikrobus_port *port;
++	struct device *dev = &pdev->dev;
++	struct device_node *i2c_adap_np;
++	struct device_node *uart_np;
++	int retval;
++	u32 val;
++
++	port = kzalloc(sizeof(*port), GFP_KERNEL);
++	if (!port)
++		return -ENOMEM;
++
++	i2c_adap_np = of_parse_phandle(dev->of_node, "i2c-adapter", 0);
++	if (!i2c_adap_np) {
++		dev_err(dev, "cannot parse i2c-adapter\n");
++		retval = -ENODEV;
++		goto err_port;
++	}
++	port->i2c_adap = of_find_i2c_adapter_by_node(i2c_adap_np);
++	of_node_put(i2c_adap_np);
++	retval = device_property_read_u32(dev, "spi-master", &val);
++	if (retval) {
++		dev_err(dev, "failed to get spi-master [%d]\n", retval);
++		goto err_port;
++	}
++	port->spi_mstr = spi_busnum_to_master(val);
++	retval = device_property_read_u32_array(dev, "spi-cs",
++						port->chip_select, 2);
++	if (retval) {
++		dev_err(dev, "failed to get spi-cs [%d]\n", retval);
++		goto err_port;
++	}
++	uart_np = of_parse_phandle(dev->of_node, "uart", 0);
++	if (!uart_np) {
++		dev_err(dev, "cannot parse uart\n");
++		retval = -ENODEV;
++		goto err_port;
++	}
++	port->ser_ctrl = of_find_serdev_controller_by_node(uart_np);
++	of_node_put(uart_np);
++	//port->pwm = devm_pwm_get(dev, NULL);
++	//if (IS_ERR(port->pwm)) {
++	//	retval = PTR_ERR(port->pwm);
++	//	if (retval != -EPROBE_DEFER)
++	//		dev_err(dev, "failed to request PWM device [%d]\n",
++	//			retval);
++	//	goto err_port;
++	//}
++	port->gpios = gpiod_get_array(dev, "mikrobus", GPIOD_OUT_LOW);
++	if (IS_ERR(port->gpios)) {
++		retval = PTR_ERR(port->gpios);
++		dev_err(dev, "failed to get gpio array [%d]\n", retval);
++		goto err_port;
++	}
++	port->pinctrl = devm_pinctrl_get(dev);
++	if (IS_ERR(port->pinctrl)) {
++		retval = PTR_ERR(port->pinctrl);
++		dev_err(dev, "failed to get pinctrl [%d]\n", retval);
++		goto err_port;
++	}
++	port->dev.parent = dev;
++	port->dev.of_node = pdev->dev.of_node;
++
++	retval = mikrobus_port_probe_pinctrl_setup(port);
++	if (retval) {
++		dev_err(dev, "failed to setup pinctrl [%d]\n", retval);
++		goto err_port;
++	}
++
++	retval = mikrobus_port_register(port);
++	if (retval) {
++		pr_err("port : can't register port [%d]\n", retval);
++		goto err_port;
++	}
++	platform_set_drvdata(pdev, port);
++	return 0;
++err_port:
++	kfree(port);
++	return retval;
++}
++
++static int mikrobus_port_remove(struct platform_device *pdev)
++{
++	struct mikrobus_port	*port = platform_get_drvdata(pdev);
++
++	mikrobus_port_delete(port);
++	return 0;
++}
++
++static const struct of_device_id mikrobus_port_of_match[] = {
++	{.compatible = "linux,mikrobus"},
++	{},
++};
++MODULE_DEVICE_TABLE(of, mikrobus_port_of_match);
++
++static struct platform_driver mikrobus_port_driver = {
++	.probe = mikrobus_port_probe,
++	.remove = mikrobus_port_remove,
++	.driver = {
++		.name = "mikrobus",
++		.of_match_table = of_match_ptr(mikrobus_port_of_match),
++	},
++};
++
 +static int __init mikrobus_init(void)
 +{
 +	int retval;
@@ -784,7 +958,10 @@ index 000000000000..f1ccd4b4d5a2
 +		__mikrobus_first_dynamic_bus_num = retval + 1;
 +
 +	is_registered = true;
-+	return 0;
++	retval = platform_driver_register(&mikrobus_port_driver);
++	if (retval)
++		pr_err("driver register failed [%d]\n", retval);
++	return retval;
 +
 +class_err:
 +	bus_unregister(&mikrobus_bus_type);
@@ -796,6 +973,7 @@ index 000000000000..f1ccd4b4d5a2
 +
 +static void __exit mikrobus_exit(void)
 +{
++	platform_driver_unregister(&mikrobus_port_driver);
 +	bus_unregister(&mikrobus_bus_type);
 +	class_compat_unregister(mikrobus_port_compat_class);
 +	idr_destroy(&mikrobus_port_idr);
@@ -807,10 +985,10 @@ index 000000000000..f1ccd4b4d5a2
 +MODULE_LICENSE("GPL v2");
 diff --git a/drivers/misc/mikrobus/mikrobus_core.h b/drivers/misc/mikrobus/mikrobus_core.h
 new file mode 100644
-index 000000000000..03894ad6d48f
+index 000000000000..9ac1e6248018
 --- /dev/null
 +++ b/drivers/misc/mikrobus/mikrobus_core.h
-@@ -0,0 +1,190 @@
+@@ -0,0 +1,197 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * mikroBUS Driver for instantiating add-on
@@ -859,12 +1037,14 @@ index 000000000000..03894ad6d48f
 +
 +enum mikrobus_property_type {
 +	MIKROBUS_PROPERTY_TYPE_MIKROBUS = 0x00,
-+	MIKROBUS_PROPERTY_TYPE_LINK	= 0x01,
++	MIKROBUS_PROPERTY_TYPE_PROPERTY	= 0x01,
 +	MIKROBUS_PROPERTY_TYPE_GPIO	= 0x02,
 +	MIKROBUS_PROPERTY_TYPE_U8	= 0x03,
 +	MIKROBUS_PROPERTY_TYPE_U16	= 0x04,
 +	MIKROBUS_PROPERTY_TYPE_U32	= 0x05,
 +	MIKROBUS_PROPERTY_TYPE_U64	= 0x06,
++	MIKROBUS_PROPERTY_TYPE_REGULATOR	= 0x07,
++	MIKROBUS_PROPERTY_TYPE_CLOCK	= 0x08,
 +};
 +
 +enum mikrobus_pin {
@@ -924,9 +1104,13 @@ index 000000000000..03894ad6d48f
 +struct board_device_info {
 +	struct gpiod_lookup_table *gpio_lookup;
 +	struct property_entry *properties;
++	struct property_entry *regulators;
++	struct property_entry *clocks;
 +	struct list_head links;
 +	unsigned short num_gpio_resources;
 +	unsigned short num_properties;
++	unsigned short num_regulators;
++	unsigned short num_clocks;
 +	unsigned short protocol;
 +	unsigned short reg;
 +	unsigned int mode;
@@ -979,6 +1163,7 @@ index 000000000000..03894ad6d48f
 +	struct addon_board_info *board;
 +	struct i2c_adapter *i2c_adap;
 +	struct spi_master *spi_mstr;
++	struct serdev_controller *ser_ctrl;
 +	struct nvmem_device *eeprom;
 +	struct gpio_descs *gpios;
 +	struct pwm_device *pwm;
@@ -1003,10 +1188,10 @@ index 000000000000..03894ad6d48f
 +#endif /* __MIKROBUS_H */
 diff --git a/drivers/misc/mikrobus/mikrobus_manifest.c b/drivers/misc/mikrobus/mikrobus_manifest.c
 new file mode 100644
-index 000000000000..629720b4c0fa
+index 000000000000..9cacc3d36d4e
 --- /dev/null
 +++ b/drivers/misc/mikrobus/mikrobus_manifest.c
-@@ -0,0 +1,440 @@
+@@ -0,0 +1,475 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * mikroBUS manifest parsing, an
@@ -1276,8 +1461,12 @@ index 000000000000..629720b4c0fa
 +	val_u8 = kmemdup(&desc_property->value, desc_property->length, GFP_KERNEL);
 +	if (prop_type == MIKROBUS_PROPERTY_TYPE_GPIO)
 +		board_dev->num_gpio_resources = desc_property->length;
-+	else if (prop_type == MIKROBUS_PROPERTY_TYPE_LINK)
++	else if (prop_type == MIKROBUS_PROPERTY_TYPE_PROPERTY)
 +		board_dev->num_properties = desc_property->length;
++	else if (prop_type == MIKROBUS_PROPERTY_TYPE_REGULATOR)
++		board_dev->num_regulators = desc_property->length;
++	else if (prop_type == MIKROBUS_PROPERTY_TYPE_CLOCK)
++		board_dev->num_clocks = desc_property->length;
 +	return val_u8;
 +}
 +
@@ -1290,6 +1479,9 @@ index 000000000000..629720b4c0fa
 +	struct manifest_desc *descriptor;
 +	u8 *gpio_desc_link;
 +	u8 *prop_link;
++	u8 *reg_link;
++	u8 *clock_link;
++	u8 *gpioval;
 +	int retval;
 +	int i;
 +
@@ -1312,7 +1504,7 @@ index 000000000000..629720b4c0fa
 +
 +	if (dev_desc->prop_link > 0) {
 +		prop_link = mikrobus_property_link_get(board, dev_desc->prop_link,
-+				board_dev, MIKROBUS_PROPERTY_TYPE_LINK);
++				board_dev, MIKROBUS_PROPERTY_TYPE_PROPERTY);
 +		if (!prop_link) {
 +			retval = -ENOENT;
 +			goto err_free_board_dev;
@@ -1344,7 +1536,9 @@ index 000000000000..629720b4c0fa
 +					continue;
 +				desc_property = descriptor->data;
 +				if (desc_property->id == gpio_desc_link[i]) {
-+					lookup->table[i].chip_hwnum = *desc_property->value;
++					gpioval = desc_property->value;
++					lookup->table[i].chip_hwnum = gpioval[0];
++					lookup->table[i].flags = gpioval[1];
 +					lookup->table[i].con_id =
 +					mikrobus_string_get(board,
 +							desc_property->propname_stringid);
@@ -1353,6 +1547,32 @@ index 000000000000..629720b4c0fa
 +			}
 +		}
 +		board_dev->gpio_lookup = lookup;
++	}
++
++	if (dev_desc->reg_link > 0) {
++		reg_link = mikrobus_property_link_get(board, dev_desc->reg_link,
++				board_dev, MIKROBUS_PROPERTY_TYPE_REGULATOR);
++		if (!reg_link) {
++			retval = -ENOENT;
++			goto err_free_board_dev;
++		}
++		pr_info("device %d, number of regulators=%d", board_dev->id,
++								board_dev->num_regulators);
++		board_dev->regulators = mikrobus_property_entry_get(board, reg_link,
++									board_dev->num_regulators);
++	}
++
++	if (dev_desc->clock_link > 0) {
++		clock_link = mikrobus_property_link_get(board, dev_desc->clock_link,
++				board_dev, MIKROBUS_PROPERTY_TYPE_CLOCK);
++		if (!clock_link) {
++			retval = -ENOENT;
++			goto err_free_board_dev;
++		}
++		pr_info("device %d, number of clocks=%d", board_dev->id,
++								board_dev->num_clocks);
++		board_dev->clocks = mikrobus_property_entry_get(board, clock_link,
++									board_dev->num_clocks);
 +	}
 +	list_add_tail(&board_dev->links, &board->devices);
 +	return 0;
@@ -1398,7 +1618,7 @@ index 000000000000..629720b4c0fa
 +	manifest_size = le16_to_cpu(header->size);
 +
 +	if (manifest_size != size) {
-+		pr_err("invalid manifest size(%zu < %zu)", size, manifest_size);
++		pr_err("invalid manifest size(%zu < %u)", size, manifest_size);
 +		return -EINVAL;
 +	}
 +
@@ -1414,7 +1634,7 @@ index 000000000000..629720b4c0fa
 +	while (size) {
 +		desc_size = board_descriptor_add(board, desc, size);
 +		if (desc_size < 0) {
-+			pr_err("invalid manifest descriptor, size: %zu", desc_size);
++			pr_err("invalid manifest descriptor, size: %u", desc_size);
 +			return -EINVAL;
 +		}
 +		desc = (void *)desc + desc_size;
@@ -1473,193 +1693,8 @@ index 000000000000..36b64b2093f5
 +size_t mikrobus_manifest_header_validate(void *data, size_t size);
 +
 +#endif /* __MIKROBUS_MANIFEST_H */
-diff --git a/drivers/misc/mikrobus/mikrobus_port.c b/drivers/misc/mikrobus/mikrobus_port.c
-new file mode 100644
-index 000000000000..d54520b98053
---- /dev/null
-+++ b/drivers/misc/mikrobus/mikrobus_port.c
-@@ -0,0 +1,179 @@
-+// SPDX-License-Identifier: GPL-2.0
-+/*
-+ * mikroBUS driver for adding mikrobus port from device tree
-+ *
-+ * Copyright 2020 Vaishnav M A, BeagleBoard.org Foundation.
-+ */
-+#define pr_fmt(fmt) "mikrobus_port:%s: " fmt, __func__
-+
-+#include <linux/err.h>
-+#include <linux/errno.h>
-+#include <linux/init.h>
-+#include <linux/jump_label.h>
-+#include <linux/kernel.h>
-+#include <linux/module.h>
-+#include <linux/device.h>
-+#include <linux/of.h>
-+#include <linux/of_device.h>
-+#include <linux/of_gpio.h>
-+#include <linux/i2c.h>
-+#include <linux/gpio.h>
-+#include <linux/pwm.h>
-+#include <linux/spi/spi.h>
-+#include <linux/serdev.h>
-+#include <linux/pinctrl/pinctrl.h>
-+#include <linux/pinctrl/pinmux.h>
-+#include <linux/pinctrl/consumer.h>
-+
-+#include "mikrobus_core.h"
-+
-+static int mikrobus_port_probe_pinctrl_setup(struct mikrobus_port *port)
-+{
-+	struct pinctrl_state *state;
-+	struct device *dev = port->dev.parent;
-+	int retval, i;
-+
-+	state = pinctrl_lookup_state(port->pinctrl, PINCTRL_STATE_DEFAULT);
-+	if (!IS_ERR(state)) {
-+		retval = pinctrl_select_state(port->pinctrl, state);
-+		if (retval != 0) {
-+			dev_err(dev, "Failed to select state %s\n",
-+				PINCTRL_STATE_DEFAULT);
-+			return retval;
-+		}
-+	} else {
-+		dev_err(dev, "failed to find state %s\n",
-+			PINCTRL_STATE_DEFAULT);
-+		return PTR_ERR(state);
-+	}
-+
-+	for (i = 0; i < MIKROBUS_NUM_PINCTRL_STATE; i++) {
-+		port->pinctrl_selected[i] =
-+				kmalloc(MIKROBUS_PINCTRL_NAME_SIZE, GFP_KERNEL);
-+		sprintf(port->pinctrl_selected[i], "%s_%s",
-+			MIKROBUS_PINCTRL_STR[i], PINCTRL_STATE_DEFAULT);
-+	}
-+
-+	retval = mikrobus_port_pinctrl_select(port);
-+	if (retval)
-+		dev_err(dev, "failed to select pinctrl states [%d]", retval);
-+	return retval;
-+}
-+
-+static int mikrobus_port_probe(struct platform_device *pdev)
-+{
-+	struct mikrobus_port *port;
-+	struct device *dev = &pdev->dev;
-+	struct device_node *i2c_adap_np;
-+	int retval;
-+	u32 val;
-+
-+	port = kzalloc(sizeof(*port), GFP_KERNEL);
-+	if (!port)
-+		return -ENOMEM;
-+
-+	i2c_adap_np = of_parse_phandle(dev->of_node, "i2c-adapter", 0);
-+	if (!i2c_adap_np) {
-+		dev_err(dev, "cannot parse i2c-adapter\n");
-+		retval = -ENODEV;
-+		goto err_port;
-+	}
-+	port->i2c_adap = of_find_i2c_adapter_by_node(i2c_adap_np);
-+	of_node_put(i2c_adap_np);
-+	retval = device_property_read_u32(dev, "spi-master", &val);
-+	if (retval) {
-+		dev_err(dev, "failed to get spi-master [%d]\n", retval);
-+		goto err_port;
-+	}
-+	port->spi_mstr = spi_busnum_to_master(val);
-+	retval = device_property_read_u32_array(dev, "spi-cs",
-+						port->chip_select, 2);
-+	if (retval) {
-+		dev_err(dev, "failed to get spi-cs [%d]\n", retval);
-+		goto err_port;
-+	}
-+	//port->pwm = devm_pwm_get(dev, NULL);
-+	//if (IS_ERR(port->pwm)) {
-+	//	retval = PTR_ERR(port->pwm);
-+	//	if (retval != -EPROBE_DEFER)
-+	//		dev_err(dev, "failed to request PWM device [%d]\n",
-+	//			retval);
-+	//	goto err_port;
-+	//}
-+	port->gpios = gpiod_get_array(dev, "mikrobus", GPIOD_OUT_LOW);
-+	if (IS_ERR(port->gpios)) {
-+		retval = PTR_ERR(port->gpios);
-+		dev_err(dev, "failed to get gpio array [%d]\n", retval);
-+		goto err_port;
-+	}
-+	port->pinctrl = devm_pinctrl_get(dev);
-+	if (IS_ERR(port->pinctrl)) {
-+		retval = PTR_ERR(port->pinctrl);
-+		dev_err(dev, "failed to get pinctrl [%d]\n", retval);
-+		goto err_port;
-+	}
-+	port->dev.parent = dev;
-+	port->dev.of_node = pdev->dev.of_node;
-+
-+	retval = mikrobus_port_probe_pinctrl_setup(port);
-+	if (retval) {
-+		dev_err(dev, "failed to setup pinctrl [%d]\n", retval);
-+		goto err_port;
-+	}
-+
-+	retval = mikrobus_port_register(port);
-+	if (retval) {
-+		pr_err("port : can't register port [%d]\n", retval);
-+		goto err_port;
-+	}
-+	platform_set_drvdata(pdev, port);
-+	return 0;
-+err_port:
-+	kfree(port);
-+	return retval;
-+}
-+
-+static int mikrobus_port_remove(struct platform_device *pdev)
-+{
-+	struct mikrobus_port	*port = platform_get_drvdata(pdev);
-+
-+	mikrobus_port_delete(port);
-+	return 0;
-+}
-+
-+static const struct of_device_id mikrobus_port_of_match[] = {
-+	{.compatible = "linux,mikrobus"},
-+	{},
-+};
-+MODULE_DEVICE_TABLE(of, mikrobus_port_of_match);
-+
-+static struct platform_driver mikrobus_port_driver = {
-+	.probe = mikrobus_port_probe,
-+	.remove = mikrobus_port_remove,
-+	.driver = {
-+		.name = "mikrobus",
-+		.of_match_table = of_match_ptr(mikrobus_port_of_match),
-+	},
-+};
-+
-+static int __init
-+mikrobus_port_init_driver(void)
-+{
-+	int retval;
-+
-+	retval = platform_driver_register(&mikrobus_port_driver);
-+	if (retval)
-+		pr_err("driver register failed [%d]\n", retval);
-+	return retval;
-+}
-+subsys_initcall(mikrobus_port_init_driver);
-+
-+static void __exit mikrobus_port_exit_driver(void)
-+{
-+	platform_driver_unregister(&mikrobus_port_driver);
-+}
-+module_exit(mikrobus_port_exit_driver);
-+
-+MODULE_AUTHOR("Vaishnav M A <vaishnav@beagleboard.org>");
-+MODULE_DESCRIPTION("mikroBUS port module");
-+MODULE_LICENSE("GPL");
 diff --git a/include/linux/greybus/greybus_manifest.h b/include/linux/greybus/greybus_manifest.h
-index 6e62fe478712..821661ea7f01 100644
+index 6e62fe478712..50d5a5fd3d51 100644
 --- a/include/linux/greybus/greybus_manifest.h
 +++ b/include/linux/greybus/greybus_manifest.h
 @@ -23,6 +23,9 @@ enum greybus_descriptor_type {
@@ -1672,7 +1707,7 @@ index 6e62fe478712..821661ea7f01 100644
  };
  
  enum greybus_protocol {
-@@ -151,6 +154,47 @@ struct greybus_descriptor_cport {
+@@ -151,6 +154,49 @@ struct greybus_descriptor_cport {
  	__u8	protocol_id;	/* enum greybus_protocol */
  } __packed;
  
@@ -1714,13 +1749,15 @@ index 6e62fe478712..821661ea7f01 100644
 +	__u8 mode;
 +	__u8 prop_link;
 +	__u8 gpio_link;
-+	__u8 pad[3];
++	__u8 reg_link;
++	__u8 clock_link;
++	__u8 pad[1];
 +} __packed;
 +
  struct greybus_descriptor_header {
  	__le16	size;
  	__u8	type;		/* enum greybus_descriptor_type */
-@@ -164,6 +208,9 @@ struct greybus_descriptor {
+@@ -164,6 +210,9 @@ struct greybus_descriptor {
  		struct greybus_descriptor_interface	interface;
  		struct greybus_descriptor_bundle	bundle;
  		struct greybus_descriptor_cport		cport;
