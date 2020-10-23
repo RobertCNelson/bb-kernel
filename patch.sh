@@ -289,7 +289,7 @@ local_patch () {
 }
 
 #external_git
-#can_isotp
+can_isotp
 #rt
 ti_pm_firmware
 #beagleboard_dtbs
@@ -385,6 +385,7 @@ drivers () {
 	dir 'drivers/mikrobus'
 	dir 'drivers/serdev'
 	dir 'drivers/iio'
+	dir 'drivers/fb_ssd1306'
 }
 
 soc () {
