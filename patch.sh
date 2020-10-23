@@ -174,62 +174,6 @@ rt () {
 	dir 'rt'
 }
 
-wireguard_fail () {
-	echo "WireGuard failed"
-	exit 2
-}
-
-wireguard () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ ! -d ./WireGuard ] ; then
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
-			cd ./WireGuard
-				wireguard_hash=$(git rev-parse HEAD)
-			cd -
-		else
-			rm -rf ./WireGuard || true
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
-			cd ./WireGuard
-				wireguard_hash=$(git rev-parse HEAD)
-			cd -
-		fi
-
-		#cd ./WireGuard/
-		#${git_bin}  revert --no-edit xyz
-		#cd ../
-
-		cd ./KERNEL/
-
-		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
-
-		${git_bin} add .
-
-		#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=v5.4.34&id=f8c60f7a00516820589c4c9da5614e4b7f4d0b2f
-		sed -i -e 's:skb_reset_tc:skb_reset_redirect:g' ./net/wireguard/queueing.h
-		sed -i -e 's:skb_reset_tc:skb_reset_redirect:g' ./net/wireguard/compat/compat.h
-
-		${git_bin} commit -a -m 'merge: WireGuard' -m "https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/WireGuard/
-		echo "WIREGUARD: https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" > ../patches/git/WIREGUARD
-
-		rm -rf ../WireGuard/ || true
-
-		${git_bin} reset --hard HEAD^
-
-		start_cleanup
-
-		${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
-
-		wdir="WireGuard"
-		number=1
-		cleanup
-	fi
-
-	dir 'WireGuard'
-}
-
 ti_pm_firmware () {
 	#http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y-next
 	#regenerate="enable"
@@ -278,16 +222,12 @@ dtb_makefile_append_omap4 () {
 	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
 
-dtb_makefile_append_am5 () {
-	sed -i -e 's:am57xx-beagle-x15.dtb \\:am57xx-beagle-x15.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
 
 beagleboard_dtbs () {
-	branch="v5.4.x"
+	branch="v5.8.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -321,8 +261,6 @@ beagleboard_dtbs () {
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
-		device="am5729-beagleboneai.dtb" ; dtb_makefile_append_am5
-
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
 		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $branch" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
@@ -353,9 +291,8 @@ local_patch () {
 #external_git
 can_isotp
 rt
-wireguard
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -392,58 +329,6 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.8.15"
-
-	subsystem="greybus"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.6.19"
-
-	subsystem="exfat"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.5.19"
-
-	subsystem="counter"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/bus/* ./drivers/bus/
-		cp -rv ~/linux-src/drivers/counter/* ./drivers/counter/
-		cp -rv ~/linux-src/drivers/pwm/* ./drivers/pwm/
-		cp -v ~/linux-src/include/linux/counter.h ./include/linux/counter.h
-		cp -v ~/linux-src/include/linux/platform_data/ti-sysc.h ./include/linux/platform_data/ti-sysc.h
-		cp -v ~/linux-src/include/linux/mfd/stm32-timers.h ./include/linux/mfd/stm32-timers.h
-		rm -rf ./drivers/pwm/pwm-tipwmss.c || true
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
 	backport_tag="v5.4.18"
 
 	subsystem="brcm80211"
@@ -452,7 +337,7 @@ backports () {
 		pre_backports
 
 		cp -rv ~/linux-src/drivers/net/wireless/broadcom/brcm80211/* ./drivers/net/wireless/broadcom/brcm80211/
-		#cp -v ~/linux-src/include/linux/mmc/sdio_ids.h ./include/linux/mmc/sdio_ids.h
+		cp -v ~/linux-src/include/linux/mmc/sdio_ids.h ./include/linux/mmc/sdio_ids.h
 		#cp -v ~/linux-src/include/linux/firmware.h ./include/linux/firmware.h
 
 		post_backports
@@ -463,6 +348,8 @@ backports () {
 
 	#regenerate="enable"
 	dir 'cypress/brcmfmac'
+	#exit 2
+	dir 'cypress/fixes'
 }
 
 reverts () {
@@ -486,17 +373,19 @@ reverts () {
 
 drivers () {
 	dir 'drivers/ar1021_i2c'
-	dir 'drivers/sound'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
 	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
-	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
+	dir 'drivers/mikrobus'
+	dir 'drivers/serdev'
+	dir 'drivers/iio'
+	dir 'drivers/fb_ssd1306'
 }
 
 soc () {
@@ -504,21 +393,20 @@ soc () {
 #	dir 'soc/imx/wandboard'
 #	dir 'soc/imx/imx7'
 
-#	dir 'soc/ti/panda'
+	dir 'soc/ti/panda'
 	dir 'bootup_hacks'
 }
 
 ###
-backports
+#backports
 #reverts
 drivers
 soc
-dir 'fixes'
 
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.6"
+		backport_tag="v5.6-rc4"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
