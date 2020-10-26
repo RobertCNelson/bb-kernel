@@ -34,10 +34,6 @@ cat_files () {
 		cat ./patches/git/BBDTBS >> ${wfile}
 	fi
 
-	if [ -f ./patches/git/CAN-ISOTP ] ; then
-		cat ./patches/git/CAN-ISOTP >> ${wfile}
-	fi
-
 	if [ -f ./patches/git/RT ] ; then
 		cat ./patches/git/RT >> ${wfile}
 	fi
