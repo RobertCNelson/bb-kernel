@@ -1,9 +1,9 @@
-From 63523d870035c1ae5798c323d50826461fc6f76d Mon Sep 17 00:00:00 2001
+From d62322654dbfe710b9c0138cd67812a67c6deb07 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 26 Oct 2020 10:33:49 -0500
+Date: Thu, 29 Oct 2020 10:45:58 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-5.9.1-rt19.patch.xz
+patch-5.9.1-rt20.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -77,7 +77,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/x86/mm/highmem_32.c                      |   10 +-
  arch/x86/mm/iomap_32.c                        |   15 +-
  arch/xtensa/include/asm/spinlock_types.h      |    4 -
- block/blk-mq.c                                |   10 +-
+ block/blk-mq.c                                |  104 +-
  crypto/cryptd.c                               |   19 +-
  drivers/base/core.c                           |   46 +-
  drivers/block/zram/zram_drv.c                 |   41 +-
@@ -122,6 +122,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/proc/base.c                                |    3 +-
  fs/proc/proc_sysctl.c                         |    2 +-
  include/asm-generic/preempt.h                 |    3 +
+ include/linux/blkdev.h                        |    2 +-
  include/linux/bottom_half.h                   |    8 +-
  include/linux/console.h                       |    7 +
  include/linux/cpuhotplug.h                    |    1 +
@@ -263,9 +264,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  lib/nmi_backtrace.c                           |    6 -
  lib/scatterlist.c                             |    2 +-
  lib/smp_processor_id.c                        |    5 +
+ lib/test_lockup.c                             |   16 +
  mm/Kconfig                                    |    2 +-
  mm/highmem.c                                  |    5 +-
- mm/memcontrol.c                               |   64 +-
+ mm/memcontrol.c                               |   66 +-
  mm/page_alloc.c                               |  180 +-
  mm/shmem.c                                    |   31 +-
  mm/slab.c                                     |   90 +-
@@ -290,7 +292,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/xfrm/xfrm_state.c                         |    9 +-
  scripts/gdb/linux/dmesg.py                    |  147 +-
  scripts/gdb/linux/utils.py                    |    7 +
- 283 files changed, 10855 insertions(+), 3474 deletions(-)
+ 285 files changed, 10904 insertions(+), 3539 deletions(-)
  create mode 100644 include/linux/mutex_rt.h
  create mode 100644 include/linux/rbtree_type.h
  create mode 100644 include/linux/rwlock_rt.h
@@ -2840,35 +2842,160 @@ index 64c9389254f1..dc846323b1cd 100644
  #include <asm-generic/qrwlock_types.h>
  
 diff --git a/block/blk-mq.c b/block/blk-mq.c
-index cdced4aca2e8..99d2fb51e0e8 100644
+index cdced4aca2e8..1f9b312595a1 100644
 --- a/block/blk-mq.c
 +++ b/block/blk-mq.c
-@@ -604,6 +604,7 @@ static void blk_mq_trigger_softirq(struct request *rq)
- 	if (list->next == &rq->ipi_list)
- 		raise_softirq_irqoff(BLOCK_SOFTIRQ);
- 	local_irq_restore(flags);
-+	preempt_check_resched_rt();
+@@ -41,7 +41,7 @@
+ #include "blk-mq-sched.h"
+ #include "blk-rq-qos.h"
+ 
+-static DEFINE_PER_CPU(struct list_head, blk_cpu_done);
++static DEFINE_PER_CPU(struct llist_head, blk_cpu_done);
+ 
+ static void blk_mq_poll_stats_start(struct request_queue *q);
+ static void blk_mq_poll_stats_fn(struct blk_stat_callback *cb);
+@@ -565,80 +565,32 @@ void blk_mq_end_request(struct request *rq, blk_status_t error)
+ }
+ EXPORT_SYMBOL(blk_mq_end_request);
+ 
+-/*
+- * Softirq action handler - move entries to local list and loop over them
+- * while passing them to the queue registered handler.
+- */
+-static __latent_entropy void blk_done_softirq(struct softirq_action *h)
++static void blk_complete_reqs(struct llist_head *cpu_list)
+ {
+-	struct list_head *cpu_list, local_list;
+-
+-	local_irq_disable();
+-	cpu_list = this_cpu_ptr(&blk_cpu_done);
+-	list_replace_init(cpu_list, &local_list);
+-	local_irq_enable();
++	struct llist_node *entry;
++	struct request *rq, *rq_next;
+ 
+-	while (!list_empty(&local_list)) {
+-		struct request *rq;
++	entry = llist_del_all(cpu_list);
++	entry = llist_reverse_order(entry);
+ 
+-		rq = list_entry(local_list.next, struct request, ipi_list);
+-		list_del_init(&rq->ipi_list);
++	llist_for_each_entry_safe(rq, rq_next, entry, ipi_list)
+ 		rq->q->mq_ops->complete(rq);
+-	}
+ }
+ 
+-static void blk_mq_trigger_softirq(struct request *rq)
++static __latent_entropy void blk_done_softirq(struct softirq_action *h)
+ {
+-	struct list_head *list;
+-	unsigned long flags;
+-
+-	local_irq_save(flags);
+-	list = this_cpu_ptr(&blk_cpu_done);
+-	list_add_tail(&rq->ipi_list, list);
+-
+-	/*
+-	 * If the list only contains our just added request, signal a raise of
+-	 * the softirq.  If there are already entries there, someone already
+-	 * raised the irq but it hasn't run yet.
+-	 */
+-	if (list->next == &rq->ipi_list)
+-		raise_softirq_irqoff(BLOCK_SOFTIRQ);
+-	local_irq_restore(flags);
++	blk_complete_reqs(this_cpu_ptr(&blk_cpu_done));
  }
  
  static int blk_softirq_cpu_dead(unsigned int cpu)
-@@ -617,6 +618,7 @@ static int blk_softirq_cpu_dead(unsigned int cpu)
- 			 this_cpu_ptr(&blk_cpu_done));
- 	raise_softirq_irqoff(BLOCK_SOFTIRQ);
- 	local_irq_enable();
-+	preempt_check_resched_rt();
- 
+ {
+-	/*
+-	 * If a CPU goes away, splice its entries to the current CPU
+-	 * and trigger a run of the softirq
+-	 */
+-	local_irq_disable();
+-	list_splice_init(&per_cpu(blk_cpu_done, cpu),
+-			 this_cpu_ptr(&blk_cpu_done));
+-	raise_softirq_irqoff(BLOCK_SOFTIRQ);
+-	local_irq_enable();
+-
++	blk_complete_reqs(&per_cpu(blk_cpu_done, cpu));
  	return 0;
  }
-@@ -645,7 +647,7 @@ static inline bool blk_mq_complete_need_ipi(struct request *rq)
- {
- 	int cpu = raw_smp_processor_id();
  
--	if (!IS_ENABLED(CONFIG_SMP) ||
-+	if (!IS_ENABLED(CONFIG_SMP) || IS_ENABLED(CONFIG_PREEMPT_RT) ||
+-
+ static void __blk_mq_complete_request_remote(void *data)
+ {
+-	struct request *rq = data;
+-
+-	/*
+-	 * For most of single queue controllers, there is only one irq vector
+-	 * for handling I/O completion, and the only irq's affinity is set
+-	 * to all possible CPUs.  On most of ARCHs, this affinity means the irq
+-	 * is handled on one specific CPU.
+-	 *
+-	 * So complete I/O requests in softirq context in case of single queue
+-	 * devices to avoid degrading I/O performance due to irqsoff latency.
+-	 */
+-	if (rq->q->nr_hw_queues == 1)
+-		blk_mq_trigger_softirq(rq);
+-	else
+-		rq->q->mq_ops->complete(rq);
++	__raise_softirq_irqoff(BLOCK_SOFTIRQ);
+ }
+ 
+ static inline bool blk_mq_complete_need_ipi(struct request *rq)
+@@ -648,6 +600,14 @@ static inline bool blk_mq_complete_need_ipi(struct request *rq)
+ 	if (!IS_ENABLED(CONFIG_SMP) ||
  	    !test_bit(QUEUE_FLAG_SAME_COMP, &rq->q->queue_flags))
  		return false;
++	/*
++	 * With force threaded interrupts enabled, raising softirq from an SMP
++	 * function call will always result in waking the ksoftirqd thread.
++	 * This is probably worse than completing the request on a different
++	 * cache domain.
++	 */
++	if (force_irqthreads)
++		return false;
  
-@@ -1603,14 +1605,14 @@ static void __blk_mq_delay_run_hw_queue(struct blk_mq_hw_ctx *hctx, bool async,
+ 	/* same CPU or cache domain?  Complete locally */
+ 	if (cpu == rq->mq_ctx->cpu ||
+@@ -661,6 +621,7 @@ static inline bool blk_mq_complete_need_ipi(struct request *rq)
+ 
+ bool blk_mq_complete_request_remote(struct request *rq)
+ {
++	struct llist_head *cpu_list;
+ 	WRITE_ONCE(rq->state, MQ_RQ_COMPLETE);
+ 
+ 	/*
+@@ -671,14 +632,21 @@ bool blk_mq_complete_request_remote(struct request *rq)
+ 		return false;
+ 
+ 	if (blk_mq_complete_need_ipi(rq)) {
+-		rq->csd.func = __blk_mq_complete_request_remote;
+-		rq->csd.info = rq;
+-		rq->csd.flags = 0;
+-		smp_call_function_single_async(rq->mq_ctx->cpu, &rq->csd);
++		unsigned int cpu;
++
++		cpu = rq->mq_ctx->cpu;
++		cpu_list = &per_cpu(blk_cpu_done, cpu);
++		if (llist_add(&rq->ipi_list, cpu_list)) {
++			rq->csd.func = __blk_mq_complete_request_remote;
++			rq->csd.flags = 0;
++			smp_call_function_single_async(cpu, &rq->csd);
++		}
+ 	} else {
+ 		if (rq->q->nr_hw_queues > 1)
+ 			return false;
+-		blk_mq_trigger_softirq(rq);
++		cpu_list = this_cpu_ptr(&blk_cpu_done);
++		if (llist_add(&rq->ipi_list, cpu_list))
++			raise_softirq(BLOCK_SOFTIRQ);
+ 	}
+ 
+ 	return true;
+@@ -1603,14 +1571,14 @@ static void __blk_mq_delay_run_hw_queue(struct blk_mq_hw_ctx *hctx, bool async,
  		return;
  
  	if (!async && !(hctx->flags & BLK_MQ_F_BLOCKING)) {
@@ -2886,6 +3013,15 @@ index cdced4aca2e8..99d2fb51e0e8 100644
  	}
  
  	kblockd_mod_delayed_work_on(blk_mq_hctx_next_cpu(hctx), &hctx->run_work,
+@@ -3881,7 +3849,7 @@ static int __init blk_mq_init(void)
+ 	int i;
+ 
+ 	for_each_possible_cpu(i)
+-		INIT_LIST_HEAD(&per_cpu(blk_cpu_done, i));
++		init_llist_head(&per_cpu(blk_cpu_done, i));
+ 	open_softirq(BLOCK_SOFTIRQ, blk_done_softirq);
+ 
+ 	cpuhp_setup_state_nocalls(CPUHP_BLOCK_SOFTIRQ_DEAD,
 diff --git a/crypto/cryptd.c b/crypto/cryptd.c
 index a1bea0f4baa8..5f8ca8c1f59c 100644
 --- a/crypto/cryptd.c
@@ -4646,6 +4782,19 @@ index d683f5e6d791..71c1535db56a 100644
  extern asmlinkage void preempt_schedule(void);
  #define __preempt_schedule() preempt_schedule()
  extern asmlinkage void preempt_schedule_notrace(void);
+diff --git a/include/linux/blkdev.h b/include/linux/blkdev.h
+index 868e11face00..28231798f161 100644
+--- a/include/linux/blkdev.h
++++ b/include/linux/blkdev.h
+@@ -154,7 +154,7 @@ struct request {
+ 	 */
+ 	union {
+ 		struct hlist_node hash;	/* merge hash */
+-		struct list_head ipi_list;
++		struct llist_node ipi_list;
+ 	};
+ 
+ 	/*
 diff --git a/include/linux/bottom_half.h b/include/linux/bottom_half.h
 index a19519f4241d..eed86eb0a1de 100644
 --- a/include/linux/bottom_half.h
@@ -11264,7 +11413,7 @@ index d1d62f942be2..407f3da146cb 100644
  # include "rtmutex-debug.h"
 diff --git a/kernel/locking/rwlock-rt.c b/kernel/locking/rwlock-rt.c
 new file mode 100644
-index 000000000000..4cd72a2968a6
+index 000000000000..3d2d1f14b513
 --- /dev/null
 +++ b/kernel/locking/rwlock-rt.c
 @@ -0,0 +1,334 @@
@@ -11331,7 +11480,7 @@ index 000000000000..4cd72a2968a6
 +	lock->rtmutex.save_state = 1;
 +}
 +
-+int __read_rt_trylock(struct rt_rw_lock *lock)
++static int __read_rt_trylock(struct rt_rw_lock *lock)
 +{
 +	int r, old;
 +
@@ -22095,6 +22244,40 @@ index 525222e4f409..faaa927ac2c8 100644
  	/*
  	 * It is valid to assume CPU-locality during early bootup:
  	 */
+diff --git a/lib/test_lockup.c b/lib/test_lockup.c
+index f1a020bcc763..864554e76973 100644
+--- a/lib/test_lockup.c
++++ b/lib/test_lockup.c
+@@ -480,6 +480,21 @@ static int __init test_lockup_init(void)
+ 		return -EINVAL;
+ 
+ #ifdef CONFIG_DEBUG_SPINLOCK
++#ifdef CONFIG_PREEMPT_RT
++	if (test_magic(lock_spinlock_ptr,
++		       offsetof(spinlock_t, lock.wait_lock.magic),
++		       SPINLOCK_MAGIC) ||
++	    test_magic(lock_rwlock_ptr,
++		       offsetof(rwlock_t, rtmutex.wait_lock.magic),
++		       SPINLOCK_MAGIC) ||
++	    test_magic(lock_mutex_ptr,
++		       offsetof(struct mutex, lock.wait_lock.magic),
++		       SPINLOCK_MAGIC) ||
++	    test_magic(lock_rwsem_ptr,
++		       offsetof(struct rw_semaphore, rtmutex.wait_lock.magic),
++		       SPINLOCK_MAGIC))
++		return -EINVAL;
++#else
+ 	if (test_magic(lock_spinlock_ptr,
+ 		       offsetof(spinlock_t, rlock.magic),
+ 		       SPINLOCK_MAGIC) ||
+@@ -493,6 +508,7 @@ static int __init test_lockup_init(void)
+ 		       offsetof(struct rw_semaphore, wait_lock.magic),
+ 		       SPINLOCK_MAGIC))
+ 		return -EINVAL;
++#endif
+ #endif
+ 
+ 	if ((wait_state != TASK_RUNNING ||
 diff --git a/mm/Kconfig b/mm/Kconfig
 index 6c974888f86f..056460878a2b 100644
 --- a/mm/Kconfig
@@ -22134,7 +22317,7 @@ index 64d8dea47dd1..7d3065719ce8 100644
  {
  	struct zone *zone;
 diff --git a/mm/memcontrol.c b/mm/memcontrol.c
-index 6877c765b8d0..f35ffe52cc4f 100644
+index 6877c765b8d0..09fa87f7a811 100644
 --- a/mm/memcontrol.c
 +++ b/mm/memcontrol.c
 @@ -63,6 +63,7 @@
@@ -22159,7 +22342,23 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  /* Whether legacy memory+swap accounting is active */
  static bool do_memsw_account(void)
  {
-@@ -2154,6 +2162,7 @@ void unlock_page_memcg(struct page *page)
+@@ -821,6 +829,7 @@ void __mod_memcg_lruvec_state(struct lruvec *lruvec, enum node_stat_item idx,
+ 	pn = container_of(lruvec, struct mem_cgroup_per_node, lruvec);
+ 	memcg = pn->memcg;
+ 
++	preempt_disable_rt();
+ 	/* Update memcg */
+ 	__mod_memcg_state(memcg, idx, val);
+ 
+@@ -840,6 +849,7 @@ void __mod_memcg_lruvec_state(struct lruvec *lruvec, enum node_stat_item idx,
+ 		x = 0;
+ 	}
+ 	__this_cpu_write(pn->lruvec_stat_cpu->count[idx], x);
++	preempt_enable_rt();
+ }
+ 
+ /**
+@@ -2154,6 +2164,7 @@ void unlock_page_memcg(struct page *page)
  EXPORT_SYMBOL(unlock_page_memcg);
  
  struct memcg_stock_pcp {
@@ -22167,7 +22366,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  	struct mem_cgroup *cached; /* this never be root cgroup */
  	unsigned int nr_pages;
  
-@@ -2205,7 +2214,7 @@ static bool consume_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
+@@ -2205,7 +2216,7 @@ static bool consume_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
  	if (nr_pages > MEMCG_CHARGE_BATCH)
  		return ret;
  
@@ -22176,7 +22375,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	stock = this_cpu_ptr(&memcg_stock);
  	if (memcg == stock->cached && stock->nr_pages >= nr_pages) {
-@@ -2213,7 +2222,7 @@ static bool consume_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
+@@ -2213,7 +2224,7 @@ static bool consume_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
  		ret = true;
  	}
  
@@ -22185,7 +22384,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	return ret;
  }
-@@ -2248,14 +2257,14 @@ static void drain_local_stock(struct work_struct *dummy)
+@@ -2248,14 +2259,14 @@ static void drain_local_stock(struct work_struct *dummy)
  	 * The only protection from memory hotplug vs. drain_stock races is
  	 * that we always operate on local CPU stock here with IRQ disabled
  	 */
@@ -22202,7 +22401,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  }
  
  /*
-@@ -2267,7 +2276,7 @@ static void refill_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
+@@ -2267,7 +2278,7 @@ static void refill_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
  	struct memcg_stock_pcp *stock;
  	unsigned long flags;
  
@@ -22211,7 +22410,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	stock = this_cpu_ptr(&memcg_stock);
  	if (stock->cached != memcg) { /* reset if necessary */
-@@ -2280,7 +2289,7 @@ static void refill_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
+@@ -2280,7 +2291,7 @@ static void refill_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
  	if (stock->nr_pages > MEMCG_CHARGE_BATCH)
  		drain_stock(stock);
  
@@ -22220,7 +22419,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  }
  
  /*
-@@ -2300,7 +2309,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
+@@ -2300,7 +2311,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
  	 * as well as workers from this path always operate on the local
  	 * per-cpu data. CPU up doesn't touch memcg_stock at all.
  	 */
@@ -22229,7 +22428,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  	for_each_online_cpu(cpu) {
  		struct memcg_stock_pcp *stock = &per_cpu(memcg_stock, cpu);
  		struct mem_cgroup *memcg;
-@@ -2323,7 +2332,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
+@@ -2323,7 +2334,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
  				schedule_work_on(cpu, &stock->work);
  		}
  	}
@@ -22238,7 +22437,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  	mutex_unlock(&percpu_charge_mutex);
  }
  
-@@ -3084,7 +3093,7 @@ static bool consume_obj_stock(struct obj_cgroup *objcg, unsigned int nr_bytes)
+@@ -3084,7 +3095,7 @@ static bool consume_obj_stock(struct obj_cgroup *objcg, unsigned int nr_bytes)
  	unsigned long flags;
  	bool ret = false;
  
@@ -22247,7 +22446,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	stock = this_cpu_ptr(&memcg_stock);
  	if (objcg == stock->cached_objcg && stock->nr_bytes >= nr_bytes) {
-@@ -3092,7 +3101,7 @@ static bool consume_obj_stock(struct obj_cgroup *objcg, unsigned int nr_bytes)
+@@ -3092,7 +3103,7 @@ static bool consume_obj_stock(struct obj_cgroup *objcg, unsigned int nr_bytes)
  		ret = true;
  	}
  
@@ -22256,7 +22455,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	return ret;
  }
-@@ -3151,7 +3160,7 @@ static void refill_obj_stock(struct obj_cgroup *objcg, unsigned int nr_bytes)
+@@ -3151,7 +3162,7 @@ static void refill_obj_stock(struct obj_cgroup *objcg, unsigned int nr_bytes)
  	struct memcg_stock_pcp *stock;
  	unsigned long flags;
  
@@ -22265,7 +22464,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	stock = this_cpu_ptr(&memcg_stock);
  	if (stock->cached_objcg != objcg) { /* reset if necessary */
-@@ -3165,7 +3174,7 @@ static void refill_obj_stock(struct obj_cgroup *objcg, unsigned int nr_bytes)
+@@ -3165,7 +3176,7 @@ static void refill_obj_stock(struct obj_cgroup *objcg, unsigned int nr_bytes)
  	if (stock->nr_bytes > PAGE_SIZE)
  		drain_obj_stock(stock);
  
@@ -22274,7 +22473,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  }
  
  int obj_cgroup_charge(struct obj_cgroup *objcg, gfp_t gfp, size_t size)
-@@ -5681,12 +5690,12 @@ static int mem_cgroup_move_account(struct page *page,
+@@ -5681,12 +5692,12 @@ static int mem_cgroup_move_account(struct page *page,
  
  	ret = 0;
  
@@ -22289,7 +22488,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  out_unlock:
  	unlock_page(page);
  out:
-@@ -6722,10 +6731,10 @@ int mem_cgroup_charge(struct page *page, struct mm_struct *mm, gfp_t gfp_mask)
+@@ -6722,10 +6733,10 @@ int mem_cgroup_charge(struct page *page, struct mm_struct *mm, gfp_t gfp_mask)
  	css_get(&memcg->css);
  	commit_charge(page, memcg);
  
@@ -22302,7 +22501,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	if (PageSwapCache(page)) {
  		swp_entry_t entry = { .val = page_private(page) };
-@@ -6769,11 +6778,11 @@ static void uncharge_batch(const struct uncharge_gather *ug)
+@@ -6769,11 +6780,11 @@ static void uncharge_batch(const struct uncharge_gather *ug)
  		memcg_oom_recover(ug->memcg);
  	}
  
@@ -22316,7 +22515,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	/* drop reference from uncharge_page */
  	css_put(&ug->memcg->css);
-@@ -6927,10 +6936,10 @@ void mem_cgroup_migrate(struct page *oldpage, struct page *newpage)
+@@ -6927,10 +6938,10 @@ void mem_cgroup_migrate(struct page *oldpage, struct page *newpage)
  	css_get(&memcg->css);
  	commit_charge(newpage, memcg);
  
@@ -22329,7 +22528,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  }
  
  DEFINE_STATIC_KEY_FALSE(memcg_sockets_enabled_key);
-@@ -7050,9 +7059,13 @@ static int __init mem_cgroup_init(void)
+@@ -7050,9 +7061,13 @@ static int __init mem_cgroup_init(void)
  	cpuhp_setup_state_nocalls(CPUHP_MM_MEMCQ_DEAD, "mm/memctrl:dead", NULL,
  				  memcg_hotplug_cpu_dead);
  
@@ -22346,7 +22545,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	for_each_node(node) {
  		struct mem_cgroup_tree_per_node *rtpn;
-@@ -7101,6 +7114,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
+@@ -7101,6 +7116,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
  	struct mem_cgroup *memcg, *swap_memcg;
  	unsigned int nr_entries;
  	unsigned short oldid;
@@ -22354,7 +22553,7 @@ index 6877c765b8d0..f35ffe52cc4f 100644
  
  	VM_BUG_ON_PAGE(PageLRU(page), page);
  	VM_BUG_ON_PAGE(page_count(page), page);
-@@ -7146,9 +7160,13 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
+@@ -7146,9 +7162,13 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
  	 * important here to have the interrupts disabled because it is the
  	 * only synchronisation we have for updating the per-CPU variables.
  	 */
