@@ -360,9 +360,9 @@ reverts () {
 	fi
 
 	## notes
-	##git revert --no-edit xyz -s
+	##git revert --no-edit ccd11d1dcd66c7d1b3d404bd537f55edc5223cc5 -s
 
-	#${git} "${DIR}/patches/reverts/0001-Revert-xyz.patch"
+	${git} "${DIR}/patches/reverts/0001-Revert-vmlinux.lds.h-Add-PGO-and-AutoFDO-input-secti.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
@@ -399,7 +399,7 @@ soc () {
 
 ###
 #backports
-#reverts
+reverts
 drivers
 soc
 
