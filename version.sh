@@ -10,7 +10,6 @@ branch_postfix=""
 
 #arm
 KERNEL_ARCH=arm
-#toolchain="gcc_linaro_eabi_4_8"
 #toolchain="gcc_linaro_eabi_4_9"
 #toolchain="gcc_linaro_eabi_5"
 #toolchain="gcc_linaro_eabi_6"
@@ -18,8 +17,6 @@ KERNEL_ARCH=arm
 #toolchain="gcc_arm_eabi_8"
 #toolchain="gcc_arm_eabi_9"
 #toolchain="gcc_arm_eabi_10"
-#toolchain="gcc_linaro_gnueabihf_4_7"
-#toolchain="gcc_linaro_gnueabihf_4_8"
 #toolchain="gcc_linaro_gnueabihf_4_9"
 #toolchain="gcc_linaro_gnueabihf_5"
 #toolchain="gcc_linaro_gnueabihf_6"
