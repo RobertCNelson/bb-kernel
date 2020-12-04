@@ -17,6 +17,7 @@ KERNEL_ARCH=arm
 #toolchain="gcc_linaro_eabi_7"
 #toolchain="gcc_arm_eabi_8"
 #toolchain="gcc_arm_eabi_9"
+#toolchain="gcc_arm_eabi_10"
 #toolchain="gcc_linaro_gnueabihf_4_7"
 #toolchain="gcc_linaro_gnueabihf_4_8"
 #toolchain="gcc_linaro_gnueabihf_4_9"
@@ -25,6 +26,7 @@ KERNEL_ARCH=arm
 #toolchain="gcc_linaro_gnueabihf_7"
 #toolchain="gcc_arm_gnueabihf_8"
 toolchain="gcc_arm_gnueabihf_9"
+#toolchain="gcc_arm_gnueabihf_10"
 #arm64
 #KERNEL_ARCH=arm64
 #toolchain="gcc_linaro_aarch64_gnu_5"
@@ -32,6 +34,7 @@ toolchain="gcc_arm_gnueabihf_9"
 #toolchain="gcc_linaro_aarch64_gnu_7"
 #toolchain="gcc_arm_aarch64_gnu_8"
 #toolchain="gcc_arm_aarch64_gnu_9"
+#toolchain="gcc_arm_aarch64_gnu_10"
 
 #Kernel
 KERNEL_REL=5.8

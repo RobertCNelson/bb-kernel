@@ -621,6 +621,9 @@ if [ "x${ARCH}" = "xx86_64" ] ; then
 	gcc_arm_eabi_9|gcc_arm_gnueabihf_9|gcc_arm_aarch64_gnu_9)
 		ignore_32bit="true"
 		;;
+	gcc_arm_eabi_10|gcc_arm_gnueabihf_10|gcc_arm_aarch64_gnu_10)
+		ignore_32bit="true"
+		;;
 	*)
 		ignore_32bit="false"
 		;;
