@@ -8,23 +8,23 @@ build_prefix="-bone"
 branch_prefix="am33x-v"
 branch_postfix=""
 
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.9.1
 #arm
 KERNEL_ARCH=arm
-#toolchain="gcc_linaro_eabi_4_8"
 #toolchain="gcc_linaro_eabi_4_9"
 #toolchain="gcc_linaro_eabi_5"
 #toolchain="gcc_linaro_eabi_6"
 #toolchain="gcc_linaro_eabi_7"
 #toolchain="gcc_arm_eabi_8"
 #toolchain="gcc_arm_eabi_9"
-#toolchain="gcc_linaro_gnueabihf_4_7"
-#toolchain="gcc_linaro_gnueabihf_4_8"
+#toolchain="gcc_arm_eabi_10"
 #toolchain="gcc_linaro_gnueabihf_4_9"
 #toolchain="gcc_linaro_gnueabihf_5"
 #toolchain="gcc_linaro_gnueabihf_6"
 #toolchain="gcc_linaro_gnueabihf_7"
 #toolchain="gcc_arm_gnueabihf_8"
 toolchain="gcc_arm_gnueabihf_9"
+#toolchain="gcc_arm_gnueabihf_10"
 #arm64
 #KERNEL_ARCH=arm64
 #toolchain="gcc_linaro_aarch64_gnu_5"
@@ -32,13 +32,14 @@ toolchain="gcc_arm_gnueabihf_9"
 #toolchain="gcc_linaro_aarch64_gnu_7"
 #toolchain="gcc_arm_aarch64_gnu_8"
 #toolchain="gcc_arm_aarch64_gnu_9"
+#toolchain="gcc_arm_aarch64_gnu_10"
 
 #Kernel
 KERNEL_REL=5.9
-KERNEL_TAG=${KERNEL_REL}.11
+KERNEL_TAG=${KERNEL_REL}.12
 kernel_rt=".1-rt20"
 #Kernel Build
-BUILD=${build_prefix}14
+BUILD=${build_prefix}14.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""

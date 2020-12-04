@@ -66,19 +66,6 @@ dl_gcc_generic () {
 
 gcc_toolchain () {
 	case "${toolchain}" in
-	gcc_linaro_eabi_4_8)
-		#
-		#https://releases.linaro.org/archive/14.04/components/toolchain/binaries/gcc-linaro-arm-none-eabi-4.8-2014.04_linux.tar.xz
-		#
-
-		gcc_html_path="https://releases.linaro.org/archive/14.04/components/toolchain/binaries/"
-		gcc_filename_prefix="gcc-linaro-arm-none-eabi-4.8-2014.04_linux"
-		gcc_banner="arm-none-eabi-gcc (crosstool-NG linaro-1.13.1-4.8-2014.04 - Linaro GCC 4.8-2014.04) 4.8.3 20140401 (prerelease)"
-		gcc_copyright="2013"
-		datestamp="2014.04-gcc-arm-none-eabi"
-
-		binary="bin/arm-none-eabi-"
-		;;
 	gcc_linaro_eabi_4_9)
 		#
 		#https://releases.linaro.org/components/toolchain/binaries/4.9-2017.01/arm-eabi/gcc-linaro-4.9.4-2017.01-x86_64_arm-eabi.tar.xz
@@ -167,31 +154,18 @@ gcc_toolchain () {
 
 		binary="bin/arm-none-eabi-"
 		;;
-	gcc_linaro_gnueabihf_4_7)
+	gcc_arm_eabi_10)
 		#
-		#https://releases.linaro.org/archive/13.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
-		#
-
-		gcc_html_path="https://releases.linaro.org/archive/13.04/components/toolchain/binaries/"
-		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux"
-		gcc_banner="arm-linux-gnueabihf-gcc (crosstool-NG linaro-1.13.1-4.7-2013.04-20130415 - Linaro GCC 2013.04) 4.7.3 20130328 (prerelease)"
-		gcc_copyright="2012"
-		datestamp="2013.04-gcc-arm-linux-gnueabihf"
-
-		binary="bin/arm-linux-gnueabihf-"
-		;;
-	gcc_linaro_gnueabihf_4_8)
-		#
-		#https://releases.linaro.org/archive/14.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux.tar.xz
+		#https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-eabi.tar.xz
 		#
 
-		gcc_html_path="https://releases.linaro.org/archive/14.04/components/toolchain/binaries/"
-		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux"
-		gcc_banner="arm-linux-gnueabihf-gcc (crosstool-NG linaro-1.13.1-4.8-2014.04 - Linaro GCC 4.8-2014.04) 4.8.3 20140401 (prerelease)"
-		gcc_copyright="2013"
-		datestamp="2014.04-gcc-arm-linux-gnueabihf"
+		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/"
+		gcc_filename_prefix="gcc-arm-10.2-2020.11-x86_64-arm-none-eabi"
+		gcc_banner="arm-none-eabi-gcc (GNU Toolchain for the A-profile Architecture 10.2-2020.11 (arm-10.16)) 10.2.1 20201103"
+		gcc_copyright="2020"
+		datestamp="2020.11-gcc-arm-none-eabi"
 
-		binary="bin/arm-linux-gnueabihf-"
+		binary="bin/arm-none-eabi-"
 		;;
 	gcc_linaro_gnueabihf_4_9)
 		#
@@ -284,6 +258,19 @@ gcc_toolchain () {
 
 		binary="bin/arm-none-linux-gnueabihf-"
 		;;
+	gcc_arm_gnueabihf_10)
+		#
+		#https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz
+		#
+
+		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/"
+		gcc_filename_prefix="gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf"
+		gcc_banner="arm-none-linux-gnueabihf-gcc (GNU Toolchain for the A-profile Architecture 10.2-2020.11 (arm-10.16)) 10.2.1 20201103"
+		gcc_copyright="2020"
+		datestamp="2020.11-gcc-arm-linux-gnueabihf"
+
+		binary="bin/arm-none-linux-gnueabihf-"
+		;;
 	gcc_linaro_aarch64_gnu_5)
 		#
 		#https://releases.linaro.org/components/toolchain/binaries/5.4-2017.05/aarch64-linux-gnu/gcc-linaro-5.4.1-2017.05-x86_64_aarch64-linux-gnu.tar.xz
@@ -359,6 +346,19 @@ gcc_toolchain () {
 		gcc_banner="aarch64-none-linux-gnu-gcc (GNU Toolchain for the A-profile Architecture 9.2-2019.12 (arm-9.10)) 9.2.1 20191025"
 		gcc_copyright="2019"
 		datestamp="2019.12-gcc-aarch64-linux-gnu"
+
+		binary="bin/aarch64-none-linux-gnu-"
+		;;
+	gcc_arm_aarch64_gnu_10)
+		#
+		#https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-aarch64-none-linux-gnu.tar.xz
+		#
+
+		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/"
+		gcc_filename_prefix="gcc-arm-10.2-2020.11-x86_64-aarch64-none-linux-gnu"
+		gcc_banner="aarch64-none-linux-gnu-gcc (GNU Toolchain for the A-profile Architecture 10.2-2020.11 (arm-10.16)) 10.2.1 20201103"
+		gcc_copyright="2020"
+		datestamp="2020.11-gcc-aarch64-linux-gnu"
 
 		binary="bin/aarch64-none-linux-gnu-"
 		;;
