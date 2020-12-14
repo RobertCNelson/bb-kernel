@@ -77,4 +77,13 @@ config="CONFIG_SERIAL_SC16IS7XX_I2C" ; config_disable
 config="CONFIG_SERIAL_SC16IS7XX_SPI" ; config_disable
 config="CONFIG_SERIAL_DEV_CTRL_TTYPORT" ; config_enable
 
+#WIMAX going to be removed soon...
+config="CONFIG_WIMAX" ; config_disable
+config="CONFIG_WIMAX_I2400M" ; config_disable
+config="CONFIG_WIMAX_I2400M_USB" ; config_disable
+
+#Move W1 as enable, for MIKROBUS
+config="CONFIG_W1" ; config_enable
+config="CONFIG_W1_MASTER_GPIO" ; config_enable
+
 cd ${DIR}/
