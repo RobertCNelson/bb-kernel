@@ -82,4 +82,8 @@ config="CONFIG_WIMAX" ; config_disable
 config="CONFIG_WIMAX_I2400M" ; config_disable
 config="CONFIG_WIMAX_I2400M_USB" ; config_disable
 
+#Move W1 as enable, for MIKROBUS
+config="CONFIG_W1" ; config_enable
+config="CONFIG_W1_MASTER_GPIO" ; config_enable
+
 cd ${DIR}/
