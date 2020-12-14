@@ -180,19 +180,6 @@ gcc_toolchain () {
 
 		binary="bin/arm-none-eabi-"
 		;;
-	gcc_linaro_gnueabihf_4_7)
-		#
-		#https://releases.linaro.org/archive/13.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
-		#
-
-		gcc_html_path="https://releases.linaro.org/archive/13.04/components/toolchain/binaries/"
-		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux"
-		gcc_banner="arm-linux-gnueabihf-gcc (crosstool-NG linaro-1.13.1-4.7-2013.04-20130415 - Linaro GCC 2013.04) 4.7.3 20130328 (prerelease)"
-		gcc_copyright="2012"
-		datestamp="2013.04-gcc-arm-linux-gnueabihf"
-
-		binary="bin/arm-linux-gnueabihf-"
-		;;
 	gcc_linaro_gnueabihf_4_8)
 		#
 		#https://releases.linaro.org/archive/14.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux.tar.xz

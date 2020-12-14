@@ -8,6 +8,7 @@ build_prefix="-bone"
 branch_prefix="am33x-v"
 branch_postfix=""
 
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.8-rc1
 #arm
 KERNEL_ARCH=arm
 #toolchain="gcc_linaro_eabi_4_8"
@@ -18,7 +19,6 @@ KERNEL_ARCH=arm
 #toolchain="gcc_arm_eabi_8"
 #toolchain="gcc_arm_eabi_9"
 #toolchain="gcc_arm_eabi_10"
-#toolchain="gcc_linaro_gnueabihf_4_7"
 #toolchain="gcc_linaro_gnueabihf_4_8"
 #toolchain="gcc_linaro_gnueabihf_4_9"
 #toolchain="gcc_linaro_gnueabihf_5"
@@ -41,7 +41,7 @@ KERNEL_REL=5.8
 KERNEL_TAG=${KERNEL_REL}.18
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}24
+BUILD=${build_prefix}24.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
