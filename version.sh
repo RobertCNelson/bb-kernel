@@ -8,6 +8,7 @@ build_prefix="-bone"
 branch_prefix="am33x-v"
 branch_postfix=""
 
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.10-rc1
 #arm
 KERNEL_ARCH=arm
 #toolchain="gcc_linaro_eabi_4_9"
@@ -35,10 +36,10 @@ toolchain="gcc_arm_gnueabihf_10"
 
 #Kernel
 KERNEL_REL=5.10
-KERNEL_TAG=${KERNEL_REL}-rc7
+KERNEL_TAG=${KERNEL_REL}
 kernel_rt=".x-rty"
 #Kernel Build
-BUILD=${build_prefix}6
+BUILD=${build_prefix}6.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
