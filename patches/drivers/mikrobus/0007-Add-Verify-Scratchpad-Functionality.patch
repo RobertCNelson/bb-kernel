@@ -1,0 +1,105 @@
+From c771e602856da5e2c9e96f37ae7b7cca5e94156c Mon Sep 17 00:00:00 2001
+From: Vaishnav M A <vaishnav@beagleboard.org>
+Date: Thu, 10 Dec 2020 20:21:14 +0530
+Subject: [PATCH] Add Verify Scratchpad Functionality
+
+Signed-off-by: Vaishnav M A <vaishnav@beagleboard.org>
+---
+ drivers/misc/mikrobus/mikrobus_id.c | 47 +++++++++++++++--------------
+ 1 file changed, 25 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/misc/mikrobus/mikrobus_id.c b/drivers/misc/mikrobus/mikrobus_id.c
+index 088c9e2a50c4..533221e97aaf 100644
+--- a/drivers/misc/mikrobus/mikrobus_id.c
++++ b/drivers/misc/mikrobus/mikrobus_id.c
+@@ -18,16 +18,17 @@
+ 
+ #define W1_EEPROM_MIKROBUS_ID	0xAC
+ 
+-#define W1_MIKROBUS_ID_EEPROM_SIZE	512
++#define W1_MIKROBUS_ID_EEPROM_SIZE	1536
+ #define W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE	32
+ #define W1_MIKROBUS_ID_READ_EEPROM	0xF0
+ #define W1_MIKROBUS_ID_EEPROM_READ_RETRIES	10
++#define W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES	5
+ #define W1_MIKROBUS_ID_EEPROM_WRITE_SCRATCH	0x0F
+ #define W1_MIKROBUS_ID_EEPROM_READ_SCRATCH	0xAA
+ #define W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH	0x55
+ #define W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH_ES	0x40
+ 
+-#define W1_MIKROBUS_ID_EEPROM_TPROG_MS		60
++#define W1_MIKROBUS_ID_EEPROM_TPROG_MS		25
+ 
+ static int w1_mikrobus_id_readblock(struct w1_slave *sl, int off, int count, char *buf)
+ {
+@@ -35,8 +36,6 @@ static int w1_mikrobus_id_readblock(struct w1_slave *sl, int off, int count, cha
+ 	u8 cmp[W1_MIKROBUS_ID_EEPROM_SIZE];
+ 	int tries = W1_MIKROBUS_ID_EEPROM_READ_RETRIES;
+ 	
+-	msleep(10); /* debug slave going not responding on write-read-write */
+-	
+ 	do {
+ 		wrbuf[0] = W1_MIKROBUS_ID_READ_EEPROM;
+ 		wrbuf[1] = count >> 8;
+@@ -67,36 +66,40 @@ static int w1_mikrobus_id_writeblock(struct w1_slave *sl, int off, int count, ch
+ 	u8 write_scratchpad_crc[2];
+ 	u16 wraddr = 0;
+ 	u16 len = W1_MIKROBUS_ID_EEPROM_SIZE;
+-	int k;
++	int verify_status;
+ 
+ 	memcpy(wrdata, buf, W1_MIKROBUS_ID_EEPROM_SIZE);
+-	msleep(10);
++
+ 	while(len > 0) {
+ 		wrbuf[0] = W1_MIKROBUS_ID_EEPROM_WRITE_SCRATCH;
+ 		wrbuf[1] = wraddr >> 8;
+ 		wrbuf[2] = wraddr & 0xFF;
+ 
+-		/* write scratchpad */
+-		w1_reset_select_slave(sl);
+-		w1_write_block(sl->master, wrbuf, 3);
+-		w1_write_block(sl->master, wrdata + wraddr, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
+-		udelay(100);
+-		w1_read_block(sl->master, write_scratchpad_crc, 2);
+-		w1_reset_select_slave(sl);
+-		w1_write_8(sl->master, W1_MIKROBUS_ID_EEPROM_READ_SCRATCH);
+-		w1_read_block(sl->master, scratchpad_verify, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE + 3);
++		int tries = W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES;
++		do {
++			w1_reset_select_slave(sl);
++			w1_write_block(sl->master, wrbuf, 3);
++			w1_write_block(sl->master, wrdata + wraddr, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
++			udelay(100);
++			w1_read_block(sl->master, write_scratchpad_crc, 2);
++			w1_reset_select_slave(sl);
++			w1_write_8(sl->master, W1_MIKROBUS_ID_EEPROM_READ_SCRATCH);
++			w1_read_block(sl->master, scratchpad_verify, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE + 3);
++			verify_status = memcmp(wrdata + wraddr, scratchpad_verify + 3, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
++		} while(verify_status && --tries);
++
++		if(!tries & verify_status){
++			dev_err(&sl->dev, "verify scratchpad failed %d times\n",
++				W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES);
++			return -EIO;
++		}
++			
+ 		wrbuf[0] = W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH;
+ 		wrbuf[1] = wraddr >> 8;
+ 		wrbuf[2] = wraddr & 0xFF;
+ 		wrbuf[3] = W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH_ES;
+ 		w1_reset_select_slave(sl);
+-		/* write_block fails */
+-		//w1_write_block(sl->master, wrbuf, 4);
+-		w1_write_8(sl->master, wrbuf[0]);
+-		udelay(20);
+-		w1_write_8(sl->master, wrbuf[1]);
+-		w1_write_8(sl->master, wrbuf[2]);
+-		w1_write_8(sl->master, wrbuf[3]);
++		w1_write_block(sl->master, wrbuf, 4);
+ 
+ 		msleep(W1_MIKROBUS_ID_EEPROM_TPROG_MS);
+ 		wraddr += W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE;
+-- 
+2.25.1
+
