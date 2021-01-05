@@ -49,6 +49,10 @@ cat_files () {
 	if [ -f ./patches/git/WIREGUARD ] ; then
 		cat ./patches/git/WIREGUARD >> ${wfile}
 	fi
+
+	if [ -f ./patches/git/WPANUSB ] ; then
+		cat ./patches/git/WPANUSB >> ${wfile}
+	fi
 }
 
 DIR=$PWD
