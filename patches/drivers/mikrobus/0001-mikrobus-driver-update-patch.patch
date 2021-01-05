@@ -1,4 +1,4 @@
-From 3d0959e5ebaa1d082bf9ba2e5a4d86054c266d64 Mon Sep 17 00:00:00 2001
+From e0a3ef4d89c4d3540b8fe565a33ef0573df6d796 Mon Sep 17 00:00:00 2001
 From: Vaishnav M A <vaishnav@beagleboard.org>
 Date: Thu, 15 Oct 2020 17:05:50 +0530
 Subject: [PATCH] mikrobus driver update patch
@@ -27,32 +27,36 @@ Signed-off-by: Vaishnav M A <vaishnav@beagleboard.org>
  drivers/misc/Kconfig                      |   1 +
  drivers/misc/Makefile                     |   1 +
  drivers/misc/mikrobus/Kconfig             |  16 +
- drivers/misc/mikrobus/Makefile            |   5 +
- drivers/misc/mikrobus/mikrobus_core.c     | 880 ++++++++++++++++++++++
- drivers/misc/mikrobus/mikrobus_core.h     | 197 +++++
- drivers/misc/mikrobus/mikrobus_manifest.c | 475 ++++++++++++
+ drivers/misc/mikrobus/Makefile            |   6 +
+ drivers/misc/mikrobus/mikrobus_core.c     | 953 ++++++++++++++++++++++
+ drivers/misc/mikrobus/mikrobus_core.h     | 201 +++++
+ drivers/misc/mikrobus/mikrobus_id.c       | 207 +++++
+ drivers/misc/mikrobus/mikrobus_manifest.c | 475 +++++++++++
  drivers/misc/mikrobus/mikrobus_manifest.h |  20 +
+ drivers/w1/w1_int.c                       |  28 +
  include/linux/greybus/greybus_manifest.h  |  49 ++
- 9 files changed, 1644 insertions(+)
+ include/linux/w1.h                        |   1 +
+ 12 files changed, 1958 insertions(+)
  create mode 100644 drivers/misc/mikrobus/Kconfig
  create mode 100644 drivers/misc/mikrobus/Makefile
  create mode 100644 drivers/misc/mikrobus/mikrobus_core.c
  create mode 100644 drivers/misc/mikrobus/mikrobus_core.h
+ create mode 100644 drivers/misc/mikrobus/mikrobus_id.c
  create mode 100644 drivers/misc/mikrobus/mikrobus_manifest.c
  create mode 100644 drivers/misc/mikrobus/mikrobus_manifest.h
 
 diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
-index ce136d685d14..cb1539f39b30 100644
+index 9252c020fe50..98d6be2597c8 100644
 --- a/drivers/misc/Kconfig
 +++ b/drivers/misc/Kconfig
-@@ -472,4 +472,5 @@ source "drivers/misc/ocxl/Kconfig"
+@@ -473,4 +473,5 @@ source "drivers/misc/ocxl/Kconfig"
  source "drivers/misc/cardreader/Kconfig"
  source "drivers/misc/habanalabs/Kconfig"
  source "drivers/misc/uacce/Kconfig"
 +source "drivers/misc/mikrobus/Kconfig"
  endmenu
 diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
-index c7bd01ac6291..45486dd77da5 100644
+index 42a1b0b64232..f0ca0234c8b2 100644
 --- a/drivers/misc/Makefile
 +++ b/drivers/misc/Makefile
 @@ -40,6 +40,7 @@ obj-$(CONFIG_VMWARE_BALLOON)	+= vmw_balloon.o
@@ -87,22 +91,23 @@ index 000000000000..5f42bc4e9410
 +	  will be called mikrobus.ko
 diff --git a/drivers/misc/mikrobus/Makefile b/drivers/misc/mikrobus/Makefile
 new file mode 100644
-index 000000000000..982bdec90c09
+index 000000000000..0dfd04eabaf6
 --- /dev/null
 +++ b/drivers/misc/mikrobus/Makefile
-@@ -0,0 +1,5 @@
+@@ -0,0 +1,6 @@
 +# SPDX-License-Identifier: GPL-2.0
 +# mikroBUS Core
 +
 +obj-$(CONFIG_MIKROBUS) += mikrobus.o
 +mikrobus-y :=	mikrobus_core.o	mikrobus_manifest.o
++obj-$(CONFIG_MIKROBUS) += mikrobus_id.o
 \ No newline at end of file
 diff --git a/drivers/misc/mikrobus/mikrobus_core.c b/drivers/misc/mikrobus/mikrobus_core.c
 new file mode 100644
-index 000000000000..7e342e2b079b
+index 000000000000..07f9f3cc9991
 --- /dev/null
 +++ b/drivers/misc/mikrobus/mikrobus_core.c
-@@ -0,0 +1,880 @@
+@@ -0,0 +1,953 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * mikroBUS driver for instantiating add-on
@@ -122,6 +127,8 @@ index 000000000000..7e342e2b079b
 +#include <linux/module.h>
 +#include <linux/gpio/consumer.h>
 +#include <linux/mutex.h>
++#include <linux/w1.h>
++#include <linux/w1-gpio.h>
 +#include <linux/device.h>
 +#include <linux/i2c.h>
 +#include <linux/gpio.h>
@@ -150,6 +157,7 @@ index 000000000000..7e342e2b079b
 +static struct class_compat *mikrobus_port_compat_class;
 +int	__mikrobus_first_dynamic_bus_num;
 +static bool is_registered;
++static int mikrobus_port_id_eeprom_probe(struct mikrobus_port *port);
 +
 +const char *MIKROBUS_PINCTRL_STR[] = {"pwm", "uart", "i2c", "spi"};
 +
@@ -158,14 +166,13 @@ index 000000000000..7e342e2b079b
 +};
 +EXPORT_SYMBOL_GPL(mikrobus_bus_type);
 +
-+static int mikrobus_port_scan_eeprom(struct mikrobus_port *port)
++int mikrobus_port_scan_eeprom(struct mikrobus_port *port)
 +{
 +	struct addon_board_info *board;
 +	int manifest_size;
 +	char header[12];
 +	int retval;
 +	char *buf;
-+
 +	retval = nvmem_device_read(port->eeprom, 0, 12, header);
 +	if (retval != 12) {
 +		dev_err(&port->dev, "failed to fetch manifest header %d\n",
@@ -192,6 +199,9 @@ index 000000000000..7e342e2b079b
 +		retval = -ENOMEM;
 +		goto err_free_buf;
 +	}
++	w1_reset_bus(port->w1_master);
++	w1_write_8(port->w1_master, MIKROBUS_EEPROM_EXIT_ID_CMD);
++	set_bit(W1_ABORT_SEARCH, &port->w1_master->flags);
 +	INIT_LIST_HEAD(&board->manifest_descs);
 +	INIT_LIST_HEAD(&board->devices);
 +	retval = mikrobus_manifest_parse(board, buf, manifest_size);
@@ -215,6 +225,7 @@ index 000000000000..7e342e2b079b
 +	kfree(buf);
 +	return retval;
 +}
++EXPORT_SYMBOL_GPL(mikrobus_port_scan_eeprom);
 +
 +static ssize_t name_show(struct device *dev, struct device_attribute *attr,
 +						 char *buf)
@@ -265,6 +276,7 @@ index 000000000000..7e342e2b079b
 +	struct mikrobus_port *port = to_mikrobus_port(dev);
 +	unsigned long id;
 +	int retval;
++	int i;
 +
 +	if (kstrtoul(buf, 0, &id)) {
 +		dev_err(dev, "cannot parse trigger\n");
@@ -274,6 +286,27 @@ index 000000000000..7e342e2b079b
 +		dev_err(dev, "already has board registered\n");
 +		return -EBUSY;
 +	}
++
++	if (!port->eeprom){
++		return mikrobus_port_id_eeprom_probe(port);
++	}
++	/* Enter ID Mode */
++	sprintf(port->pinctrl_selected[MIKROBUS_PINCTRL_SPI], "%s_%s",
++			MIKROBUS_PINCTRL_STR[MIKROBUS_PINCTRL_SPI], MIKROBUS_PINCTRL_STATE_GPIO);
++
++	retval = mikrobus_port_pinctrl_select(port);
++	/* set MOSI LOW, SCK HIGH */
++	gpiod_direction_output(port->gpios->desc[MIKROBUS_PIN_MOSI], 0);
++	gpiod_direction_output(port->gpios->desc[MIKROBUS_PIN_SCK], 1);
++	msleep(100);
++	for( i = 0; i < 4; i++){
++		gpiod_set_value(port->gpios->desc[MIKROBUS_PIN_MOSI] , 1);
++		udelay(1000);
++		gpiod_set_value(port->gpios->desc[MIKROBUS_PIN_MOSI] , 0);
++		udelay(1000);
++	}
++	msleep(100); /* temporary delay to fix ROM ID copy */
++
 +	retval = mikrobus_port_scan_eeprom(port);
 +	if (retval) {
 +		dev_err(dev, "board register from manifest failed\n");
@@ -323,7 +356,29 @@ index 000000000000..7e342e2b079b
 +};
 +EXPORT_SYMBOL_GPL(mikrobus_port_type);
 +
++static int mikrobus_w1_master_match(struct device *dev, const void *data)
++{
++	struct mikrobus_port *port;
 +
++	if(dev->type != &mikrobus_port_type)
++		return 0;	
++
++	port = to_mikrobus_port(dev);
++
++	return port->w1_master == data;
++}
++
++struct mikrobus_port *mikrobus_find_port_by_w1_master(struct w1_master *master)
++{
++	struct device *dev;
++
++	dev = bus_find_device(&mikrobus_bus_type, NULL, master, mikrobus_w1_master_match);
++	if (!dev)
++		return NULL;
++
++	return (dev->type == &mikrobus_port_type) ? to_mikrobus_port(dev) : NULL;
++}
++EXPORT_SYMBOL(mikrobus_find_port_by_w1_master);
 +
 +int mikrobus_port_pinctrl_select(struct mikrobus_port *port)
 +{
@@ -676,35 +731,58 @@ index 000000000000..7e342e2b079b
 +}
 +EXPORT_SYMBOL_GPL(mikrobus_board_unregister);
 +
-+static struct i2c_board_info mikrobus_eeprom_info = {
-+	I2C_BOARD_INFO("24c32", 0x57),
++static struct w1_gpio_platform_data mikrobus_id_eeprom_w1_pdata = {
++      .pullup_gpiod  = NULL,
 +};
 +
-+static int mikrobus_port_eeprom_probe(struct mikrobus_port *port)
-+{
-+	struct i2c_client *eeprom_client;
-+	struct nvmem_device *eeprom;
-+	char dev_name[MIKROBUS_NAME_SIZE];
++static struct platform_device mikrobus_id_eeprom_w1_device = {
++      .name                   = "w1-gpio",
++      .id                     = -1,
++	  .dev.platform_data      = &mikrobus_id_eeprom_w1_pdata,
++};
 +
-+	eeprom_client = i2c_new_client_device(port->i2c_adap, &mikrobus_eeprom_info);
-+	if (!IS_ERR(eeprom_client)) {
-+		pr_info(" mikrobus port %d default eeprom is probed at %02x\n", port->id,
-+									eeprom_client->addr);
-+		snprintf(dev_name, sizeof(dev_name), "%d-%04x0", port->i2c_adap->nr,
-+				 eeprom_client->addr);
-+		eeprom = nvmem_device_get(&eeprom_client->dev, dev_name);
-+		if (IS_ERR(eeprom)) {
-+			pr_err(" mikrobus port %d eeprom nvmem device probe failed\n", port->id);
-+			i2c_unregister_device(eeprom_client);
-+			port->eeprom = NULL;
-+			return 0;
-+		}
-+	} else {
-+		pr_info(" mikrobus port %d default eeprom probe failed\n", port->id);
-+		return 0;
++static int mikrobus_port_id_eeprom_probe(struct mikrobus_port *port)
++{
++	struct w1_bus_master *bm;
++	struct gpiod_lookup_table *lookup;
++	int retval;
++	int i;
++
++	sprintf(port->pinctrl_selected[MIKROBUS_PINCTRL_SPI], "%s_%s",
++			MIKROBUS_PINCTRL_STR[MIKROBUS_PINCTRL_SPI], MIKROBUS_PINCTRL_STATE_GPIO);
++
++	retval = mikrobus_port_pinctrl_select(port);
++	/* set MOSI LOW, SCK HIGH */
++	gpiod_direction_output(port->gpios->desc[MIKROBUS_PIN_MOSI], 0);
++	gpiod_direction_output(port->gpios->desc[MIKROBUS_PIN_SCK], 1);
++	msleep(100);
++	for( i = 0; i < 4; i++){
++		gpiod_set_value(port->gpios->desc[MIKROBUS_PIN_MOSI] , 1);
++		udelay(1000);
++		gpiod_set_value(port->gpios->desc[MIKROBUS_PIN_MOSI] , 0);
++		udelay(1000);
 +	}
-+	port->eeprom = eeprom;
-+	port->eeprom_client = eeprom_client;
++	msleep(100); /* temporary delay to fix ROM ID copy */
++
++	lookup = kzalloc(struct_size(lookup, table, 1),
++					GFP_KERNEL);
++	if (!lookup)
++			return -ENOMEM;
++	lookup->dev_id = mikrobus_id_eeprom_w1_device.name;
++	lookup->table[0].key = mikrobus_gpio_chip_name_get(port,
++						MIKROBUS_PIN_CS);
++	lookup->table[0].flags = GPIO_ACTIVE_HIGH|GPIO_OPEN_DRAIN;
++	lookup->table[0].chip_hwnum = mikrobus_gpio_hwnum_get(port,
++						MIKROBUS_PIN_CS);
++	gpiod_add_lookup_table(lookup);
++	platform_device_register(&mikrobus_id_eeprom_w1_device);
++	port->w1_gpio = &mikrobus_id_eeprom_w1_device;
++	bm = (struct w1_bus_master *) platform_get_drvdata(&mikrobus_id_eeprom_w1_device);
++	port->w1_master = w1_find_master_device(bm);
++	mutex_lock(&port->w1_master->mutex);
++	port->w1_master->max_slave_count = 1;
++	clear_bit(W1_WARN_MAX_COUNT, &port->w1_master->flags);
++	mutex_unlock(&port->w1_master->mutex);
 +	return 0;
 +}
 +
@@ -752,18 +830,18 @@ index 000000000000..7e342e2b079b
 +								port->dev.parent);
 +	if (retval)
 +		dev_warn(&port->dev, "failed to create compatibility class link\n");
-+	if (!port->eeprom) {
++	if (!port->w1_master) {
 +		dev_info(&port->dev, "mikrobus port %d eeprom empty probing default eeprom\n",
 +											port->id);
-+		retval = mikrobus_port_eeprom_probe(port);
++		retval = mikrobus_port_id_eeprom_probe(port);
 +	}
-+	if (port->eeprom) {
-+		retval = mikrobus_port_scan_eeprom(port);
-+		if (retval) {
-+			dev_warn(&port->dev, "failed to register board from manifest\n");
-+			return 0;
-+		}
-+	}
++	// if (port->w1_master) {
++	// 	retval = mikrobus_port_scan_eeprom(port);
++	// 	if (retval) {
++	// 		dev_warn(&port->dev, "failed to register board from manifest\n");
++	// 		return 0;
++	// 	}
++	// }
 +	return retval;
 +}
 +EXPORT_SYMBOL_GPL(mikrobus_port_register);
@@ -787,7 +865,7 @@ index 000000000000..7e342e2b079b
 +
 +	if (port->eeprom) {
 +		nvmem_device_put(port->eeprom);
-+		i2c_unregister_device(port->eeprom_client);
++		platform_device_unregister(port->w1_gpio);
 +	}
 +
 +	class_compat_remove_link(mikrobus_port_compat_class, &port->dev,
@@ -985,10 +1063,10 @@ index 000000000000..7e342e2b079b
 +MODULE_LICENSE("GPL v2");
 diff --git a/drivers/misc/mikrobus/mikrobus_core.h b/drivers/misc/mikrobus/mikrobus_core.h
 new file mode 100644
-index 000000000000..9ac1e6248018
+index 000000000000..f7c53d760a12
 --- /dev/null
 +++ b/drivers/misc/mikrobus/mikrobus_core.h
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,201 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * mikroBUS Driver for instantiating add-on
@@ -1030,6 +1108,8 @@ index 000000000000..9ac1e6248018
 +#define MIKROBUS_PINCTRL_SPI		3
 +
 +#define MIKROBUS_PINCTRL_STATE_GPIO	"gpio"
++
++#define MIKROBUS_EEPROM_EXIT_ID_CMD 0xD2
 +
 +extern struct bus_type mikrobus_bus_type;
 +extern struct device_type mikrobus_port_type;
@@ -1159,12 +1239,13 @@ index 000000000000..9ac1e6248018
 + * @id: port id starting from 1
 + */
 +struct mikrobus_port {
-+	struct i2c_client *eeprom_client;
 +	struct addon_board_info *board;
++	struct nvmem_device *eeprom;
 +	struct i2c_adapter *i2c_adap;
 +	struct spi_master *spi_mstr;
++	struct w1_master *w1_master;
++	struct platform_device *w1_gpio;
 +	struct serdev_controller *ser_ctrl;
-+	struct nvmem_device *eeprom;
 +	struct gpio_descs *gpios;
 +	struct pwm_device *pwm;
 +	struct pinctrl *pinctrl;
@@ -1184,8 +1265,223 @@ index 000000000000..9ac1e6248018
 +int mikrobus_port_register(struct mikrobus_port *port);
 +int mikrobus_port_pinctrl_select(struct mikrobus_port *port);
 +void mikrobus_port_delete(struct mikrobus_port *port);
-+
++int mikrobus_port_scan_eeprom(struct mikrobus_port *port);
++struct mikrobus_port *mikrobus_find_port_by_w1_master(struct w1_master *master);
 +#endif /* __MIKROBUS_H */
+diff --git a/drivers/misc/mikrobus/mikrobus_id.c b/drivers/misc/mikrobus/mikrobus_id.c
+new file mode 100644
+index 000000000000..e891645f745c
+--- /dev/null
++++ b/drivers/misc/mikrobus/mikrobus_id.c
+@@ -0,0 +1,207 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * mikrobus_id.c - w1 mikroBUS ID family EEPROM driver
++ *
++ */
++
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/device.h>
++#include <linux/types.h>
++#include <linux/delay.h>
++
++#include <linux/w1.h>
++#include <linux/nvmem-provider.h>
++
++#include "mikrobus_core.h"
++
++#define W1_EEPROM_MIKROBUS_ID	0xAC
++
++#define W1_MIKROBUS_ID_EEPROM_SIZE	1536
++#define W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE	32
++#define W1_MIKROBUS_ID_EEPROM_VERIFY_SCRATCH_SIZE	35
++#define W1_MIKROBUS_ID_READ_EEPROM	0xF0
++#define W1_MIKROBUS_ID_EEPROM_READ_RETRIES	10
++#define W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES	5
++#define W1_MIKROBUS_ID_EEPROM_WRITE_SCRATCH	0x0F
++#define W1_MIKROBUS_ID_EEPROM_READ_SCRATCH	0xAA
++#define W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH	0x55
++#define W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH_ES	0x40
++#define W1_MIKROBUS_ID_EEPROM_TPROG_MS		20
++
++static int w1_mikrobus_id_readblock(struct w1_slave *sl, int off, int count, char *buf)
++{
++	u8 wrbuf[3];
++	u8 *cmp;
++	int tries = W1_MIKROBUS_ID_EEPROM_READ_RETRIES;
++	
++	do {
++		wrbuf[0] = W1_MIKROBUS_ID_READ_EEPROM;
++		wrbuf[1] = count >> 8;
++		wrbuf[2] = count & 0xFF;
++
++		if (w1_reset_select_slave(sl))
++				return -1;
++		w1_write_block(sl->master, wrbuf, 3);
++		w1_read_block(sl->master, buf, count);
++
++		if (w1_reset_select_slave(sl))
++				return -1;
++		cmp = kzalloc(count, GFP_KERNEL);
++		if (!cmp)
++			return -ENOMEM;
++		w1_write_block(sl->master, wrbuf, 3);
++		w1_read_block(sl->master, cmp, count);
++		if (!memcmp(cmp, buf, count)){
++			kfree(cmp);
++			return 0;
++		}
++	} while (--tries);
++
++	dev_err(&sl->dev, "proof reading failed %d times\n",
++			W1_MIKROBUS_ID_EEPROM_READ_RETRIES);
++	kfree(cmp);
++	return -EIO;
++}
++
++static int w1_mikrobus_id_movescratch(struct w1_slave *sl, int addr, char *buf)
++{
++	u8 wrbuf[4];
++	u8 scratchpad_verify[W1_MIKROBUS_ID_EEPROM_VERIFY_SCRATCH_SIZE];
++	u8 write_scratchpad_crc[2];
++	int verify_status;
++	int tries;
++
++	wrbuf[0] = W1_MIKROBUS_ID_EEPROM_WRITE_SCRATCH;
++	wrbuf[1] = addr >> 8;
++	wrbuf[2] = addr & 0xFF;
++
++	tries = W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES;
++	do {
++		if (w1_reset_select_slave(sl))
++			return -1;
++		w1_write_block(sl->master, wrbuf, 3);
++		w1_write_block(sl->master, buf, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
++		udelay(100); /* delay for CRC calculation at slave */
++		w1_read_block(sl->master, write_scratchpad_crc, 2);
++		if (w1_reset_select_slave(sl))
++			return -1;
++		w1_write_8(sl->master, W1_MIKROBUS_ID_EEPROM_READ_SCRATCH);
++		w1_read_block(sl->master, scratchpad_verify, W1_MIKROBUS_ID_EEPROM_VERIFY_SCRATCH_SIZE);
++		verify_status = memcmp(buf, scratchpad_verify + 3, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
++	} while(verify_status && --tries);
++
++	if(!tries && verify_status){
++		dev_err(&sl->dev, "verify scratchpad failed %d times\n",
++			W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES);
++		return -EIO;
++	}
++		
++	wrbuf[0] = W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH;
++	wrbuf[1] = addr >> 8;
++	wrbuf[2] = addr & 0xFF;
++	wrbuf[3] = W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH_ES;
++	if (w1_reset_select_slave(sl))
++			return -1;
++	w1_write_block(sl->master, wrbuf, 4);
++	msleep(W1_MIKROBUS_ID_EEPROM_TPROG_MS);
++	return 0;
++}
++
++static int w1_mikrobus_id_writeblock(struct w1_slave *sl, int off, int count, char *buf)
++{
++	u16 wraddr = 0;
++	u16 len = count - (count % W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
++	u8 scratchpad_write[W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE];
++
++	while(len > 0) {
++		w1_mikrobus_id_movescratch(sl, wraddr, buf + wraddr);
++		wraddr += W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE;
++		len -= W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE;
++	}
++
++	if(count % W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE){
++		memcpy(scratchpad_write, buf + wraddr, count % W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
++		w1_mikrobus_id_movescratch(sl, wraddr, scratchpad_write);
++	}
++
++	return 0;
++}
++
++static int w1_mikrobus_id_nvmem_read(void *priv, unsigned int off, void *buf, size_t count)
++{
++	struct w1_slave *sl = priv;
++	int ret;
++
++	/* mikroBUS ID EEPROM does not support reading from offsets */
++	if (off)
++		return -EINVAL;
++
++	if (count > W1_MIKROBUS_ID_EEPROM_SIZE)
++		return -EINVAL;
++
++	mutex_lock(&sl->master->bus_mutex);
++	ret = w1_mikrobus_id_readblock(sl, off, count, buf);
++	mutex_unlock(&sl->master->bus_mutex);
++	
++	return ret;
++}
++
++static int w1_mikrobus_id_nvmem_write(void *priv, unsigned int off, void *buf, size_t count)
++{
++	struct w1_slave *sl = priv;
++	int ret;
++
++	if ((off + count) > W1_MIKROBUS_ID_EEPROM_SIZE)
++		return -EINVAL;
++
++	mutex_lock(&sl->master->bus_mutex);
++	ret = w1_mikrobus_id_writeblock(sl, off, count, buf);
++	mutex_unlock(&sl->master->bus_mutex);
++	
++	return ret;
++}
++
++static int w1_mikrobus_id_add_slave(struct w1_slave *sl)
++{
++	struct nvmem_device *nvmem;
++	struct mikrobus_port *port;
++	struct nvmem_config nvmem_cfg = {
++		.dev = &sl->dev,
++		.reg_read = w1_mikrobus_id_nvmem_read,
++		.reg_write = w1_mikrobus_id_nvmem_write,
++		.type = NVMEM_TYPE_EEPROM,
++		.read_only = false,
++		.word_size = 1,
++		.stride = 1,
++		.size = W1_MIKROBUS_ID_EEPROM_SIZE,
++		.priv = sl,
++	};
++
++	port = mikrobus_find_port_by_w1_master(sl->master);
++	if(!port)
++		return -ENODEV;
++
++	nvmem_cfg.name = port->name;
++	nvmem = devm_nvmem_register(&sl->dev, &nvmem_cfg);
++	port->eeprom = nvmem;
++	mikrobus_port_scan_eeprom(port);
++
++	return PTR_ERR_OR_ZERO(nvmem);
++}
++
++static const struct w1_family_ops w1_family_mikrobus_id_fops = {
++	.add_slave		= w1_mikrobus_id_add_slave,
++};
++
++static struct w1_family w1_family_mikrobus_id = {
++	.fid = W1_EEPROM_MIKROBUS_ID,
++	.fops = &w1_family_mikrobus_id_fops,
++};
++module_w1_family(w1_family_mikrobus_id);
++
++MODULE_AUTHOR("Vaishnav M A <vaishnav@beagleboard.org>");
++MODULE_DESCRIPTION("w1 family ac driver for mikroBUS ID EEPROM");
++MODULE_LICENSE("GPL");
++MODULE_ALIAS("w1-family-" __stringify(W1_EEPROM_MIKROBUS_ID));
+\ No newline at end of file
 diff --git a/drivers/misc/mikrobus/mikrobus_manifest.c b/drivers/misc/mikrobus/mikrobus_manifest.c
 new file mode 100644
 index 000000000000..9cacc3d36d4e
@@ -1693,6 +1989,42 @@ index 000000000000..36b64b2093f5
 +size_t mikrobus_manifest_header_validate(void *data, size_t size);
 +
 +#endif /* __MIKROBUS_MANIFEST_H */
+diff --git a/drivers/w1/w1_int.c b/drivers/w1/w1_int.c
+index b3e1792d9c49..5b16717c8415 100644
+--- a/drivers/w1/w1_int.c
++++ b/drivers/w1/w1_int.c
+@@ -243,3 +243,31 @@ void w1_remove_master_device(struct w1_bus_master *bm)
+ 	__w1_remove_master_device(found);
+ }
+ EXPORT_SYMBOL(w1_remove_master_device);
++
++/**
++ * w1_find_master_device() - find a master device
++ * @bm:	master bus device to search
++ */
++struct w1_master *w1_find_master_device(struct w1_bus_master *bm)
++{
++	struct w1_master *dev, *found = NULL;
++
++	list_for_each_entry(dev, &w1_masters, w1_master_entry) {
++		if (!dev->initialized)
++			continue;
++
++		if (dev->bus_master->data == bm->data) {
++			found = dev;
++			break;
++		}
++	}
++
++	if (!found) {
++		pr_err("device doesn't exist.\n");
++		return ERR_PTR(-ENODEV);
++	}
++
++	return found;
++}
++EXPORT_SYMBOL(w1_find_master_device);
++
 diff --git a/include/linux/greybus/greybus_manifest.h b/include/linux/greybus/greybus_manifest.h
 index 6e62fe478712..50d5a5fd3d51 100644
 --- a/include/linux/greybus/greybus_manifest.h
@@ -1767,6 +2099,18 @@ index 6e62fe478712..50d5a5fd3d51 100644
  	};
  } __packed;
  
+diff --git a/include/linux/w1.h b/include/linux/w1.h
+index cebf3464bc03..2076f9a289cf 100644
+--- a/include/linux/w1.h
++++ b/include/linux/w1.h
+@@ -242,6 +242,7 @@ struct w1_master {
+ 
+ int w1_add_master_device(struct w1_bus_master *master);
+ void w1_remove_master_device(struct w1_bus_master *master);
++struct w1_master *w1_find_master_device(struct w1_bus_master *master);
+ 
+ /**
+  * struct w1_family_ops - operations for a family type
 -- 
 2.25.1
 
