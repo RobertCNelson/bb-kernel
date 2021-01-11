@@ -1,6 +1,6 @@
-From b1ca47729891d0a6521fb83fb088fb274b60cfcf Mon Sep 17 00:00:00 2001
+From 9a985abc11d4bd58d0ddc6952a2dd1f00900f8f3 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 28 Dec 2020 17:04:24 -0600
+Date: Sun, 10 Jan 2021 18:55:04 -0600
 Subject: [PATCH] backports: counter: from: linux.git
 
 Reference: v5.5.19
@@ -10,10 +10,12 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/bus/Makefile                          |   1 +
  drivers/bus/fsl-mc/dprc-driver.c              |   6 +-
  drivers/bus/fsl-mc/dprc.c                     |  53 ++
+ drivers/bus/fsl-mc/fsl-mc-allocator.c         |   4 +-
  drivers/bus/fsl-mc/fsl-mc-bus.c               |  43 ++
  drivers/bus/fsl-mc/fsl-mc-private.h           |  42 ++
  drivers/bus/fsl-mc/mc-io.c                    |   7 +-
  drivers/bus/hisi_lpc.c                        |  36 +-
+ drivers/bus/mips_cdmm.c                       |   4 +-
  drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} |   0
  drivers/bus/ti-sysc.c                         | 435 +++++-----------
  drivers/counter/104-quad-8.c                  | 227 ++-------
@@ -30,15 +32,17 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/pwm/pwm-bcm2835.c                     |   1 -
  drivers/pwm/pwm-img.c                         |  11 +-
  drivers/pwm/pwm-jz4740.c                      |   9 +-
+ drivers/pwm/pwm-lp3943.c                      |   1 -
  drivers/pwm/pwm-lpss.c                        |   7 +-
  drivers/pwm/pwm-rcar.c                        |  10 +-
  drivers/pwm/pwm-renesas-tpu.c                 |   9 +-
  drivers/pwm/pwm-stm32.c                       | 112 +++--
  drivers/pwm/pwm-sun4i.c                       |   1 -
+ drivers/pwm/pwm-zx.c                          |   1 -
  include/linux/counter.h                       |  76 +--
  include/linux/mfd/stm32-timers.h              |  12 +-
  include/linux/platform_data/ti-sysc.h         |   1 -
- 32 files changed, 963 insertions(+), 792 deletions(-)
+ 36 files changed, 967 insertions(+), 798 deletions(-)
  rename drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} (100%)
  create mode 100644 drivers/counter/ti-eqep.c
 
@@ -164,6 +168,22 @@ index 0fe3f52ae0de..602f030d84eb 100644
 +
 +	return 0;
 +}
+diff --git a/drivers/bus/fsl-mc/fsl-mc-allocator.c b/drivers/bus/fsl-mc/fsl-mc-allocator.c
+index 95672306d371..cc7bb900f524 100644
+--- a/drivers/bus/fsl-mc/fsl-mc-allocator.c
++++ b/drivers/bus/fsl-mc/fsl-mc-allocator.c
+@@ -292,10 +292,8 @@ int __must_check fsl_mc_object_allocate(struct fsl_mc_device *mc_dev,
+ 		goto error;
+ 
+ 	mc_adev = resource->data;
+-	if (!mc_adev) {
+-		error = -EINVAL;
++	if (!mc_adev)
+ 		goto error;
+-	}
+ 
+ 	mc_adev->consumer_link = device_link_add(&mc_dev->dev,
+ 						 &mc_adev->dev,
 diff --git a/drivers/bus/fsl-mc/fsl-mc-bus.c b/drivers/bus/fsl-mc/fsl-mc-bus.c
 index 5c9bf2e06552..c78d10ea641f 100644
 --- a/drivers/bus/fsl-mc/fsl-mc-bus.c
@@ -429,6 +449,22 @@ index 2e9252d37a18..8101df901830 100644
 +		resources[count++] = *rentry->res;
  
  	acpi_dev_free_resource_list(&resource_list);
+ 
+diff --git a/drivers/bus/mips_cdmm.c b/drivers/bus/mips_cdmm.c
+index 7c1da45be166..1b14256376d2 100644
+--- a/drivers/bus/mips_cdmm.c
++++ b/drivers/bus/mips_cdmm.c
+@@ -544,8 +544,10 @@ static void mips_cdmm_bus_discover(struct mips_cdmm_bus *bus)
+ 		dev_set_name(&dev->dev, "cdmm%u-%u", cpu, id);
+ 		++id;
+ 		ret = device_register(&dev->dev);
+-		if (ret)
++		if (ret) {
+ 			put_device(&dev->dev);
++			kfree(dev);
++		}
+ 	}
+ }
  
 diff --git a/drivers/pwm/pwm-tipwmss.c b/drivers/bus/ti-pwmss.c
 similarity index 100%
@@ -2760,6 +2796,18 @@ index 77c28313e95f..9d78cc21cb12 100644
  	duty = period - tmp;
  
  	if (duty >= period)
+diff --git a/drivers/pwm/pwm-lp3943.c b/drivers/pwm/pwm-lp3943.c
+index bf3f14fb5f24..7551253ada32 100644
+--- a/drivers/pwm/pwm-lp3943.c
++++ b/drivers/pwm/pwm-lp3943.c
+@@ -275,7 +275,6 @@ static int lp3943_pwm_probe(struct platform_device *pdev)
+ 	lp3943_pwm->chip.dev = &pdev->dev;
+ 	lp3943_pwm->chip.ops = &lp3943_pwm_ops;
+ 	lp3943_pwm->chip.npwm = LP3943_NUM_PWMS;
+-	lp3943_pwm->chip.base = -1;
+ 
+ 	platform_set_drvdata(pdev, lp3943_pwm);
+ 
 diff --git a/drivers/pwm/pwm-lpss.c b/drivers/pwm/pwm-lpss.c
 index d77cec2769b7..75bbfe5f3bc2 100644
 --- a/drivers/pwm/pwm-lpss.c
@@ -3068,6 +3116,18 @@ index 05273725a9ff..581d23287333 100644
  		/*
  		 * When not using any prescaler, the clock period in nanoseconds
  		 * is not an integer so round it half up instead of
+diff --git a/drivers/pwm/pwm-zx.c b/drivers/pwm/pwm-zx.c
+index 3763ce5311ac..e2c21cc34a96 100644
+--- a/drivers/pwm/pwm-zx.c
++++ b/drivers/pwm/pwm-zx.c
+@@ -238,7 +238,6 @@ static int zx_pwm_probe(struct platform_device *pdev)
+ 	ret = pwmchip_add(&zpc->chip);
+ 	if (ret < 0) {
+ 		dev_err(&pdev->dev, "failed to add PWM chip: %d\n", ret);
+-		clk_disable_unprepare(zpc->pclk);
+ 		return ret;
+ 	}
+ 
 diff --git a/include/linux/counter.h b/include/linux/counter.h
 index a061cdcdef7c..9dbd5df4cd34 100644
 --- a/include/linux/counter.h
