@@ -34,10 +34,6 @@ cat_files () {
 		cat ./patches/git/BBDTBS >> ${wfile}
 	fi
 
-	if [ -f ./patches/git/CAN-ISOTP ] ; then
-		cat ./patches/git/CAN-ISOTP >> ${wfile}
-	fi
-
 	if [ -f ./patches/git/RT ] ; then
 		cat ./patches/git/RT >> ${wfile}
 	fi
@@ -48,6 +44,10 @@ cat_files () {
 
 	if [ -f ./patches/git/WIREGUARD ] ; then
 		cat ./patches/git/WIREGUARD >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/WPANUSB ] ; then
+		cat ./patches/git/WPANUSB >> ${wfile}
 	fi
 }
 

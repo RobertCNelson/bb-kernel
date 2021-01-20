@@ -103,48 +103,48 @@ external_git () {
 	${git_bin} describe
 }
 
-can_isotp () {
+wpanusb () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ ! -d ./can-isotp ] ; then
-			${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
-			cd ./can-isotp
-				isotp_hash=$(git rev-parse HEAD)
+		if [ ! -d ./wpanusb ] ; then
+			${git_bin} clone https://github.com/statropy/wpanusb --depth=1
+			cd ./wpanusb
+				wpanusb_hash=$(git rev-parse HEAD)
 			cd -
 		else
-			rm -rf ./can-isotp || true
-			${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
-			cd ./can-isotp
-				isotp_hash=$(git rev-parse HEAD)
+			rm -rf ./wpanusb || true
+			${git_bin} clone https://github.com/statropy/wpanusb --depth=1
+			cd ./wpanusb
+				wpanusb_hash=$(git rev-parse HEAD)
 			cd -
 		fi
 
 		cd ./KERNEL/
 
-		cp -v ../can-isotp/include/uapi/linux/can/isotp.h  include/uapi/linux/can/
-		cp -v ../can-isotp/net/can/isotp.c net/can/
+		cp -v ../wpanusb/wpanusb.h drivers/net/ieee802154/
+		cp -v ../wpanusb/wpanusb.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: can-isotp: https://github.com/hartkopp/can-isotp' -m "https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/can_isotp/
-		echo "CAN-ISOTP: https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" > ../patches/git/CAN-ISOTP
+		${git_bin} commit -a -m 'merge: wpanusb: https://github.com/statropy/wpanusb' -m "https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/wpanusb/
+		echo "WPANUSB: https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" > ../patches/git/WPANUSB
 
-		rm -rf ../can-isotp/ || true
+		rm -rf ../wpanusb/ || true
 
 		${git_bin} reset --hard HEAD~1
 
 		start_cleanup
 
-		${git} "${DIR}/patches/can_isotp/0001-merge-can-isotp-https-github.com-hartkopp-can-isotp.patch"
+		${git} "${DIR}/patches/wpanusb/0001-merge-wpanusb-https-github.com-statropy-wpanusb.patch"
 
-		wdir="can_isotp"
+		wdir="wpanusb"
 		number=1
 		cleanup
 
 		exit 2
 	fi
-	dir 'can_isotp'
+	dir 'wpanusb'
 }
 
 rt_cleanup () {
@@ -227,7 +227,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.8.x"
+	branch="v5.10.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -250,16 +250,16 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
+		#device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
-		device="am335x-abbbi.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		#device="am335x-abbbi.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
-		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -289,10 +289,10 @@ local_patch () {
 }
 
 #external_git
-can_isotp
+wpanusb
 rt
 ti_pm_firmware
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -306,6 +306,10 @@ pre_backports () {
 		${git_bin} checkout ${backport_tag} -b tmp
 	fi
 	cd -
+}
+
+omap () {
+	dir 'tmlind/v5.11'
 }
 
 post_backports () {
@@ -390,7 +394,6 @@ drivers () {
 
 soc () {
 #	dir 'soc/imx/udoo'
-#	dir 'soc/imx/wandboard'
 #	dir 'soc/imx/imx7'
 
 	dir 'soc/ti/panda'
@@ -400,6 +403,7 @@ soc () {
 ###
 #backports
 #reverts
+omap
 drivers
 soc
 
