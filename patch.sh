@@ -172,7 +172,7 @@ wpanusb () {
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: wpanusb: https://github.com/statropy/wpanusb' -m "https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/wpanusb/
-		echo "WPANUSB: https://github.com/statropy/wpanusb/commit/${isotp_hash}" > ../patches/git/WPANUSB
+		echo "WPANUSB: https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" > ../patches/git/WPANUSB
 
 		rm -rf ../wpanusb/ || true
 
@@ -291,6 +291,7 @@ beagleboard_dtbs () {
 		fi
 		cd ./KERNEL/
 
+		mkdir -p arch/arm/boot/dts/overlays/
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
@@ -422,11 +423,11 @@ reverts () {
 }
 
 drivers () {
+	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
-	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
@@ -437,6 +438,7 @@ drivers () {
 	dir 'drivers/iio'
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/mmc'
+	dir 'fixes'
 }
 
 soc () {
