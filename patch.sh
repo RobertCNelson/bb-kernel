@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -308,6 +308,7 @@ beagleboard_dtbs () {
 		fi
 		cd ./KERNEL/
 
+		mkdir -p arch/arm/boot/dts/overlays/
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
@@ -409,7 +410,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.6.19"
+	backport_tag="1657f11c7ca109b6f7e7bec4e241bf6cbbe2d4b0"
 
 	subsystem="exfat"
 	#regenerate="enable"
@@ -475,9 +476,10 @@ reverts () {
 	fi
 
 	## notes
-	##git revert --no-edit xyz -s
+	#git revert --no-edit 87ea51c90280388f71255121bb29e9f6a531c754 -s
+	#exit 2
 
-	#${git} "${DIR}/patches/reverts/0001-Revert-xyz.patch"
+	${git} "${DIR}/patches/reverts/0001-Revert-vmlinux.lds.h-Add-PGO-and-AutoFDO-input-secti.patch"
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
@@ -487,12 +489,12 @@ reverts () {
 }
 
 drivers () {
+	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
-	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
@@ -512,7 +514,7 @@ soc () {
 
 ###
 backports
-#reverts
+reverts
 drivers
 soc
 dir 'fixes'
