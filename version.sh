@@ -11,6 +11,7 @@ branch_postfix=""
 #https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v4.19-rc1
 #arm
 KERNEL_ARCH=arm
+DEBARCH=armhf
 #toolchain="gcc_linaro_eabi_4_8"
 #toolchain="gcc_linaro_eabi_4_9"
 #toolchain="gcc_linaro_eabi_5"
@@ -30,12 +31,17 @@ toolchain="gcc_arm_gnueabihf_8"
 #toolchain="gcc_arm_gnueabihf_10"
 #arm64
 #KERNEL_ARCH=arm64
+#DEBARCH=arm64
 #toolchain="gcc_linaro_aarch64_gnu_5"
 #toolchain="gcc_linaro_aarch64_gnu_6"
 #toolchain="gcc_linaro_aarch64_gnu_7"
 #toolchain="gcc_arm_aarch64_gnu_8"
 #toolchain="gcc_arm_aarch64_gnu_9"
 #toolchain="gcc_arm_aarch64_gnu_10"
+#riscv64
+#KERNEL_ARCH=riscv
+#DEBARCH=riscv64
+#toolchain="gcc_10_riscv64"
 
 #Kernel
 KERNEL_REL=4.19
@@ -52,5 +58,4 @@ BUILD=${build_prefix}58
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=xross
-DEBARCH=armhf
 #
