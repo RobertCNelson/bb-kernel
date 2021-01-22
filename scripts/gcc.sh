@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -41,16 +41,22 @@ fi
 
 dl_gcc_generic () {
 	WGET="wget -c --directory-prefix=${gcc_dir}/"
-	if [ ! -f "${gcc_dir}/${gcc_filename_prefix}/${datestamp}" ] ; then
+	if [ "x${extracted_dir}" = "x" ] ; then
+		filename_prefix=${gcc_filename_prefix}
+	else
+		filename_prefix=${extracted_dir}
+	fi
+	
+	if [ ! -f "${gcc_dir}/${filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
 		echo "-----------------------------"
 		${WGET} "${gcc_html_path}${gcc_filename_prefix}.tar.xz"
-		if [ -d "${gcc_dir}/${gcc_filename_prefix}" ] ; then
-			rm -rf "${gcc_dir}/${gcc_filename_prefix}" || true
+		if [ -d "${gcc_dir}/${filename_prefix}" ] ; then
+			rm -rf "${gcc_dir}/${filename_prefix}" || true
 		fi
 		tar -xf "${gcc_dir}/${gcc_filename_prefix}.tar.xz" -C "${gcc_dir}/"
-		if [ -f "${gcc_dir}/${gcc_filename_prefix}/${binary}gcc" ] ; then
-			touch "${gcc_dir}/${gcc_filename_prefix}/${datestamp}"
+		if [ -f "${gcc_dir}/${filename_prefix}/${binary}gcc" ] ; then
+			touch "${gcc_dir}/${filename_prefix}/${datestamp}"
 		fi
 	else
 		echo "Using Existing Toolchain: ${toolchain}"
@@ -60,11 +66,12 @@ dl_gcc_generic () {
 		#using native gcc
 		CC=
 	else
-		CC="${gcc_dir}/${gcc_filename_prefix}/${binary}"
+		CC="${gcc_dir}/${filename_prefix}/${binary}"
 	fi
 }
 
 gcc_toolchain () {
+	unset extracted_dir
 	case "${toolchain}" in
 	gcc_linaro_eabi_4_9)
 		#
@@ -362,6 +369,20 @@ gcc_toolchain () {
 
 		binary="bin/aarch64-none-linux-gnu-"
 		;;
+	gcc_10_riscv64)
+		#
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.1.0/x86_64-gcc-10.1.0-nolibc-riscv64-linux.tar.xz
+		#
+
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.1.0/"
+		gcc_filename_prefix="x86_64-gcc-10.1.0-nolibc-riscv64-linux"
+		extracted_dir="gcc-10.1.0-nolibc/riscv64-linux"
+		gcc_banner="riscv64-linux-gcc (GCC) 10.1.0"
+		gcc_copyright="2020"
+		datestamp="2020.10.1.0-riscv64-linux-gcc"
+
+		binary="bin/riscv64-linux-"
+		;;
 	*)
 		echo "bug: maintainer forgot to set:"
 		echo "toolchain=\"xzy\" in version.sh"
@@ -383,8 +404,16 @@ fi
 if [ "x${KERNEL_ARCH}" = "xarm64" ] ; then
 	check="aarch64"
 fi
+if [ "x${KERNEL_ARCH}" = "xriscv" ] ; then
+	check="riscv"
+fi
 
-GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep ${check} || true)
+if [ "x${check}" = "x" ] ; then
+	echo "ERROR: fix: scripts/gcc.sh..."
+	exit 2
+else
+	GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep ${check} || true)
+fi
 
 if [ "x${GCC_TEST}" = "x" ] ; then
 	echo "-----------------------------"
