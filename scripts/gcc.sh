@@ -46,7 +46,7 @@ dl_gcc_generic () {
 	else
 		filename_prefix=${extracted_dir}
 	fi
-	
+
 	if [ ! -f "${gcc_dir}/${filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
 		echo "-----------------------------"
