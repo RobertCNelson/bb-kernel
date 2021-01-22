@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -483,7 +483,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.166"
+	backport_tag="v4.19.169"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -499,7 +499,7 @@ backports () {
 		${git} "${DIR}/patches/backports/greybus/0002-greybus-drivers-staging-greybus-module.c-no-struct_s.patch"
 	fi
 
-	backport_tag="v5.4.88"
+	backport_tag="v5.4.91"
 
 	subsystem="wiznet"
 	#regenerate="enable"
