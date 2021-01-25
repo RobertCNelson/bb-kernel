@@ -251,7 +251,7 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
+		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
 		#device="am335x-abbbi.dtb" ; dtb_makefile_append
 		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
@@ -330,27 +330,23 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.4.18"
+#	backport_tag="v5.11-rc5"
+#
+#	subsystem="wlcore"
+#	#regenerate="enable"
+#	if [ "x${regenerate}" = "xenable" ] ; then
+#		pre_backports
+#
+#		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
+#
+#		post_backports
+#		exit 2
+#	else
+#		patch_backports
+#	fi
 
-	subsystem="brcm80211"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/net/wireless/broadcom/brcm80211/* ./drivers/net/wireless/broadcom/brcm80211/
-		cp -v ~/linux-src/include/linux/mmc/sdio_ids.h ./include/linux/mmc/sdio_ids.h
-		#cp -v ~/linux-src/include/linux/firmware.h ./include/linux/firmware.h
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	#regenerate="enable"
-	dir 'cypress/brcmfmac'
-	#exit 2
-	dir 'cypress/fixes'
+	${git} "${DIR}/patches/backports/wlcore/0002-wlcore-Downgrade-exceeded-max-RX-BA-sessions-to-debu.patch"
+	${git} "${DIR}/patches/backports/wlcore/0003-wlcore-Fix-command-execute-failure-19-for-wl12xx.patch"
 }
 
 reverts () {
@@ -398,7 +394,7 @@ soc () {
 }
 
 ###
-#backports
+backports
 #reverts
 drivers
 soc
