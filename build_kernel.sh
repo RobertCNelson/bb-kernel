@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2019 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,18 +24,6 @@ DIR=$PWD
 git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
-
-config_patch_build_salt () {
-	sed -i -e 's:CONFIG_BUILD_SALT:#CONFIG_BUILD_SALT:g' .config
-	echo "CONFIG_BUILD_SALT=\"${KERNEL_TAG}${BUILD}\"" >> .config
-}
-
-config_use_lzo_if_no_lz4 () {
-	if [ ! -f /usr/bin/lz4 ] ; then
-		sed -i -e 's:CONFIG_KERNEL_LZ4=y:# CONFIG_KERNEL_LZ4 is not set:g' .config
-		sed -i -e 's:# CONFIG_KERNEL_LZO is not set:CONFIG_KERNEL_LZO=y:g' .config
-	fi
-}
 
 patch_kernel () {
 	cd "${DIR}/KERNEL" || exit
@@ -68,10 +56,6 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
-	if [ ! -f "${DIR}/.yakbuild" ] ; then
-		config_patch_build_salt
-		config_use_lzo_if_no_lz4
-	fi
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
@@ -193,27 +177,6 @@ if [ ! -f "${DIR}/system.sh" ] ; then
 	cp -v "${DIR}/system.sh.sample" "${DIR}/system.sh"
 fi
 
-if [ -f "${DIR}/branches.list" ] ; then
-	echo "-----------------------------"
-	echo "Please checkout one of the active branches:"
-	echo "-----------------------------"
-	cat "${DIR}/branches.list" | grep -v INACTIVE
-	echo "-----------------------------"
-	exit
-fi
-
-if [ -f "${DIR}/branch.expired" ] ; then
-	echo "-----------------------------"
-	echo "Support for this branch has expired."
-	unset response
-	echo -n "Do you wish to bypass this warning and support your self: (y/n)? "
-	read response
-	if [ "x${response}" != "xy" ] ; then
-		exit
-	fi
-	echo "-----------------------------"
-fi
-
 unset CC
 unset LINUX_GIT
 . "${DIR}/system.sh"
@@ -254,8 +217,10 @@ if [  -f "${DIR}/.yakbuild" ] ; then
 	BUILD=$(echo ${kernel_tag} | sed 's/[^-]*//'|| true)
 fi
 make_kernel
-make_modules_pkg
-make_dtbs_pkg
+if [ ! "${AUTO_BUILD_DONT_PKG}" ] ; then
+	make_modules_pkg
+	make_dtbs_pkg
+fi
 echo "-----------------------------"
 echo "Script Complete"
 echo "${KERNEL_UTS}" > kernel_version
