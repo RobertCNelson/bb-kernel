@@ -39,7 +39,7 @@ check_rpm () {
 }
 
 redhat_reqs () {
-	pkgtool="yum"
+	pkgtool="dnf"
 
 	#https://fedoraproject.org/wiki/Releases
 	unset rpm_pkgs
@@ -53,30 +53,37 @@ redhat_reqs () {
 	check_rpm
 	pkg="wget"
 	check_rpm
+	pkg="fakeroot"
+	check_rpm
+	pkg="xz"
+	check_rpm
+	pkg="lzop"
+	check_rpm
+	pkg="bison"
+	check_rpm
+	pkg="flex"
+	check_rpm
+	pkg="uboot-tools"
+	check_rpm
+	pkg="openssl-devel"
+	check_rpm
 
 	arch=$(uname -m)
 	if [ "x${arch}" = "xx86_64" ] ; then
 		pkg="ncurses-devel.x86_64"
 		check_rpm
+		pkg="libmpc-devel.x86_64"
+		check_rpm
 		if [ "x${ignore_32bit}" = "xfalse" ] ; then
 			pkg="ncurses-devel.i686"
+			check_rpm
+			pkg="libmpc-devel.i686"
 			check_rpm
 			pkg="libstdc++.i686"
 			check_rpm
 			pkg="zlib.i686"
 			check_rpm
 		fi
-	fi
-
-	if [ "$(which lsb_release)" ] ; then
-		rpm_distro=$(lsb_release -rs)
-		echo "RPM distro version: [${rpm_distro}]"
-
-		case "${rpm_distro}" in
-		22|23|24|25)
-			pkgtool="dnf"
-			;;
-		esac
 	fi
 
 	if [ "${rpm_pkgs}" ] ; then
@@ -312,6 +319,10 @@ debian_regs () {
 			#LMDE 3 https://linuxmint.com/rel_cindy.php
 			deb_distro="stretch"
 			;;
+		debbie)
+			#LMDE 4
+			deb_distro="buster"
+			;;
 		debian)
 			deb_distro="jessie"
 			;;
@@ -393,16 +404,36 @@ debian_regs () {
 			#https://blog.linuxmint.com/?p=3671
 			deb_distro="bionic"
 			;;
+		tina)
+			#19.2
+			#https://blog.linuxmint.com/?p=3736
+			deb_distro="bionic"
+			;;
+		tricia)
+			#19.3
+			#http://packages.linuxmint.com/index.php
+			deb_distro="bionic"
+			;;
+		ulyana)
+			#20
+			#http://packages.linuxmint.com/index.php
+			deb_distro="focal"
+			;;
+		ulyssa)
+			#20
+			#http://packages.linuxmint.com/index.php
+			deb_distro="groovy"
+			;;
 		esac
 
 		#Future Debian Code names:
 		case "${deb_distro}" in
-		bullseye)
-			#11 bullseye: https://wiki.debian.org/DebianBullseye
+		bookworm)
+			#12 bookworm: https://wiki.debian.org/DebianBookworm
 			deb_distro="sid"
 			;;
-		bookworm)
-			#12 bookworm:
+		trixie)
+			#13 trixie: https://wiki.debian.org/DebianTrixie
 			deb_distro="sid"
 			;;
 		esac
@@ -410,11 +441,12 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		jessie|stretch|buster|sid)
+		jessie|stretch|buster|bullseye|sid)
 			#https://wiki.debian.org/LTS
 			#8 jessie: https://wiki.debian.org/DebianJessie
 			#9 stretch: https://wiki.debian.org/DebianStretch
 			#10 buster: https://wiki.debian.org/DebianBuster
+			#11 bullseye: https://wiki.debian.org/DebianBullseye
 			unset warn_eol_distro
 			;;
 		squeeze|wheezy)
@@ -424,15 +456,20 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|cosmic)
-			#18.04 bionic: (EOL: April 2023) lts: bionic -> xyz
-			#18.10 cosmic: (EOL: July 2019)
+		bionic|focal|groovy|hirsute)
+			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
+			#20.04 focal: (EOL: April 2025) lts: focal -> xyz
+			#20.10 groovy: (EOL: July 2021)
+			#21.04 hirsute: (EOL: January 2022)
 			unset warn_eol_distro
 			;;
-		yakkety|zesty|artful)
+		yakkety|zesty|artful|cosmic|disco|eoan)
 			#16.10 yakkety: (EOL: July 20, 2017)
 			#17.04 zesty: (EOL: January 2018)
 			#17.10 artful: (EOL: July 2018)
+			#18.10 cosmic: (EOL: July 18, 2019)
+			#19.04 disco: (EOL: January 23, 2020)
+			#19.10 eoan: (EOL: July 2020)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -440,18 +477,7 @@ debian_regs () {
 			#16.04 xenial: (EOL: April 2021) lts: xenial -> bionic
 			unset warn_eol_distro
 			;;
-		utopic|vivid|wily)
-			#14.10 utopic: (EOL: July 23, 2015)
-			#15.04 vivid: (EOL: February 4, 2016)
-			#15.10 wily: (EOL: July 28, 2016)
-			warn_eol_distro=1
-			stop_pkg_search=1
-			;;
-		trusty)
-			#14.04 trusty: (EOL: April 2019) lts: trusty -> xenial
-			unset warn_eol_distro
-			;;
-		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy)
+		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
@@ -461,6 +487,10 @@ debian_regs () {
 			#12.10 quantal: (EOL: May 16, 2014)
 			#13.04 raring: (EOL: January 27, 2014)
 			#13.10 saucy: (EOL: July 17, 2014)
+			#14.04 trusty: (EOL: April 25, 2019) lts: trusty -> xenial
+			#14.10 utopic: (EOL: July 23, 2015)
+			#15.04 vivid: (EOL: February 4, 2016)
+			#15.10 wily: (EOL: July 28, 2016)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -529,7 +559,7 @@ debian_regs () {
 	if [ "${error_unknown_deb_distro}" ] ; then
 		echo "Unrecognized deb based system:"
 		echo "-----------------------------"
-		echo "Please cut, paste and email to: bugs@rcn-ee.com"
+		echo "Please cut, paste and email to: robertcnelson+bugs@gmail.com"
 		echo "-----------------------------"
 		echo "git: [$(${git_bin} rev-parse HEAD)]"
 		echo "git: [$(cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g')]"
@@ -588,6 +618,12 @@ if [ "x${ARCH}" = "xx86_64" ] ; then
 	gcc_arm_eabi_8|gcc_arm_gnueabihf_8|gcc_arm_aarch64_gnu_8)
 		ignore_32bit="true"
 		;;
+	gcc_arm_eabi_9|gcc_arm_gnueabihf_9|gcc_arm_aarch64_gnu_9)
+		ignore_32bit="true"
+		;;
+	gcc_arm_eabi_10|gcc_arm_gnueabihf_10|gcc_arm_aarch64_gnu_10)
+		ignore_32bit="true"
+		;;
 	*)
 		ignore_32bit="false"
 		;;
@@ -619,6 +655,28 @@ elif [ "${git_major}" -eq "${compare_major}" ] ; then
 			build_git="true"
 		fi
 	fi
+fi
+
+echo "-----------------------------"
+unset NEEDS_COMMAND
+check_for_command () {
+	if ! which "$1" >/dev/null 2>&1 ; then
+		echo "You're missing command $1"
+		NEEDS_COMMAND=1
+	else
+		version=$(LC_ALL=C $1 $2 | head -n 1)
+		echo "$1: $version"
+	fi
+}
+
+unset NEEDS_COMMAND
+check_for_command cpio --version
+check_for_command lzop --version
+
+if [ "${NEEDS_COMMAND}" ] ; then
+	echo "Please install missing commands"
+	echo "-----------------------------"
+	exit 2
 fi
 
 case "$BUILD_HOST" in
