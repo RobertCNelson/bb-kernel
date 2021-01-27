@@ -247,6 +247,7 @@ beagleboard_dtbs () {
 		fi
 		cd ./KERNEL/
 
+		mkdir -p arch/arm/boot/dts/overlays/
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
@@ -370,12 +371,12 @@ reverts () {
 }
 
 drivers () {
+	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/pwm'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
-	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
@@ -400,9 +401,9 @@ drivers
 soc
 
 packaging () {
-	#do_backport="enable"
+	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.6-rc4"
+		backport_tag="v5.10"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
