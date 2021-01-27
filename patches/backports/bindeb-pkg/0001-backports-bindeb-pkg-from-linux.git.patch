@@ -1,0 +1,228 @@
+From 1067db4462ce434f001f434f445af58f0f70b98f Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Wed, 27 Jan 2021 13:00:06 -0600
+Subject: [PATCH] backports: bindeb-pkg: from: linux.git
+
+Reference: v5.10
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ scripts/package/builddeb | 21 ++++++++++++------
+ scripts/package/buildtar | 18 +++++++++++++---
+ scripts/package/mkdebian | 46 ++++++++++++++++++++++++----------------
+ scripts/package/mkspec   |  2 +-
+ 4 files changed, 59 insertions(+), 28 deletions(-)
+
+diff --git a/scripts/package/builddeb b/scripts/package/builddeb
+index 6df3c9f8b2da..91a502bb97e8 100755
+--- a/scripts/package/builddeb
++++ b/scripts/package/builddeb
+@@ -26,24 +26,31 @@ if_enabled_echo() {
+ 
+ create_package() {
+ 	local pname="$1" pdir="$2"
++	local dpkg_deb_opts
+ 
+ 	mkdir -m 755 -p "$pdir/DEBIAN"
+ 	mkdir -p "$pdir/usr/share/doc/$pname"
+ 	cp debian/copyright "$pdir/usr/share/doc/$pname/"
+ 	cp debian/changelog "$pdir/usr/share/doc/$pname/changelog.Debian"
+-	gzip -9 "$pdir/usr/share/doc/$pname/changelog.Debian"
++	gzip -n -9 "$pdir/usr/share/doc/$pname/changelog.Debian"
+ 	sh -c "cd '$pdir'; find . -type f ! -path './DEBIAN/*' -printf '%P\0' \
+ 		| xargs -r0 md5sum > DEBIAN/md5sums"
+ 
+ 	# Fix ownership and permissions
+-	chown -R root:root "$pdir"
++	if [ "$DEB_RULES_REQUIRES_ROOT" = "no" ]; then
++		dpkg_deb_opts="--root-owner-group"
++	else
++		chown -R root:root "$pdir"
++	fi
+ 	chmod -R go-w "$pdir"
+ 	# in case we are in a restrictive umask environment like 0077
+ 	chmod -R a+rX "$pdir"
++	# in case we build in a setuid/setgid directory
++	chmod -R ug-s "$pdir"
+ 
+ 	# Create the package
+ 	dpkg-gencontrol -p$pname -P"$pdir"
+-	dpkg-deb ${KDEB_COMPRESS:+-Z$KDEB_COMPRESS} --build "$pdir" ..
++	dpkg-deb $dpkg_deb_opts ${KDEB_COMPRESS:+-Z$KDEB_COMPRESS} --build "$pdir" ..
+ }
+ 
+ deploy_kernel_headers () {
+@@ -55,7 +62,7 @@ deploy_kernel_headers () {
+ 		cd $srctree
+ 		find . arch/$SRCARCH -maxdepth 1 -name Makefile\*
+ 		find include scripts -type f -o -type l
+-		find arch/$SRCARCH -name module.lds -o -name Kbuild.platforms -o -name Platform
++		find arch/$SRCARCH -name Kbuild.platforms -o -name Platform
+ 		find $(find arch/$SRCARCH -name include -o -name scripts -type d) -type f
+ 	) > debian/hdrsrcfiles
+ 
+@@ -202,8 +209,10 @@ EOF
+ done
+ 
+ if [ "$ARCH" != "um" ]; then
+-	deploy_kernel_headers debian/linux-headers
+-	create_package linux-headers-$version debian/linux-headers
++	if is_enabled CONFIG_MODULES; then
++		deploy_kernel_headers debian/linux-headers
++		create_package linux-headers-$version debian/linux-headers
++	fi
+ 
+ 	deploy_libc_headers debian/linux-libc-dev
+ 	create_package linux-libc-dev debian/linux-libc-dev
+diff --git a/scripts/package/buildtar b/scripts/package/buildtar
+index 77c7caefede1..936198a90477 100755
+--- a/scripts/package/buildtar
++++ b/scripts/package/buildtar
+@@ -28,15 +28,15 @@ case "${1}" in
+ 		opts=
+ 		;;
+ 	targz-pkg)
+-		opts=--gzip
++		opts="-I ${KGZIP}"
+ 		tarball=${tarball}.gz
+ 		;;
+ 	tarbz2-pkg)
+-		opts=--bzip2
++		opts="-I ${KBZIP2}"
+ 		tarball=${tarball}.bz2
+ 		;;
+ 	tarxz-pkg)
+-		opts=--xz
++		opts="-I ${XZ}"
+ 		tarball=${tarball}.xz
+ 		;;
+ 	*)
+@@ -53,6 +53,18 @@ rm -rf -- "${tmpdir}"
+ mkdir -p -- "${tmpdir}/boot"
+ dirs=boot
+ 
++
++#
++# Try to install dtbs
++#
++if grep -q '^CONFIG_OF_EARLY_FLATTREE=y' include/config/auto.conf; then
++	# Only some architectures with OF support have this target
++	if [ -d "${srctree}/arch/${SRCARCH}/boot/dts" ]; then
++		$MAKE ARCH="${ARCH}" -f ${srctree}/Makefile INSTALL_DTBS_PATH="${tmpdir}/boot/dtbs/${KERNELRELEASE}" dtbs_install
++    fi
++fi
++
++
+ #
+ # Try to install modules
+ #
+diff --git a/scripts/package/mkdebian b/scripts/package/mkdebian
+index df1adbfb8ead..60a2a63a5e90 100755
+--- a/scripts/package/mkdebian
++++ b/scripts/package/mkdebian
+@@ -94,16 +94,16 @@ else
+ 	packageversion=$version-$revision
+ fi
+ sourcename=$KDEB_SOURCENAME
+-packagename=linux-image-$version
+-kernel_headers_packagename=linux-headers-$version
+-dbg_packagename=$packagename-dbg
+-debarch=
+-set_debarch
+ 
+ if [ "$ARCH" = "um" ] ; then
+-	packagename=user-mode-linux-$version
++	packagename=user-mode-linux
++else
++	packagename=linux-image
+ fi
+ 
++debarch=
++set_debarch
++
+ email=${DEBEMAIL-$EMAIL}
+ 
+ # use email string directly if it contains <email>
+@@ -174,22 +174,16 @@ Source: $sourcename
+ Section: kernel
+ Priority: optional
+ Maintainer: $maintainer
++Rules-Requires-Root: no
+ Build-Depends: bc, rsync, kmod, cpio, bison, flex | flex:native $extra_build_depends
+-Homepage: http://www.kernel.org/
++Homepage: https://www.kernel.org/
+ 
+-Package: $packagename
++Package: $packagename-$version
+ Architecture: $debarch
+ Description: Linux kernel, version $version
+  This package contains the Linux kernel, modules and corresponding other
+  files, version: $version.
+ 
+-Package: $kernel_headers_packagename
+-Architecture: $debarch
+-Description: Linux kernel headers for $version on $debarch
+- This package provides kernel header files for $version on $debarch
+- .
+- This is useful for people who need to build external modules
+-
+ Package: linux-libc-dev
+ Section: devel
+ Provides: linux-kernel-headers
+@@ -200,10 +194,22 @@ Description: Linux support headers for userspace development
+ Multi-Arch: same
+ EOF
+ 
++if is_enabled CONFIG_MODULES; then
++cat <<EOF >> debian/control
++
++Package: linux-headers-$version
++Architecture: $debarch
++Description: Linux kernel headers for $version on $debarch
++ This package provides kernel header files for $version on $debarch
++ .
++ This is useful for people who need to build external modules
++EOF
++fi
++
+ if is_enabled CONFIG_DEBUG_INFO; then
+ cat <<EOF >> debian/control
+ 
+-Package: $dbg_packagename
++Package: linux-image-$version-dbg
+ Section: debug
+ Architecture: $debarch
+ Description: Linux kernel debugging symbols for $version
+@@ -217,11 +223,15 @@ cat <<EOF > debian/rules
+ 
+ srctree ?= .
+ 
+-build:
++build-indep:
++build-arch:
+ 	\$(MAKE) KERNELRELEASE=${version} ARCH=${ARCH} \
+ 	KBUILD_BUILD_VERSION=${revision} -f \$(srctree)/Makefile
+ 
+-binary-arch:
++build: build-arch
++
++binary-indep:
++binary-arch: build-arch
+ 	\$(MAKE) KERNELRELEASE=${version} ARCH=${ARCH} \
+ 	KBUILD_BUILD_VERSION=${revision} -f \$(srctree)/Makefile intdeb-pkg
+ 
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index 8640c278f1aa..7c477ca7dc98 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -46,7 +46,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
+ 	License: GPL
+ 	Group: System Environment/Kernel
+ 	Vendor: The Linux Community
+-	URL: http://www.kernel.org
++	URL: https://www.kernel.org
+ $S	Source: kernel-$__KERNELRELEASE.tar.gz
+ 	Provides: $PROVIDES
+ 	%define __spec_install_post /usr/lib/rpm/brp-compress || :
+-- 
+2.29.2
+
