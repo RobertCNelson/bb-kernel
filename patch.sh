@@ -254,7 +254,7 @@ beagleboard_dtbs () {
 		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
 		#device="am335x-abbbi.dtb" ; dtb_makefile_append
-		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
@@ -402,7 +402,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.6-rc4"
+		backport_tag="v5.10"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
