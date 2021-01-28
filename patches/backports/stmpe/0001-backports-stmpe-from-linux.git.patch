@@ -1,0 +1,593 @@
+From 713cf4625dc7c41760e52ac2e87814ba76c5868a Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Thu, 28 Jan 2021 17:25:12 -0600
+Subject: [PATCH] backports: stmpe: from: linux.git
+
+Reference: v5.3.18
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/iio/adc/stmpe-adc.c | 366 ++++++++++++++++++++++++++++++++++++
+ drivers/mfd/stmpe.c         |  82 +++++++-
+ include/linux/mfd/stmpe.h   |  23 ++-
+ 3 files changed, 463 insertions(+), 8 deletions(-)
+ create mode 100644 drivers/iio/adc/stmpe-adc.c
+
+diff --git a/drivers/iio/adc/stmpe-adc.c b/drivers/iio/adc/stmpe-adc.c
+new file mode 100644
+index 000000000000..bd72727fc417
+--- /dev/null
++++ b/drivers/iio/adc/stmpe-adc.c
+@@ -0,0 +1,366 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ *  STMicroelectronics STMPE811 IIO ADC Driver
++ *
++ *  4 channel, 10/12-bit ADC
++ *
++ *  Copyright (C) 2013-2018 Toradex AG <stefan.agner@toradex.com>
++ */
++
++#include <linux/completion.h>
++#include <linux/err.h>
++#include <linux/iio/iio.h>
++#include <linux/interrupt.h>
++#include <linux/kernel.h>
++#include <linux/mfd/stmpe.h>
++#include <linux/module.h>
++#include <linux/of_platform.h>
++#include <linux/platform_device.h>
++#include <linux/device.h>
++
++#define STMPE_REG_INT_STA		0x0B
++#define STMPE_REG_ADC_INT_EN		0x0E
++#define STMPE_REG_ADC_INT_STA		0x0F
++
++#define STMPE_REG_ADC_CTRL1		0x20
++#define STMPE_REG_ADC_CTRL2		0x21
++#define STMPE_REG_ADC_CAPT		0x22
++#define STMPE_REG_ADC_DATA_CH(channel)	(0x30 + 2 * (channel))
++
++#define STMPE_REG_TEMP_CTRL		0x60
++#define STMPE_TEMP_CTRL_ENABLE		BIT(0)
++#define STMPE_TEMP_CTRL_ACQ		BIT(1)
++#define STMPE_TEMP_CTRL_THRES_EN	BIT(3)
++#define STMPE_START_ONE_TEMP_CONV	(STMPE_TEMP_CTRL_ENABLE | \
++					STMPE_TEMP_CTRL_ACQ | \
++					STMPE_TEMP_CTRL_THRES_EN)
++#define STMPE_REG_TEMP_DATA		0x61
++#define STMPE_REG_TEMP_TH		0x63
++#define STMPE_ADC_LAST_NR		7
++#define STMPE_TEMP_CHANNEL		(STMPE_ADC_LAST_NR + 1)
++
++#define STMPE_ADC_CH(channel)		((1 << (channel)) & 0xff)
++
++#define STMPE_ADC_TIMEOUT		msecs_to_jiffies(1000)
++
++struct stmpe_adc {
++	struct stmpe *stmpe;
++	struct clk *clk;
++	struct device *dev;
++	struct mutex lock;
++
++	/* We are allocating plus one for the temperature channel */
++	struct iio_chan_spec stmpe_adc_iio_channels[STMPE_ADC_LAST_NR + 2];
++
++	struct completion completion;
++
++	u8 channel;
++	u32 value;
++};
++
++static int stmpe_read_voltage(struct stmpe_adc *info,
++		struct iio_chan_spec const *chan, int *val)
++{
++	long ret;
++
++	mutex_lock(&info->lock);
++
++	reinit_completion(&info->completion);
++
++	info->channel = (u8)chan->channel;
++
++	if (info->channel > STMPE_ADC_LAST_NR) {
++		mutex_unlock(&info->lock);
++		return -EINVAL;
++	}
++
++	stmpe_reg_write(info->stmpe, STMPE_REG_ADC_CAPT,
++			STMPE_ADC_CH(info->channel));
++
++	ret = wait_for_completion_timeout(&info->completion, STMPE_ADC_TIMEOUT);
++
++	if (ret <= 0) {
++		stmpe_reg_write(info->stmpe, STMPE_REG_ADC_INT_STA,
++				STMPE_ADC_CH(info->channel));
++		mutex_unlock(&info->lock);
++		return -ETIMEDOUT;
++	}
++
++	*val = info->value;
++
++	mutex_unlock(&info->lock);
++
++	return 0;
++}
++
++static int stmpe_read_temp(struct stmpe_adc *info,
++		struct iio_chan_spec const *chan, int *val)
++{
++	long ret;
++
++	mutex_lock(&info->lock);
++
++	reinit_completion(&info->completion);
++
++	info->channel = (u8)chan->channel;
++
++	if (info->channel != STMPE_TEMP_CHANNEL) {
++		mutex_unlock(&info->lock);
++		return -EINVAL;
++	}
++
++	stmpe_reg_write(info->stmpe, STMPE_REG_TEMP_CTRL,
++			STMPE_START_ONE_TEMP_CONV);
++
++	ret = wait_for_completion_timeout(&info->completion, STMPE_ADC_TIMEOUT);
++
++	if (ret <= 0) {
++		mutex_unlock(&info->lock);
++		return -ETIMEDOUT;
++	}
++
++	/*
++	 * absolute temp = +V3.3 * value /7.51 [K]
++	 * scale to [milli °C]
++	 */
++	*val = ((449960l * info->value) / 1024l) - 273150;
++
++	mutex_unlock(&info->lock);
++
++	return 0;
++}
++
++static int stmpe_read_raw(struct iio_dev *indio_dev,
++			  struct iio_chan_spec const *chan,
++			  int *val,
++			  int *val2,
++			  long mask)
++{
++	struct stmpe_adc *info = iio_priv(indio_dev);
++	long ret;
++
++	switch (mask) {
++	case IIO_CHAN_INFO_RAW:
++	case IIO_CHAN_INFO_PROCESSED:
++
++		switch (chan->type) {
++		case IIO_VOLTAGE:
++			ret = stmpe_read_voltage(info, chan, val);
++			break;
++
++		case IIO_TEMP:
++			ret = stmpe_read_temp(info, chan, val);
++			break;
++		default:
++			return -EINVAL;
++		}
++
++		if (ret < 0)
++			return ret;
++
++		return IIO_VAL_INT;
++
++	case IIO_CHAN_INFO_SCALE:
++		*val = 3300;
++		*val2 = info->stmpe->mod_12b ? 12 : 10;
++		return IIO_VAL_FRACTIONAL_LOG2;
++
++	default:
++		break;
++	}
++
++	return -EINVAL;
++}
++
++static irqreturn_t stmpe_adc_isr(int irq, void *dev_id)
++{
++	struct stmpe_adc *info = (struct stmpe_adc *)dev_id;
++	u16 data;
++
++	if (info->channel <= STMPE_ADC_LAST_NR) {
++		int int_sta;
++
++		int_sta = stmpe_reg_read(info->stmpe, STMPE_REG_ADC_INT_STA);
++
++		/* Is the interrupt relevant */
++		if (!(int_sta & STMPE_ADC_CH(info->channel)))
++			return IRQ_NONE;
++
++		/* Read value */
++		stmpe_block_read(info->stmpe,
++			STMPE_REG_ADC_DATA_CH(info->channel), 2, (u8 *) &data);
++
++		stmpe_reg_write(info->stmpe, STMPE_REG_ADC_INT_STA, int_sta);
++	} else if (info->channel == STMPE_TEMP_CHANNEL) {
++		/* Read value */
++		stmpe_block_read(info->stmpe, STMPE_REG_TEMP_DATA, 2,
++				(u8 *) &data);
++	} else {
++		return IRQ_NONE;
++	}
++
++	info->value = (u32) be16_to_cpu(data);
++	complete(&info->completion);
++
++	return IRQ_HANDLED;
++}
++
++static const struct iio_info stmpe_adc_iio_info = {
++	.read_raw = &stmpe_read_raw,
++};
++
++static void stmpe_adc_voltage_chan(struct iio_chan_spec *ics, int chan)
++{
++	ics->type = IIO_VOLTAGE;
++	ics->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
++	ics->info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE);
++	ics->indexed = 1;
++	ics->channel = chan;
++}
++
++static void stmpe_adc_temp_chan(struct iio_chan_spec *ics, int chan)
++{
++	ics->type = IIO_TEMP;
++	ics->info_mask_separate = BIT(IIO_CHAN_INFO_PROCESSED);
++	ics->indexed = 1;
++	ics->channel = chan;
++}
++
++static int stmpe_adc_init_hw(struct stmpe_adc *adc)
++{
++	int ret;
++	struct stmpe *stmpe = adc->stmpe;
++
++	ret = stmpe_enable(stmpe, STMPE_BLOCK_ADC);
++	if (ret) {
++		dev_err(stmpe->dev, "Could not enable clock for ADC\n");
++		return ret;
++	}
++
++	ret = stmpe811_adc_common_init(stmpe);
++	if (ret) {
++		stmpe_disable(stmpe, STMPE_BLOCK_ADC);
++		return ret;
++	}
++
++	/* use temp irq for each conversion completion */
++	stmpe_reg_write(stmpe, STMPE_REG_TEMP_TH, 0);
++	stmpe_reg_write(stmpe, STMPE_REG_TEMP_TH + 1, 0);
++
++	return 0;
++}
++
++static int stmpe_adc_probe(struct platform_device *pdev)
++{
++	struct iio_dev *indio_dev;
++	struct stmpe_adc *info;
++	struct device_node *np;
++	u32 norequest_mask = 0;
++	int irq_temp, irq_adc;
++	int num_chan = 0;
++	int i = 0;
++	int ret;
++
++	irq_adc = platform_get_irq_byname(pdev, "STMPE_ADC");
++	if (irq_adc < 0)
++		return irq_adc;
++
++	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(struct stmpe_adc));
++	if (!indio_dev) {
++		dev_err(&pdev->dev, "failed allocating iio device\n");
++		return -ENOMEM;
++	}
++
++	info = iio_priv(indio_dev);
++	mutex_init(&info->lock);
++
++	init_completion(&info->completion);
++	ret = devm_request_threaded_irq(&pdev->dev, irq_adc, NULL,
++					stmpe_adc_isr, IRQF_ONESHOT,
++					"stmpe-adc", info);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "failed requesting irq, irq = %d\n",
++				irq_adc);
++		return ret;
++	}
++
++	irq_temp = platform_get_irq_byname(pdev, "STMPE_TEMP_SENS");
++	if (irq_temp >= 0) {
++		ret = devm_request_threaded_irq(&pdev->dev, irq_temp, NULL,
++						stmpe_adc_isr, IRQF_ONESHOT,
++						"stmpe-adc", info);
++		if (ret < 0)
++			dev_warn(&pdev->dev, "failed requesting irq for"
++				 " temp sensor, irq = %d\n", irq_temp);
++	}
++
++	platform_set_drvdata(pdev, indio_dev);
++
++	indio_dev->name		= dev_name(&pdev->dev);
++	indio_dev->dev.parent	= &pdev->dev;
++	indio_dev->info		= &stmpe_adc_iio_info;
++	indio_dev->modes	= INDIO_DIRECT_MODE;
++
++	info->stmpe = dev_get_drvdata(pdev->dev.parent);
++
++	np = pdev->dev.of_node;
++
++	if (!np)
++		dev_err(&pdev->dev, "no device tree node found\n");
++
++	of_property_read_u32(np, "st,norequest-mask", &norequest_mask);
++
++	for_each_clear_bit(i, (unsigned long *) &norequest_mask,
++			   (STMPE_ADC_LAST_NR + 1)) {
++		stmpe_adc_voltage_chan(&info->stmpe_adc_iio_channels[num_chan], i);
++		num_chan++;
++	}
++	stmpe_adc_temp_chan(&info->stmpe_adc_iio_channels[num_chan], i);
++	num_chan++;
++	indio_dev->channels = info->stmpe_adc_iio_channels;
++	indio_dev->num_channels = num_chan;
++
++	ret = stmpe_adc_init_hw(info);
++	if (ret)
++		return ret;
++
++	stmpe_reg_write(info->stmpe, STMPE_REG_ADC_INT_EN,
++			~(norequest_mask & 0xFF));
++
++	stmpe_reg_write(info->stmpe, STMPE_REG_ADC_INT_STA,
++			~(norequest_mask & 0xFF));
++
++	return devm_iio_device_register(&pdev->dev, indio_dev);
++}
++
++static int __maybe_unused stmpe_adc_resume(struct device *dev)
++{
++	struct iio_dev *indio_dev = dev_get_drvdata(dev);
++	struct stmpe_adc *info = iio_priv(indio_dev);
++
++	stmpe_adc_init_hw(info);
++
++	return 0;
++}
++
++static SIMPLE_DEV_PM_OPS(stmpe_adc_pm_ops, NULL, stmpe_adc_resume);
++
++static struct platform_driver stmpe_adc_driver = {
++	.probe		= stmpe_adc_probe,
++	.driver		= {
++		.name	= "stmpe-adc",
++		.pm	= &stmpe_adc_pm_ops,
++	},
++};
++module_platform_driver(stmpe_adc_driver);
++
++static const struct of_device_id stmpe_adc_ids[] = {
++	{ .compatible = "st,stmpe-adc", },
++	{ },
++};
++MODULE_DEVICE_TABLE(of, stmpe_adc_ids);
++
++MODULE_AUTHOR("Stefan Agner <stefan.agner@toradex.com>");
++MODULE_DESCRIPTION("STMPEXXX ADC driver");
++MODULE_LICENSE("GPL v2");
++MODULE_ALIAS("platform:stmpe-adc");
+diff --git a/drivers/mfd/stmpe.c b/drivers/mfd/stmpe.c
+index 566caca4efd8..1aee3b3253fc 100644
+--- a/drivers/mfd/stmpe.c
++++ b/drivers/mfd/stmpe.c
+@@ -1,9 +1,9 @@
++// SPDX-License-Identifier: GPL-2.0-only
+ /*
+  * ST Microelectronics MFD: stmpe's driver
+  *
+  * Copyright (C) ST-Ericsson SA 2010
+  *
+- * License Terms: GNU General Public License, version 2
+  * Author: Rabin Vincent <rabin.vincent@stericsson.com> for ST-Ericsson
+  */
+ 
+@@ -463,6 +463,28 @@ static const struct mfd_cell stmpe_ts_cell = {
+ 	.num_resources	= ARRAY_SIZE(stmpe_ts_resources),
+ };
+ 
++/*
++ * ADC (STMPE811)
++ */
++
++static struct resource stmpe_adc_resources[] = {
++	{
++		.name	= "STMPE_TEMP_SENS",
++		.flags	= IORESOURCE_IRQ,
++	},
++	{
++		.name	= "STMPE_ADC",
++		.flags	= IORESOURCE_IRQ,
++	},
++};
++
++static const struct mfd_cell stmpe_adc_cell = {
++	.name		= "stmpe-adc",
++	.of_compatible	= "st,stmpe-adc",
++	.resources	= stmpe_adc_resources,
++	.num_resources	= ARRAY_SIZE(stmpe_adc_resources),
++};
++
+ /*
+  * STMPE811 or STMPE610
+  */
+@@ -497,6 +519,11 @@ static struct stmpe_variant_block stmpe811_blocks[] = {
+ 		.irq	= STMPE811_IRQ_TOUCH_DET,
+ 		.block	= STMPE_BLOCK_TOUCHSCREEN,
+ 	},
++	{
++		.cell	= &stmpe_adc_cell,
++		.irq	= STMPE811_IRQ_TEMP_SENS,
++		.block	= STMPE_BLOCK_ADC,
++	},
+ };
+ 
+ static int stmpe811_enable(struct stmpe *stmpe, unsigned int blocks,
+@@ -517,6 +544,35 @@ static int stmpe811_enable(struct stmpe *stmpe, unsigned int blocks,
+ 				enable ? 0 : mask);
+ }
+ 
++int stmpe811_adc_common_init(struct stmpe *stmpe)
++{
++	int ret;
++	u8 adc_ctrl1, adc_ctrl1_mask;
++
++	adc_ctrl1 = STMPE_SAMPLE_TIME(stmpe->sample_time) |
++		    STMPE_MOD_12B(stmpe->mod_12b) |
++		    STMPE_REF_SEL(stmpe->ref_sel);
++	adc_ctrl1_mask = STMPE_SAMPLE_TIME(0xff) | STMPE_MOD_12B(0xff) |
++			 STMPE_REF_SEL(0xff);
++
++	ret = stmpe_set_bits(stmpe, STMPE811_REG_ADC_CTRL1,
++			adc_ctrl1_mask, adc_ctrl1);
++	if (ret) {
++		dev_err(stmpe->dev, "Could not setup ADC\n");
++		return ret;
++	}
++
++	ret = stmpe_set_bits(stmpe, STMPE811_REG_ADC_CTRL2,
++			STMPE_ADC_FREQ(0xff), STMPE_ADC_FREQ(stmpe->adc_freq));
++	if (ret) {
++		dev_err(stmpe->dev, "Could not setup ADC\n");
++		return ret;
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(stmpe811_adc_common_init);
++
+ static int stmpe811_get_altfunc(struct stmpe *stmpe, enum stmpe_block block)
+ {
+ 	/* 0 for touchscreen, 1 for GPIO */
+@@ -1302,17 +1358,17 @@ static void stmpe_of_probe(struct stmpe_platform_data *pdata,
+ 	pdata->autosleep = (pdata->autosleep_timeout) ? true : false;
+ 
+ 	for_each_child_of_node(np, child) {
+-		if (!strcmp(child->name, "stmpe_gpio")) {
++		if (of_node_name_eq(child, "stmpe_gpio")) {
+ 			pdata->blocks |= STMPE_BLOCK_GPIO;
+-		} else if (!strcmp(child->name, "stmpe_keypad")) {
++		} else if (of_node_name_eq(child, "stmpe_keypad")) {
+ 			pdata->blocks |= STMPE_BLOCK_KEYPAD;
+-		} else if (!strcmp(child->name, "stmpe_touchscreen")) {
++		} else if (of_node_name_eq(child, "stmpe_touchscreen")) {
+ 			pdata->blocks |= STMPE_BLOCK_TOUCHSCREEN;
+-		} else if (!strcmp(child->name, "stmpe_adc")) {
++		} else if (of_node_name_eq(child, "stmpe_adc")) {
+ 			pdata->blocks |= STMPE_BLOCK_ADC;
+-		} else if (!strcmp(child->name, "stmpe_pwm")) {
++		} else if (of_node_name_eq(child, "stmpe_pwm")) {
+ 			pdata->blocks |= STMPE_BLOCK_PWM;
+-		} else if (!strcmp(child->name, "stmpe_rotator")) {
++		} else if (of_node_name_eq(child, "stmpe_rotator")) {
+ 			pdata->blocks |= STMPE_BLOCK_ROTATOR;
+ 		}
+ 	}
+@@ -1325,6 +1381,7 @@ int stmpe_probe(struct stmpe_client_info *ci, enum stmpe_partnum partnum)
+ 	struct device_node *np = ci->dev->of_node;
+ 	struct stmpe *stmpe;
+ 	int ret;
++	u32 val;
+ 
+ 	pdata = devm_kzalloc(ci->dev, sizeof(*pdata), GFP_KERNEL);
+ 	if (!pdata)
+@@ -1342,6 +1399,15 @@ int stmpe_probe(struct stmpe_client_info *ci, enum stmpe_partnum partnum)
+ 	mutex_init(&stmpe->irq_lock);
+ 	mutex_init(&stmpe->lock);
+ 
++	if (!of_property_read_u32(np, "st,sample-time", &val))
++		stmpe->sample_time = val;
++	if (!of_property_read_u32(np, "st,mod-12b", &val))
++		stmpe->mod_12b = val;
++	if (!of_property_read_u32(np, "st,ref-sel", &val))
++		stmpe->ref_sel = val;
++	if (!of_property_read_u32(np, "st,adc-freq", &val))
++		stmpe->adc_freq = val;
++
+ 	stmpe->dev = ci->dev;
+ 	stmpe->client = ci->client;
+ 	stmpe->pdata = pdata;
+@@ -1433,6 +1499,8 @@ int stmpe_remove(struct stmpe *stmpe)
+ 	if (!IS_ERR(stmpe->vcc))
+ 		regulator_disable(stmpe->vcc);
+ 
++	__stmpe_disable(stmpe, STMPE_BLOCK_ADC);
++
+ 	mfd_remove_devices(stmpe->dev);
+ 
+ 	return 0;
+diff --git a/include/linux/mfd/stmpe.h b/include/linux/mfd/stmpe.h
+index 4a827af17e59..87e29d561e22 100644
+--- a/include/linux/mfd/stmpe.h
++++ b/include/linux/mfd/stmpe.h
+@@ -1,7 +1,7 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
+ /*
+  * Copyright (C) ST-Ericsson SA 2010
+  *
+- * License Terms: GNU General Public License, version 2
+  * Author: Rabin Vincent <rabin.vincent@stericsson.com> for ST-Ericsson
+  */
+ 
+@@ -10,6 +10,20 @@
+ 
+ #include <linux/mutex.h>
+ 
++#define STMPE_SAMPLE_TIME(x)	((x & 0xf) << 4)
++#define STMPE_MOD_12B(x)	((x & 0x1) << 3)
++#define STMPE_REF_SEL(x)	((x & 0x1) << 1)
++#define STMPE_ADC_FREQ(x)	(x & 0x3)
++#define STMPE_AVE_CTRL(x)	((x & 0x3) << 6)
++#define STMPE_DET_DELAY(x)	((x & 0x7) << 3)
++#define STMPE_SETTLING(x)	(x & 0x7)
++#define STMPE_FRACTION_Z(x)	(x & 0x7)
++#define STMPE_I_DRIVE(x)	(x & 0x1)
++#define STMPE_OP_MODE(x)	((x & 0x7) << 1)
++
++#define STMPE811_REG_ADC_CTRL1	0x20
++#define STMPE811_REG_ADC_CTRL2	0x21
++
+ struct device;
+ struct regulator;
+ 
+@@ -123,6 +137,12 @@ struct stmpe {
+ 	u8 ier[2];
+ 	u8 oldier[2];
+ 	struct stmpe_platform_data *pdata;
++
++	/* For devices that use an ADC */
++	u8 sample_time;
++	u8 mod_12b;
++	u8 ref_sel;
++	u8 adc_freq;
+ };
+ 
+ extern int stmpe_reg_write(struct stmpe *stmpe, u8 reg, u8 data);
+@@ -136,6 +156,7 @@ extern int stmpe_set_altfunc(struct stmpe *stmpe, u32 pins,
+ 			     enum stmpe_block block);
+ extern int stmpe_enable(struct stmpe *stmpe, unsigned int blocks);
+ extern int stmpe_disable(struct stmpe *stmpe, unsigned int blocks);
++extern int stmpe811_adc_common_init(struct stmpe *stmpe);
+ 
+ #define STMPE_GPIO_NOREQ_811_TOUCH	(0xf0)
+ 
+-- 
+2.29.2
+
