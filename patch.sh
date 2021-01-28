@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2019 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -112,6 +112,7 @@ aufs () {
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
+		KERNEL_REL=5.1
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -141,11 +142,18 @@ aufs () {
 		cd ../
 		if [ ! -d ./${aufs_prefix}standalone ] ; then
 			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
+			cd ./${aufs_prefix}standalone/
+				aufs_hash=$(git rev-parse HEAD)
+			cd -
 		else
 			rm -rf ./${aufs_prefix}standalone || true
 			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
+			cd ./${aufs_prefix}standalone/
+				aufs_hash=$(git rev-parse HEAD)
+			cd -
 		fi
 		cd ./KERNEL/
+		KERNEL_REL=5.1
 
 		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -155,8 +163,9 @@ aufs () {
 		cp -v ../${aufs_prefix}standalone/include/uapi/linux/aufs_type.h ./include/uapi/linux/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs' -s
+		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" -s
 		${git_bin} format-patch -5 -o ../patches/aufs/
+		echo "AUFS: https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" > ../patches/git/AUFS
 
 		rm -rf ../${aufs_prefix}standalone/ || true
 
@@ -178,6 +187,50 @@ aufs () {
 	dir 'aufs'
 }
 
+can_isotp () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./can-isotp ] ; then
+			${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
+			cd ./can-isotp
+				isotp_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./can-isotp || true
+			${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
+			cd ./can-isotp
+				isotp_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+
+		cd ./KERNEL/
+
+		cp -v ../can-isotp/include/uapi/linux/can/isotp.h  include/uapi/linux/can/
+		cp -v ../can-isotp/net/can/isotp.c net/can/
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: can-isotp: https://github.com/hartkopp/can-isotp' -m "https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/can_isotp/
+		echo "CAN-ISOTP: https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" > ../patches/git/CAN-ISOTP
+
+		rm -rf ../can-isotp/ || true
+
+		${git_bin} reset --hard HEAD~1
+
+		start_cleanup
+
+		${git} "${DIR}/patches/can_isotp/0001-merge-can-isotp-https-github.com-hartkopp-can-isotp.patch"
+
+		wdir="can_isotp"
+		number=1
+		cleanup
+
+		exit 2
+	fi
+	dir 'can_isotp'
+}
+
 rt_cleanup () {
 	echo "rt: needs fixup"
 	exit 2
@@ -195,8 +248,9 @@ rt () {
 		rm -f patch-${rt_patch}.patch.xz
 		rm -f localversion-rt
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
+		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 		${git_bin} format-patch -1 -o ../patches/rt/
+		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/git/RT
 
 		exit 2
 	fi
@@ -215,9 +269,15 @@ wireguard () {
 		cd ../
 		if [ ! -d ./WireGuard ] ; then
 			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+			cd ./WireGuard
+				wireguard_hash=$(git rev-parse HEAD)
+			cd -
 		else
 			rm -rf ./WireGuard || true
 			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+			cd ./WireGuard
+				wireguard_hash=$(git rev-parse HEAD)
+			cd -
 		fi
 
 		#cd ./WireGuard/
@@ -229,8 +289,9 @@ wireguard () {
 		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: WireGuard' -s
+		${git_bin} commit -a -m 'merge: WireGuard' -m "https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/WireGuard/
+		echo "WIREGUARD: https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" > ../patches/git/WIREGUARD
 
 		rm -rf ../WireGuard/ || true
 
@@ -256,9 +317,15 @@ ti_pm_firmware () {
 		cd ../
 		if [ ! -d ./ti-amx3-cm3-pm-firmware ] ; then
 			${git_bin} clone -b ti-v4.1.y-next git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
+			cd ./ti-amx3-cm3-pm-firmware
+				ti_amx3_cm3_hash=$(git rev-parse HEAD)
+			cd -
 		else
 			rm -rf ./ti-amx3-cm3-pm-firmware || true
 			${git_bin} clone -b ti-v4.1.y-next git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
+			cd ./ti-amx3-cm3-pm-firmware
+				ti_amx3_cm3_hash=$(git rev-parse HEAD)
+			cd -
 		fi
 		cd ./KERNEL/
 
@@ -266,8 +333,9 @@ ti_pm_firmware () {
 		cp -v ../ti-amx3-cm3-pm-firmware/bin/am* ./firmware/
 
 		${git_bin} add -f ./firmware/am*
-		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -s
+		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -m "http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
+		echo "TI_AMX3_CM3: http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" > ../patches/git/TI_AMX3_CM3
 
 		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
 
@@ -284,6 +352,7 @@ ti_pm_firmware () {
 
 	dir 'drivers/ti/firmware'
 }
+
 dtb_makefile_append_omap4 () {
 	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -293,24 +362,34 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	bbdtbs="v5.1.x"
+	branch="v5.1.x"
+	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
+	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ ! -d ./BeagleBoard-DeviceTrees ] ; then
-			${git_bin} clone -b ${bbdtbs} https://github.com/beagleboard/BeagleBoard-DeviceTrees --depth=1
+		if [ ! -d ./${work_dir} ] ; then
+			${git_bin} clone -b ${branch} ${https_repo} --depth=1
+			cd ./${work_dir}
+				git_hash=$(git rev-parse HEAD)
+			cd -
 		else
-			rm -rf ./BeagleBoard-DeviceTrees || true
-			${git_bin} clone -b ${bbdtbs} https://github.com/beagleboard/BeagleBoard-DeviceTrees --depth=1
+			rm -rf ./${work_dir} || true
+			${git_bin} clone -b ${branch} ${https_repo} --depth=1
+			cd ./${work_dir}
+				git_hash=$(git rev-parse HEAD)
+			cd -
 		fi
 		cd ./KERNEL/
 
-		cp -vr ../BeagleBoard-DeviceTrees/src/arm/* arch/arm/boot/dts/
-		cp -vr ../BeagleBoard-DeviceTrees/include/dt-bindings/* ./include/dt-bindings/
+		mkdir -p arch/arm/boot/dts/overlays/
+		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
+		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
 		device="am335x-abbbi.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
@@ -320,16 +399,17 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $bbdtbs" -m "https://github.com/beagleboard/BeagleBoard-DeviceTrees/tree/${bbdtbs}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $branch" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
+		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
 
-		rm -rf ../BeagleBoard-DeviceTrees/ || true
+		rm -rf ../${work_dir}/ || true
 
 		${git_bin} reset --hard HEAD^
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-DTBS-$bbdtbs.patch"
+		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-DTBS-$branch.patch"
 
 		wdir="soc/ti/beagleboard_dtbs"
 		number=1
@@ -346,6 +426,7 @@ local_patch () {
 
 #external_git
 aufs
+can_isotp
 #rt
 wireguard
 ti_pm_firmware
@@ -373,7 +454,7 @@ post_backports () {
 	fi
 
 	${git_bin} add .
-	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -s
+	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
@@ -423,6 +504,7 @@ reverts () {
 }
 
 drivers () {
+	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/pwm'
 	dir 'drivers/spi'
@@ -430,7 +512,6 @@ drivers () {
 	dir 'drivers/tps65217'
 	dir 'drivers/wiznet'
 
-	dir 'drivers/ti/overlays'
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/eqep'
 	dir 'drivers/ti/rpmsg'
@@ -455,18 +536,25 @@ drivers
 soc
 
 packaging () {
-	echo "dir: packaging"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cp -v "${DIR}/3rdparty/packaging/Makefile" "${DIR}/KERNEL/scripts/package"
-		cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
-		cp -v "${DIR}/3rdparty/packaging/mkdebian" "${DIR}/KERNEL/scripts/package"
-		${git_bin} commit -a -m 'packaging: sync builddeb changes' -s
-		${git_bin} format-patch -1 -o "${DIR}/patches/packaging"
-		exit 2
-	else
-		${git} "${DIR}/patches/packaging/0001-packaging-sync-builddeb-changes.patch"
+	do_backport="enable"
+	if [ "x${do_backport}" = "xenable" ] ; then
+		backport_tag="v5.2"
+
+		subsystem="bindeb-pkg"
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			pre_backports
+
+			cp -v ~/linux-src/scripts/package/* ./scripts/package/
+
+			post_backports
+			exit 2
+		else
+			patch_backports
+		fi
 	fi
+
+	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
 }
 
 packaging
