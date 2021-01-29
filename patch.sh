@@ -437,6 +437,24 @@ backports () {
 		patch_backports
 	fi
 
+	backport_tag="v5.11-rc5"
+
+	subsystem="wlcore"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	${git} "${DIR}/patches/backports/wlcore/0002-wlcore-Downgrade-exceeded-max-RX-BA-sessions-to-debu.patch"
+	${git} "${DIR}/patches/backports/wlcore/0003-wlcore-Fix-command-execute-failure-19-for-wl12xx.patch"
+
 	backport_tag="v5.4.18"
 
 	subsystem="brcm80211"
