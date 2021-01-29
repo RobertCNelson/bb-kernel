@@ -1,0 +1,111 @@
+From c3b47df2f11b171c99e5197f786ffb927ed65746 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Thu, 28 Jan 2021 17:47:13 -0600
+Subject: [PATCH] Overlays: Port RPi Overlay building
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ arch/arm/boot/dts/Makefile | 10 ++++++++++
+ scripts/Kbuild.include     |  2 +-
+ scripts/Makefile.dtbinst   |  8 ++++++--
+ scripts/Makefile.lib       | 13 +++++++++++++
+ 4 files changed, 30 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
+index 30f36c321c10..a3cc853295c6 100644
+--- a/arch/arm/boot/dts/Makefile
++++ b/arch/arm/boot/dts/Makefile
+@@ -1,4 +1,9 @@
+ # SPDX-License-Identifier: GPL-2.0
++
++ifeq ($(CONFIG_OF_OVERLAY),y)
++DTC_FLAGS += -@
++endif
++
+ dtb-$(CONFIG_ARCH_ALPINE) += \
+ 	alpine-db.dtb
+ dtb-$(CONFIG_MACH_ARTPEC6) += \
+@@ -1222,3 +1227,8 @@ dtb-$(CONFIG_ARCH_ASPEED) += \
+ 	aspeed-bmc-opp-zaius.dtb \
+ 	aspeed-bmc-portwell-neptune.dtb \
+ 	aspeed-bmc-quanta-q71l.dtb
++
++targets += dtbs dtbs_install
++targets += $(dtb-y)
++
++subdir-y	:= overlays
+diff --git a/scripts/Kbuild.include b/scripts/Kbuild.include
+index c830750d725b..2a43f1c70643 100644
+--- a/scripts/Kbuild.include
++++ b/scripts/Kbuild.include
+@@ -288,7 +288,7 @@ ksym_dep_filter =                                                            \
+ 	    $(CPP) $(call flags_nodeps,c_flags) -D__KSYM_DEPS__ $< ;;        \
+ 	  as_*_S|cpp_s_S)                                                    \
+ 	    $(CPP) $(call flags_nodeps,a_flags) -D__KSYM_DEPS__ $< ;;        \
+-	  boot*|build*|cpp_its_S|*cpp_lds_S|dtc|host*|vdso*) : ;;            \
++	  boot*|build*|cpp_its_S|*cpp_lds_S|dtc*|host*|vdso*) : ;;            \
+ 	  *) echo "Don't know how to preprocess $(1)" >&2; false ;;          \
+ 	esac | tr ";" "\n" | sed -n 's/^.*=== __KSYM_\(.*\) ===.*$$/_\1/p'
+ 
+diff --git a/scripts/Makefile.dtbinst b/scripts/Makefile.dtbinst
+index 7301ab5e2e06..da2af04a6d7d 100644
+--- a/scripts/Makefile.dtbinst
++++ b/scripts/Makefile.dtbinst
+@@ -20,6 +20,7 @@ include scripts/Kbuild.include
+ include $(src)/Makefile
+ 
+ dtbinst-files	:= $(sort $(dtb-y) $(if $(CONFIG_OF_ALL_DTBS), $(dtb-)))
++dtboinst-files	:= $(sort $(dtbo-y) $(if $(CONFIG_OF_ALL_DTBS), $(dtb-)))
+ dtbinst-dirs	:= $(subdir-y) $(subdir-m)
+ 
+ # Helper targets for Installing DTBs into the boot directory
+@@ -31,10 +32,13 @@ install-dir = $(patsubst $(dtbinst_root)%,$(INSTALL_DTBS_PATH)%,$(obj))
+ $(dtbinst-files): %.dtb: $(obj)/%.dtb
+ 	$(call cmd,dtb_install,$(install-dir))
+ 
++$(dtboinst-files): %.dtbo: $(obj)/%.dtbo
++	$(call cmd,dtb_install,$(install-dir))
++
+ $(dtbinst-dirs):
+ 	$(Q)$(MAKE) $(dtbinst)=$(obj)/$@
+ 
+-PHONY += $(dtbinst-files) $(dtbinst-dirs)
+-__dtbs_install: $(dtbinst-files) $(dtbinst-dirs)
++PHONY += $(dtbinst-files) $(dtboinst-files) $(dtbinst-dirs)
++__dtbs_install: $(dtbinst-files) $(dtboinst-files) $(dtbinst-dirs)
+ 
+ .PHONY: $(PHONY)
+diff --git a/scripts/Makefile.lib b/scripts/Makefile.lib
+index a232741e3fd3..6779febcee8a 100644
+--- a/scripts/Makefile.lib
++++ b/scripts/Makefile.lib
+@@ -248,6 +248,7 @@ DTC ?= $(objtree)/scripts/dtc/dtc
+ ifeq ($(findstring 1,$(KBUILD_ENABLE_EXTRA_GCC_CHECKS)),)
+ DTC_FLAGS += -Wno-unit_address_vs_reg \
+ 	-Wno-unit_address_format \
++	-Wno-gpios_property \
+ 	-Wno-avoid_unnecessary_addr_size \
+ 	-Wno-alias_paths \
+ 	-Wno-graph_child_address \
+@@ -293,6 +294,18 @@ cmd_dtc = mkdir -p $(dir ${dtc-tmp}) ; \
+ $(obj)/%.dtb: $(src)/%.dts $(DTC) FORCE
+ 	$(call if_changed_dep,dtc)
+ 
++quiet_cmd_dtco = DTCO    $@
++cmd_dtco = mkdir -p $(dir ${dtc-tmp}) ; \
++	$(CPP) $(dtc_cpp_flags) -x assembler-with-cpp -o $(dtc-tmp) $< ; \
++	$(DTC) -@ -H epapr -O dtb -o $@ -b 0 \
++		-i $(dir $<) $(DTC_FLAGS) \
++		-Wno-interrupts_property \
++		-d $(depfile).dtc.tmp $(dtc-tmp) ; \
++	cat $(depfile).pre.tmp $(depfile).dtc.tmp > $(depfile)
++
++$(obj)/%.dtbo: $(src)/%.dts FORCE
++	$(call if_changed_dep,dtco)
++
+ dtc-tmp = $(subst $(comma),_,$(dot-target).dts.tmp)
+ 
+ # Bzip2
+-- 
+2.29.2
+
