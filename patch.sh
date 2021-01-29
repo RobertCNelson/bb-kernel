@@ -239,7 +239,6 @@ rt_cleanup () {
 rt () {
 	rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#v5.2.x
 	#${git_bin} revert --no-edit xyz
 
 	#regenerate="enable"
@@ -510,6 +509,7 @@ drivers () {
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/pwm'
+	dir 'drivers/sound'
 	dir 'drivers/spi'
 	dir 'drivers/ssd1306'
 	dir 'drivers/tps65217'
@@ -529,7 +529,7 @@ soc () {
 #	dir 'soc/imx/wandboard'
 #	dir 'soc/imx/imx7'
 
-	dir 'soc/ti/panda'
+#	dir 'soc/ti/panda'
 	dir 'fixes'
 }
 
@@ -542,7 +542,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.6"
+		backport_tag="v5.4.93"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
