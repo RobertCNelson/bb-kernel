@@ -402,10 +402,12 @@ beagleboard_dtbs () {
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
 
 		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-sancloud-bbe-uboot-univ.dtb" ; dtb_makefile_append
 
 		device="am5729-beagleboneai.dtb" ; dtb_makefile_append_am5
 
@@ -595,6 +597,7 @@ soc () {
 
 #	dir 'soc/ti/panda'
 	dir 'bootup_hacks'
+	dir 'fixes'
 }
 
 ###
@@ -602,12 +605,11 @@ backports
 reverts
 drivers
 soc
-dir 'fixes'
 
 packaging () {
-	#do_backport="enable"
+	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.6"
+		backport_tag="v5.10.11"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
