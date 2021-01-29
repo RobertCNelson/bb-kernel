@@ -1,0 +1,361 @@
+From a8d0d00fd5280caee112cc01ecc34b18806ddc26 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Thu, 28 Jan 2021 22:32:11 -0600
+Subject: [PATCH] backports: bindeb-pkg: from: linux.git
+
+Reference: v5.10.11
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ scripts/package/builddeb | 119 ++++++++++++++++++++++++---------------
+ scripts/package/buildtar |  20 ++++++-
+ scripts/package/mkdebian |  51 +++++++++++------
+ scripts/package/mkspec   |   2 +-
+ 4 files changed, 126 insertions(+), 66 deletions(-)
+
+diff --git a/scripts/package/builddeb b/scripts/package/builddeb
+index c4c580f547ef..91a502bb97e8 100755
+--- a/scripts/package/builddeb
++++ b/scripts/package/builddeb
+@@ -26,34 +26,90 @@ if_enabled_echo() {
+ 
+ create_package() {
+ 	local pname="$1" pdir="$2"
++	local dpkg_deb_opts
+ 
+ 	mkdir -m 755 -p "$pdir/DEBIAN"
+ 	mkdir -p "$pdir/usr/share/doc/$pname"
+ 	cp debian/copyright "$pdir/usr/share/doc/$pname/"
+ 	cp debian/changelog "$pdir/usr/share/doc/$pname/changelog.Debian"
+-	gzip -9 "$pdir/usr/share/doc/$pname/changelog.Debian"
++	gzip -n -9 "$pdir/usr/share/doc/$pname/changelog.Debian"
+ 	sh -c "cd '$pdir'; find . -type f ! -path './DEBIAN/*' -printf '%P\0' \
+ 		| xargs -r0 md5sum > DEBIAN/md5sums"
+ 
+ 	# Fix ownership and permissions
+-	chown -R root:root "$pdir"
++	if [ "$DEB_RULES_REQUIRES_ROOT" = "no" ]; then
++		dpkg_deb_opts="--root-owner-group"
++	else
++		chown -R root:root "$pdir"
++	fi
+ 	chmod -R go-w "$pdir"
+ 	# in case we are in a restrictive umask environment like 0077
+ 	chmod -R a+rX "$pdir"
++	# in case we build in a setuid/setgid directory
++	chmod -R ug-s "$pdir"
+ 
+ 	# Create the package
+ 	dpkg-gencontrol -p$pname -P"$pdir"
+-	dpkg --build "$pdir" ..
++	dpkg-deb $dpkg_deb_opts ${KDEB_COMPRESS:+-Z$KDEB_COMPRESS} --build "$pdir" ..
++}
++
++deploy_kernel_headers () {
++	pdir=$1
++
++	rm -rf $pdir
++
++	(
++		cd $srctree
++		find . arch/$SRCARCH -maxdepth 1 -name Makefile\*
++		find include scripts -type f -o -type l
++		find arch/$SRCARCH -name Kbuild.platforms -o -name Platform
++		find $(find arch/$SRCARCH -name include -o -name scripts -type d) -type f
++	) > debian/hdrsrcfiles
++
++	{
++		if is_enabled CONFIG_STACK_VALIDATION; then
++			echo tools/objtool/objtool
++		fi
++
++		find arch/$SRCARCH/include Module.symvers include scripts -type f
++
++		if is_enabled CONFIG_GCC_PLUGINS; then
++			find scripts/gcc-plugins -name \*.so
++		fi
++	} > debian/hdrobjfiles
++
++	destdir=$pdir/usr/src/linux-headers-$version
++	mkdir -p $destdir
++	tar -c -f - -C $srctree -T debian/hdrsrcfiles | tar -xf - -C $destdir
++	tar -c -f - -T debian/hdrobjfiles | tar -xf - -C $destdir
++	rm -f debian/hdrsrcfiles debian/hdrobjfiles
++
++	# copy .config manually to be where it's expected to be
++	cp $KCONFIG_CONFIG $destdir/.config
++
++	mkdir -p $pdir/lib/modules/$version/
++	ln -s /usr/src/linux-headers-$version $pdir/lib/modules/$version/build
++}
++
++deploy_libc_headers () {
++	pdir=$1
++
++	rm -rf $pdir
++
++	$MAKE -f $srctree/Makefile headers
++	$MAKE -f $srctree/Makefile headers_install INSTALL_HDR_PATH=$pdir/usr
++
++	# move asm headers to /usr/include/<libc-machine>/asm to match the structure
++	# used by Debian-based distros (to support multi-arch)
++	host_arch=$(dpkg-architecture -a$(cat debian/arch) -qDEB_HOST_MULTIARCH)
++	mkdir $pdir/usr/include/$host_arch
++	mv $pdir/usr/include/asm $pdir/usr/include/$host_arch/
+ }
+ 
+ version=$KERNELRELEASE
+-tmpdir="$objtree/debian/tmp"
+-kernel_headers_dir="$objtree/debian/hdrtmp"
+-libc_headers_dir="$objtree/debian/headertmp"
+-dbg_dir="$objtree/debian/dbgtmp"
++tmpdir=debian/linux-image
++dbg_dir=debian/linux-image-dbg
+ packagename=linux-image-$version
+-kernel_headers_packagename=linux-headers-$version
+-libc_headers_packagename=linux-libc-dev
+ dbg_packagename=$packagename-dbg
+ 
+ if [ "$ARCH" = "um" ] ; then
+@@ -77,15 +133,13 @@ esac
+ BUILD_DEBUG=$(if_enabled_echo CONFIG_DEBUG_INFO Yes)
+ 
+ # Setup the directory structure
+-rm -rf "$tmpdir" "$kernel_headers_dir" "$libc_headers_dir" "$dbg_dir" $objtree/debian/files
++rm -rf "$tmpdir" "$dbg_dir" debian/files
+ mkdir -m 755 -p "$tmpdir/DEBIAN"
+ mkdir -p "$tmpdir/lib" "$tmpdir/boot"
+-mkdir -p "$kernel_headers_dir/lib/modules/$version/"
+ 
+-# Build and install the kernel
++# Install the kernel
+ if [ "$ARCH" = "um" ] ; then
+ 	mkdir -p "$tmpdir/usr/lib/uml/modules/$version" "$tmpdir/usr/bin" "$tmpdir/usr/share/doc/$packagename"
+-	$MAKE linux
+ 	cp System.map "$tmpdir/usr/lib/uml/modules/$version/System.map"
+ 	cp $KCONFIG_CONFIG "$tmpdir/usr/share/doc/$packagename/config"
+ 	gzip "$tmpdir/usr/share/doc/$packagename/config"
+@@ -129,16 +183,6 @@ if is_enabled CONFIG_MODULES; then
+ 	fi
+ fi
+ 
+-if [ "$ARCH" != "um" ]; then
+-	$MAKE -f $srctree/Makefile headers
+-	$MAKE -f $srctree/Makefile headers_install INSTALL_HDR_PATH="$libc_headers_dir/usr"
+-	# move asm headers to /usr/include/<libc-machine>/asm to match the structure
+-	# used by Debian-based distros (to support multi-arch)
+-	host_arch=$(dpkg-architecture -a$(cat debian/arch) -qDEB_HOST_MULTIARCH)
+-	mkdir $libc_headers_dir/usr/include/$host_arch
+-	mv $libc_headers_dir/usr/include/asm $libc_headers_dir/usr/include/$host_arch/
+-fi
+-
+ # Install the maintainer scripts
+ # Note: hook scripts under /etc/kernel are also executed by official Debian
+ # kernel packages, as well as kernel packages built using make-kpkg.
+@@ -164,29 +208,14 @@ EOF
+ 	chmod 755 "$tmpdir/DEBIAN/$script"
+ done
+ 
+-# Build kernel header package
+-(cd $srctree; find . -name Makefile\* -o -name Kconfig\* -o -name \*.pl) > "$objtree/debian/hdrsrcfiles"
+-(cd $srctree; find arch/*/include include scripts -type f -o -type l) >> "$objtree/debian/hdrsrcfiles"
+-(cd $srctree; find arch/$SRCARCH -name module.lds -o -name Kbuild.platforms -o -name Platform) >> "$objtree/debian/hdrsrcfiles"
+-(cd $srctree; find $(find arch/$SRCARCH -name include -o -name scripts -type d) -type f) >> "$objtree/debian/hdrsrcfiles"
+-if is_enabled CONFIG_STACK_VALIDATION; then
+-	(cd $objtree; find tools/objtool -type f -executable) >> "$objtree/debian/hdrobjfiles"
+-fi
+-(cd $objtree; find arch/$SRCARCH/include Module.symvers include scripts -type f) >> "$objtree/debian/hdrobjfiles"
+-if is_enabled CONFIG_GCC_PLUGINS; then
+-	(cd $objtree; find scripts/gcc-plugins -name \*.so -o -name gcc-common.h) >> "$objtree/debian/hdrobjfiles"
+-fi
+-destdir=$kernel_headers_dir/usr/src/linux-headers-$version
+-mkdir -p "$destdir"
+-(cd $srctree; tar -c -f - -T -) < "$objtree/debian/hdrsrcfiles" | (cd $destdir; tar -xf -)
+-(cd $objtree; tar -c -f - -T -) < "$objtree/debian/hdrobjfiles" | (cd $destdir; tar -xf -)
+-(cd $objtree; cp $KCONFIG_CONFIG $destdir/.config) # copy .config manually to be where it's expected to be
+-ln -sf "/usr/src/linux-headers-$version" "$kernel_headers_dir/lib/modules/$version/build"
+-rm -f "$objtree/debian/hdrsrcfiles" "$objtree/debian/hdrobjfiles"
+-
+ if [ "$ARCH" != "um" ]; then
+-	create_package "$kernel_headers_packagename" "$kernel_headers_dir"
+-	create_package "$libc_headers_packagename" "$libc_headers_dir"
++	if is_enabled CONFIG_MODULES; then
++		deploy_kernel_headers debian/linux-headers
++		create_package linux-headers-$version debian/linux-headers
++	fi
++
++	deploy_libc_headers debian/linux-libc-dev
++	create_package linux-libc-dev debian/linux-libc-dev
+ fi
+ 
+ create_package "$packagename" "$tmpdir"
+diff --git a/scripts/package/buildtar b/scripts/package/buildtar
+index 3d541cee16ed..936198a90477 100755
+--- a/scripts/package/buildtar
++++ b/scripts/package/buildtar
+@@ -2,7 +2,7 @@
+ # SPDX-License-Identifier: GPL-2.0
+ 
+ #
+-# buildtar 0.0.4
++# buildtar 0.0.5
+ #
+ # (C) 2004-2006 by Jan-Benedict Glaw <jbglaw@lug-owl.de>
+ #
+@@ -24,7 +24,7 @@ tarball="${objtree}/linux-${KERNELRELEASE}-${ARCH}.tar"
+ # Figure out how to compress, if requested at all
+ #
+ case "${1}" in
+-	tar-pkg)
++	dir-pkg|tar-pkg)
+ 		opts=
+ 		;;
+ 	targz-pkg)
+@@ -53,6 +53,18 @@ rm -rf -- "${tmpdir}"
+ mkdir -p -- "${tmpdir}/boot"
+ dirs=boot
+ 
++
++#
++# Try to install dtbs
++#
++if grep -q '^CONFIG_OF_EARLY_FLATTREE=y' include/config/auto.conf; then
++	# Only some architectures with OF support have this target
++	if [ -d "${srctree}/arch/${SRCARCH}/boot/dts" ]; then
++		$MAKE ARCH="${ARCH}" -f ${srctree}/Makefile INSTALL_DTBS_PATH="${tmpdir}/boot/dtbs/${KERNELRELEASE}" dtbs_install
++    fi
++fi
++
++
+ #
+ # Try to install modules
+ #
+@@ -125,6 +137,10 @@ case "${ARCH}" in
+ 		;;
+ esac
+ 
++if [ "${1}" = dir-pkg ]; then
++	echo "Kernel tree successfully created in $tmpdir"
++	exit 0
++fi
+ 
+ #
+ # Create the tarball
+diff --git a/scripts/package/mkdebian b/scripts/package/mkdebian
+index 357dc56bcf30..60a2a63a5e90 100755
+--- a/scripts/package/mkdebian
++++ b/scripts/package/mkdebian
+@@ -94,16 +94,16 @@ else
+ 	packageversion=$version-$revision
+ fi
+ sourcename=$KDEB_SOURCENAME
+-packagename=linux-image-$version
+-kernel_headers_packagename=linux-headers-$version
+-dbg_packagename=$packagename-dbg
+-debarch=
+-set_debarch
+ 
+ if [ "$ARCH" = "um" ] ; then
+-	packagename=user-mode-linux-$version
++	packagename=user-mode-linux
++else
++	packagename=linux-image
+ fi
+ 
++debarch=
++set_debarch
++
+ email=${DEBEMAIL-$EMAIL}
+ 
+ # use email string directly if it contains <email>
+@@ -174,22 +174,16 @@ Source: $sourcename
+ Section: kernel
+ Priority: optional
+ Maintainer: $maintainer
++Rules-Requires-Root: no
+ Build-Depends: bc, rsync, kmod, cpio, bison, flex | flex:native $extra_build_depends
+-Homepage: http://www.kernel.org/
++Homepage: https://www.kernel.org/
+ 
+-Package: $packagename
++Package: $packagename-$version
+ Architecture: $debarch
+ Description: Linux kernel, version $version
+  This package contains the Linux kernel, modules and corresponding other
+  files, version: $version.
+ 
+-Package: $kernel_headers_packagename
+-Architecture: $debarch
+-Description: Linux kernel headers for $version on $debarch
+- This package provides kernel header files for $version on $debarch
+- .
+- This is useful for people who need to build external modules
+-
+ Package: linux-libc-dev
+ Section: devel
+ Provides: linux-kernel-headers
+@@ -198,25 +192,46 @@ Description: Linux support headers for userspace development
+  This package provides userspaces headers from the Linux kernel.  These headers
+  are used by the installed headers for GNU glibc and other system libraries.
+ Multi-Arch: same
++EOF
+ 
+-Package: $dbg_packagename
++if is_enabled CONFIG_MODULES; then
++cat <<EOF >> debian/control
++
++Package: linux-headers-$version
++Architecture: $debarch
++Description: Linux kernel headers for $version on $debarch
++ This package provides kernel header files for $version on $debarch
++ .
++ This is useful for people who need to build external modules
++EOF
++fi
++
++if is_enabled CONFIG_DEBUG_INFO; then
++cat <<EOF >> debian/control
++
++Package: linux-image-$version-dbg
+ Section: debug
+ Architecture: $debarch
+ Description: Linux kernel debugging symbols for $version
+  This package will come in handy if you need to debug the kernel. It provides
+  all the necessary debug symbols for the kernel and its modules.
+ EOF
++fi
+ 
+ cat <<EOF > debian/rules
+ #!$(command -v $MAKE) -f
+ 
+ srctree ?= .
+ 
+-build:
++build-indep:
++build-arch:
+ 	\$(MAKE) KERNELRELEASE=${version} ARCH=${ARCH} \
+ 	KBUILD_BUILD_VERSION=${revision} -f \$(srctree)/Makefile
+ 
+-binary-arch:
++build: build-arch
++
++binary-indep:
++binary-arch: build-arch
+ 	\$(MAKE) KERNELRELEASE=${version} ARCH=${ARCH} \
+ 	KBUILD_BUILD_VERSION=${revision} -f \$(srctree)/Makefile intdeb-pkg
+ 
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index 8640c278f1aa..7c477ca7dc98 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -46,7 +46,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
+ 	License: GPL
+ 	Group: System Environment/Kernel
+ 	Vendor: The Linux Community
+-	URL: http://www.kernel.org
++	URL: https://www.kernel.org
+ $S	Source: kernel-$__KERNELRELEASE.tar.gz
+ 	Provides: $PROVIDES
+ 	%define __spec_install_post /usr/lib/rpm/brp-compress || :
+-- 
+2.29.2
+
