@@ -1,0 +1,230 @@
+From 6c263b1bb8279d8e1b84e873ee5ead6ff623da78 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Thu, 28 Jan 2021 21:03:49 -0600
+Subject: [PATCH] backports: greybus: from: linux.git
+
+Reference: v5.10.11
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/greybus/interface.c              |  6 +++---
+ drivers/staging/greybus/audio_codec.c    |  6 ++++--
+ drivers/staging/greybus/audio_helper.c   |  3 ++-
+ drivers/staging/greybus/audio_module.c   |  6 +++---
+ drivers/staging/greybus/audio_topology.c | 20 ++++++++++----------
+ drivers/staging/greybus/gbphy.h          |  4 ++--
+ 6 files changed, 24 insertions(+), 21 deletions(-)
+
+diff --git a/drivers/greybus/interface.c b/drivers/greybus/interface.c
+index 58ea374d8aaa..9ec949a438ef 100644
+--- a/drivers/greybus/interface.c
++++ b/drivers/greybus/interface.c
+@@ -620,7 +620,7 @@ static struct attribute *interface_common_attrs[] = {
+ static umode_t interface_unipro_is_visible(struct kobject *kobj,
+ 					   struct attribute *attr, int n)
+ {
+-	struct device *dev = container_of(kobj, struct device, kobj);
++	struct device *dev = kobj_to_dev(kobj);
+ 	struct gb_interface *intf = to_gb_interface(dev);
+ 
+ 	switch (intf->type) {
+@@ -635,7 +635,7 @@ static umode_t interface_unipro_is_visible(struct kobject *kobj,
+ static umode_t interface_greybus_is_visible(struct kobject *kobj,
+ 					    struct attribute *attr, int n)
+ {
+-	struct device *dev = container_of(kobj, struct device, kobj);
++	struct device *dev = kobj_to_dev(kobj);
+ 	struct gb_interface *intf = to_gb_interface(dev);
+ 
+ 	switch (intf->type) {
+@@ -649,7 +649,7 @@ static umode_t interface_greybus_is_visible(struct kobject *kobj,
+ static umode_t interface_power_is_visible(struct kobject *kobj,
+ 					  struct attribute *attr, int n)
+ {
+-	struct device *dev = container_of(kobj, struct device, kobj);
++	struct device *dev = kobj_to_dev(kobj);
+ 	struct gb_interface *intf = to_gb_interface(dev);
+ 
+ 	switch (intf->type) {
+diff --git a/drivers/staging/greybus/audio_codec.c b/drivers/staging/greybus/audio_codec.c
+index 74538f8c5fa4..42ce6c88ea75 100644
+--- a/drivers/staging/greybus/audio_codec.c
++++ b/drivers/staging/greybus/audio_codec.c
+@@ -490,6 +490,7 @@ static int gbcodec_hw_params(struct snd_pcm_substream *substream,
+ 	if (ret) {
+ 		dev_err_ratelimited(dai->dev, "%d: Error during set_config\n",
+ 				    ret);
++		gb_pm_runtime_put_noidle(bundle);
+ 		mutex_unlock(&codec->lock);
+ 		return ret;
+ 	}
+@@ -566,6 +567,7 @@ static int gbcodec_prepare(struct snd_pcm_substream *substream,
+ 		break;
+ 	}
+ 	if (ret) {
++		gb_pm_runtime_put_noidle(bundle);
+ 		mutex_unlock(&codec->lock);
+ 		dev_err_ratelimited(dai->dev, "set_data_size failed:%d\n",
+ 				    ret);
+@@ -688,7 +690,7 @@ static struct snd_soc_dai_driver gbaudio_dai[] = {
+ 		.playback = {
+ 			.stream_name = "I2S 0 Playback",
+ 			.rates = SNDRV_PCM_RATE_48000,
+-			.formats = SNDRV_PCM_FORMAT_S16_LE,
++			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+ 			.rate_max = 48000,
+ 			.rate_min = 48000,
+ 			.channels_min = 1,
+@@ -698,7 +700,7 @@ static struct snd_soc_dai_driver gbaudio_dai[] = {
+ 		.capture = {
+ 			.stream_name = "I2S 0 Capture",
+ 			.rates = SNDRV_PCM_RATE_48000,
+-			.formats = SNDRV_PCM_FORMAT_S16_LE,
++			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+ 			.rate_max = 48000,
+ 			.rate_min = 48000,
+ 			.channels_min = 1,
+diff --git a/drivers/staging/greybus/audio_helper.c b/drivers/staging/greybus/audio_helper.c
+index 237531ba60f3..3011b8abce38 100644
+--- a/drivers/staging/greybus/audio_helper.c
++++ b/drivers/staging/greybus/audio_helper.c
+@@ -135,7 +135,8 @@ int gbaudio_dapm_free_controls(struct snd_soc_dapm_context *dapm,
+ 		if (!w) {
+ 			dev_err(dapm->dev, "%s: widget not found\n",
+ 				widget->name);
+-			return -EINVAL;
++			widget++;
++			continue;
+ 		}
+ 		widget++;
+ #ifdef CONFIG_DEBUG_FS
+diff --git a/drivers/staging/greybus/audio_module.c b/drivers/staging/greybus/audio_module.c
+index 16f60256adb2..c52c4f361b90 100644
+--- a/drivers/staging/greybus/audio_module.c
++++ b/drivers/staging/greybus/audio_module.c
+@@ -219,7 +219,7 @@ static int gb_audio_add_data_connection(struct gbaudio_module_info *gbmodule,
+ 
+ 	greybus_set_drvdata(bundle, gbmodule);
+ 	dai->id = 0;
+-	dai->data_cport = connection->intf_cport_id;
++	dai->data_cport = cpu_to_le16(connection->intf_cport_id);
+ 	dai->connection = connection;
+ 	list_add(&dai->list, &gbmodule->data_list);
+ 
+@@ -329,7 +329,7 @@ static int gb_audio_probe(struct gb_bundle *bundle,
+ 		if (ret) {
+ 			dev_err(dev,
+ 				"%d:Error while enabling %d:data connection\n",
+-				ret, dai->data_cport);
++				ret, le16_to_cpu(dai->data_cport));
+ 			goto disable_data_connection;
+ 		}
+ 	}
+@@ -451,7 +451,7 @@ static int gb_audio_resume(struct device *dev)
+ 		if (ret) {
+ 			dev_err(dev,
+ 				"%d:Error while enabling %d:data connection\n",
+-				ret, dai->data_cport);
++				ret, le16_to_cpu(dai->data_cport));
+ 			return ret;
+ 		}
+ 	}
+diff --git a/drivers/staging/greybus/audio_topology.c b/drivers/staging/greybus/audio_topology.c
+index 83b38ae8908c..662e3e8b4b63 100644
+--- a/drivers/staging/greybus/audio_topology.c
++++ b/drivers/staging/greybus/audio_topology.c
+@@ -182,7 +182,7 @@ static int gbcodec_mixer_ctl_info(struct snd_kcontrol *kcontrol,
+ 	/* update uinfo */
+ 	uinfo->access = data->access;
+ 	uinfo->count = data->vcount;
+-	uinfo->type = (snd_ctl_elem_type_t)info->type;
++	uinfo->type = (__force snd_ctl_elem_type_t)info->type;
+ 
+ 	switch (info->type) {
+ 	case GB_AUDIO_CTL_ELEM_TYPE_BOOLEAN:
+@@ -466,7 +466,7 @@ static int gbcodec_mixer_dapm_ctl_put(struct snd_kcontrol *kcontrol,
+ 		goto exit;
+ 
+ 	/* update ucontrol */
+-	if (gbvalue.value.integer_value[0] != val) {
++	if (le32_to_cpu(gbvalue.value.integer_value[0]) != val) {
+ 		for (wi = 0; wi < wlist->num_widgets; wi++) {
+ 			widget = wlist->widgets[wi];
+ 			snd_soc_dapm_mixer_update_power(widget->dapm, kcontrol,
+@@ -689,7 +689,7 @@ static int gbaudio_tplg_create_kcontrol(struct gbaudio_module_info *gb,
+ 				return -ENOMEM;
+ 			ctldata->ctl_id = ctl->id;
+ 			ctldata->data_cport = le16_to_cpu(ctl->data_cport);
+-			ctldata->access = ctl->access;
++			ctldata->access = le32_to_cpu(ctl->access);
+ 			ctldata->vcount = ctl->count_values;
+ 			ctldata->info = &ctl->info;
+ 			*kctl = (struct snd_kcontrol_new)
+@@ -744,10 +744,10 @@ static int gbcodec_enum_dapm_ctl_get(struct snd_kcontrol *kcontrol,
+ 		return ret;
+ 	}
+ 
+-	ucontrol->value.enumerated.item[0] = gbvalue.value.enumerated_item[0];
++	ucontrol->value.enumerated.item[0] = le32_to_cpu(gbvalue.value.enumerated_item[0]);
+ 	if (e->shift_l != e->shift_r)
+ 		ucontrol->value.enumerated.item[1] =
+-			gbvalue.value.enumerated_item[1];
++			le32_to_cpu(gbvalue.value.enumerated_item[1]);
+ 
+ 	return 0;
+ }
+@@ -800,11 +800,11 @@ static int gbcodec_enum_dapm_ctl_put(struct snd_kcontrol *kcontrol,
+ 	val = mux << e->shift_l;
+ 	mask = e->mask << e->shift_l;
+ 
+-	if (gbvalue.value.enumerated_item[0] !=
++	if (le32_to_cpu(gbvalue.value.enumerated_item[0]) !=
+ 	    ucontrol->value.enumerated.item[0]) {
+ 		change = 1;
+ 		gbvalue.value.enumerated_item[0] =
+-			ucontrol->value.enumerated.item[0];
++			cpu_to_le32(ucontrol->value.enumerated.item[0]);
+ 	}
+ 
+ 	if (e->shift_l != e->shift_r) {
+@@ -812,11 +812,11 @@ static int gbcodec_enum_dapm_ctl_put(struct snd_kcontrol *kcontrol,
+ 			return -EINVAL;
+ 		val |= ucontrol->value.enumerated.item[1] << e->shift_r;
+ 		mask |= e->mask << e->shift_r;
+-		if (gbvalue.value.enumerated_item[1] !=
++		if (le32_to_cpu(gbvalue.value.enumerated_item[1]) !=
+ 		    ucontrol->value.enumerated.item[1]) {
+ 			change = 1;
+ 			gbvalue.value.enumerated_item[1] =
+-				ucontrol->value.enumerated.item[1];
++				cpu_to_le32(ucontrol->value.enumerated.item[1]);
+ 		}
+ 	}
+ 
+@@ -887,7 +887,7 @@ static int gbaudio_tplg_create_mixer_ctl(struct gbaudio_module_info *gb,
+ 		return -ENOMEM;
+ 	ctldata->ctl_id = ctl->id;
+ 	ctldata->data_cport = le16_to_cpu(ctl->data_cport);
+-	ctldata->access = ctl->access;
++	ctldata->access = le32_to_cpu(ctl->access);
+ 	ctldata->vcount = ctl->count_values;
+ 	ctldata->info = &ctl->info;
+ 	*kctl = (struct snd_kcontrol_new)
+diff --git a/drivers/staging/greybus/gbphy.h b/drivers/staging/greybus/gbphy.h
+index 087928a586fb..d4a225b76338 100644
+--- a/drivers/staging/greybus/gbphy.h
++++ b/drivers/staging/greybus/gbphy.h
+@@ -36,9 +36,9 @@ struct gbphy_device_id {
+ 
+ struct gbphy_driver {
+ 	const char *name;
+-	int (*probe)(struct gbphy_device *,
++	int (*probe)(struct gbphy_device *device,
+ 		     const struct gbphy_device_id *id);
+-	void (*remove)(struct gbphy_device *);
++	void (*remove)(struct gbphy_device *device);
+ 	const struct gbphy_device_id *id_table;
+ 
+ 	struct device_driver driver;
+-- 
+2.29.2
+
