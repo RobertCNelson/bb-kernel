@@ -547,9 +547,9 @@ drivers
 soc
 
 packaging () {
-	do_backport="enable"
+	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.4.93"
+		backport_tag="v5.2.21"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
