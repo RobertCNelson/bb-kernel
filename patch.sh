@@ -425,7 +425,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.11-rc5"
+	backport_tag="v5.11-rc7"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -441,7 +441,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.11-rc5"
+	backport_tag="v5.11-rc7"
 
 	subsystem="wlcore"
 	#regenerate="enable"
