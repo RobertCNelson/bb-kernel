@@ -461,7 +461,6 @@ backports () {
 }
 
 reverts () {
-	echo "dir: reverts"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
@@ -469,12 +468,14 @@ reverts () {
 
 	## notes
 	##git revert --no-edit xyz -s
+	#git revert --no-edit 6212804f2d78e86f15dba5b46a4065cbf1403cde -s
+	#git revert --no-edit 596b0474d3d9b1242eab713f84d8873f9887d980 -s
 
-	#${git} "${DIR}/patches/reverts/0001-Revert-xyz.patch"
+	dir 'reverts'
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=1
+		number=2
 		cleanup
 	fi
 }
@@ -508,7 +509,7 @@ soc () {
 
 ###
 backports
-#reverts
+reverts
 omap
 drivers
 soc
