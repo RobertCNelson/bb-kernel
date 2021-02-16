@@ -1,9 +1,9 @@
-From 05229d2a3ed31520ca47052ea5d9f82e99d30b39 Mon Sep 17 00:00:00 2001
+From 0a331b85d80f4676a5d865d9ed31d99576b071e2 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 15 Feb 2021 10:56:30 -0600
+Date: Tue, 16 Feb 2021 09:49:59 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-5.10.16-rt29.patch.xz
+patch-5.10.16-rt30.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -155,7 +155,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/xtensa/include/asm/highmem.h             |   12 +-
  arch/xtensa/include/asm/spinlock_types.h      |    4 -
  arch/xtensa/mm/highmem.c                      |   46 +-
- block/blk-mq.c                                |  107 +-
+ block/blk-mq.c                                |  127 +-
  crypto/cryptd.c                               |   19 +-
  drivers/atm/eni.c                             |    2 +-
  drivers/block/zram/zram_drv.c                 |   36 +
@@ -357,6 +357,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/sched/swait.c                          |    1 +
  kernel/sched/topology.c                       |    1 +
  kernel/signal.c                               |  105 +-
+ kernel/smp.c                                  |   14 +
  kernel/softirq.c                              |  428 ++++-
  kernel/stop_machine.c                         |   23 +-
  kernel/time/hrtimer.c                         |   30 +
@@ -416,7 +417,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/sched/sch_generic.c                       |   10 +
  net/sunrpc/svc_xprt.c                         |    4 +-
  net/xfrm/xfrm_state.c                         |    9 +-
- 409 files changed, 9153 insertions(+), 5087 deletions(-)
+ 410 files changed, 9182 insertions(+), 5092 deletions(-)
  delete mode 100644 arch/alpha/include/asm/kmap_types.h
  delete mode 100644 arch/arc/include/asm/kmap_types.h
  delete mode 100644 arch/arm/include/asm/kmap_types.h
@@ -5329,7 +5330,7 @@ index 673196fe862e..0735ca5e8f86 100644
  	kmap_waitqueues_init();
  }
 diff --git a/block/blk-mq.c b/block/blk-mq.c
-index 2a1eff60c797..5b27fd6c8c7c 100644
+index 2a1eff60c797..b293f74ea8ca 100644
 --- a/block/blk-mq.c
 +++ b/block/blk-mq.c
 @@ -41,7 +41,7 @@
@@ -5341,7 +5342,7 @@ index 2a1eff60c797..5b27fd6c8c7c 100644
  
  static void blk_mq_poll_stats_start(struct request_queue *q);
  static void blk_mq_poll_stats_fn(struct blk_stat_callback *cb);
-@@ -565,80 +565,32 @@ void blk_mq_end_request(struct request *rq, blk_status_t error)
+@@ -565,80 +565,29 @@ void blk_mq_end_request(struct request *rq, blk_status_t error)
  }
  EXPORT_SYMBOL(blk_mq_end_request);
  
@@ -5350,7 +5351,7 @@ index 2a1eff60c797..5b27fd6c8c7c 100644
 - * while passing them to the queue registered handler.
 - */
 -static __latent_entropy void blk_done_softirq(struct softirq_action *h)
-+static void blk_complete_reqs(struct llist_head *cpu_list)
++static void blk_complete_reqs(struct llist_head *list)
  {
 -	struct list_head *cpu_list, local_list;
 -
@@ -5358,17 +5359,15 @@ index 2a1eff60c797..5b27fd6c8c7c 100644
 -	cpu_list = this_cpu_ptr(&blk_cpu_done);
 -	list_replace_init(cpu_list, &local_list);
 -	local_irq_enable();
-+	struct llist_node *entry;
-+	struct request *rq, *rq_next;
- 
+-
 -	while (!list_empty(&local_list)) {
 -		struct request *rq;
-+	entry = llist_del_all(cpu_list);
-+	entry = llist_reverse_order(entry);
++	struct llist_node *entry = llist_reverse_order(llist_del_all(list));
++	struct request *rq, *next;
  
 -		rq = list_entry(local_list.next, struct request, ipi_list);
 -		list_del_init(&rq->ipi_list);
-+	llist_for_each_entry_safe(rq, rq_next, entry, ipi_list)
++	llist_for_each_entry_safe(rq, next, entry, ipi_list)
  		rq->q->mq_ops->complete(rq);
 -	}
  }
@@ -5432,7 +5431,7 @@ index 2a1eff60c797..5b27fd6c8c7c 100644
  }
  
  static inline bool blk_mq_complete_need_ipi(struct request *rq)
-@@ -648,6 +600,14 @@ static inline bool blk_mq_complete_need_ipi(struct request *rq)
+@@ -648,6 +597,14 @@ static inline bool blk_mq_complete_need_ipi(struct request *rq)
  	if (!IS_ENABLED(CONFIG_SMP) ||
  	    !test_bit(QUEUE_FLAG_SAME_COMP, &rq->q->queue_flags))
  		return false;
@@ -5447,15 +5446,40 @@ index 2a1eff60c797..5b27fd6c8c7c 100644
  
  	/* same CPU or cache domain?  Complete locally */
  	if (cpu == rq->mq_ctx->cpu ||
-@@ -661,6 +621,7 @@ static inline bool blk_mq_complete_need_ipi(struct request *rq)
+@@ -659,6 +616,32 @@ static inline bool blk_mq_complete_need_ipi(struct request *rq)
+ 	return cpu_online(rq->mq_ctx->cpu);
+ }
  
++static void blk_mq_complete_send_ipi(struct request *rq)
++{
++	struct llist_head *list;
++	unsigned int cpu;
++
++	cpu = rq->mq_ctx->cpu;
++	list = &per_cpu(blk_cpu_done, cpu);
++	if (llist_add(&rq->ipi_list, list)) {
++		rq->csd.func = __blk_mq_complete_request_remote;
++		rq->csd.info = rq;
++		rq->csd.flags = 0;
++		smp_call_function_single_async(cpu, &rq->csd);
++	}
++}
++
++static void blk_mq_raise_softirq(struct request *rq)
++{
++	struct llist_head *list;
++
++	preempt_disable();
++	list = this_cpu_ptr(&blk_cpu_done);
++	if (llist_add(&rq->ipi_list, list))
++		raise_softirq(BLOCK_SOFTIRQ);
++	preempt_enable();
++}
++
  bool blk_mq_complete_request_remote(struct request *rq)
  {
-+	struct llist_head *cpu_list;
  	WRITE_ONCE(rq->state, MQ_RQ_COMPLETE);
- 
- 	/*
-@@ -671,14 +632,24 @@ bool blk_mq_complete_request_remote(struct request *rq)
+@@ -671,17 +654,15 @@ bool blk_mq_complete_request_remote(struct request *rq)
  		return false;
  
  	if (blk_mq_complete_need_ipi(rq)) {
@@ -5463,29 +5487,24 @@ index 2a1eff60c797..5b27fd6c8c7c 100644
 -		rq->csd.info = rq;
 -		rq->csd.flags = 0;
 -		smp_call_function_single_async(rq->mq_ctx->cpu, &rq->csd);
-+		unsigned int cpu;
-+
-+		cpu = rq->mq_ctx->cpu;
-+		cpu_list = &per_cpu(blk_cpu_done, cpu);
-+		if (llist_add(&rq->ipi_list, cpu_list)) {
-+			rq->csd.func = __blk_mq_complete_request_remote;
-+			rq->csd.flags = 0;
-+			smp_call_function_single_async(cpu, &rq->csd);
-+		}
- 	} else {
- 		if (rq->q->nr_hw_queues > 1)
- 			return false;
+-	} else {
+-		if (rq->q->nr_hw_queues > 1)
+-			return false;
 -		blk_mq_trigger_softirq(rq);
-+
-+		preempt_disable();
-+		cpu_list = this_cpu_ptr(&blk_cpu_done);
-+		if (llist_add(&rq->ipi_list, cpu_list))
-+			raise_softirq(BLOCK_SOFTIRQ);
-+		preempt_enable();
++		blk_mq_complete_send_ipi(rq);
++		return true;
  	}
  
- 	return true;
-@@ -1604,14 +1575,14 @@ static void __blk_mq_delay_run_hw_queue(struct blk_mq_hw_ctx *hctx, bool async,
+-	return true;
++	if (rq->q->nr_hw_queues == 1) {
++		blk_mq_raise_softirq(rq);
++		return true;
++	}
++	return false;
+ }
+ EXPORT_SYMBOL_GPL(blk_mq_complete_request_remote);
+ 
+@@ -1604,14 +1585,14 @@ static void __blk_mq_delay_run_hw_queue(struct blk_mq_hw_ctx *hctx, bool async,
  		return;
  
  	if (!async && !(hctx->flags & BLK_MQ_F_BLOCKING)) {
@@ -5503,7 +5522,7 @@ index 2a1eff60c797..5b27fd6c8c7c 100644
  	}
  
  	kblockd_mod_delayed_work_on(blk_mq_hctx_next_cpu(hctx), &hctx->run_work,
-@@ -3909,7 +3880,7 @@ static int __init blk_mq_init(void)
+@@ -3909,7 +3890,7 @@ static int __init blk_mq_init(void)
  	int i;
  
  	for_each_possible_cpu(i)
@@ -21787,8 +21806,40 @@ index ef8f2a28d37c..0be3c40c5662 100644
  		freezable_schedule();
  		cgroup_leave_frozen(true);
  	} else {
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 4d17501433be..23778281aaa7 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -14,6 +14,7 @@
+ #include <linux/export.h>
+ #include <linux/percpu.h>
+ #include <linux/init.h>
++#include <linux/interrupt.h>
+ #include <linux/gfp.h>
+ #include <linux/smp.h>
+ #include <linux/cpu.h>
+@@ -449,6 +450,19 @@ void flush_smp_call_function_from_idle(void)
+ 
+ 	local_irq_save(flags);
+ 	flush_smp_call_function_queue(true);
++
++	if (local_softirq_pending()) {
++
++		if (!IS_ENABLED(CONFIG_PREEMPT_RT)) {
++			do_softirq();
++		} else {
++			struct task_struct *ksoftirqd = this_cpu_ksoftirqd();
++
++			if (ksoftirqd && ksoftirqd->state != TASK_RUNNING)
++				wake_up_process(ksoftirqd);
++		}
++	}
++
+ 	local_irq_restore(flags);
+ }
+ 
 diff --git a/kernel/softirq.c b/kernel/softirq.c
-index 09229ad82209..3efa76041728 100644
+index 09229ad82209..f0074f134440 100644
 --- a/kernel/softirq.c
 +++ b/kernel/softirq.c
 @@ -13,6 +13,7 @@
@@ -22316,7 +22367,7 @@ index 09229ad82209..3efa76041728 100644
  }
  EXPORT_SYMBOL(tasklet_kill);
  
-+#ifdef CONFIG_SMP
++#if defined(CONFIG_SMP) || defined(CONFIG_PREEMPT_RT)
 +void tasklet_unlock(struct tasklet_struct *t)
 +{
 +	smp_mb__before_atomic();
