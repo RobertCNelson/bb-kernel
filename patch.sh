@@ -381,10 +381,10 @@ local_patch () {
 
 #external_git
 #aufs
-wpanusb
+#wpanusb
 #rt
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -460,7 +460,7 @@ reverts () {
 }
 
 drivers () {
-	dir 'RPi'
+#	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
@@ -485,7 +485,7 @@ soc () {
 }
 
 ###
-backports
+#backports
 #reverts
 drivers
 soc
