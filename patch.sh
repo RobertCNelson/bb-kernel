@@ -112,7 +112,7 @@ aufs () {
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.10
+		KERNEL_REL=5.11
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -153,7 +153,7 @@ aufs () {
 			cd -
 		fi
 		cd ./KERNEL/
-		KERNEL_REL=5.10
+		KERNEL_REL=5.11
 
 		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -315,7 +315,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.11.x"
+	branch="v5.12.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -342,10 +342,10 @@ beagleboard_dtbs () {
 		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
 		#device="am335x-abbbi.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+#		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-		device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
+#		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+#		device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
 
 		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
@@ -381,10 +381,10 @@ local_patch () {
 
 #external_git
 #aufs
-#wpanusb
+wpanusb
 #rt
 ti_pm_firmware
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
