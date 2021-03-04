@@ -112,7 +112,7 @@ aufs () {
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.10
+		KERNEL_REL=5.11
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -153,7 +153,7 @@ aufs () {
 			cd -
 		fi
 		cd ./KERNEL/
-		KERNEL_REL=5.10
+		KERNEL_REL=5.11
 
 		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -315,7 +315,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.10.x"
+	branch="v5.11.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -400,10 +400,6 @@ pre_backports () {
 	cd -
 }
 
-omap () {
-	dir 'tmlind/v5.11'
-}
-
 post_backports () {
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		cd ~/linux-src/
@@ -425,23 +421,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.11"
-
-	subsystem="greybus"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.11"
+	backport_tag="v5.12-rc1"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -455,9 +435,6 @@ backports () {
 	else
 		patch_backports
 	fi
-
-	${git} "${DIR}/patches/backports/wlcore/0002-wlcore-Downgrade-exceeded-max-RX-BA-sessions-to-debu.patch"
-	${git} "${DIR}/patches/backports/wlcore/0003-wlcore-Fix-command-execute-failure-19-for-wl12xx.patch"
 }
 
 reverts () {
@@ -468,14 +445,12 @@ reverts () {
 
 	## notes
 	##git revert --no-edit xyz -s
-	#git revert --no-edit 6212804f2d78e86f15dba5b46a4065cbf1403cde -s
-	#git revert --no-edit 596b0474d3d9b1242eab713f84d8873f9887d980 -s
 
 	dir 'reverts'
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=2
+		number=1
 		cleanup
 	fi
 }
@@ -483,7 +458,6 @@ reverts () {
 drivers () {
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
-	dir 'drivers/sound'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
@@ -494,7 +468,6 @@ drivers () {
 	dir 'drivers/greybus'
 	dir 'drivers/mikrobus'
 	dir 'drivers/serdev'
-	dir 'drivers/iio'
 	dir 'drivers/fb_ssd1306'
 	dir 'fixes'
 }
@@ -509,8 +482,7 @@ soc () {
 
 ###
 backports
-reverts
-omap
+#reverts
 drivers
 soc
 

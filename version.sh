@@ -8,7 +8,7 @@ build_prefix="-bone-rt-r"
 branch_prefix="am33x-rt-v"
 branch_postfix=""
 
-#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.10-rc1
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.11-rc1
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf
@@ -41,11 +41,11 @@ toolchain="gcc_arm_gnueabihf_10"
 #toolchain="gcc_10_riscv64"
 
 #Kernel
-KERNEL_REL=5.10
-KERNEL_TAG=${KERNEL_REL}.17
-kernel_rt=".17-rt32"
+KERNEL_REL=5.11
+KERNEL_TAG=${KERNEL_REL}.2
+kernel_rt=".2-rt9"
 #Kernel Build
-BUILD=${build_prefix}26
+BUILD=${build_prefix}10.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
