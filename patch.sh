@@ -112,7 +112,7 @@ aufs () {
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.10
+		KERNEL_REL=5.11
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -153,7 +153,7 @@ aufs () {
 			cd -
 		fi
 		cd ./KERNEL/
-		KERNEL_REL=5.10
+		KERNEL_REL=5.11
 
 		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -380,7 +380,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 wpanusb
 #rt
 ti_pm_firmware
@@ -421,27 +421,23 @@ patch_backports (){
 }
 
 backports () {
-#	backport_tag="v5.11-rc5"
-#
-#	subsystem="wlcore"
-#	#regenerate="enable"
-#	if [ "x${regenerate}" = "xenable" ] ; then
-#		pre_backports
-#
-#		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
-#
-#		post_backports
-#		exit 2
-#	else
-#		patch_backports
-#	fi
+	backport_tag="v5.12-rc1"
 
-	${git} "${DIR}/patches/backports/wlcore/0002-wlcore-Downgrade-exceeded-max-RX-BA-sessions-to-debu.patch"
-	${git} "${DIR}/patches/backports/wlcore/0003-wlcore-Fix-command-execute-failure-19-for-wl12xx.patch"
+	subsystem="wlcore"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
 }
 
 reverts () {
-	echo "dir: reverts"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
@@ -450,7 +446,7 @@ reverts () {
 	## notes
 	##git revert --no-edit xyz -s
 
-	#${git} "${DIR}/patches/reverts/0001-Revert-xyz.patch"
+	dir 'reverts'
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
