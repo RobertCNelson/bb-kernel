@@ -516,7 +516,6 @@ backports () {
 }
 
 reverts () {
-	echo "dir: reverts"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
@@ -530,13 +529,11 @@ reverts () {
 	#[    5.414178] bone_capemgr bone_capemgr: compatible-baseboard=ti,beaglebone-black - #slots=4
 	#[    5.422573] bone_capemgr bone_capemgr: Failed to add slot #1
 
-	${git} "${DIR}/patches/reverts/0001-Revert-eeprom-at24-check-if-the-chip-is-functional-i.patch"
-	${git} "${DIR}/patches/reverts/0002-Revert-of-unittest-kmemleak-in-of_unittest_platform_.patch"
-	${git} "${DIR}/patches/reverts/0003-Revert-of-fix-missing-kobject-init-for-SYSFS-OF_DYNA.patch"
+	dir 'reverts'
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=1
+		number=4
 		cleanup
 	fi
 }
