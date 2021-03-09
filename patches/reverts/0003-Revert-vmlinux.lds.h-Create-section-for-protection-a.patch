@@ -1,0 +1,173 @@
+From 2343bfe9605838ea8e3dbd876741aa62209d733c Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Tue, 9 Mar 2021 08:49:20 -0600
+Subject: [PATCH 3/4] Revert "vmlinux.lds.h: Create section for protection
+ against instrumentation"
+
+This reverts commit 4f5416710e13eb4e1587f6c38e92e9134cf5f480.
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ arch/powerpc/kernel/vmlinux.lds.S |  1 -
+ include/asm-generic/sections.h    |  3 --
+ include/asm-generic/vmlinux.lds.h | 10 ------
+ include/linux/compiler.h          | 53 -------------------------------
+ include/linux/compiler_types.h    |  4 ---
+ scripts/mod/modpost.c             |  2 +-
+ 6 files changed, 1 insertion(+), 72 deletions(-)
+
+diff --git a/arch/powerpc/kernel/vmlinux.lds.S b/arch/powerpc/kernel/vmlinux.lds.S
+index 3ea360cad337..a4e576019d79 100644
+--- a/arch/powerpc/kernel/vmlinux.lds.S
++++ b/arch/powerpc/kernel/vmlinux.lds.S
+@@ -102,7 +102,6 @@ SECTIONS
+ #ifdef CONFIG_PPC64
+ 		*(.tramp.ftrace.text);
+ #endif
+-		NOINSTR_TEXT
+ 		SCHED_TEXT
+ 		CPUIDLE_TEXT
+ 		LOCK_TEXT
+diff --git a/include/asm-generic/sections.h b/include/asm-generic/sections.h
+index 66397ed10acb..d1779d442aa5 100644
+--- a/include/asm-generic/sections.h
++++ b/include/asm-generic/sections.h
+@@ -53,9 +53,6 @@ extern char __ctors_start[], __ctors_end[];
+ /* Start and end of .opd section - used for function descriptors. */
+ extern char __start_opd[], __end_opd[];
+ 
+-/* Start and end of instrumentation protected text section */
+-extern char __noinstr_text_start[], __noinstr_text_end[];
+-
+ extern __visible const void __nosave_begin, __nosave_end;
+ 
+ /* Function descriptor handling (if any).  Override in asm/sections.h */
+diff --git a/include/asm-generic/vmlinux.lds.h b/include/asm-generic/vmlinux.lds.h
+index 9a4a5a43e886..130f16cc0b86 100644
+--- a/include/asm-generic/vmlinux.lds.h
++++ b/include/asm-generic/vmlinux.lds.h
+@@ -510,15 +510,6 @@
+ #define RODATA          RO_DATA_SECTION(4096)
+ #define RO_DATA(align)  RO_DATA_SECTION(align)
+ 
+-/*
+- * Non-instrumentable text section
+- */
+-#define NOINSTR_TEXT							\
+-		ALIGN_FUNCTION();					\
+-		__noinstr_text_start = .;				\
+-		*(.noinstr.text)					\
+-		__noinstr_text_end = .;
+-
+ /*
+  * .text section. Map to function alignment to avoid address changes
+  * during second ld run in second ld pass when generating System.map
+@@ -533,7 +524,6 @@
+ 		*(TEXT_MAIN .text.fixup)				\
+ 		*(.text.unlikely .text.unlikely.*)			\
+ 		*(.text.unknown .text.unknown.*)			\
+-		NOINSTR_TEXT						\
+ 		*(.text..refcount)					\
+ 		*(.ref.text)						\
+ 	MEM_KEEP(init.text*)						\
+diff --git a/include/linux/compiler.h b/include/linux/compiler.h
+index 9446e8fbe55c..f164a9b12813 100644
+--- a/include/linux/compiler.h
++++ b/include/linux/compiler.h
+@@ -134,65 +134,12 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
+ /* Annotate a C jump table to allow objtool to follow the code flow */
+ #define __annotate_jump_table __section(.rodata..c_jump_table)
+ 
+-#ifdef CONFIG_DEBUG_ENTRY
+-/* Begin/end of an instrumentation safe region */
+-#define instrumentation_begin() ({					\
+-	asm volatile("%c0:\n\t"						\
+-		     ".pushsection .discard.instr_begin\n\t"		\
+-		     ".long %c0b - .\n\t"				\
+-		     ".popsection\n\t" : : "i" (__COUNTER__));		\
+-})
+-
+-/*
+- * Because instrumentation_{begin,end}() can nest, objtool validation considers
+- * _begin() a +1 and _end() a -1 and computes a sum over the instructions.
+- * When the value is greater than 0, we consider instrumentation allowed.
+- *
+- * There is a problem with code like:
+- *
+- * noinstr void foo()
+- * {
+- *	instrumentation_begin();
+- *	...
+- *	if (cond) {
+- *		instrumentation_begin();
+- *		...
+- *		instrumentation_end();
+- *	}
+- *	bar();
+- *	instrumentation_end();
+- * }
+- *
+- * If instrumentation_end() would be an empty label, like all the other
+- * annotations, the inner _end(), which is at the end of a conditional block,
+- * would land on the instruction after the block.
+- *
+- * If we then consider the sum of the !cond path, we'll see that the call to
+- * bar() is with a 0-value, even though, we meant it to happen with a positive
+- * value.
+- *
+- * To avoid this, have _end() be a NOP instruction, this ensures it will be
+- * part of the condition block and does not escape.
+- */
+-#define instrumentation_end() ({					\
+-	asm volatile("%c0: nop\n\t"					\
+-		     ".pushsection .discard.instr_end\n\t"		\
+-		     ".long %c0b - .\n\t"				\
+-		     ".popsection\n\t" : : "i" (__COUNTER__));		\
+-})
+-#endif /* CONFIG_DEBUG_ENTRY */
+-
+ #else
+ #define annotate_reachable()
+ #define annotate_unreachable()
+ #define __annotate_jump_table
+ #endif
+ 
+-#ifndef instrumentation_begin
+-#define instrumentation_begin()		do { } while(0)
+-#define instrumentation_end()		do { } while(0)
+-#endif
+-
+ #ifndef ASM_UNREACHABLE
+ # define ASM_UNREACHABLE
+ #endif
+diff --git a/include/linux/compiler_types.h b/include/linux/compiler_types.h
+index b94d08d055ff..77433633572e 100644
+--- a/include/linux/compiler_types.h
++++ b/include/linux/compiler_types.h
+@@ -118,10 +118,6 @@ struct ftrace_likely_data {
+ #define notrace			__attribute__((__no_instrument_function__))
+ #endif
+ 
+-/* Section for code which can't be instrumented at all */
+-#define noinstr								\
+-	noinline notrace __attribute((__section__(".noinstr.text")))
+-
+ /*
+  * it doesn't make sense on ARM (currently the only user of __naked)
+  * to trace naked functions because then mcount is called without
+diff --git a/scripts/mod/modpost.c b/scripts/mod/modpost.c
+index 13cda6aa2688..52f1152c9838 100644
+--- a/scripts/mod/modpost.c
++++ b/scripts/mod/modpost.c
+@@ -960,7 +960,7 @@ static void check_section(const char *modname, struct elf_info *elf,
+ 
+ #define DATA_SECTIONS ".data", ".data.rel"
+ #define TEXT_SECTIONS ".text", ".text.unlikely", ".sched.text", \
+-		".kprobes.text", ".cpuidle.text", ".noinstr.text"
++		".kprobes.text", ".cpuidle.text"
+ #define OTHER_TEXT_SECTIONS ".ref.text", ".head.text", ".spinlock.text", \
+ 		".fixup", ".entry.text", ".exception.text", ".text.*", \
+ 		".coldtext"
+-- 
+2.30.1
+

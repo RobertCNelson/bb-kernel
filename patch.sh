@@ -481,7 +481,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.14"
+	backport_tag="v5.10.22"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -556,21 +556,23 @@ backports () {
 }
 
 reverts () {
-	echo "dir: reverts"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		start_cleanup
 	fi
 
 	## notes
+	#git revert --no-edit 0a6565762f2783604ccc9c3d7d237d153724b307 -s
+	#git revert --no-edit 107cf5eede74c0b927a3154799bf71dd51862575 -s
+	#git revert --no-edit 4f5416710e13eb4e1587f6c38e92e9134cf5f480 -s
 	#git revert --no-edit 87ea51c90280388f71255121bb29e9f6a531c754 -s
 	#exit 2
 
-	${git} "${DIR}/patches/reverts/0001-Revert-vmlinux.lds.h-Add-PGO-and-AutoFDO-input-secti.patch"
+	dir 'reverts'
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=1
+		number=4
 		cleanup
 	fi
 }
@@ -609,7 +611,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.14"
+		backport_tag="v5.10.22"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
