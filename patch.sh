@@ -421,7 +421,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12-rc1"
+	backport_tag="v5.12-rc2"
 
 	subsystem="wlcore"
 	#regenerate="enable"
