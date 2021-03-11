@@ -425,7 +425,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.11"
+	backport_tag="v5.11.5"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -441,7 +441,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.11"
+	backport_tag="v5.11.5"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -457,7 +457,6 @@ backports () {
 	fi
 
 	${git} "${DIR}/patches/backports/wlcore/0002-wlcore-Downgrade-exceeded-max-RX-BA-sessions-to-debu.patch"
-	${git} "${DIR}/patches/backports/wlcore/0003-wlcore-Fix-command-execute-failure-19-for-wl12xx.patch"
 }
 
 reverts () {
@@ -509,7 +508,7 @@ soc () {
 
 ###
 backports
-reverts
+#reverts
 omap
 drivers
 soc
