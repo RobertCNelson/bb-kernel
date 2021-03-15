@@ -1,23 +1,23 @@
-From b1b70b85665c47c8402a7769556352e064c8ef19 Mon Sep 17 00:00:00 2001
+From 3ddd29c78dbd75d93b12c5c1926936e85b955fc6 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 8 Mar 2021 12:04:46 -0600
+Date: Mon, 15 Mar 2021 11:32:53 -0500
 Subject: [PATCH] merge: wpanusb: https://github.com/statropy/wpanusb
 
-https://github.com/statropy/wpanusb/commit/7ba5f3d24d95f804e80b2d8d28e35b34c15219c2
+https://github.com/statropy/wpanusb/commit/251f0167545bf2dcaa3cad991a59dbf5ab05490a
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/net/ieee802154/wpanusb.c | 757 +++++++++++++++++++++++++++++++
+ drivers/net/ieee802154/wpanusb.c | 783 +++++++++++++++++++++++++++++++
  drivers/net/ieee802154/wpanusb.h |  53 +++
- 2 files changed, 810 insertions(+)
+ 2 files changed, 836 insertions(+)
  create mode 100644 drivers/net/ieee802154/wpanusb.c
  create mode 100644 drivers/net/ieee802154/wpanusb.h
 
 diff --git a/drivers/net/ieee802154/wpanusb.c b/drivers/net/ieee802154/wpanusb.c
 new file mode 100644
-index 000000000000..698f2c505079
+index 000000000000..ab933c08b800
 --- /dev/null
 +++ b/drivers/net/ieee802154/wpanusb.c
-@@ -0,0 +1,757 @@
+@@ -0,0 +1,783 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Driver for the WPANUSB IEEE 802.15.4 dongle
@@ -45,6 +45,7 @@ index 000000000000..698f2c505079
 +#define WPANUSB_ALLOC_DELAY_MS	100	/* delay after failed allocation */
 +
 +#define VENDOR_OUT		(USB_TYPE_VENDOR | USB_DIR_OUT)
++#define VENDOR_IN		(USB_TYPE_VENDOR | USB_DIR_IN)
 +
 +#define WPANUSB_VALID_CHANNELS	(0x07FFFFFF)
 +
@@ -73,6 +74,17 @@ index 000000000000..698f2c505079
 +	struct usb_device *udev = wpanusb->udev;
 +
 +	return usb_control_msg(udev, pipe, request, VENDOR_OUT,
++			       0, 0, data, size, 1000);
++}
++
++static int wpanusb_control_recv(struct wpanusb *wpanusb, u8 request, void *data, u16 size)
++{
++	struct usb_device *udev = wpanusb->udev;
++
++	usb_control_msg(udev, usb_sndctrlpipe(udev, 0), request, VENDOR_OUT,
++			       0, 0, NULL, 0, 1000);
++
++	return usb_control_msg(udev, usb_rcvbulkpipe(udev, 1), request, VENDOR_IN,
 +			       0, 0, data, size, 1000);
 +}
 +
@@ -468,6 +480,7 @@ index 000000000000..698f2c505079
 +	struct wpanusb *wpanusb = hw->priv;
 +	struct usb_device *udev = wpanusb->udev;
 +	unsigned char *buffer;
++	uint32_t valid_channels;
 +	int ret = 0;
 +
 +	buffer = kmalloc(IEEE802154_EXTENDED_ADDR_LEN, GFP_KERNEL);
@@ -483,18 +496,31 @@ index 000000000000..698f2c505079
 +		return ret;
 +	}
 +
++	buffer = kmalloc(sizeof(valid_channels), GFP_NOIO);
++	if (!buffer)
++		return -ENOMEM;
++	ret = wpanusb_control_recv(wpanusb, GET_SUPPORTED_CHANNELS, buffer,	sizeof(valid_channels));
++	if (ret != sizeof(uint32_t)) {
++		dev_err(&udev->dev, "failed to fetch supported channels\n");
++		kfree(buffer);
++		return ret;
++	}
++	valid_channels = *(uint32_t *)buffer;
++	if (!valid_channels) {
++		dev_err(&udev->dev, "failed to fetch valid channels, setting default valid channels\n");
++		valid_channels = WPANUSB_VALID_CHANNELS;
++	}
++
 +	/* FIXME: these need to come from device capabilities */
-+	hw->flags = IEEE802154_HW_TX_OMIT_CKSUM | IEEE802154_HW_AFILT |
-+		    IEEE802154_HW_PROMISCUOUS;
++	hw->flags = IEEE802154_HW_TX_OMIT_CKSUM | IEEE802154_HW_AFILT;
 +
 +	/* FIXME: these need to come from device capabilities */
 +	hw->phy->flags = WPAN_PHY_FLAG_TXPOWER;
 +
 +	/* Set default and supported channels */
 +	hw->phy->current_page = 0;
-+	hw->phy->current_channel = 11;
-+	/* FIXME: these need to come from device capabilities */
-+	hw->phy->supported.channels[0] = WPANUSB_VALID_CHANNELS;
++	hw->phy->current_channel = ffs(valid_channels) - 1; //set to lowest valid channel
++	hw->phy->supported.channels[0] = valid_channels;
 +
 +	/* FIXME: these need to come from device capabilities */
 +	hw->phy->supported.tx_powers = wpanusb_powers;
@@ -777,7 +803,7 @@ index 000000000000..698f2c505079
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/net/ieee802154/wpanusb.h b/drivers/net/ieee802154/wpanusb.h
 new file mode 100644
-index 000000000000..8338df3e23ce
+index 000000000000..52e54fdca737
 --- /dev/null
 +++ b/drivers/net/ieee802154/wpanusb.h
 @@ -0,0 +1,53 @@
@@ -815,7 +841,7 @@ index 000000000000..8338df3e23ce
 +	SET_FRAME_RETRIES,
 +	SET_PROMISCUOUS_MODE,
 +	GET_EXTENDED_ADDR,
-+	GET_CAPABILITIES,
++	GET_SUPPORTED_CHANNELS,
 +};
 +
 +struct set_channel {
@@ -835,5 +861,5 @@ index 000000000000..8338df3e23ce
 +	__le64 ieee_addr;
 +} __packed;
 -- 
-2.30.1
+2.30.2
 
