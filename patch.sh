@@ -303,19 +303,19 @@ rt () {
 }
 
 ti_pm_firmware () {
-	#http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y-next
+	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 
 		cd ../
 		if [ ! -d ./ti-amx3-cm3-pm-firmware ] ; then
-			${git_bin} clone -b ti-v4.1.y-next git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
+			${git_bin} clone -b ti-v4.1.y git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
 			cd ./ti-amx3-cm3-pm-firmware
 				ti_amx3_cm3_hash=$(git rev-parse HEAD)
 			cd -
 		else
 			rm -rf ./ti-amx3-cm3-pm-firmware || true
-			${git_bin} clone -b ti-v4.1.y-next git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
+			${git_bin} clone -b ti-v4.1.y git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
 			cd ./ti-amx3-cm3-pm-firmware
 				ti_amx3_cm3_hash=$(git rev-parse HEAD)
 			cd -
@@ -466,23 +466,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.9.16"
-
-	subsystem="greybus"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.11-rc5"
+	backport_tag="v5.11.8"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -498,7 +482,22 @@ backports () {
 	fi
 
 	${git} "${DIR}/patches/backports/wlcore/0002-wlcore-Downgrade-exceeded-max-RX-BA-sessions-to-debu.patch"
-	${git} "${DIR}/patches/backports/wlcore/0003-wlcore-Fix-command-execute-failure-19-for-wl12xx.patch"
+
+	backport_tag="v5.10.25"
+
+	subsystem="greybus"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
+		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
 }
 
 reverts () {
@@ -521,6 +520,7 @@ reverts () {
 }
 
 drivers () {
+	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
@@ -557,7 +557,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.11"
+		backport_tag="v5.10.25"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
