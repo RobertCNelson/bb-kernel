@@ -481,6 +481,21 @@ patch_backports (){
 }
 
 backports () {
+	backport_tag="v5.4.109"
+
+	subsystem="wiznet"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/net/ethernet/wiznet/* ./drivers/net/ethernet/wiznet/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
 	backport_tag="v4.20.17"
 
 	subsystem="remoteproc"
@@ -563,7 +578,6 @@ drivers () {
 	dir 'drivers/ssd1306'
 	dir 'drivers/tps65217'
 	dir 'drivers/opp'
-	dir 'drivers/wiznet'
 
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/etnaviv'
