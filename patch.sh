@@ -421,7 +421,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12-rc3"
+	backport_tag="v5.12-rc5"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -456,6 +456,7 @@ reverts () {
 }
 
 drivers () {
+	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/spi'
