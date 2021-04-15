@@ -422,23 +422,36 @@ patch_backports (){
 }
 
 backports () {
-#	backport_tag="v5.11-rc5"
-#
-#	subsystem="wlcore"
-#	#regenerate="enable"
-#	if [ "x${regenerate}" = "xenable" ] ; then
-#		pre_backports
-#
-#		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
-#
-#		post_backports
-#		exit 2
-#	else
-#		patch_backports
-#	fi
+	backport_tag="v5.12-rc7"
 
-	${git} "${DIR}/patches/backports/wlcore/0002-wlcore-Downgrade-exceeded-max-RX-BA-sessions-to-debu.patch"
-	${git} "${DIR}/patches/backports/wlcore/0003-wlcore-Fix-command-execute-failure-19-for-wl12xx.patch"
+	subsystem="greybus"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
+		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	backport_tag="v5.12-rc7"
+
+	subsystem="wlcore"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
 }
 
 reverts () {
@@ -460,6 +473,7 @@ reverts () {
 }
 
 drivers () {
+	#exit 2
 #	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/spi'
@@ -493,7 +507,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.11"
+		backport_tag="v5.10.30"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
