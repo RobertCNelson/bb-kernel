@@ -1,9 +1,9 @@
-From 3303a47bc3d414c43dac4db4c53137875904967b Mon Sep 17 00:00:00 2001
+From 61f46e5981fd565a7ac22545cb5490b9719887e9 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 22 Mar 2021 10:41:59 -0500
+Date: Tue, 20 Apr 2021 16:18:51 -0500
 Subject: [PATCH 5/5] merge: aufs
 
-https://github.com/sfjro/aufs5-standalone/commit/8beef0cdfb1c0e3cb066e3678cb224445b2e436f
+https://github.com/sfjro/aufs5-standalone/commit/1261b17ba4debc621917a2f3f46fd1aa647119e0
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  Documentation/ABI/testing/debugfs-aufs        |   55 +
@@ -47,7 +47,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/dynop.c                               |  368 +++
  fs/aufs/dynop.h                               |   77 +
  fs/aufs/export.c                              |  838 +++++++
- fs/aufs/f_op.c                                |  819 +++++++
+ fs/aufs/f_op.c                                |  828 +++++++
  fs/aufs/fhsm.c                                |  427 ++++
  fs/aufs/file.c                                |  863 ++++++++
  fs/aufs/file.h                                |  342 +++
@@ -98,7 +98,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/xattr.c                               |  356 +++
  fs/aufs/xino.c                                | 1966 +++++++++++++++++
  include/uapi/linux/aufs_type.h                |  452 ++++
- 92 files changed, 37810 insertions(+)
+ 92 files changed, 37819 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -194,7 +194,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 
 diff --git a/Documentation/ABI/testing/debugfs-aufs b/Documentation/ABI/testing/debugfs-aufs
 new file mode 100644
-index 000000000000..4a6694194ba6
+index 000000000000..45b739879d76
 --- /dev/null
 +++ b/Documentation/ABI/testing/debugfs-aufs
 @@ -0,0 +1,55 @@
@@ -228,7 +228,7 @@ index 000000000000..4a6694194ba6
 +		When the aufs mount option 'noxino' is specified, it
 +		will be empty. About XINO files, see the aufs manual.
 +
-+What:		/debug/aufs/si_<id>/xi0, xi1 ... xiN and xiN-N
++What:		/debug/aufs/si_<id>/xi<branch-index>
 +Date:		March 2009
 +Contact:	J. R. Okajima <hooanon05g@gmail.com>
 +Description:
@@ -255,7 +255,7 @@ index 000000000000..4a6694194ba6
 +		will be empty. About XINO files, see the aufs manual.
 diff --git a/Documentation/ABI/testing/sysfs-aufs b/Documentation/ABI/testing/sysfs-aufs
 new file mode 100644
-index 000000000000..82f9518495ea
+index 000000000000..48500c0569e6
 --- /dev/null
 +++ b/Documentation/ABI/testing/sysfs-aufs
 @@ -0,0 +1,31 @@
@@ -267,14 +267,14 @@ index 000000000000..82f9518495ea
 +		per aufs mount, where <id> is a unique id generated
 +		internally.
 +
-+What:		/sys/fs/aufs/si_<id>/br0, br1 ... brN
++What:		/sys/fs/aufs/si_<id>/br<idx>
 +Date:		March 2009
 +Contact:	J. R. Okajima <hooanon05g@gmail.com>
 +Description:
 +		It shows the abolute path of a member directory (which
 +		is called branch) in aufs, and its permission.
 +
-+What:		/sys/fs/aufs/si_<id>/brid0, brid1 ... bridN
++What:		/sys/fs/aufs/si_<id>/brid<idx>
 +Date:		July 2013
 +Contact:	J. R. Okajima <hooanon05g@gmail.com>
 +Description:
@@ -13188,10 +13188,10 @@ index 000000000000..842df6f05517
 +}
 diff --git a/fs/aufs/f_op.c b/fs/aufs/f_op.c
 new file mode 100644
-index 000000000000..9894e2124bd5
+index 000000000000..d9ad7ccfab98
 --- /dev/null
 +++ b/fs/aufs/f_op.c
-@@ -0,0 +1,819 @@
+@@ -0,0 +1,828 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (C) 2005-2020 Junjiro R. Okajima
@@ -13608,6 +13608,15 @@ index 000000000000..9894e2124bd5
 +	return err;
 +}
 +
++/*
++ * We may be able to remove aufs_splice_{read,write}() since almost all FSes
++ * don't have their own .splice_{read,write} implimentations, and they use
++ * generic_file_splice_read() and iter_file_splice_write() who can act like the
++ * simple converters to f_op->iter_read() and ->iter_write().
++ * But we keep our own implementations because some non-mainlined FSes may have
++ * their own .splice_{read,write} implimentations and aufs doesn't want to take
++ * away an opportunity to co-work with aufs from them.
++ */
 +static ssize_t aufs_splice_read(struct file *file, loff_t *ppos,
 +				struct pipe_inode_info *pipe, size_t len,
 +				unsigned int flags)
@@ -38098,7 +38107,7 @@ index 000000000000..b3152c0ce0b5
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..3c0a4a7d86e5
+index 000000000000..2dbe10e26f10
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,452 @@
@@ -38144,7 +38153,7 @@ index 000000000000..3c0a4a7d86e5
 +#include <limits.h>
 +#endif /* __KERNEL__ */
 +
-+#define AUFS_VERSION	"5.9-20210215"
++#define AUFS_VERSION	"5.9-20210412"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
