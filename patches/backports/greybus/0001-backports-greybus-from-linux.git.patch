@@ -1,27 +1,30 @@
-From 976696b18b85254375405079b98a8bc33ea1df9c Mon Sep 17 00:00:00 2001
+From d4ce5c3ffc6536461dfa447f1b8742a0385c06b8 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 22 Mar 2021 12:47:48 -0500
+Date: Wed, 21 Apr 2021 15:31:40 -0500
 Subject: [PATCH] backports: greybus: from: linux.git
 
-Reference: v5.9.16
+Reference: v5.11.16
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  drivers/greybus/Kconfig                       |  10 +-
  drivers/greybus/arpc.h                        |   2 +-
  drivers/greybus/es2.c                         |   2 +-
- drivers/greybus/interface.c                   |   2 +-
- drivers/staging/greybus/Kconfig               |  54 +++--
+ drivers/greybus/interface.c                   |   8 +-
+ drivers/staging/greybus/Kconfig               |  54 ++--
  drivers/staging/greybus/Makefile              |   6 +-
+ drivers/staging/greybus/TODO                  |   2 +
  drivers/staging/greybus/audio_apbridgea.h     |   2 +-
- drivers/staging/greybus/audio_codec.c         | 178 +++++++++-------
+ drivers/staging/greybus/audio_codec.c         | 289 +++++++++---------
  drivers/staging/greybus/audio_codec.h         |  12 +-
- drivers/staging/greybus/audio_helper.c        | 197 ++++++++++++++++++
+ drivers/staging/greybus/audio_helper.c        | 198 ++++++++++++
  drivers/staging/greybus/audio_helper.h        |  17 ++
- drivers/staging/greybus/audio_module.c        |  15 +-
- drivers/staging/greybus/audio_topology.c      | 158 +++++++-------
- drivers/staging/greybus/gpio.c                |  34 ++-
+ .../staging/greybus/audio_manager_module.c    |   3 +-
+ drivers/staging/greybus/audio_module.c        |  29 +-
+ drivers/staging/greybus/audio_topology.c      | 178 ++++++-----
+ drivers/staging/greybus/gbphy.h               |   4 +-
+ drivers/staging/greybus/gpio.c                |  34 +--
  drivers/staging/greybus/hid.c                 |   3 +-
- drivers/staging/greybus/i2c.c                 |  16 --
+ drivers/staging/greybus/i2c.c                 |  16 -
  drivers/staging/greybus/light.c               |   3 +-
  drivers/staging/greybus/loopback.c            |   2 +-
  drivers/staging/greybus/raw.c                 |   2 +-
@@ -29,7 +32,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/staging/greybus/tools/.gitignore      |   1 +
  drivers/staging/greybus/tools/loopback_test.c |   3 +-
  drivers/staging/greybus/uart.c                |  19 +-
- 23 files changed, 491 insertions(+), 258 deletions(-)
+ 26 files changed, 558 insertions(+), 352 deletions(-)
  create mode 100644 drivers/staging/greybus/audio_helper.c
  create mode 100644 drivers/staging/greybus/audio_helper.h
 
@@ -99,9 +102,36 @@ index 366716f11b1a..1df6ab5d339d 100644
  	case -ENOENT:
  	case -ESHUTDOWN:
 diff --git a/drivers/greybus/interface.c b/drivers/greybus/interface.c
-index 67dbe6fda9a1..58ea374d8aaa 100644
+index 67dbe6fda9a1..9ec949a438ef 100644
 --- a/drivers/greybus/interface.c
 +++ b/drivers/greybus/interface.c
+@@ -620,7 +620,7 @@ static struct attribute *interface_common_attrs[] = {
+ static umode_t interface_unipro_is_visible(struct kobject *kobj,
+ 					   struct attribute *attr, int n)
+ {
+-	struct device *dev = container_of(kobj, struct device, kobj);
++	struct device *dev = kobj_to_dev(kobj);
+ 	struct gb_interface *intf = to_gb_interface(dev);
+ 
+ 	switch (intf->type) {
+@@ -635,7 +635,7 @@ static umode_t interface_unipro_is_visible(struct kobject *kobj,
+ static umode_t interface_greybus_is_visible(struct kobject *kobj,
+ 					    struct attribute *attr, int n)
+ {
+-	struct device *dev = container_of(kobj, struct device, kobj);
++	struct device *dev = kobj_to_dev(kobj);
+ 	struct gb_interface *intf = to_gb_interface(dev);
+ 
+ 	switch (intf->type) {
+@@ -649,7 +649,7 @@ static umode_t interface_greybus_is_visible(struct kobject *kobj,
+ static umode_t interface_power_is_visible(struct kobject *kobj,
+ 					  struct attribute *attr, int n)
+ {
+-	struct device *dev = container_of(kobj, struct device, kobj);
++	struct device *dev = kobj_to_dev(kobj);
+ 	struct gb_interface *intf = to_gb_interface(dev);
+ 
+ 	switch (intf->type) {
 @@ -1233,7 +1233,7 @@ int gb_interface_add(struct gb_interface *intf)
  	case GB_INTERFACE_TYPE_GREYBUS:
  		dev_info(&intf->dev, "GMP VID=0x%08x, PID=0x%08x\n",
@@ -334,6 +364,16 @@ index 627e44f2a983..7c5e89622334 100644
  obj-$(CONFIG_GREYBUS_AUDIO)		+= gb-audio-gb.o
  obj-$(CONFIG_GREYBUS_AUDIO)		+= gb-audio-apbridgea.o
  obj-$(CONFIG_GREYBUS_AUDIO)		+= gb-audio-manager.o
+diff --git a/drivers/staging/greybus/TODO b/drivers/staging/greybus/TODO
+index 31f1f2cb401c..6461e0132fe3 100644
+--- a/drivers/staging/greybus/TODO
++++ b/drivers/staging/greybus/TODO
+@@ -1,3 +1,5 @@
+ * Convert all uses of the old GPIO API from <linux/gpio.h> to the
+   GPIO descriptor API in <linux/gpio/consumer.h> and look up GPIO
+   lines from device tree or ACPI.
++* Make pwm.c use the struct pwm_ops::apply instead of ::config, ::set_polarity,
++  ::enable and ::disable.
 diff --git a/drivers/staging/greybus/audio_apbridgea.h b/drivers/staging/greybus/audio_apbridgea.h
 index 3f1f4dd2c61a..efec0f815efd 100644
 --- a/drivers/staging/greybus/audio_apbridgea.h
@@ -348,7 +388,7 @@ index 3f1f4dd2c61a..efec0f815efd 100644
  
  struct audio_apbridgea_set_config_request {
 diff --git a/drivers/staging/greybus/audio_codec.c b/drivers/staging/greybus/audio_codec.c
-index 08746c85dea6..74538f8c5fa4 100644
+index 08746c85dea6..b589cf6b1d03 100644
 --- a/drivers/staging/greybus/audio_codec.c
 +++ b/drivers/staging/greybus/audio_codec.c
 @@ -14,6 +14,7 @@
@@ -359,7 +399,273 @@ index 08746c85dea6..74538f8c5fa4 100644
  
  static struct gbaudio_codec_info *gbcodec;
  
-@@ -709,34 +710,58 @@ static struct snd_soc_dai_driver gbaudio_dai[] = {
+@@ -70,15 +71,13 @@ static int gbaudio_module_enable_tx(struct gbaudio_codec_info *codec,
+ 		i2s_port = 0;	/* fixed for now */
+ 		cportid = data->connection->hd_cport_id;
+ 		ret = gb_audio_apbridgea_register_cport(data->connection,
+-						i2s_port, cportid,
+-						AUDIO_APBRIDGEA_DIRECTION_TX);
++							i2s_port, cportid,
++							AUDIO_APBRIDGEA_DIRECTION_TX);
+ 		if (ret) {
+-			dev_err_ratelimited(module->dev,
+-					    "reg_cport failed:%d\n", ret);
++			dev_err_ratelimited(module->dev, "reg_cport failed:%d\n", ret);
+ 			return ret;
+ 		}
+-		data->state[SNDRV_PCM_STREAM_PLAYBACK] =
+-			GBAUDIO_CODEC_STARTUP;
++		data->state[SNDRV_PCM_STREAM_PLAYBACK] = GBAUDIO_CODEC_STARTUP;
+ 		dev_dbg(module->dev, "Dynamic Register %d DAI\n", cportid);
+ 	}
+ 
+@@ -92,12 +91,10 @@ static int gbaudio_module_enable_tx(struct gbaudio_codec_info *codec,
+ 		ret = gb_audio_gb_set_pcm(module->mgmt_connection, data_cport,
+ 					  format, rate, channels, sig_bits);
+ 		if (ret) {
+-			dev_err_ratelimited(module->dev, "set_pcm failed:%d\n",
+-					    ret);
++			dev_err_ratelimited(module->dev, "set_pcm failed:%d\n", ret);
+ 			return ret;
+ 		}
+-		data->state[SNDRV_PCM_STREAM_PLAYBACK] =
+-			GBAUDIO_CODEC_HWPARAMS;
++		data->state[SNDRV_PCM_STREAM_PLAYBACK] = GBAUDIO_CODEC_HWPARAMS;
+ 		dev_dbg(module->dev, "Dynamic hw_params %d DAI\n", data_cport);
+ 	}
+ 
+@@ -112,15 +109,13 @@ static int gbaudio_module_enable_tx(struct gbaudio_codec_info *codec,
+ 					    ret);
+ 			return ret;
+ 		}
+-		ret = gb_audio_gb_activate_tx(module->mgmt_connection,
+-					      data_cport);
++		ret = gb_audio_gb_activate_tx(module->mgmt_connection, data_cport);
+ 		if (ret) {
+ 			dev_err_ratelimited(module->dev,
+ 					    "activate_tx failed:%d\n", ret);
+ 			return ret;
+ 		}
+-		data->state[SNDRV_PCM_STREAM_PLAYBACK] =
+-			GBAUDIO_CODEC_PREPARE;
++		data->state[SNDRV_PCM_STREAM_PLAYBACK] = GBAUDIO_CODEC_PREPARE;
+ 		dev_dbg(module->dev, "Dynamic prepare %d DAI\n", data_cport);
+ 	}
+ 
+@@ -152,25 +147,22 @@ static int gbaudio_module_disable_tx(struct gbaudio_module_info *module, int id)
+ 			return ret;
+ 		}
+ 		dev_dbg(module->dev, "Dynamic deactivate %d DAI\n", data_cport);
+-		data->state[SNDRV_PCM_STREAM_PLAYBACK] =
+-			GBAUDIO_CODEC_HWPARAMS;
++		data->state[SNDRV_PCM_STREAM_PLAYBACK] = GBAUDIO_CODEC_HWPARAMS;
+ 	}
+ 
+ 	if (module_state > GBAUDIO_CODEC_SHUTDOWN) {
+ 		i2s_port = 0;	/* fixed for now */
+ 		cportid = data->connection->hd_cport_id;
+ 		ret = gb_audio_apbridgea_unregister_cport(data->connection,
+-						i2s_port, cportid,
+-						AUDIO_APBRIDGEA_DIRECTION_TX);
++							  i2s_port, cportid,
++							  AUDIO_APBRIDGEA_DIRECTION_TX);
+ 		if (ret) {
+ 			dev_err_ratelimited(module->dev,
+-					    "unregister_cport failed:%d\n",
+-					    ret);
++					    "unregister_cport failed:%d\n", ret);
+ 			return ret;
+ 		}
+ 		dev_dbg(module->dev, "Dynamic Unregister %d DAI\n", cportid);
+-		data->state[SNDRV_PCM_STREAM_PLAYBACK] =
+-			GBAUDIO_CODEC_SHUTDOWN;
++		data->state[SNDRV_PCM_STREAM_PLAYBACK] = GBAUDIO_CODEC_SHUTDOWN;
+ 	}
+ 
+ 	return 0;
+@@ -205,15 +197,13 @@ static int gbaudio_module_enable_rx(struct gbaudio_codec_info *codec,
+ 		i2s_port = 0;	/* fixed for now */
+ 		cportid = data->connection->hd_cport_id;
+ 		ret = gb_audio_apbridgea_register_cport(data->connection,
+-						i2s_port, cportid,
+-						AUDIO_APBRIDGEA_DIRECTION_RX);
++							i2s_port, cportid,
++							AUDIO_APBRIDGEA_DIRECTION_RX);
+ 		if (ret) {
+-			dev_err_ratelimited(module->dev,
+-					    "reg_cport failed:%d\n", ret);
++			dev_err_ratelimited(module->dev, "reg_cport failed:%d\n", ret);
+ 			return ret;
+ 		}
+-		data->state[SNDRV_PCM_STREAM_CAPTURE] =
+-			GBAUDIO_CODEC_STARTUP;
++		data->state[SNDRV_PCM_STREAM_CAPTURE] = GBAUDIO_CODEC_STARTUP;
+ 		dev_dbg(module->dev, "Dynamic Register %d DAI\n", cportid);
+ 	}
+ 
+@@ -227,12 +217,10 @@ static int gbaudio_module_enable_rx(struct gbaudio_codec_info *codec,
+ 		ret = gb_audio_gb_set_pcm(module->mgmt_connection, data_cport,
+ 					  format, rate, channels, sig_bits);
+ 		if (ret) {
+-			dev_err_ratelimited(module->dev, "set_pcm failed:%d\n",
+-					    ret);
++			dev_err_ratelimited(module->dev, "set_pcm failed:%d\n", ret);
+ 			return ret;
+ 		}
+-		data->state[SNDRV_PCM_STREAM_CAPTURE] =
+-			GBAUDIO_CODEC_HWPARAMS;
++		data->state[SNDRV_PCM_STREAM_CAPTURE] = GBAUDIO_CODEC_HWPARAMS;
+ 		dev_dbg(module->dev, "Dynamic hw_params %d DAI\n", data_cport);
+ 	}
+ 
+@@ -254,8 +242,7 @@ static int gbaudio_module_enable_rx(struct gbaudio_codec_info *codec,
+ 					    "activate_rx failed:%d\n", ret);
+ 			return ret;
+ 		}
+-		data->state[SNDRV_PCM_STREAM_CAPTURE] =
+-			GBAUDIO_CODEC_PREPARE;
++		data->state[SNDRV_PCM_STREAM_CAPTURE] = GBAUDIO_CODEC_PREPARE;
+ 		dev_dbg(module->dev, "Dynamic prepare %d DAI\n", data_cport);
+ 	}
+ 
+@@ -287,25 +274,22 @@ static int gbaudio_module_disable_rx(struct gbaudio_module_info *module, int id)
+ 			return ret;
+ 		}
+ 		dev_dbg(module->dev, "Dynamic deactivate %d DAI\n", data_cport);
+-		data->state[SNDRV_PCM_STREAM_CAPTURE] =
+-			GBAUDIO_CODEC_HWPARAMS;
++		data->state[SNDRV_PCM_STREAM_CAPTURE] = GBAUDIO_CODEC_HWPARAMS;
+ 	}
+ 
+ 	if (module_state > GBAUDIO_CODEC_SHUTDOWN) {
+ 		i2s_port = 0;	/* fixed for now */
+ 		cportid = data->connection->hd_cport_id;
+ 		ret = gb_audio_apbridgea_unregister_cport(data->connection,
+-						i2s_port, cportid,
+-						AUDIO_APBRIDGEA_DIRECTION_RX);
++							  i2s_port, cportid,
++							  AUDIO_APBRIDGEA_DIRECTION_RX);
+ 		if (ret) {
+ 			dev_err_ratelimited(module->dev,
+-					    "unregister_cport failed:%d\n",
+-					    ret);
++					    "unregister_cport failed:%d\n", ret);
+ 			return ret;
+ 		}
+ 		dev_dbg(module->dev, "Dynamic Unregister %d DAI\n", cportid);
+-		data->state[SNDRV_PCM_STREAM_CAPTURE] =
+-			GBAUDIO_CODEC_SHUTDOWN;
++		data->state[SNDRV_PCM_STREAM_CAPTURE] = GBAUDIO_CODEC_SHUTDOWN;
+ 	}
+ 
+ 	return 0;
+@@ -329,8 +313,7 @@ int gbaudio_module_update(struct gbaudio_codec_info *codec,
+ 	/* parse dai_id from AIF widget's stream_name */
+ 	ret = sscanf(w->sname, "%s %d %s", intf_name, &dai_id, dir);
+ 	if (ret < 3) {
+-		dev_err(codec->dev, "Error while parsing dai_id for %s\n",
+-			w->name);
++		dev_err(codec->dev, "Error while parsing dai_id for %s\n", w->name);
+ 		return -EINVAL;
+ 	}
+ 
+@@ -448,8 +431,7 @@ static int gbcodec_hw_params(struct snd_pcm_substream *substream,
+ 	rate = GB_AUDIO_PCM_RATE_48000;
+ 
+ 	if (params_format(hwparams) != SNDRV_PCM_FORMAT_S16_LE) {
+-		dev_err(dai->dev, "Invalid format:%d\n",
+-			params_format(hwparams));
++		dev_err(dai->dev, "Invalid format:%d\n", params_format(hwparams));
+ 		mutex_unlock(&codec->lock);
+ 		return -EINVAL;
+ 	}
+@@ -489,6 +471,7 @@ static int gbcodec_hw_params(struct snd_pcm_substream *substream,
+ 	if (ret) {
+ 		dev_err_ratelimited(dai->dev, "%d: Error during set_config\n",
+ 				    ret);
++		gb_pm_runtime_put_noidle(bundle);
+ 		mutex_unlock(&codec->lock);
+ 		return ret;
+ 	}
+@@ -556,18 +539,16 @@ static int gbcodec_prepare(struct snd_pcm_substream *substream,
+ 
+ 	switch (substream->stream) {
+ 	case SNDRV_PCM_STREAM_PLAYBACK:
+-		ret = gb_audio_apbridgea_set_tx_data_size(data->connection, 0,
+-							  192);
++		ret = gb_audio_apbridgea_set_tx_data_size(data->connection, 0, 192);
+ 		break;
+ 	case SNDRV_PCM_STREAM_CAPTURE:
+-		ret = gb_audio_apbridgea_set_rx_data_size(data->connection, 0,
+-							  192);
++		ret = gb_audio_apbridgea_set_rx_data_size(data->connection, 0, 192);
+ 		break;
+ 	}
+ 	if (ret) {
++		gb_pm_runtime_put_noidle(bundle);
+ 		mutex_unlock(&codec->lock);
+-		dev_err_ratelimited(dai->dev, "set_data_size failed:%d\n",
+-				    ret);
++		dev_err_ratelimited(dai->dev, "set_data_size failed:%d\n", ret);
+ 		return ret;
+ 	}
+ 
+@@ -632,30 +613,24 @@ static int gbcodec_mute_stream(struct snd_soc_dai *dai, int mute, int stream)
+ 	}
+ 
+ 	if (!mute && !stream) {/* start playback */
+-		ret = gb_audio_apbridgea_prepare_tx(data->connection,
+-						    0);
++		ret = gb_audio_apbridgea_prepare_tx(data->connection, 0);
+ 		if (!ret)
+-			ret = gb_audio_apbridgea_start_tx(data->connection,
+-							  0, 0);
++			ret = gb_audio_apbridgea_start_tx(data->connection, 0, 0);
+ 		params->state = GBAUDIO_CODEC_START;
+ 	} else if (!mute && stream) {/* start capture */
+-		ret = gb_audio_apbridgea_prepare_rx(data->connection,
+-						    0);
++		ret = gb_audio_apbridgea_prepare_rx(data->connection, 0);
+ 		if (!ret)
+-			ret = gb_audio_apbridgea_start_rx(data->connection,
+-							  0);
++			ret = gb_audio_apbridgea_start_rx(data->connection, 0);
+ 		params->state = GBAUDIO_CODEC_START;
+ 	} else if (mute && !stream) {/* stop playback */
+ 		ret = gb_audio_apbridgea_stop_tx(data->connection, 0);
+ 		if (!ret)
+-			ret = gb_audio_apbridgea_shutdown_tx(data->connection,
+-							     0);
++			ret = gb_audio_apbridgea_shutdown_tx(data->connection, 0);
+ 		params->state = GBAUDIO_CODEC_STOP;
+ 	} else if (mute && stream) {/* stop capture */
+ 		ret = gb_audio_apbridgea_stop_rx(data->connection, 0);
+ 		if (!ret)
+-			ret = gb_audio_apbridgea_shutdown_rx(data->connection,
+-							     0);
++			ret = gb_audio_apbridgea_shutdown_rx(data->connection, 0);
+ 		params->state = GBAUDIO_CODEC_STOP;
+ 	} else {
+ 		ret = -EINVAL;
+@@ -687,7 +662,7 @@ static struct snd_soc_dai_driver gbaudio_dai[] = {
+ 		.playback = {
+ 			.stream_name = "I2S 0 Playback",
+ 			.rates = SNDRV_PCM_RATE_48000,
+-			.formats = SNDRV_PCM_FORMAT_S16_LE,
++			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+ 			.rate_max = 48000,
+ 			.rate_min = 48000,
+ 			.channels_min = 1,
+@@ -697,7 +672,7 @@ static struct snd_soc_dai_driver gbaudio_dai[] = {
+ 		.capture = {
+ 			.stream_name = "I2S 0 Capture",
+ 			.rates = SNDRV_PCM_RATE_48000,
+-			.formats = SNDRV_PCM_FORMAT_S16_LE,
++			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+ 			.rate_max = 48000,
+ 			.rate_min = 48000,
+ 			.channels_min = 1,
+@@ -709,34 +684,58 @@ static struct snd_soc_dai_driver gbaudio_dai[] = {
  };
  
  static int gbaudio_init_jack(struct gbaudio_module_info *module,
@@ -424,7 +730,7 @@ index 08746c85dea6..74538f8c5fa4 100644
  	/*
  	 * Currently, max 4 buttons are supported with following key mapping
  	 * BTN_0 = KEY_MEDIA
-@@ -746,64 +771,72 @@ static int gbaudio_init_jack(struct gbaudio_module_info *module,
+@@ -746,64 +745,72 @@ static int gbaudio_init_jack(struct gbaudio_module_info *module,
  	 */
  
  	if (module->button_mask & SND_JACK_BTN_0) {
@@ -510,7 +816,7 @@ index 08746c85dea6..74538f8c5fa4 100644
  
  	down_write(&card->controls_rwsem);
  
-@@ -815,36 +848,34 @@ int gbaudio_register_module(struct gbaudio_module_info *module)
+@@ -815,36 +822,33 @@ int gbaudio_register_module(struct gbaudio_module_info *module)
  		return -EINVAL;
  	}
  
@@ -540,8 +846,7 @@ index 08746c85dea6..74538f8c5fa4 100644
 -		snd_soc_dapm_link_component_dai_widgets(codec->card,
 -							&codec->dapm);
 +	if (comp->card->instantiated) {
-+		gbaudio_dapm_link_component_dai_widgets(comp->card,
-+							&comp->dapm);
++		gbaudio_dapm_link_component_dai_widgets(comp->card, &comp->dapm);
  #ifdef CONFIG_SND_JACK
  		/*
  		 * register jack devices for this module
@@ -558,7 +863,7 @@ index 08746c85dea6..74538f8c5fa4 100644
  		}
  #endif
  	}
-@@ -853,9 +884,9 @@ int gbaudio_register_module(struct gbaudio_module_info *module)
+@@ -853,9 +857,9 @@ int gbaudio_register_module(struct gbaudio_module_info *module)
  	list_add(&module->list, &gbcodec->module_list);
  	mutex_unlock(&gbcodec->lock);
  
@@ -571,7 +876,27 @@ index 08746c85dea6..74538f8c5fa4 100644
  
  	up_write(&card->controls_rwsem);
  	return ret;
-@@ -926,126 +957,127 @@ static void gbaudio_codec_cleanup(struct gbaudio_module_info *module)
+@@ -871,8 +875,7 @@ static void gbaudio_codec_clean_data_tx(struct gbaudio_data_connection *data)
+ 		ret = gb_audio_apbridgea_stop_tx(data->connection, 0);
+ 		if (ret)
+ 			return;
+-		ret = gb_audio_apbridgea_shutdown_tx(data->connection,
+-						     0);
++		ret = gb_audio_apbridgea_shutdown_tx(data->connection, 0);
+ 		if (ret)
+ 			return;
+ 	}
+@@ -893,8 +896,7 @@ static void gbaudio_codec_clean_data_rx(struct gbaudio_data_connection *data)
+ 		ret = gb_audio_apbridgea_stop_rx(data->connection, 0);
+ 		if (ret)
+ 			return;
+-		ret = gb_audio_apbridgea_shutdown_rx(data->connection,
+-						     0);
++		ret = gb_audio_apbridgea_shutdown_rx(data->connection, 0);
+ 		if (ret)
+ 			return;
+ 	}
+@@ -926,126 +928,127 @@ static void gbaudio_codec_cleanup(struct gbaudio_module_info *module)
  
  void gbaudio_unregister_module(struct gbaudio_module_info *module)
  {
@@ -735,7 +1060,7 @@ index 08746c85dea6..74538f8c5fa4 100644
  };
  
  #ifdef CONFIG_PM
-@@ -1069,13 +1101,13 @@ static const struct dev_pm_ops gbaudio_codec_pm_ops = {
+@@ -1069,13 +1072,13 @@ static const struct dev_pm_ops gbaudio_codec_pm_ops = {
  
  static int gbaudio_codec_probe(struct platform_device *pdev)
  {
@@ -797,10 +1122,10 @@ index cb5d271da1a5..ce15e800e607 100644
  };
 diff --git a/drivers/staging/greybus/audio_helper.c b/drivers/staging/greybus/audio_helper.c
 new file mode 100644
-index 000000000000..237531ba60f3
+index 000000000000..3011b8abce38
 --- /dev/null
 +++ b/drivers/staging/greybus/audio_helper.c
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,198 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Greybus Audio Sound SoC helper APIs
@@ -938,7 +1263,8 @@ index 000000000000..237531ba60f3
 +		if (!w) {
 +			dev_err(dapm->dev, "%s: widget not found\n",
 +				widget->name);
-+			return -EINVAL;
++			widget++;
++			continue;
 +		}
 +		widget++;
 +#ifdef CONFIG_DEBUG_FS
@@ -1021,8 +1347,22 @@ index 000000000000..5cf1c6d7d3ea
 +				      const struct snd_kcontrol_new *controls,
 +				      unsigned int num_controls);
 +#endif
+diff --git a/drivers/staging/greybus/audio_manager_module.c b/drivers/staging/greybus/audio_manager_module.c
+index 2bfd804183c4..525cf8f8394f 100644
+--- a/drivers/staging/greybus/audio_manager_module.c
++++ b/drivers/staging/greybus/audio_manager_module.c
+@@ -213,8 +213,7 @@ int gb_audio_manager_module_create(
+ 	err = kobject_init_and_add(&m->kobj, &gb_audio_module_type, NULL, "%d",
+ 				   id);
+ 	if (err) {
+-		pr_err("failed initializing kobject for audio module #%d\n",
+-		       id);
++		pr_err("failed initializing kobject for audio module #%d\n", id);
+ 		kobject_put(&m->kobj);
+ 		return err;
+ 	}
 diff --git a/drivers/staging/greybus/audio_module.c b/drivers/staging/greybus/audio_module.c
-index 300a2b4f3fc7..16f60256adb2 100644
+index 300a2b4f3fc7..a243d60f0d56 100644
 --- a/drivers/staging/greybus/audio_module.c
 +++ b/drivers/staging/greybus/audio_module.c
 @@ -21,8 +21,8 @@ static int gbaudio_request_jack(struct gbaudio_module_info *module,
@@ -1077,6 +1417,37 @@ index 300a2b4f3fc7..16f60256adb2 100644
  
  	return 0;
  }
+@@ -175,8 +175,8 @@ static int gbaudio_codec_request_handler(struct gb_operation *op)
+ }
+ 
+ static int gb_audio_add_mgmt_connection(struct gbaudio_module_info *gbmodule,
+-				struct greybus_descriptor_cport *cport_desc,
+-				struct gb_bundle *bundle)
++					struct greybus_descriptor_cport *cport_desc,
++					struct gb_bundle *bundle)
+ {
+ 	struct gb_connection *connection;
+ 
+@@ -199,8 +199,8 @@ static int gb_audio_add_mgmt_connection(struct gbaudio_module_info *gbmodule,
+ }
+ 
+ static int gb_audio_add_data_connection(struct gbaudio_module_info *gbmodule,
+-				struct greybus_descriptor_cport *cport_desc,
+-				struct gb_bundle *bundle)
++					struct greybus_descriptor_cport *cport_desc,
++					struct gb_bundle *bundle)
+ {
+ 	struct gb_connection *connection;
+ 	struct gbaudio_data_connection *dai;
+@@ -219,7 +219,7 @@ static int gb_audio_add_data_connection(struct gbaudio_module_info *gbmodule,
+ 
+ 	greybus_set_drvdata(bundle, gbmodule);
+ 	dai->id = 0;
+-	dai->data_cport = connection->intf_cport_id;
++	dai->data_cport = cpu_to_le16(connection->intf_cport_id);
+ 	dai->connection = connection;
+ 	list_add(&dai->list, &gbmodule->data_list);
+ 
 @@ -258,6 +258,7 @@ static int gb_audio_probe(struct gb_bundle *bundle,
  	INIT_LIST_HEAD(&gbmodule->widget_list);
  	INIT_LIST_HEAD(&gbmodule->ctl_list);
@@ -1085,8 +1456,26 @@ index 300a2b4f3fc7..16f60256adb2 100644
  	gbmodule->dev = dev;
  	snprintf(gbmodule->name, NAME_SIZE, "%s.%s", dev->driver->name,
  		 dev_name(dev));
+@@ -328,7 +329,7 @@ static int gb_audio_probe(struct gb_bundle *bundle,
+ 		if (ret) {
+ 			dev_err(dev,
+ 				"%d:Error while enabling %d:data connection\n",
+-				ret, dai->data_cport);
++				ret, le16_to_cpu(dai->data_cport));
+ 			goto disable_data_connection;
+ 		}
+ 	}
+@@ -450,7 +451,7 @@ static int gb_audio_resume(struct device *dev)
+ 		if (ret) {
+ 			dev_err(dev,
+ 				"%d:Error while enabling %d:data connection\n",
+-				ret, dai->data_cport);
++				ret, le16_to_cpu(dai->data_cport));
+ 			return ret;
+ 		}
+ 	}
 diff --git a/drivers/staging/greybus/audio_topology.c b/drivers/staging/greybus/audio_topology.c
-index 4ac30accf226..83b38ae8908c 100644
+index 4ac30accf226..662e3e8b4b63 100644
 --- a/drivers/staging/greybus/audio_topology.c
 +++ b/drivers/staging/greybus/audio_topology.c
 @@ -5,8 +5,8 @@
@@ -1118,7 +1507,7 @@ index 4ac30accf226..83b38ae8908c 100644
  	dev_dbg(codec->dev, "%s:Find module#%d\n", __func__, dev_id);
  
  	mutex_lock(&codec->lock);
-@@ -165,15 +167,15 @@ static int gbcodec_mixer_ctl_info(struct snd_kcontrol *kcontrol,
+@@ -165,22 +167,22 @@ static int gbcodec_mixer_ctl_info(struct snd_kcontrol *kcontrol,
  	struct gbaudio_ctl_pvt *data;
  	struct gb_audio_ctl_elem_info *info;
  	struct gbaudio_module_info *module;
@@ -1138,6 +1527,14 @@ index 4ac30accf226..83b38ae8908c 100644
  		return -EINVAL;
  	}
  
+ 	/* update uinfo */
+ 	uinfo->access = data->access;
+ 	uinfo->count = data->vcount;
+-	uinfo->type = (snd_ctl_elem_type_t)info->type;
++	uinfo->type = (__force snd_ctl_elem_type_t)info->type;
+ 
+ 	switch (info->type) {
+ 	case GB_AUDIO_CTL_ELEM_TYPE_BOOLEAN:
 @@ -201,7 +203,7 @@ static int gbcodec_mixer_ctl_info(struct snd_kcontrol *kcontrol,
  		strlcpy(uinfo->value.enumerated.name, name, NAME_SIZE);
  		break;
@@ -1290,7 +1687,8 @@ index 4ac30accf226..83b38ae8908c 100644
 +		goto exit;
 +
  	/* update ucontrol */
- 	if (gbvalue.value.integer_value[0] != val) {
+-	if (gbvalue.value.integer_value[0] != val) {
++	if (le32_to_cpu(gbvalue.value.integer_value[0]) != val) {
  		for (wi = 0; wi < wlist->num_widgets; wi++) {
  			widget = wlist->widgets[wi];
 -
@@ -1413,6 +1811,15 @@ index 4ac30accf226..83b38ae8908c 100644
  		dev_dbg(gb->dev, "src[%d]: %s\n", i, gbe->texts[i]);
  
  	*kctl = (struct snd_kcontrol_new)
+@@ -695,7 +689,7 @@ static int gbaudio_tplg_create_kcontrol(struct gbaudio_module_info *gb,
+ 				return -ENOMEM;
+ 			ctldata->ctl_id = ctl->id;
+ 			ctldata->data_cport = le16_to_cpu(ctl->data_cport);
+-			ctldata->access = ctl->access;
++			ctldata->access = le32_to_cpu(ctl->access);
+ 			ctldata->vcount = ctl->count_values;
+ 			ctldata->info = &ctl->info;
+ 			*kctl = (struct snd_kcontrol_new)
 @@ -720,8 +714,8 @@ static int gbcodec_enum_dapm_ctl_get(struct snd_kcontrol *kcontrol,
  	struct snd_soc_dapm_widget *widget = wlist->widgets[0];
  	struct gbaudio_module_info *module;
@@ -1424,7 +1831,7 @@ index 4ac30accf226..83b38ae8908c 100644
  	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
  	struct gb_bundle *bundle;
  
-@@ -745,7 +739,7 @@ static int gbcodec_enum_dapm_ctl_get(struct snd_kcontrol *kcontrol,
+@@ -745,15 +739,15 @@ static int gbcodec_enum_dapm_ctl_get(struct snd_kcontrol *kcontrol,
  	gb_pm_runtime_put_autosuspend(bundle);
  
  	if (ret) {
@@ -1433,6 +1840,16 @@ index 4ac30accf226..83b38ae8908c 100644
  				    __func__, kcontrol->id.name);
  		return ret;
  	}
+ 
+-	ucontrol->value.enumerated.item[0] = gbvalue.value.enumerated_item[0];
++	ucontrol->value.enumerated.item[0] = le32_to_cpu(gbvalue.value.enumerated_item[0]);
+ 	if (e->shift_l != e->shift_r)
+ 		ucontrol->value.enumerated.item[1] =
+-			gbvalue.value.enumerated_item[1];
++			le32_to_cpu(gbvalue.value.enumerated_item[1]);
+ 
+ 	return 0;
+ }
 @@ -768,12 +762,12 @@ static int gbcodec_enum_dapm_ctl_put(struct snd_kcontrol *kcontrol,
  	struct snd_soc_dapm_widget *widget = wlist->widgets[0];
  	struct gb_audio_ctl_elem_value gbvalue;
@@ -1458,7 +1875,17 @@ index 4ac30accf226..83b38ae8908c 100644
  				    __func__, kcontrol->id.name);
  		return ret;
  	}
-@@ -814,7 +808,7 @@ static int gbcodec_enum_dapm_ctl_put(struct snd_kcontrol *kcontrol,
+@@ -806,23 +800,23 @@ static int gbcodec_enum_dapm_ctl_put(struct snd_kcontrol *kcontrol,
+ 	val = mux << e->shift_l;
+ 	mask = e->mask << e->shift_l;
+ 
+-	if (gbvalue.value.enumerated_item[0] !=
++	if (le32_to_cpu(gbvalue.value.enumerated_item[0]) !=
+ 	    ucontrol->value.enumerated.item[0]) {
+ 		change = 1;
+ 		gbvalue.value.enumerated_item[0] =
+-			ucontrol->value.enumerated.item[0];
++			cpu_to_le32(ucontrol->value.enumerated.item[0]);
  	}
  
  	if (e->shift_l != e->shift_r) {
@@ -1467,6 +1894,16 @@ index 4ac30accf226..83b38ae8908c 100644
  			return -EINVAL;
  		val |= ucontrol->value.enumerated.item[1] << e->shift_r;
  		mask |= e->mask << e->shift_r;
+-		if (gbvalue.value.enumerated_item[1] !=
++		if (le32_to_cpu(gbvalue.value.enumerated_item[1]) !=
+ 		    ucontrol->value.enumerated.item[1]) {
+ 			change = 1;
+ 			gbvalue.value.enumerated_item[1] =
+-				ucontrol->value.enumerated.item[1];
++				cpu_to_le32(ucontrol->value.enumerated.item[1]);
+ 		}
+ 	}
+ 
 @@ -837,16 +831,14 @@ static int gbcodec_enum_dapm_ctl_put(struct snd_kcontrol *kcontrol,
  		gb_pm_runtime_put_autosuspend(bundle);
  
@@ -1504,6 +1941,15 @@ index 4ac30accf226..83b38ae8908c 100644
  		dev_dbg(gb->dev, "src[%d]: %s\n", i, gbe->texts[i]);
  
  	*kctl = (struct snd_kcontrol_new)
+@@ -895,7 +887,7 @@ static int gbaudio_tplg_create_mixer_ctl(struct gbaudio_module_info *gb,
+ 		return -ENOMEM;
+ 	ctldata->ctl_id = ctl->id;
+ 	ctldata->data_cport = le16_to_cpu(ctl->data_cport);
+-	ctldata->access = ctl->access;
++	ctldata->access = le32_to_cpu(ctl->access);
+ 	ctldata->vcount = ctl->count_values;
+ 	ctldata->info = &ctl->info;
+ 	*kctl = (struct snd_kcontrol_new)
 @@ -935,12 +927,12 @@ static int gbaudio_widget_event(struct snd_soc_dapm_widget *w,
  {
  	int wid;
@@ -1538,6 +1984,22 @@ index 4ac30accf226..83b38ae8908c 100644
  				    "%d: widget, event:%d failed:%d\n", wid,
  				    event, ret);
  
+diff --git a/drivers/staging/greybus/gbphy.h b/drivers/staging/greybus/gbphy.h
+index 087928a586fb..d4a225b76338 100644
+--- a/drivers/staging/greybus/gbphy.h
++++ b/drivers/staging/greybus/gbphy.h
+@@ -36,9 +36,9 @@ struct gbphy_device_id {
+ 
+ struct gbphy_driver {
+ 	const char *name;
+-	int (*probe)(struct gbphy_device *,
++	int (*probe)(struct gbphy_device *device,
+ 		     const struct gbphy_device_id *id);
+-	void (*remove)(struct gbphy_device *);
++	void (*remove)(struct gbphy_device *device);
+ 	const struct gbphy_device_id *id_table;
+ 
+ 	struct device_driver driver;
 diff --git a/drivers/staging/greybus/gpio.c b/drivers/staging/greybus/gpio.c
 index 1ff34abd5692..7e6347fe93f9 100644
 --- a/drivers/staging/greybus/gpio.c
