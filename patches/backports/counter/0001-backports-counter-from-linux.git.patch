@@ -1,6 +1,6 @@
-From b394212ded83a3fb6a14c4d3ed8f62d8db04d16e Mon Sep 17 00:00:00 2001
+From 314193be4c5a895b5333de3961a9daacdfd8ad8a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 30 Mar 2021 14:32:08 -0500
+Date: Wed, 21 Apr 2021 17:23:30 -0500
 Subject: [PATCH] backports: counter: from: linux.git
 
 Reference: v5.5.19
@@ -16,6 +16,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/bus/fsl-mc/mc-io.c                    |   7 +-
  drivers/bus/hisi_lpc.c                        |  36 +-
  drivers/bus/mips_cdmm.c                       |   4 +-
+ drivers/bus/omap_l3_noc.c                     |   4 +-
  drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} |   0
  drivers/bus/ti-sysc.c                         | 435 +++++-----------
  drivers/counter/104-quad-8.c                  | 227 ++-------
@@ -24,7 +25,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/counter/counter.c                     | 101 +---
  drivers/counter/ftm-quaddec.c                 |  14 +-
  drivers/counter/stm32-lptimer-cnt.c           |   7 +-
- drivers/counter/stm32-timer-cnt.c             |  23 +-
+ drivers/counter/stm32-timer-cnt.c             |  67 +--
  drivers/counter/ti-eqep.c                     | 466 ++++++++++++++++++
  drivers/pwm/Kconfig                           |   9 -
  drivers/pwm/Makefile                          |   1 -
@@ -43,7 +44,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/counter.h                       |  76 +--
  include/linux/mfd/stm32-timers.h              |  12 +-
  include/linux/platform_data/ti-sysc.h         |   1 -
- 37 files changed, 968 insertions(+), 798 deletions(-)
+ 38 files changed, 984 insertions(+), 830 deletions(-)
  rename drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} (100%)
  create mode 100644 drivers/counter/ti-eqep.c
 
@@ -466,6 +467,28 @@ index 7c1da45be166..1b14256376d2 100644
 +		}
  	}
  }
+ 
+diff --git a/drivers/bus/omap_l3_noc.c b/drivers/bus/omap_l3_noc.c
+index dcfb32ee5cb6..b040447575ad 100644
+--- a/drivers/bus/omap_l3_noc.c
++++ b/drivers/bus/omap_l3_noc.c
+@@ -285,7 +285,7 @@ static int omap_l3_probe(struct platform_device *pdev)
+ 	 */
+ 	l3->debug_irq = platform_get_irq(pdev, 0);
+ 	ret = devm_request_irq(l3->dev, l3->debug_irq, l3_interrupt_handler,
+-			       IRQF_NO_THREAD, "l3-dbg-irq", l3);
++			       0x0, "l3-dbg-irq", l3);
+ 	if (ret) {
+ 		dev_err(l3->dev, "request_irq failed for %d\n",
+ 			l3->debug_irq);
+@@ -294,7 +294,7 @@ static int omap_l3_probe(struct platform_device *pdev)
+ 
+ 	l3->app_irq = platform_get_irq(pdev, 1);
+ 	ret = devm_request_irq(l3->dev, l3->app_irq, l3_interrupt_handler,
+-			       IRQF_NO_THREAD, "l3-app-irq", l3);
++			       0x0, "l3-app-irq", l3);
+ 	if (ret)
+ 		dev_err(l3->dev, "request_irq failed for %d\n", l3->app_irq);
  
 diff --git a/drivers/pwm/pwm-tipwmss.c b/drivers/bus/ti-pwmss.c
 similarity index 100%
@@ -2116,10 +2139,14 @@ index bbc930a5962c..8e276eb655f5 100644
  	return 0;
  }
 diff --git a/drivers/counter/stm32-timer-cnt.c b/drivers/counter/stm32-timer-cnt.c
-index 644ba18a72ad..3eafccec3beb 100644
+index 75e08a98d09b..3eafccec3beb 100644
 --- a/drivers/counter/stm32-timer-cnt.c
 +++ b/drivers/counter/stm32-timer-cnt.c
-@@ -28,7 +28,7 @@ struct stm32_timer_cnt {
+@@ -25,59 +25,50 @@ struct stm32_timer_cnt {
+ 	struct regmap *regmap;
+ 	struct clk *clk;
+ 	u32 ceiling;
+-	u32 max_arr;
  };
  
  /**
@@ -2128,7 +2155,21 @@ index 644ba18a72ad..3eafccec3beb 100644
   * @STM32_COUNT_SLAVE_MODE_DISABLED: counts on internal clock when CEN=1
   * @STM32_COUNT_ENCODER_MODE_1: counts TI1FP1 edges, depending on TI2FP2 level
   * @STM32_COUNT_ENCODER_MODE_2: counts TI2FP2 edges, depending on TI1FP1 level
-@@ -48,34 +48,27 @@ static enum counter_count_function stm32_count_functions[] = {
+  * @STM32_COUNT_ENCODER_MODE_3: counts on both TI1FP1 and TI2FP2 edges
+  */
+ enum stm32_count_function {
+-	STM32_COUNT_SLAVE_MODE_DISABLED,
++	STM32_COUNT_SLAVE_MODE_DISABLED = -1,
+ 	STM32_COUNT_ENCODER_MODE_1,
+ 	STM32_COUNT_ENCODER_MODE_2,
+ 	STM32_COUNT_ENCODER_MODE_3,
+ };
+ 
+ static enum counter_count_function stm32_count_functions[] = {
+-	[STM32_COUNT_SLAVE_MODE_DISABLED] = COUNTER_COUNT_FUNCTION_INCREASE,
+ 	[STM32_COUNT_ENCODER_MODE_1] = COUNTER_COUNT_FUNCTION_QUADRATURE_X2_A,
+ 	[STM32_COUNT_ENCODER_MODE_2] = COUNTER_COUNT_FUNCTION_QUADRATURE_X2_B,
+ 	[STM32_COUNT_ENCODER_MODE_3] = COUNTER_COUNT_FUNCTION_QUADRATURE_X4,
  };
  
  static int stm32_count_read(struct counter_device *counter,
@@ -2168,7 +2209,59 @@ index 644ba18a72ad..3eafccec3beb 100644
  }
  
  static int stm32_count_function_get(struct counter_device *counter,
-@@ -219,8 +212,8 @@ static ssize_t stm32_count_enable_write(struct counter_device *counter,
+@@ -90,9 +81,6 @@ static int stm32_count_function_get(struct counter_device *counter,
+ 	regmap_read(priv->regmap, TIM_SMCR, &smcr);
+ 
+ 	switch (smcr & TIM_SMCR_SMS) {
+-	case 0:
+-		*function = STM32_COUNT_SLAVE_MODE_DISABLED;
+-		return 0;
+ 	case 1:
+ 		*function = STM32_COUNT_ENCODER_MODE_1;
+ 		return 0;
+@@ -102,9 +90,9 @@ static int stm32_count_function_get(struct counter_device *counter,
+ 	case 3:
+ 		*function = STM32_COUNT_ENCODER_MODE_3;
+ 		return 0;
+-	default:
+-		return -EINVAL;
+ 	}
++
++	return -EINVAL;
+ }
+ 
+ static int stm32_count_function_set(struct counter_device *counter,
+@@ -115,9 +103,6 @@ static int stm32_count_function_set(struct counter_device *counter,
+ 	u32 cr1, sms;
+ 
+ 	switch (function) {
+-	case STM32_COUNT_SLAVE_MODE_DISABLED:
+-		sms = 0;
+-		break;
+ 	case STM32_COUNT_ENCODER_MODE_1:
+ 		sms = 1;
+ 		break;
+@@ -128,7 +113,8 @@ static int stm32_count_function_set(struct counter_device *counter,
+ 		sms = 3;
+ 		break;
+ 	default:
+-		return -EINVAL;
++		sms = 0;
++		break;
+ 	}
+ 
+ 	/* Store enable status */
+@@ -190,9 +176,6 @@ static ssize_t stm32_count_ceiling_write(struct counter_device *counter,
+ 	if (ret)
+ 		return ret;
+ 
+-	if (ceiling > priv->max_arr)
+-		return -ERANGE;
+-
+ 	/* TIMx_ARR register shouldn't be buffered (ARPE=0) */
+ 	regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_ARPE, 0);
+ 	regmap_write(priv->regmap, TIM_ARR, ceiling);
+@@ -229,8 +212,8 @@ static ssize_t stm32_count_enable_write(struct counter_device *counter,
  
  	if (enable) {
  		regmap_read(priv->regmap, TIM_CR1, &cr1);
@@ -2179,6 +2272,60 @@ index 644ba18a72ad..3eafccec3beb 100644
  
  		regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN,
  				   TIM_CR1_CEN);
+@@ -279,36 +262,31 @@ static int stm32_action_get(struct counter_device *counter,
+ 	size_t function;
+ 	int err;
+ 
++	/* Default action mode (e.g. STM32_COUNT_SLAVE_MODE_DISABLED) */
++	*action = STM32_SYNAPSE_ACTION_NONE;
++
+ 	err = stm32_count_function_get(counter, count, &function);
+ 	if (err)
+-		return err;
++		return 0;
+ 
+ 	switch (function) {
+-	case STM32_COUNT_SLAVE_MODE_DISABLED:
+-		/* counts on internal clock when CEN=1 */
+-		*action = STM32_SYNAPSE_ACTION_NONE;
+-		return 0;
+ 	case STM32_COUNT_ENCODER_MODE_1:
+ 		/* counts up/down on TI1FP1 edge depending on TI2FP2 level */
+ 		if (synapse->signal->id == count->synapses[0].signal->id)
+ 			*action = STM32_SYNAPSE_ACTION_BOTH_EDGES;
+-		else
+-			*action = STM32_SYNAPSE_ACTION_NONE;
+-		return 0;
++		break;
+ 	case STM32_COUNT_ENCODER_MODE_2:
+ 		/* counts up/down on TI2FP2 edge depending on TI1FP1 level */
+ 		if (synapse->signal->id == count->synapses[1].signal->id)
+ 			*action = STM32_SYNAPSE_ACTION_BOTH_EDGES;
+-		else
+-			*action = STM32_SYNAPSE_ACTION_NONE;
+-		return 0;
++		break;
+ 	case STM32_COUNT_ENCODER_MODE_3:
+ 		/* counts up/down on both TI1FP1 and TI2FP2 edges */
+ 		*action = STM32_SYNAPSE_ACTION_BOTH_EDGES;
+-		return 0;
+-	default:
+-		return -EINVAL;
++		break;
+ 	}
++
++	return 0;
+ }
+ 
+ static const struct counter_ops stm32_timer_cnt_ops = {
+@@ -370,7 +348,6 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
+ 	priv->regmap = ddata->regmap;
+ 	priv->clk = ddata->clk;
+ 	priv->ceiling = ddata->max_arr;
+-	priv->max_arr = ddata->max_arr;
+ 
+ 	priv->counter.name = dev_name(dev);
+ 	priv->counter.parent = dev;
 diff --git a/drivers/counter/ti-eqep.c b/drivers/counter/ti-eqep.c
 new file mode 100644
 index 000000000000..1ff07faef27f
