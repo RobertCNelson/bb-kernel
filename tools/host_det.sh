@@ -420,9 +420,9 @@ debian_regs () {
 			deb_distro="focal"
 			;;
 		ulyssa)
-			#20
+			#20.1
 			#http://packages.linuxmint.com/index.php
-			deb_distro="groovy"
+			deb_distro="focal"
 			;;
 		esac
 
@@ -456,28 +456,15 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|focal|groovy|hirsute)
+		bionic|focal|groovy|hirsute|impish)
 			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
 			#20.04 focal: (EOL: April 2025) lts: focal -> xyz
 			#20.10 groovy: (EOL: July 2021)
 			#21.04 hirsute: (EOL: January 2022)
+			#21.10 hirsute: (EOL: July 2022)
 			unset warn_eol_distro
 			;;
-		yakkety|zesty|artful|cosmic|disco|eoan)
-			#16.10 yakkety: (EOL: July 20, 2017)
-			#17.04 zesty: (EOL: January 2018)
-			#17.10 artful: (EOL: July 2018)
-			#18.10 cosmic: (EOL: July 18, 2019)
-			#19.04 disco: (EOL: January 23, 2020)
-			#19.10 eoan: (EOL: July 2020)
-			warn_eol_distro=1
-			stop_pkg_search=1
-			;;
-		xenial)
-			#16.04 xenial: (EOL: April 2021) lts: xenial -> bionic
-			unset warn_eol_distro
-			;;
-		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily)
+		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|cosmic|disco|eoan)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
@@ -491,6 +478,13 @@ debian_regs () {
 			#14.10 utopic: (EOL: July 23, 2015)
 			#15.04 vivid: (EOL: February 4, 2016)
 			#15.10 wily: (EOL: July 28, 2016)
+			#16.04 xenial: (EOL: April 2021) lts: xenial -> bionic
+			#16.10 yakkety: (EOL: July 20, 2017)
+			#17.04 zesty: (EOL: January 2018)
+			#17.10 artful: (EOL: July 2018)
+			#18.10 cosmic: (EOL: July 18, 2019)
+			#19.04 disco: (EOL: January 23, 2020)
+			#19.10 eoan: (EOL: July 2020)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -622,6 +616,9 @@ if [ "x${ARCH}" = "xx86_64" ] ; then
 		ignore_32bit="true"
 		;;
 	gcc_arm_eabi_10|gcc_arm_gnueabihf_10|gcc_arm_aarch64_gnu_10)
+		ignore_32bit="true"
+		;;
+	gcc_10_riscv64)
 		ignore_32bit="true"
 		;;
 	*)

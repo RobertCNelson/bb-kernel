@@ -372,14 +372,15 @@ gcc_toolchain () {
 	gcc_10_riscv64)
 		#
 		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.1.0/x86_64-gcc-10.1.0-nolibc-riscv64-linux.tar.xz
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.3.0/x86_64-gcc-10.3.0-nolibc-riscv64-linux.tar.xz
 		#
 
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.1.0/"
-		gcc_filename_prefix="x86_64-gcc-10.1.0-nolibc-riscv64-linux"
-		extracted_dir="gcc-10.1.0-nolibc/riscv64-linux"
-		gcc_banner="riscv64-linux-gcc (GCC) 10.1.0"
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.3.0/"
+		gcc_filename_prefix="x86_64-gcc-10.3.0-nolibc-riscv64-linux"
+		extracted_dir="gcc-10.3.0-nolibc/riscv64-linux"
+		gcc_banner="riscv64-linux-gcc (GCC) 10.3.0"
 		gcc_copyright="2020"
-		datestamp="2020.10.1.0-riscv64-linux-gcc"
+		datestamp="2020.10.3.0-riscv64-linux-gcc"
 
 		binary="bin/riscv64-linux-"
 		;;
