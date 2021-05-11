@@ -8,7 +8,7 @@ build_prefix="-bone"
 branch_prefix="am33x-v"
 branch_postfix=""
 
-#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.12-rc1
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.12-rc2
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf
@@ -25,7 +25,7 @@ DEBARCH=armhf
 #toolchain="gcc_linaro_gnueabihf_7"
 #toolchain="gcc_arm_gnueabihf_8"
 #toolchain="gcc_arm_gnueabihf_9"
-toolchain="gcc_arm_gnueabihf_10"
+toolchain="gcc_10_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
@@ -34,10 +34,12 @@ toolchain="gcc_arm_gnueabihf_10"
 #toolchain="gcc_linaro_aarch64_gnu_7"
 #toolchain="gcc_arm_aarch64_gnu_8"
 #toolchain="gcc_arm_aarch64_gnu_9"
-#toolchain="gcc_arm_aarch64_gnu_10"
+#toolchain="gcc_10_aarch64"
 #riscv64
 #KERNEL_ARCH=riscv
 #DEBARCH=riscv64
+#toolchain="gcc_8_riscv64"
+#toolchain="gcc_9_riscv64"
 #toolchain="gcc_10_riscv64"
 
 #Kernel
