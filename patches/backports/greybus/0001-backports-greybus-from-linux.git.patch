@@ -1,0 +1,254 @@
+From 8540d20c3d6b18197e1d484941a11430be99cabe Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Wed, 12 May 2021 13:12:56 -0500
+Subject: [PATCH] backports: greybus: from: linux.git
+
+Reference: v5.13-rc1
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/greybus/es2.c                    |  8 ++++----
+ drivers/staging/greybus/arche-platform.c | 10 ++++------
+ drivers/staging/greybus/audio_module.c   |  4 ++--
+ drivers/staging/greybus/audio_topology.c | 12 ++++++------
+ drivers/staging/greybus/camera.c         | 13 +++----------
+ drivers/staging/greybus/sdio.c           |  1 -
+ drivers/staging/greybus/spilib.c         |  5 ++++-
+ drivers/staging/greybus/uart.c           | 16 +++++++---------
+ 8 files changed, 30 insertions(+), 39 deletions(-)
+
+diff --git a/drivers/greybus/es2.c b/drivers/greybus/es2.c
+index 48ad154df3a7..15661c7f3633 100644
+--- a/drivers/greybus/es2.c
++++ b/drivers/greybus/es2.c
+@@ -72,11 +72,11 @@ struct es2_cport_in {
+ };
+ 
+ /**
+- * es2_ap_dev - ES2 USB Bridge to AP structure
++ * struct es2_ap_dev - ES2 USB Bridge to AP structure
+  * @usb_dev: pointer to the USB device we are.
+  * @usb_intf: pointer to the USB interface we are bound to.
+  * @hd: pointer to our gb_host_device structure
+-
++ *
+  * @cport_in: endpoint, urbs and buffer for cport in messages
+  * @cport_out_endpoint: endpoint for for cport out messages
+  * @cport_out_urb: array of urbs for the CPort out messages
+@@ -85,7 +85,7 @@ struct es2_cport_in {
+  * @cport_out_urb_cancelled: array of flags indicating whether the
+  *			corresponding @cport_out_urb is being cancelled
+  * @cport_out_urb_lock: locks the @cport_out_urb_busy "list"
+- *
++ * @cdsi1_in_use: true if cport CDSI1 is in use
+  * @apb_log_task: task pointer for logging thread
+  * @apb_log_dentry: file system entry for the log file interface
+  * @apb_log_enable_dentry: file system entry for enabling logging
+@@ -1171,7 +1171,7 @@ static ssize_t apb_log_enable_read(struct file *f, char __user *buf,
+ 	char tmp_buf[3];
+ 
+ 	sprintf(tmp_buf, "%d\n", enable);
+-	return simple_read_from_buffer(buf, count, ppos, tmp_buf, 3);
++	return simple_read_from_buffer(buf, count, ppos, tmp_buf, 2);
+ }
+ 
+ static ssize_t apb_log_enable_write(struct file *f, const char __user *buf,
+diff --git a/drivers/staging/greybus/arche-platform.c b/drivers/staging/greybus/arche-platform.c
+index eebf0deb39f5..e374dfc0c92f 100644
+--- a/drivers/staging/greybus/arche-platform.c
++++ b/drivers/staging/greybus/arche-platform.c
+@@ -77,9 +77,8 @@ static void arche_platform_set_state(struct arche_platform_drvdata *arche_pdata,
+ }
+ 
+ /* Requires arche_pdata->wake_lock is held by calling context */
+-static void arche_platform_set_wake_detect_state(
+-				struct arche_platform_drvdata *arche_pdata,
+-				enum svc_wakedetect_state state)
++static void arche_platform_set_wake_detect_state(struct arche_platform_drvdata *arche_pdata,
++						 enum svc_wakedetect_state state)
+ {
+ 	arche_pdata->wake_detect_state = state;
+ }
+@@ -181,9 +180,8 @@ static irqreturn_t arche_platform_wd_irq(int irq, void *devid)
+ 						WD_STATE_COLDBOOT_START) {
+ 					arche_platform_set_wake_detect_state(arche_pdata,
+ 									     WD_STATE_COLDBOOT_TRIG);
+-					spin_unlock_irqrestore(
+-						&arche_pdata->wake_lock,
+-						flags);
++					spin_unlock_irqrestore(&arche_pdata->wake_lock,
++							       flags);
+ 					return IRQ_WAKE_THREAD;
+ 				}
+ 			}
+diff --git a/drivers/staging/greybus/audio_module.c b/drivers/staging/greybus/audio_module.c
+index 0f9fdc077b4c..12c376c477b3 100644
+--- a/drivers/staging/greybus/audio_module.c
++++ b/drivers/staging/greybus/audio_module.c
+@@ -260,7 +260,7 @@ static int gb_audio_probe(struct gb_bundle *bundle,
+ 	INIT_LIST_HEAD(&gbmodule->widget_ctl_list);
+ 	INIT_LIST_HEAD(&gbmodule->jack_list);
+ 	gbmodule->dev = dev;
+-	snprintf(gbmodule->name, NAME_SIZE, "%s.%s", dev->driver->name,
++	snprintf(gbmodule->name, sizeof(gbmodule->name), "%s.%s", dev->driver->name,
+ 		 dev_name(dev));
+ 	greybus_set_drvdata(bundle, gbmodule);
+ 
+@@ -342,7 +342,7 @@ static int gb_audio_probe(struct gb_bundle *bundle,
+ 	/* inform above layer for uevent */
+ 	dev_dbg(dev, "Inform set_event:%d to above layer\n", 1);
+ 	/* prepare for the audio manager */
+-	strscpy(desc.name, gbmodule->name, GB_AUDIO_MANAGER_MODULE_NAME_LEN);
++	strscpy(desc.name, gbmodule->name, sizeof(desc.name));
+ 	desc.vid = 2; /* todo */
+ 	desc.pid = 3; /* todo */
+ 	desc.intf_id = gbmodule->dev_id;
+diff --git a/drivers/staging/greybus/audio_topology.c b/drivers/staging/greybus/audio_topology.c
+index e816e4db555e..1fc7727ab7be 100644
+--- a/drivers/staging/greybus/audio_topology.c
++++ b/drivers/staging/greybus/audio_topology.c
+@@ -200,7 +200,7 @@ static int gbcodec_mixer_ctl_info(struct snd_kcontrol *kcontrol,
+ 			return -EINVAL;
+ 		name = gbaudio_map_controlid(module, data->ctl_id,
+ 					     uinfo->value.enumerated.item);
+-		strscpy(uinfo->value.enumerated.name, name, NAME_SIZE);
++		strscpy(uinfo->value.enumerated.name, name, sizeof(uinfo->value.enumerated.name));
+ 		break;
+ 	default:
+ 		dev_err(comp->dev, "Invalid type: %d for %s:kcontrol\n",
+@@ -363,7 +363,7 @@ static int gbcodec_mixer_dapm_ctl_info(struct snd_kcontrol *kcontrol,
+ 	platform_min = le32_to_cpu(info->value.integer.min);
+ 
+ 	if (platform_max == 1 &&
+-	    !strnstr(kcontrol->id.name, " Volume", NAME_SIZE))
++	    !strnstr(kcontrol->id.name, " Volume", sizeof(kcontrol->id.name)))
+ 		uinfo->type = SNDRV_CTL_ELEM_TYPE_BOOLEAN;
+ 	else
+ 		uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+@@ -1047,8 +1047,8 @@ static int gbaudio_tplg_create_widget(struct gbaudio_module_info *module,
+ 	}
+ 
+ 	/* Prefix dev_id to widget control_name */
+-	strscpy(temp_name, w->name, NAME_SIZE);
+-	snprintf(w->name, NAME_SIZE, "GB %d %s", module->dev_id, temp_name);
++	strscpy(temp_name, w->name, sizeof(temp_name));
++	snprintf(w->name, sizeof(w->name), "GB %d %s", module->dev_id, temp_name);
+ 
+ 	switch (w->type) {
+ 	case snd_soc_dapm_spk:
+@@ -1169,8 +1169,8 @@ static int gbaudio_tplg_process_kcontrols(struct gbaudio_module_info *module,
+ 		}
+ 		control->id = curr->id;
+ 		/* Prefix dev_id to widget_name */
+-		strscpy(temp_name, curr->name, NAME_SIZE);
+-		snprintf(curr->name, NAME_SIZE, "GB %d %s", module->dev_id,
++		strscpy(temp_name, curr->name, sizeof(temp_name));
++		snprintf(curr->name, sizeof(curr->name), "GB %d %s", module->dev_id,
+ 			 temp_name);
+ 		control->name = curr->name;
+ 		if (curr->info.type == GB_AUDIO_CTL_ELEM_TYPE_ENUMERATED) {
+diff --git a/drivers/staging/greybus/camera.c b/drivers/staging/greybus/camera.c
+index b570e13394ac..cdbb42cd413b 100644
+--- a/drivers/staging/greybus/camera.c
++++ b/drivers/staging/greybus/camera.c
+@@ -1120,16 +1120,9 @@ static ssize_t gb_camera_debugfs_write(struct file *file,
+ 	if (len > 1024)
+ 		return -EINVAL;
+ 
+-	kbuf = kmalloc(len + 1, GFP_KERNEL);
+-	if (!kbuf)
+-		return -ENOMEM;
+-
+-	if (copy_from_user(kbuf, buf, len)) {
+-		ret = -EFAULT;
+-		goto done;
+-	}
+-
+-	kbuf[len] = '\0';
++	kbuf = memdup_user_nul(buf, len);
++	if (IS_ERR(kbuf))
++		return PTR_ERR(kbuf);
+ 
+ 	ret = op->execute(gcam, kbuf, len);
+ 
+diff --git a/drivers/staging/greybus/sdio.c b/drivers/staging/greybus/sdio.c
+index 0939f4a4c963..37bf04c22dbc 100644
+--- a/drivers/staging/greybus/sdio.c
++++ b/drivers/staging/greybus/sdio.c
+@@ -33,7 +33,6 @@ struct gb_sdio_host {
+ 	bool			read_only;
+ };
+ 
+-
+ #define GB_SDIO_RSP_R1_R5_R6_R7	(GB_SDIO_RSP_PRESENT | GB_SDIO_RSP_CRC | \
+ 				 GB_SDIO_RSP_OPCODE)
+ #define GB_SDIO_RSP_R3_R4	(GB_SDIO_RSP_PRESENT)
+diff --git a/drivers/staging/greybus/spilib.c b/drivers/staging/greybus/spilib.c
+index 672d540d3365..30655153df6a 100644
+--- a/drivers/staging/greybus/spilib.c
++++ b/drivers/staging/greybus/spilib.c
+@@ -245,6 +245,7 @@ static struct gb_operation *gb_spi_operation_create(struct gb_spilib *spi,
+ 	/* Fill in the transfers array */
+ 	xfer = spi->first_xfer;
+ 	while (msg->state != GB_SPI_STATE_OP_DONE) {
++		int xfer_delay;
+ 		if (xfer == spi->last_xfer)
+ 			xfer_len = spi->last_xfer_size;
+ 		else
+@@ -259,7 +260,9 @@ static struct gb_operation *gb_spi_operation_create(struct gb_spilib *spi,
+ 
+ 		gb_xfer->speed_hz = cpu_to_le32(xfer->speed_hz);
+ 		gb_xfer->len = cpu_to_le32(xfer_len);
+-		gb_xfer->delay_usecs = cpu_to_le16(xfer->delay_usecs);
++		xfer_delay = spi_delay_to_ns(&xfer->delay, xfer) / 1000;
++		xfer_delay = clamp_t(u16, xfer_delay, 0, U16_MAX);
++		gb_xfer->delay_usecs = cpu_to_le16(xfer_delay);
+ 		gb_xfer->cs_change = xfer->cs_change;
+ 		gb_xfer->bits_per_word = xfer->bits_per_word;
+ 
+diff --git a/drivers/staging/greybus/uart.c b/drivers/staging/greybus/uart.c
+index 607378bfebb7..b1e63f7798b0 100644
+--- a/drivers/staging/greybus/uart.c
++++ b/drivers/staging/greybus/uart.c
+@@ -610,14 +610,13 @@ static int get_serial_info(struct tty_struct *tty,
+ {
+ 	struct gb_tty *gb_tty = tty->driver_data;
+ 
+-	ss->type = PORT_16550A;
+ 	ss->line = gb_tty->minor;
+-	ss->xmit_fifo_size = 16;
+-	ss->baud_base = 9600;
+-	ss->close_delay = gb_tty->port.close_delay / 10;
++	ss->close_delay = jiffies_to_msecs(gb_tty->port.close_delay) / 10;
+ 	ss->closing_wait =
+ 		gb_tty->port.closing_wait == ASYNC_CLOSING_WAIT_NONE ?
+-		ASYNC_CLOSING_WAIT_NONE : gb_tty->port.closing_wait / 10;
++		ASYNC_CLOSING_WAIT_NONE :
++		jiffies_to_msecs(gb_tty->port.closing_wait) / 10;
++
+ 	return 0;
+ }
+ 
+@@ -629,17 +628,16 @@ static int set_serial_info(struct tty_struct *tty,
+ 	unsigned int close_delay;
+ 	int retval = 0;
+ 
+-	close_delay = ss->close_delay * 10;
++	close_delay = msecs_to_jiffies(ss->close_delay * 10);
+ 	closing_wait = ss->closing_wait == ASYNC_CLOSING_WAIT_NONE ?
+-			ASYNC_CLOSING_WAIT_NONE : ss->closing_wait * 10;
++			ASYNC_CLOSING_WAIT_NONE :
++			msecs_to_jiffies(ss->closing_wait * 10);
+ 
+ 	mutex_lock(&gb_tty->port.mutex);
+ 	if (!capable(CAP_SYS_ADMIN)) {
+ 		if ((close_delay != gb_tty->port.close_delay) ||
+ 		    (closing_wait != gb_tty->port.closing_wait))
+ 			retval = -EPERM;
+-		else
+-			retval = -EOPNOTSUPP;
+ 	} else {
+ 		gb_tty->port.close_delay = close_delay;
+ 		gb_tty->port.closing_wait = closing_wait;
+-- 
+2.30.2
+
