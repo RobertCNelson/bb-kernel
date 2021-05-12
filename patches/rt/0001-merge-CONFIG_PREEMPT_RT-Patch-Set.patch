@@ -1,9 +1,9 @@
-From 5cc3367650dee3f5da9b1764f4b04e40abe31342 Mon Sep 17 00:00:00 2001
+From 006dcbe0bdd4014023e2415c151d8699b8d78c6f Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 4 May 2021 16:07:25 -0500
+Date: Wed, 12 May 2021 14:00:44 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-5.10.30-rt37.patch.xz
+patch-5.10.35-rt39.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -309,6 +309,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/ww_mutex.h                      |    8 +
  include/net/gen_stats.h                       |   11 +-
  include/net/net_seq_lock.h                    |   15 +
+ include/net/netns/xfrm.h                      |    2 +-
  include/net/sch_generic.h                     |   27 +-
  include/trace/events/sched.h                  |   12 +
  init/Kconfig                                  |    5 +-
@@ -425,7 +426,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/sched/sch_generic.c                       |   10 +
  net/sunrpc/svc_xprt.c                         |    4 +-
  net/xfrm/xfrm_state.c                         |    3 +-
- 418 files changed, 9267 insertions(+), 5220 deletions(-)
+ 419 files changed, 9268 insertions(+), 5221 deletions(-)
  delete mode 100644 arch/alpha/include/asm/kmap_types.h
  delete mode 100644 arch/arc/include/asm/kmap_types.h
  delete mode 100644 arch/arm/include/asm/kmap_types.h
@@ -1623,7 +1624,7 @@ index 187fab227b50..000000000000
 -	return (void *)vaddr;
 -}
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index c1be64228327..87ea8de59f00 100644
+index 5e5cf3af6351..a2514d685485 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
 @@ -76,6 +76,7 @@ config ARM64
@@ -1781,10 +1782,10 @@ index 7d32fc959b1a..b2f29bd2ae87 100644
  #ifdef CONFIG_ARM64_SW_TTBR0_PAN
    DEFINE(TSK_TI_TTBR0,		offsetof(struct task_struct, thread_info.ttbr0));
 diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
-index d72c818b019c..924cec6010ff 100644
+index 2da82c139e1c..32c907a71ca4 100644
 --- a/arch/arm64/kernel/entry.S
 +++ b/arch/arm64/kernel/entry.S
-@@ -649,9 +649,18 @@ alternative_if ARM64_HAS_IRQ_PRIO_MASKING
+@@ -651,9 +651,18 @@ alternative_if ARM64_HAS_IRQ_PRIO_MASKING
  	mrs	x0, daif
  	orr	x24, x24, x0
  alternative_else_nop_endif
@@ -1896,7 +1897,7 @@ index a1c2c955474e..df1d0d1511d1 100644
  		/*
  		 * The ARMv8 architecture doesn't give the hypervisor
 diff --git a/arch/csky/Kconfig b/arch/csky/Kconfig
-index 268fad5f51cf..7a86481a22ff 100644
+index 7bf0a617e94c..c9f2533cc53d 100644
 --- a/arch/csky/Kconfig
 +++ b/arch/csky/Kconfig
 @@ -286,6 +286,7 @@ config NR_CPUS
@@ -12421,6 +12422,19 @@ index 000000000000..67710bace741
 +#endif
 +
 +#endif
+diff --git a/include/net/netns/xfrm.h b/include/net/netns/xfrm.h
+index b59d73d529ba..e816b6a3ef2b 100644
+--- a/include/net/netns/xfrm.h
++++ b/include/net/netns/xfrm.h
+@@ -73,7 +73,7 @@ struct netns_xfrm {
+ 	struct dst_ops		xfrm6_dst_ops;
+ #endif
+ 	spinlock_t		xfrm_state_lock;
+-	seqcount_t		xfrm_state_hash_generation;
++	seqcount_spinlock_t	xfrm_state_hash_generation;
+ 
+ 	spinlock_t xfrm_policy_lock;
+ 	struct mutex xfrm_cfg_mutex;
 diff --git a/include/net/sch_generic.h b/include/net/sch_generic.h
 index 3648164faa06..6a0434d2c279 100644
 --- a/include/net/sch_generic.h
@@ -13601,10 +13615,10 @@ index 6d11cfb9b41f..c7fbf737e16e 100644
  obj-$(CONFIG_LOCK_TORTURE_TEST) += locktorture.o
  obj-$(CONFIG_WW_MUTEX_SELFTEST) += test-ww_mutex.o
 diff --git a/kernel/locking/lockdep.c b/kernel/locking/lockdep.c
-index a18495b1a92f..3c74f0db20cb 100644
+index 7ea270453727..d0268cb0a1fd 100644
 --- a/kernel/locking/lockdep.c
 +++ b/kernel/locking/lockdep.c
-@@ -5293,6 +5293,7 @@ static noinstr void check_flags(unsigned long flags)
+@@ -5294,6 +5294,7 @@ static noinstr void check_flags(unsigned long flags)
  		}
  	}
  
@@ -13612,7 +13626,7 @@ index a18495b1a92f..3c74f0db20cb 100644
  	/*
  	 * We dont accurately track softirq state in e.g.
  	 * hardirq contexts (such as on 4KSTACKS), so only
-@@ -5307,6 +5308,7 @@ static noinstr void check_flags(unsigned long flags)
+@@ -5308,6 +5309,7 @@ static noinstr void check_flags(unsigned long flags)
  			DEBUG_LOCKS_WARN_ON(!current->softirqs_enabled);
  		}
  	}
@@ -24971,7 +24985,7 @@ index 1e2ca744dadb..c9a0c961d6e0 100644
  
  		/*
 diff --git a/lib/Kconfig.debug b/lib/Kconfig.debug
-index c789b39ed527..e7d04eade8e0 100644
+index dcf4a9028e16..1751f130e783 100644
 --- a/lib/Kconfig.debug
 +++ b/lib/Kconfig.debug
 @@ -1330,7 +1330,7 @@ config DEBUG_ATOMIC_SLEEP
@@ -27813,7 +27827,7 @@ index d6567162c1cf..05b0f041f039 100644
  config BQL
  	bool
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 62ff7121b22d..63f403961d8f 100644
+index 64f4c7ec729d..73341e6c2e5d 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -221,14 +221,14 @@ static inline struct hlist_head *dev_index_hash(struct net *net, int ifindex)
@@ -27910,7 +27924,7 @@ index 62ff7121b22d..63f403961d8f 100644
  	trace_netif_rx_ni_exit(err);
  
  	return err;
-@@ -6290,12 +6295,14 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
+@@ -6291,12 +6296,14 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
  		sd->rps_ipi_list = NULL;
  
  		local_irq_enable();
@@ -27925,7 +27939,7 @@ index 62ff7121b22d..63f403961d8f 100644
  }
  
  static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
-@@ -6373,6 +6380,7 @@ void __napi_schedule(struct napi_struct *n)
+@@ -6374,6 +6381,7 @@ void __napi_schedule(struct napi_struct *n)
  	local_irq_save(flags);
  	____napi_schedule(this_cpu_ptr(&softnet_data), n);
  	local_irq_restore(flags);
@@ -27933,7 +27947,7 @@ index 62ff7121b22d..63f403961d8f 100644
  }
  EXPORT_SYMBOL(__napi_schedule);
  
-@@ -10904,6 +10912,7 @@ static int dev_cpu_dead(unsigned int oldcpu)
+@@ -10905,6 +10913,7 @@ static int dev_cpu_dead(unsigned int oldcpu)
  
  	raise_softirq_irqoff(NET_TX_SOFTIRQ);
  	local_irq_enable();
@@ -27941,7 +27955,7 @@ index 62ff7121b22d..63f403961d8f 100644
  
  #ifdef CONFIG_RPS
  	remsd = oldsd->rps_ipi_list;
-@@ -10917,7 +10926,7 @@ static int dev_cpu_dead(unsigned int oldcpu)
+@@ -10918,7 +10927,7 @@ static int dev_cpu_dead(unsigned int oldcpu)
  		netif_rx_ni(skb);
  		input_queue_head_incr(oldsd);
  	}
@@ -27950,7 +27964,7 @@ index 62ff7121b22d..63f403961d8f 100644
  		netif_rx_ni(skb);
  		input_queue_head_incr(oldsd);
  	}
-@@ -11233,7 +11242,7 @@ static int __init net_dev_init(void)
+@@ -11234,7 +11243,7 @@ static int __init net_dev_init(void)
  
  		INIT_WORK(flush, flush_backlog);
  
