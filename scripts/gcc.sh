@@ -265,18 +265,19 @@ gcc_toolchain () {
 
 		binary="bin/arm-none-linux-gnueabihf-"
 		;;
-	gcc_arm_gnueabihf_10)
+	gcc_arm_gnueabihf_10|gcc_10_arm)
 		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.3.0/x86_64-gcc-10.3.0-nolibc-arm-linux-gnueabi.tar.xz
 		#
 
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/"
-		gcc_filename_prefix="gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf"
-		gcc_banner="arm-none-linux-gnueabihf-gcc (GNU Toolchain for the A-profile Architecture 10.2-2020.11 (arm-10.16)) 10.2.1 20201103"
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.3.0/"
+		gcc_filename_prefix="x86_64-gcc-10.3.0-nolibc-arm-linux-gnueabi"
+		extracted_dir="gcc-10.3.0-nolibc/arm-linux-gnueabi"
+		gcc_banner="arm-linux-gcc (GCC) 10.3.0"
 		gcc_copyright="2020"
-		datestamp="2020.11-gcc-arm-linux-gnueabihf"
+		datestamp="2020.10.3.0-arm-linux-gnueabi"
 
-		binary="bin/arm-none-linux-gnueabihf-"
+		binary="bin/arm-linux-gnueabi-"
 		;;
 	gcc_linaro_aarch64_gnu_5)
 		#
@@ -356,22 +357,50 @@ gcc_toolchain () {
 
 		binary="bin/aarch64-none-linux-gnu-"
 		;;
-	gcc_arm_aarch64_gnu_10)
+	gcc_arm_aarch64_gnu_10|gcc_10_aarch64)
 		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-aarch64-none-linux-gnu.tar.xz
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.3.0/x86_64-gcc-10.3.0-nolibc-aarch64-linux.tar.gz
 		#
 
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/"
-		gcc_filename_prefix="gcc-arm-10.2-2020.11-x86_64-aarch64-none-linux-gnu"
-		gcc_banner="aarch64-none-linux-gnu-gcc (GNU Toolchain for the A-profile Architecture 10.2-2020.11 (arm-10.16)) 10.2.1 20201103"
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.3.0/"
+		gcc_filename_prefix="x86_64-gcc-10.3.0-nolibc-aarch64-linux"
+		extracted_dir="gcc-10.3.0-nolibc/aarch64-linux"
+		gcc_banner="aarch64-linux-gcc (GCC) 10.3.0"
 		gcc_copyright="2020"
-		datestamp="2020.11-gcc-aarch64-linux-gnu"
+		datestamp="2020.10.3.0-aarch64-linux-gcc"
 
-		binary="bin/aarch64-none-linux-gnu-"
+		binary="bin/aarch64-linux-"
+		;;
+	gcc_8_riscv64)
+		#
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/8.4.0/x86_64-gcc-8.4.0-nolibc-riscv64-linux.tar.xz
+		#
+
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/8.4.0/"
+		gcc_filename_prefix="x86_64-gcc-8.4.0-nolibc-riscv64-linux"
+		extracted_dir="gcc-8.4.0-nolibc/riscv64-linux"
+		gcc_banner="riscv64-linux-gcc (GCC) 8.4.0"
+		gcc_copyright="2018"
+		datestamp="2018.8.4.0-riscv64-linux-gcc"
+
+		binary="bin/riscv64-linux-"
+		;;
+	gcc_9_riscv64)
+		#
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/9.3.0/x86_64-gcc-9.3.0-nolibc-riscv64-linux.tar.xz
+		#
+
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/9.3.0/"
+		gcc_filename_prefix="x86_64-gcc-9.3.0-nolibc-riscv64-linux"
+		extracted_dir="gcc-9.3.0-nolibc/riscv64-linux"
+		gcc_banner="riscv64-linux-gcc (GCC) 9.3.0"
+		gcc_copyright="2019"
+		datestamp="2019.9.3.0-riscv64-linux-gcc"
+
+		binary="bin/riscv64-linux-"
 		;;
 	gcc_10_riscv64)
 		#
-		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.1.0/x86_64-gcc-10.1.0-nolibc-riscv64-linux.tar.xz
 		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.3.0/x86_64-gcc-10.3.0-nolibc-riscv64-linux.tar.xz
 		#
 
