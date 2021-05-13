@@ -513,6 +513,7 @@ reverts () {
 }
 
 drivers () {
+	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
@@ -549,7 +550,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.4.114"
+		backport_tag="v5.4.118"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
