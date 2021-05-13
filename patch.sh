@@ -467,7 +467,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.11.16"
+	backport_tag="v5.12.3"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -483,7 +483,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12-rc8"
+	backport_tag="v5.13-rc1"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -556,6 +556,7 @@ reverts () {
 }
 
 drivers () {
+	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
@@ -588,7 +589,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.31"
+		backport_tag="v5.10.36"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
