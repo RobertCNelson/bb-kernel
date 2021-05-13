@@ -109,6 +109,7 @@ aufs_fail () {
 }
 
 aufs () {
+	#https://github.com/sfjro/aufs4-standalone/tree/aufs4.14.73+
 	aufs_prefix="aufs4-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -468,6 +469,7 @@ post_backports () {
 		cd -
 	fi
 
+	rm -f arch/arm/boot/dts/overlays/*.dtbo || true
 	${git_bin} add .
 	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
@@ -482,7 +484,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.184"
+	backport_tag="v4.19.190"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -498,7 +500,7 @@ backports () {
 		${git} "${DIR}/patches/backports/greybus/0002-greybus-drivers-staging-greybus-module.c-no-struct_s.patch"
 	fi
 
-	backport_tag="v5.4.109"
+	backport_tag="v5.4.118"
 
 	subsystem="wiznet"
 	#regenerate="enable"
@@ -538,6 +540,9 @@ reverts () {
 }
 
 drivers () {
+	#https://github.com/raspberrypi/linux/branches
+	#exit 2
+	#dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/btrfs'
 	dir 'drivers/pwm'

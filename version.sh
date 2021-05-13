@@ -28,7 +28,7 @@ DEBARCH=armhf
 toolchain="gcc_linaro_gnueabihf_7"
 #toolchain="gcc_arm_gnueabihf_8"
 #toolchain="gcc_arm_gnueabihf_9"
-#toolchain="gcc_arm_gnueabihf_10"
+#toolchain="gcc_10_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
@@ -37,18 +37,20 @@ toolchain="gcc_linaro_gnueabihf_7"
 #toolchain="gcc_linaro_aarch64_gnu_7"
 #toolchain="gcc_arm_aarch64_gnu_8"
 #toolchain="gcc_arm_aarch64_gnu_9"
-#toolchain="gcc_arm_aarch64_gnu_10"
+#toolchain="gcc_10_aarch64"
 #riscv64
 #KERNEL_ARCH=riscv
 #DEBARCH=riscv64
+#toolchain="gcc_8_riscv64"
+#toolchain="gcc_9_riscv64"
 #toolchain="gcc_10_riscv64"
 
 #Kernel
 KERNEL_REL=4.14
-KERNEL_TAG=${KERNEL_REL}.226
-kernel_rt=".226-rt109"
+KERNEL_TAG=${KERNEL_REL}.232
+kernel_rt=".232-rt111"
 #Kernel Build
-BUILD=${build_prefix}49
+BUILD=${build_prefix}49.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
