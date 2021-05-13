@@ -1,6 +1,6 @@
-From 314193be4c5a895b5333de3961a9daacdfd8ad8a Mon Sep 17 00:00:00 2001
+From 204495569af707ea1ea585578975696a218cc5a6 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 21 Apr 2021 17:23:30 -0500
+Date: Thu, 13 May 2021 09:05:44 -0500
 Subject: [PATCH] backports: counter: from: linux.git
 
 Reference: v5.5.19
@@ -18,14 +18,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/bus/mips_cdmm.c                       |   4 +-
  drivers/bus/omap_l3_noc.c                     |   4 +-
  drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} |   0
- drivers/bus/ti-sysc.c                         | 435 +++++-----------
+ drivers/bus/ti-sysc.c                         | 439 +++++------------
  drivers/counter/104-quad-8.c                  | 227 ++-------
  drivers/counter/Kconfig                       |  11 +
  drivers/counter/Makefile                      |   1 +
  drivers/counter/counter.c                     | 101 +---
  drivers/counter/ftm-quaddec.c                 |  14 +-
  drivers/counter/stm32-lptimer-cnt.c           |   7 +-
- drivers/counter/stm32-timer-cnt.c             |  67 +--
+ drivers/counter/stm32-timer-cnt.c             |  75 ++-
  drivers/counter/ti-eqep.c                     | 466 ++++++++++++++++++
  drivers/pwm/Kconfig                           |   9 -
  drivers/pwm/Makefile                          |   1 -
@@ -44,7 +44,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/counter.h                       |  76 +--
  include/linux/mfd/stm32-timers.h              |  12 +-
  include/linux/platform_data/ti-sysc.h         |   1 -
- 38 files changed, 984 insertions(+), 830 deletions(-)
+ 38 files changed, 992 insertions(+), 834 deletions(-)
  rename drivers/{pwm/pwm-tipwmss.c => bus/ti-pwmss.c} (100%)
  create mode 100644 drivers/counter/ti-eqep.c
 
@@ -495,7 +495,7 @@ similarity index 100%
 rename from drivers/pwm/pwm-tipwmss.c
 rename to drivers/bus/ti-pwmss.c
 diff --git a/drivers/bus/ti-sysc.c b/drivers/bus/ti-sysc.c
-index 3934ce3385ac..c42447d5d5a8 100644
+index f9ff6d433dfe..c42447d5d5a8 100644
 --- a/drivers/bus/ti-sysc.c
 +++ b/drivers/bus/ti-sysc.c
 @@ -70,13 +70,11 @@ static const char * const clock_names[SYSC_MAX_CLOCKS] = {
@@ -1003,7 +1003,8 @@ index 3934ce3385ac..c42447d5d5a8 100644
  
 -/* RTC on am3 and 4 needs to be unlocked and locked for sysconfig */
 -static void sysc_quirk_rtc(struct sysc *ddata, bool lock)
--{
++static void sysc_clk_disable_quirk_i2c(struct sysc *ddata)
+ {
 -	u32 val, kick0_val = 0, kick1_val = 0;
 -	unsigned long flags;
 -	int error;
@@ -1031,8 +1032,7 @@ index 3934ce3385ac..c42447d5d5a8 100644
 -}
 -
 -static void sysc_module_lock_quirk_rtc(struct sysc *ddata)
-+static void sysc_clk_disable_quirk_i2c(struct sysc *ddata)
- {
+-{
 -	sysc_quirk_rtc(ddata, true);
 +	sysc_clk_quirk_i2c(ddata, false);
  }
@@ -1268,6 +1268,17 @@ index 3934ce3385ac..c42447d5d5a8 100644
  	sysc_show_registers(ddata);
  
  	ddata->dev->type = &sysc_device_type;
+@@ -2685,9 +2520,7 @@ static int sysc_remove(struct platform_device *pdev)
+ 
+ 	pm_runtime_put_sync(&pdev->dev);
+ 	pm_runtime_disable(&pdev->dev);
+-
+-	if (!reset_control_status(ddata->rsts))
+-		reset_control_assert(ddata->rsts);
++	reset_control_assert(ddata->rsts);
+ 
+ unprepare:
+ 	sysc_unprepare(ddata);
 diff --git a/drivers/counter/104-quad-8.c b/drivers/counter/104-quad-8.c
 index 5c23a9a56921..17e67a84777d 100644
 --- a/drivers/counter/104-quad-8.c
@@ -2139,14 +2150,15 @@ index bbc930a5962c..8e276eb655f5 100644
  	return 0;
  }
 diff --git a/drivers/counter/stm32-timer-cnt.c b/drivers/counter/stm32-timer-cnt.c
-index 75e08a98d09b..3eafccec3beb 100644
+index 889ea7a6ed63..3eafccec3beb 100644
 --- a/drivers/counter/stm32-timer-cnt.c
 +++ b/drivers/counter/stm32-timer-cnt.c
-@@ -25,59 +25,50 @@ struct stm32_timer_cnt {
+@@ -24,60 +24,51 @@ struct stm32_timer_cnt {
+ 	struct counter_device counter;
  	struct regmap *regmap;
  	struct clk *clk;
- 	u32 ceiling;
 -	u32 max_arr;
++	u32 ceiling;
  };
  
  /**
@@ -2193,14 +2205,15 @@ index 75e08a98d09b..3eafccec3beb 100644
 +			     const unsigned long val)
  {
  	struct stm32_timer_cnt *const priv = counter->priv;
--	u32 cnt;
+-	u32 cnt, ceiling;
 -	int err;
 -
 -	err = counter_count_write_value_get(&cnt, COUNTER_COUNT_POSITION, val);
 -	if (err)
 -		return err;
  
--	if (cnt > priv->ceiling)
+-	regmap_read(priv->regmap, TIM_ARR, &ceiling);
+-	if (cnt > ceiling)
 +	if (val > priv->ceiling)
  		return -EINVAL;
  
@@ -2251,7 +2264,18 @@ index 75e08a98d09b..3eafccec3beb 100644
  	}
  
  	/* Store enable status */
-@@ -190,9 +176,6 @@ static ssize_t stm32_count_ceiling_write(struct counter_device *counter,
+@@ -136,6 +122,10 @@ static int stm32_count_function_set(struct counter_device *counter,
+ 
+ 	regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN, 0);
+ 
++	/* TIMx_ARR register shouldn't be buffered (ARPE=0) */
++	regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_ARPE, 0);
++	regmap_write(priv->regmap, TIM_ARR, priv->ceiling);
++
+ 	regmap_update_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS, sms);
+ 
+ 	/* Make sure that registers are updated */
+@@ -186,13 +176,11 @@ static ssize_t stm32_count_ceiling_write(struct counter_device *counter,
  	if (ret)
  		return ret;
  
@@ -2261,7 +2285,12 @@ index 75e08a98d09b..3eafccec3beb 100644
  	/* TIMx_ARR register shouldn't be buffered (ARPE=0) */
  	regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_ARPE, 0);
  	regmap_write(priv->regmap, TIM_ARR, ceiling);
-@@ -229,8 +212,8 @@ static ssize_t stm32_count_enable_write(struct counter_device *counter,
+ 
++	priv->ceiling = ceiling;
+ 	return len;
+ }
+ 
+@@ -224,8 +212,8 @@ static ssize_t stm32_count_enable_write(struct counter_device *counter,
  
  	if (enable) {
  		regmap_read(priv->regmap, TIM_CR1, &cr1);
@@ -2272,7 +2301,7 @@ index 75e08a98d09b..3eafccec3beb 100644
  
  		regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN,
  				   TIM_CR1_CEN);
-@@ -279,36 +262,31 @@ static int stm32_action_get(struct counter_device *counter,
+@@ -274,36 +262,31 @@ static int stm32_action_get(struct counter_device *counter,
  	size_t function;
  	int err;
  
@@ -2318,11 +2347,12 @@ index 75e08a98d09b..3eafccec3beb 100644
  }
  
  static const struct counter_ops stm32_timer_cnt_ops = {
-@@ -370,7 +348,6 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
+@@ -364,7 +347,7 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
+ 
  	priv->regmap = ddata->regmap;
  	priv->clk = ddata->clk;
- 	priv->ceiling = ddata->max_arr;
 -	priv->max_arr = ddata->max_arr;
++	priv->ceiling = ddata->max_arr;
  
  	priv->counter.name = dev_name(dev);
  	priv->counter.parent = dev;

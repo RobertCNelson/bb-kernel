@@ -483,7 +483,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.11.16"
+	backport_tag="v5.12.3"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -499,7 +499,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12-rc8"
+	backport_tag="v5.13-rc1"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -579,22 +579,19 @@ reverts () {
 	fi
 
 	## notes
-	#git revert --no-edit 0a6565762f2783604ccc9c3d7d237d153724b307 -s
-	#git revert --no-edit 107cf5eede74c0b927a3154799bf71dd51862575 -s
-	#git revert --no-edit 4f5416710e13eb4e1587f6c38e92e9134cf5f480 -s
-	#git revert --no-edit 87ea51c90280388f71255121bb29e9f6a531c754 -s
-	#exit 2
+	##git revert --no-edit xyz -s
 
 	dir 'reverts'
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=4
+		number=1
 		cleanup
 	fi
 }
 
 drivers () {
+	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
@@ -607,6 +604,7 @@ drivers () {
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
+	dir 'drivers/ti/mmc'
 	dir 'drivers/greybus'
 }
 
@@ -629,7 +627,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.31"
+		backport_tag="v5.10.36"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
