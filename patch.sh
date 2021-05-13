@@ -475,7 +475,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.4.114"
+	backport_tag="v5.4.118"
 
 	subsystem="wiznet"
 	#regenerate="enable"
@@ -529,6 +529,7 @@ reverts () {
 }
 
 drivers () {
+	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
