@@ -303,14 +303,6 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
-dtb_makefile_append_omap4 () {
-	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
-dtb_makefile_append_am5 () {
-	sed -i -e 's:am57xx-beagle-x15.dtb \\:am57xx-beagle-x15.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -340,9 +332,6 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
-
-		#device="am335x-abbbi.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
@@ -423,7 +412,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.13-rc1"
+	backport_tag="v5.13-rc2"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -439,7 +428,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13-rc1"
+	backport_tag="v5.12.4"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -454,7 +443,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13-rc1"
+	backport_tag="v5.13-rc2"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -462,6 +451,22 @@ backports () {
 		pre_backports
 
 		cp -v ~/linux-src/drivers/spi/spidev.c ./drivers/spi/spidev.c
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	backport_tag="v5.13-rc2"
+
+	subsystem="pinctrl"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/pinctrl/* ./drivers/pinctrl/
+		cp -rv ~/linux-src/include/linux/pinctrl/* ./include/linux/pinctrl/
 
 		post_backports
 		exit 2
@@ -505,6 +510,7 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	dir 'fixes'
+	dir 'drivers/pinctrl'
 }
 
 soc () {

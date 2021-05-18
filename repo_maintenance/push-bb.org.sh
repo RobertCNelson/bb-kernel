@@ -41,10 +41,6 @@ cat_files () {
 	if [ -f ../patches/git/TI_AMX3_CM3 ] ; then
 		cat ../patches/git/TI_AMX3_CM3 >> ${wfile}
 	fi
-
-	if [ -f ../patches/git/WIREGUARD ] ; then
-		cat ../patches/git/WIREGUARD >> ${wfile}
-	fi
 }
 
 DIR=$PWD
