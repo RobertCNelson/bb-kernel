@@ -307,10 +307,6 @@ dtb_makefile_append_omap4 () {
 	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
 
-dtb_makefile_append_am5 () {
-	sed -i -e 's:am57xx-beagle-x15.dtb \\:am57xx-beagle-x15.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -342,7 +338,6 @@ beagleboard_dtbs () {
 
 		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
-		#device="am335x-abbbi.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
@@ -427,7 +422,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.13-rc1"
+	backport_tag="v5.13-rc2"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -443,7 +438,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13-rc1"
+	backport_tag="v5.12.4"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -458,7 +453,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13-rc1"
+	backport_tag="v5.13-rc2"
 
 	subsystem="spidev"
 	#regenerate="enable"
