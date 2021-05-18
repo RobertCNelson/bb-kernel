@@ -135,45 +135,6 @@ gcc_toolchain () {
 
 		binary="bin/arm-eabi-"
 		;;
-	gcc_arm_eabi_8)
-		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/gcc-arm-8.3-2019.03-x86_64-arm-eabi.tar.xz
-		#
-
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/"
-		gcc_filename_prefix="gcc-arm-8.3-2019.03-x86_64-arm-eabi"
-		gcc_banner="arm-eabi-gcc (GNU Toolchain for the A-profile Architecture 8.3-2019.03 (arm-rel-8.36)) 8.3.0"
-		gcc_copyright="2018"
-		datestamp="2019.03-gcc-arm-none-eabi"
-
-		binary="bin/arm-eabi-"
-		;;
-	gcc_arm_eabi_9)
-		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/9.2-2019.12/binrel/gcc-arm-9.2-2019.12-x86_64-arm-none-eabi.tar.xz
-		#
-
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/9.2-2019.12/binrel/"
-		gcc_filename_prefix="gcc-arm-9.2-2019.12-x86_64-arm-none-eabi"
-		gcc_banner="arm-none-eabi-gcc (GNU Toolchain for the A-profile Architecture 9.2-2019.12 (arm-9.10)) 9.2.1 20191025"
-		gcc_copyright="2019"
-		datestamp="2019.12-gcc-arm-none-eabi"
-
-		binary="bin/arm-none-eabi-"
-		;;
-	gcc_arm_eabi_10)
-		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-eabi.tar.xz
-		#
-
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/"
-		gcc_filename_prefix="gcc-arm-10.2-2020.11-x86_64-arm-none-eabi"
-		gcc_banner="arm-none-eabi-gcc (GNU Toolchain for the A-profile Architecture 10.2-2020.11 (arm-10.16)) 10.2.1 20201103"
-		gcc_copyright="2020"
-		datestamp="2020.11-gcc-arm-none-eabi"
-
-		binary="bin/arm-none-eabi-"
-		;;
 	gcc_linaro_gnueabihf_4_9)
 		#
 		#https://releases.linaro.org/components/toolchain/binaries/4.9-2017.01/arm-linux-gnueabihf/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf.tar.xz
@@ -236,36 +197,35 @@ gcc_toolchain () {
 
 		binary="bin/arm-linux-gnueabihf-"
 		;;
-	gcc_arm_gnueabihf_8)
+	gcc_arm_gnueabihf_8|gcc_arm_eabi_8|gcc_8_arm)
 		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.08/gcc-arm-8.2-2018.08-x86_64-arm-linux-gnueabihf.tar.xz
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.11/gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf.tar.xz
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2019.01/gcc-arm-8.2-2019.01-x86_64-arm-linux-gnueabihf.tar.xz
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/gcc-arm-8.3-2019.03-x86_64-arm-linux-gnueabihf.tar.xz
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/8.4.0/x86_64-gcc-8.4.0-nolibc-arm-linux-gnueabi.tar.xz
 		#
 
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/"
-		gcc_filename_prefix="gcc-arm-8.3-2019.03-x86_64-arm-linux-gnueabihf"
-		gcc_banner="arm-linux-gnueabihf-gcc (GNU Toolchain for the A-profile Architecture 8.3-2019.03 (arm-rel-8.36)) 8.3.0"
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/8.4.0/"
+		gcc_filename_prefix="x86_64-gcc-8.4.0-nolibc-arm-linux-gnueabi"
+		extracted_dir="gcc-8.4.0-nolibc/arm-linux-gnueabi"
+		gcc_banner="arm-linux-gcc (GCC) 8.4.0"
 		gcc_copyright="2018"
-		datestamp="2019.03-gcc-arm-linux-gnueabihf"
+		datestamp="2018.8.4.0-arm-linux-gnueabi"
 
-		binary="bin/arm-linux-gnueabihf-"
+		binary="bin/arm-linux-gnueabi-"
 		;;
-	gcc_arm_gnueabihf_9)
+	gcc_arm_gnueabihf_9|gcc_arm_eabi_9|gcc_9_arm)
 		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/9.2-2019.12/binrel/gcc-arm-9.2-2019.12-x86_64-arm-none-linux-gnueabihf.tar.xz
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/9.3.0/x86_64-gcc-9.3.0-nolibc-arm-linux-gnueabi.tar.xz
 		#
 
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/9.2-2019.12/binrel/"
-		gcc_filename_prefix="gcc-arm-9.2-2019.12-x86_64-arm-none-linux-gnueabihf"
-		gcc_banner="arm-none-linux-gnueabihf-gcc (GNU Toolchain for the A-profile Architecture 9.2-2019.12 (arm-9.10)) 9.2.1 20191025"
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/9.3.0/"
+		gcc_filename_prefix="x86_64-gcc-9.3.0-nolibc-arm-linux-gnueabi"
+		extracted_dir="gcc-9.3.0-nolibc/arm-linux-gnueabi"
+		gcc_banner="arm-linux-gcc (GCC) 9.3.0"
 		gcc_copyright="2019"
-		datestamp="2019.12-gcc-arm-linux-gnueabihf"
+		datestamp="2019.9.3.0-arm-linux-gnueabi"
 
-		binary="bin/arm-none-linux-gnueabihf-"
+		binary="bin/arm-linux-gnueabi-"
 		;;
-	gcc_arm_gnueabihf_10|gcc_10_arm)
+	gcc_arm_gnueabihf_10|gcc_arm_eabi_10|gcc_10_arm)
 		#
 		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/10.3.0/x86_64-gcc-10.3.0-nolibc-arm-linux-gnueabi.tar.xz
 		#
@@ -328,34 +288,33 @@ gcc_toolchain () {
 
 		binary="bin/aarch64-linux-gnu-"
 		;;
-	gcc_arm_aarch64_gnu_8)
+	gcc_arm_aarch64_gnu_8|gcc_8_aarch64)
 		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.08/gcc-arm-8.2-2018.08-x86_64-aarch64-linux-gnu.tar.xz
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.11/gcc-arm-8.2-2018.11-x86_64-aarch64-linux-gnu.tar.xz
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2019.01/gcc-arm-8.2-2019.01-x86_64-aarch64-linux-gnu.tar.xz
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/8.4.0/x86_64-gcc-8.4.0-nolibc-aarch64-linux.tar.gz
 		#
 
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/"
-		gcc_filename_prefix="gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu"
-		gcc_banner="aarch64-linux-gnu-gcc (GNU Toolchain for the A-profile Architecture 8.3-2019.03 (arm-rel-8.36)) 8.3.0"
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/8.4.0/"
+		gcc_filename_prefix="x86_64-gcc-8.4.0-nolibc-aarch64-linux"
+		extracted_dir="gcc-8.4.0-nolibc/aarch64-linux"
+		gcc_banner="aarch64-linux-gcc (GCC) 8.4.0"
 		gcc_copyright="2018"
-		datestamp="2019.03-gcc-aarch64-linux-gnu"
+		datestamp="2018.8.4.0-aarch64-linux-gcc"
 
-		binary="bin/aarch64-linux-gnu-"
+		binary="bin/aarch64-linux-"
 		;;
-	gcc_arm_aarch64_gnu_9)
+	gcc_arm_aarch64_gnu_9|gcc_9_aarch64)
 		#
-		#https://developer.arm.com/-/media/Files/downloads/gnu-a/9.2-2019.12/binrel/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu.tar.xz
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/9.3.0/x86_64-gcc-9.3.0-nolibc-aarch64-linux.tar.xz
 		#
 
-		gcc_html_path="https://developer.arm.com/-/media/Files/downloads/gnu-a/9.2-2019.12/binrel/"
-		gcc_filename_prefix="gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu"
-		gcc_banner="aarch64-none-linux-gnu-gcc (GNU Toolchain for the A-profile Architecture 9.2-2019.12 (arm-9.10)) 9.2.1 20191025"
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/9.3.0/"
+		gcc_filename_prefix="x86_64-gcc-9.3.0-nolibc-aarch64-linux"
+		extracted_dir="gcc-9.3.0-nolibc/aarch64-linux"
+		gcc_banner="aarch64-linux-gcc (GCC) 9.3.0"
 		gcc_copyright="2019"
-		datestamp="2019.12-gcc-aarch64-linux-gnu"
+		datestamp="2019.9.3.0-aarch64-linux-gcc"
 
-		binary="bin/aarch64-none-linux-gnu-"
+		binary="bin/aarch64-linux-"
 		;;
 	gcc_arm_aarch64_gnu_10|gcc_10_aarch64)
 		#

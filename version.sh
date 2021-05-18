@@ -16,15 +16,12 @@ DEBARCH=armhf
 #toolchain="gcc_linaro_eabi_5"
 #toolchain="gcc_linaro_eabi_6"
 #toolchain="gcc_linaro_eabi_7"
-#toolchain="gcc_arm_eabi_8"
-#toolchain="gcc_arm_eabi_9"
-#toolchain="gcc_arm_eabi_10"
 #toolchain="gcc_linaro_gnueabihf_4_9"
 #toolchain="gcc_linaro_gnueabihf_5"
 #toolchain="gcc_linaro_gnueabihf_6"
 #toolchain="gcc_linaro_gnueabihf_7"
-#toolchain="gcc_arm_gnueabihf_8"
-#toolchain="gcc_arm_gnueabihf_9"
+#toolchain="gcc_8_arm"
+#toolchain="gcc_9_arm"
 toolchain="gcc_10_arm"
 #arm64
 #KERNEL_ARCH=arm64
@@ -44,10 +41,10 @@ toolchain="gcc_10_arm"
 
 #Kernel
 KERNEL_REL=5.12
-KERNEL_TAG=${KERNEL_REL}.3
+KERNEL_TAG=${KERNEL_REL}.4
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}13
+BUILD=${build_prefix}13.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
