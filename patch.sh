@@ -303,14 +303,6 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
-dtb_makefile_append_omap4 () {
-	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
-dtb_makefile_append_am5 () {
-	sed -i -e 's:am57xx-beagle-x15.dtb \\:am57xx-beagle-x15.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -340,9 +332,6 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
-
-		#device="am335x-abbbi.dtb" ; dtb_makefile_append
 #		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 #		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
@@ -385,7 +374,7 @@ local_patch () {
 wpanusb
 #rt
 ti_pm_firmware
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -453,23 +442,6 @@ backports () {
 #	else
 #		patch_backports
 	fi
-
-	backport_tag="v5.12"
-
-	subsystem="spidev"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/spi/spidev.c ./drivers/spi/spidev.c
-
-		post_backports
-		exit 2
-#	else
-#		patch_backports
-	fi
-
-	${git} "${DIR}/patches/backports/spidev/0002-spidev-Add-Micron-SPI-NOR-Authenta-device-compatible.patch"
 }
 
 reverts () {
@@ -507,10 +479,10 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 #	dir 'fixes'
+	dir 'drivers/pinctrl'
 }
 
 soc () {
-#	dir 'soc/imx/udoo'
 #	dir 'soc/imx/imx7'
 
 #	dir 'soc/ti/panda'
