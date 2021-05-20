@@ -1,0 +1,232 @@
+From dad51f296ef62582ce6ff8a4ab3d91221da4d891 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Thu, 20 May 2021 11:17:27 -0500
+Subject: [PATCH 2/2] cleanup brcmfmac patchset
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ .../broadcom/brcm80211/brcmfmac/bus.h         |  3 --
+ .../broadcom/brcm80211/brcmfmac/fwsignal.c    | 45 -------------------
+ .../broadcom/brcm80211/brcmfmac/sdio.c        |  3 --
+ .../broadcom/brcm80211/brcmfmac/usb.c         |  7 ---
+ include/uapi/linux/nl80211.h                  | 39 ++++++++++++++++
+ 5 files changed, 39 insertions(+), 58 deletions(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h
+index ea0524b8f4e6..695b14506143 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h
+@@ -158,9 +158,6 @@ struct brcmf_bus {
+ 
+ 	const struct brcmf_bus_ops *ops;
+ 	struct brcmf_bus_msgbuf *msgbuf;
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+-	bool allow_skborphan;
+-#endif
+ };
+ 
+ /*
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwsignal.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwsignal.c
+index c29eb944f931..8dfa5ccb55c7 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwsignal.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwsignal.c
+@@ -496,9 +496,6 @@ struct brcmf_fws_info {
+ 	bool creditmap_received;
+ 	u8 mode;
+ 	bool avoid_queueing;
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+-	int fifo_init_credit[BRCMF_FWS_FIFO_COUNT];
+-#endif
+ };
+ 
+ /*
+@@ -1628,9 +1625,6 @@ static int brcmf_fws_notify_credit_map(struct brcmf_if *ifp,
+ 		WARN_ONCE(fws->fifo_credit[i] < 0,
+ 			  "fifo_credit[%d] is negative(%d)\n", i,
+ 			  fws->fifo_credit[i]);
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+-		fws->fifo_init_credit[i] = fws->fifo_credit[i];
+-#endif
+ 	}
+ 	brcmf_fws_schedule_deq(fws);
+ 	brcmf_fws_unlock(fws);
+@@ -2208,38 +2202,6 @@ void brcmf_fws_del_interface(struct brcmf_if *ifp)
+ 	brcmf_fws_unlock(fws);
+ }
+ 
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+-static bool brcmf_fws_ismultistream(struct brcmf_fws_info *fws)
+-{
+-	bool ret = false;
+-	u8 credit_usage = 0;
+-
+-	/* Check only for BE, VI and VO traffic */
+-	u32 delay_map = fws->fifo_delay_map &
+-		((1 << BRCMF_FWS_FIFO_AC_BE) |
+-		 (1 << BRCMF_FWS_FIFO_AC_VI) |
+-		 (1 << BRCMF_FWS_FIFO_AC_VO));
+-
+-	if (hweight_long(delay_map) > 1) {
+-		ret = true;
+-	} else {
+-		if (fws->fifo_credit[BRCMF_FWS_FIFO_AC_BE] <
+-			fws->fifo_init_credit[BRCMF_FWS_FIFO_AC_BE])
+-			credit_usage++;
+-		if (fws->fifo_credit[BRCMF_FWS_FIFO_AC_VI] <
+-			fws->fifo_init_credit[BRCMF_FWS_FIFO_AC_VI])
+-			credit_usage++;
+-		if (fws->fifo_credit[BRCMF_FWS_FIFO_AC_VO] <
+-			fws->fifo_init_credit[BRCMF_FWS_FIFO_AC_VO])
+-			credit_usage++;
+-
+-		if (credit_usage > 1)
+-			ret = true;
+-	}
+-	return ret;
+-}
+-#endif
+-
+ static void brcmf_fws_dequeue_worker(struct work_struct *worker)
+ {
+ 	struct brcmf_fws_info *fws;
+@@ -2253,13 +2215,6 @@ static void brcmf_fws_dequeue_worker(struct work_struct *worker)
+ 	fws = container_of(worker, struct brcmf_fws_info, fws_dequeue_work);
+ 	drvr = fws->drvr;
+ 
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+-	if (brcmf_fws_ismultistream(fws))
+-		drvr->bus_if->allow_skborphan = false;
+-	else
+-		drvr->bus_if->allow_skborphan = true;
+-#endif
+-
+ 	brcmf_fws_lock(fws);
+ 	for (fifo = BRCMF_FWS_FIFO_BCMC; fifo >= 0 && !fws->bus_flow_blocked;
+ 	     fifo--) {
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
+index d85f1aa671e8..8095ad6a453f 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
+@@ -2355,9 +2355,6 @@ static uint brcmf_sdio_sendfromq(struct brcmf_sdio *bus, uint maxframes)
+ 					      &prec_out);
+ 			if (pkt == NULL)
+ 				break;
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+-			skb_orphan(pkt);
+-#endif
+ 			__skb_queue_tail(&pktq, pkt);
+ 		}
+ 		spin_unlock_bh(&bus->txq_lock);
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
+index 24d3897058e2..a1bb13959503 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
+@@ -638,10 +638,6 @@ static int brcmf_usb_tx(struct device *dev, struct sk_buff *skb)
+ 		goto fail;
+ 	}
+ 
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+-	if (devinfo->bus_pub.bus->allow_skborphan)
+-		skb_orphan(skb);
+-#endif
+ 	req->skb = skb;
+ 	req->devinfo = devinfo;
+ 	usb_fill_bulk_urb(req->urb, devinfo->usbdev, devinfo->tx_pipe,
+@@ -1289,9 +1285,6 @@ static int brcmf_usb_probe_cb(struct brcmf_usbdev_info *devinfo)
+ 	bus->ops = &brcmf_usb_bus_ops;
+ 	bus->proto_type = BRCMF_PROTO_BCDC;
+ 	bus->always_use_fws_queue = true;
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+-	bus->allow_skborphan = true;
+-#endif
+ #ifdef CONFIG_PM
+ 	bus->wowl_supported = true;
+ #endif
+diff --git a/include/uapi/linux/nl80211.h b/include/uapi/linux/nl80211.h
+index b660fb0e251b..401b9df62325 100644
+--- a/include/uapi/linux/nl80211.h
++++ b/include/uapi/linux/nl80211.h
+@@ -256,6 +256,22 @@
+  * password for SAE should be specified using %NL80211_ATTR_SAE_PASSWORD in
+  * %NL80211_CMD_CONNECT and %NL80211_CMD_START_AP for station and AP mode
+  * respectively.
++  */
++
++/**
++ * DOC: VLAN offload support for setting group keys and binding STAs to VLANs
++ *
++ * By setting @NL80211_EXT_FEATURE_VLAN_OFFLOAD flag drivers can indicate they
++ * support offloading VLAN functionality in a manner where the driver exposes a
++ * single netdev that uses VLAN tagged frames and separate VLAN-specific netdevs
++ * can then be added using RTM_NEWLINK/IFLA_VLAN_ID similarly to the Ethernet
++ * case. Frames received from stations that are not assigned to any VLAN are
++ * delivered on the main netdev and frames to such stations can be sent through
++ * that main netdev.
++ *
++ * %NL80211_CMD_NEW_KEY (for group keys), %NL80211_CMD_NEW_STATION, and
++ * %NL80211_CMD_SET_STATION will optionally specify vlan_id using
++ * %NL80211_ATTR_VLAN_ID.
+  */
+ 
+ /**
+@@ -581,6 +597,14 @@
+  *	set of BSSID,frequency parameters is used (i.e., either the enforcing
+  *	%NL80211_ATTR_MAC,%NL80211_ATTR_WIPHY_FREQ or the less strict
+  *	%NL80211_ATTR_MAC_HINT and %NL80211_ATTR_WIPHY_FREQ_HINT).
++ *	Driver shall not modify the IEs specified through %NL80211_ATTR_IE if
++ *	%NL80211_ATTR_MAC is included. However, if %NL80211_ATTR_MAC_HINT is
++ *	included, these IEs through %NL80211_ATTR_IE are specified by the user
++ *	space based on the best possible BSS selected. Thus, if the driver ends
++ *	up selecting a different BSS, it can modify these IEs accordingly (e.g.
++ *	userspace asks the driver to perform PMKSA caching with BSS1 and the
++ *	driver ends up selecting BSS2 with different PMKSA cache entry; RSNIE
++ *	has to get updated with the apt PMKID).
+  *	%NL80211_ATTR_PREV_BSSID can be used to request a reassociation within
+  *	the ESS in case the device is already associated and an association with
+  *	a different BSS is desired.
+@@ -2387,6 +2411,9 @@ enum nl80211_commands {
+  *	the allowed channel bandwidth configurations. (u8 attribute)
+  *	Defined by IEEE P802.11ay/D4.0 section 9.4.2.251, Table 13.
+  *
++ * @NL80211_ATTR_VLAN_ID: VLAN ID (1..4094) for the station and VLAN group key
++ *	(u16).
++ *
+  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
+  * @NL80211_ATTR_MAX: highest attribute number currently defined
+  * @__NL80211_ATTR_AFTER_LAST: internal use
+@@ -2849,6 +2876,8 @@ enum nl80211_attrs {
+ 	NL80211_ATTR_WIPHY_EDMG_CHANNELS,
+ 	NL80211_ATTR_WIPHY_EDMG_BW_CONFIG,
+ 
++	NL80211_ATTR_VLAN_ID,
++
+ 	/* add attributes here, update the policy in nl80211.c */
+ 
+ 	__NL80211_ATTR_AFTER_LAST,
+@@ -5503,6 +5532,14 @@ enum nl80211_feature_flags {
+  *	handshake with PSK in AP mode (PSK is passed as part of the start AP
+  *	command).
+  *
++ * @NL80211_EXT_FEATURE_VLAN_OFFLOAD: The driver supports a single netdev
++ *	with VLAN tagged frames and separate VLAN-specific netdevs added using
++ *	vconfig similarly to the Ethernet case.
++ *
++ * @NL80211_EXT_FEATURE_AQL: The driver supports the Airtime Queue Limit (AQL)
++ *	feature, which prevents bufferbloat by using the expected transmission
++ *	time to limit the amount of data buffered in the hardware.
++ *
+  * @NUM_NL80211_EXT_FEATURES: number of extended features.
+  * @MAX_NL80211_EXT_FEATURES: highest extended feature index.
+  */
+@@ -5549,6 +5586,8 @@ enum nl80211_ext_feature_index {
+ 	NL80211_EXT_FEATURE_STA_TX_PWR,
+ 	NL80211_EXT_FEATURE_SAE_OFFLOAD,
+ 	NL80211_EXT_FEATURE_4WAY_HANDSHAKE_AP_PSK,
++	NL80211_EXT_FEATURE_VLAN_OFFLOAD,
++	NL80211_EXT_FEATURE_AQL,
+ 
+ 	/* add new features before the definition below */
+ 	NUM_NL80211_EXT_FEATURES,
+-- 
+2.30.2
+
