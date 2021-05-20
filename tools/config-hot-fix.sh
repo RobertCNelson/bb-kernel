@@ -77,4 +77,12 @@ config="CONFIG_SERIAL_SC16IS7XX_I2C" ; config_disable
 config="CONFIG_SERIAL_SC16IS7XX_SPI" ; config_disable
 config="CONFIG_SERIAL_DEV_CTRL_TTYPORT" ; config_enable
 
+#WIMAX going to be removed soon...
+config="CONFIG_WIMAX" ; config_disable
+config="CONFIG_WIMAX_I2400M" ; config_disable
+config="CONFIG_WIMAX_I2400M_USB" ; config_disable
+
+#PHY: CONFIG_DP83867_PHY
+config="CONFIG_DP83867_PHY" ; config_enable
+
 cd ${DIR}/
