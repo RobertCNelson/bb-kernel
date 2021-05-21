@@ -259,6 +259,51 @@ rt () {
 	dir 'rt'
 }
 
+wireless_regdb () {
+	#https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+
+		cd ../
+		if [ ! -d ./wireless-regdb ] ; then
+			${git_bin} clone git://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
+			cd ./wireless-regdb
+				wireless_regdb_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./wireless-regdb || true
+			${git_bin} clone git://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
+			cd ./wireless-regdb
+				wireless_regdb_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+		cd ./KERNEL/
+
+		mkdir -p ./firmware/ || true
+		cp -v ../wireless-regdb/regulatory.db ./firmware/
+		cp -v ../wireless-regdb/regulatory.db.p7s ./firmware/
+		${git_bin} add -f ./firmware/regulatory.*
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
+
+		${git_bin} format-patch -1 -o ../patches/wireless_regdb/
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/git/WIRELESS_REGDB
+
+		rm -rf ../wireless-regdb/ || true
+
+		${git_bin} reset --hard HEAD^
+
+		start_cleanup
+
+		${git} "${DIR}/patches/wireless_regdb/0001-Add-wireless-regdb-regulatory-database-file.patch"
+
+		wdir="wireless_regdb"
+		number=1
+		cleanup
+	fi
+
+	dir 'wireless_regdb'
+}
+
 ti_pm_firmware () {
 	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
 	#regenerate="enable"
@@ -373,6 +418,7 @@ local_patch () {
 aufs
 wpanusb
 #rt
+wireless_regdb
 ti_pm_firmware
 beagleboard_dtbs
 #local_patch
@@ -495,7 +541,6 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	dir 'fixes'
-	dir 'drivers/pinctrl'
 }
 
 soc () {
@@ -514,7 +559,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.31"
+		backport_tag="v5.10.38"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
