@@ -74,16 +74,6 @@ redhat_reqs () {
 		check_rpm
 		pkg="libmpc-devel.x86_64"
 		check_rpm
-		if [ "x${ignore_32bit}" = "xfalse" ] ; then
-			pkg="ncurses-devel.i686"
-			check_rpm
-			pkg="libmpc-devel.i686"
-			check_rpm
-			pkg="libstdc++.i686"
-			check_rpm
-			pkg="zlib.i686"
-			check_rpm
-		fi
 	fi
 
 	if [ "${rpm_pkgs}" ] ; then
@@ -167,7 +157,6 @@ debian_regs () {
 	pkg="u-boot-tools"
 	check_dpkg
 
-	unset warn_dpkg_ia32
 	unset stop_pkg_search
 	#lsb_release might not be installed...
 	if [ "$(which lsb_release)" ] ; then
@@ -513,30 +502,6 @@ debian_regs () {
 			pkg="libexpat1-dev:${deb_arch}"
 			check_dpkg
 		fi
-
-		#pkg: ia32-libs
-		if [ "x${deb_arch}" = "xamd64" ] ; then
-			unset dpkg_multiarch
-			if [ "x${ignore_32bit}" = "xfalse" ] ; then
-				pkg="libc6:i386"
-				check_dpkg
-				pkg="libncurses5:i386"
-				check_dpkg
-				pkg="libstdc++6:i386"
-				check_dpkg
-				pkg="zlib1g:i386"
-				check_dpkg
-				dpkg_multiarch=1
-			fi
-
-			if [ "${dpkg_multiarch}" ] ; then
-				unset check_foreign
-				check_foreign=$(LC_ALL=C dpkg --print-foreign-architectures)
-				if [ "x${check_foreign}" = "x" ] ; then
-					warn_dpkg_ia32=1
-				fi
-			fi
-		fi
 	fi
 
 	if [ "${warn_eol_distro}" ] ; then
@@ -567,9 +532,6 @@ debian_regs () {
 	if [ "${deb_pkgs}" ] ; then
 		echo "Debian/Ubuntu/Mint: missing dependencies, please install:"
 		echo "-----------------------------"
-		if [ "${warn_dpkg_ia32}" ] ; then
-			echo "sudo dpkg --add-architecture i386"
-		fi
 		echo "sudo apt-get update"
 		echo "sudo apt-get install ${deb_pkgs}"
 		echo "-----------------------------"
@@ -596,33 +558,6 @@ if [  -f "${DIR}/.yakbuild" ] ; then
 fi
 
 ARCH=$(uname -m)
-
-ignore_32bit="false"
-if [ "x${ARCH}" = "xx86_64" ] ; then
-	case "${toolchain}" in
-	gcc_linaro_eabi_5|gcc_linaro_gnueabihf_5|gcc_linaro_aarch64_gnu_5)
-		ignore_32bit="true"
-		;;
-	gcc_linaro_eabi_6|gcc_linaro_gnueabihf_6|gcc_linaro_aarch64_gnu_6)
-		ignore_32bit="true"
-		;;
-	gcc_linaro_eabi_7|gcc_linaro_gnueabihf_7|gcc_linaro_aarch64_gnu_7)
-		ignore_32bit="true"
-		;;
-	gcc_arm_eabi_8|gcc_arm_gnueabihf_8|gcc_arm_aarch64_gnu_8|gcc_8_arm|gcc_8_aarch64|gcc_8_riscv64)
-		ignore_32bit="true"
-		;;
-	gcc_arm_eabi_9|gcc_arm_gnueabihf_9|gcc_arm_aarch64_gnu_9|gcc_9_arm|gcc_9_aarch64|gcc_9_riscv64)
-		ignore_32bit="true"
-		;;
-	gcc_arm_eabi_10|gcc_arm_gnueabihf_10|gcc_arm_aarch64_gnu_10|gcc_10_arm|gcc_10_aarch64|gcc_10_riscv64)
-		ignore_32bit="true"
-		;;
-	*)
-		ignore_32bit="false"
-		;;
-	esac
-fi
 
 git_bin=$(which git)
 

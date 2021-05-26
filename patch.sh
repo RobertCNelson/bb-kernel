@@ -392,14 +392,6 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
-dtb_makefile_append_omap4 () {
-	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
-dtb_makefile_append_am5 () {
-	sed -i -e 's:am57xx-beagle-x15.dtb \\:am57xx-beagle-x15.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -428,8 +420,6 @@ beagleboard_dtbs () {
 		mkdir -p arch/arm/boot/dts/overlays/
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
-
-		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
 		device="am335x-abbbi.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
@@ -514,7 +504,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12.5"
+	backport_tag="v5.12.7"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -530,7 +520,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12.5"
+	backport_tag="v5.12.7"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -772,7 +762,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.38"
+		backport_tag="v5.10.40"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
