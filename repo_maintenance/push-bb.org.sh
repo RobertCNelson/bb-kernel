@@ -46,8 +46,8 @@ cat_files () {
 		cat ../patches/git/TI_AMX3_CM3 >> ${wfile}
 	fi
 
-	if [ -f ../patches/git/WIREGUARD ] ; then
-		cat ../patches/git/WIREGUARD >> ${wfile}
+	if [ -f ../patches/git/WPANUSB ] ; then
+		cat ../patches/git/WPANUSB >> ${wfile}
 	fi
 
 	if [ -f ../patches/git/WIRELESS_REGDB ] ; then
