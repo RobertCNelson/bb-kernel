@@ -303,6 +303,51 @@ rt () {
 	dir 'rt'
 }
 
+wireless_regdb () {
+	#https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+
+		cd ../
+		if [ ! -d ./wireless-regdb ] ; then
+			${git_bin} clone git://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
+			cd ./wireless-regdb
+				wireless_regdb_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./wireless-regdb || true
+			${git_bin} clone git://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
+			cd ./wireless-regdb
+				wireless_regdb_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+		cd ./KERNEL/
+
+		mkdir -p ./firmware/ || true
+		cp -v ../wireless-regdb/regulatory.db ./firmware/
+		cp -v ../wireless-regdb/regulatory.db.p7s ./firmware/
+		${git_bin} add -f ./firmware/regulatory.*
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
+
+		${git_bin} format-patch -1 -o ../patches/wireless_regdb/
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/git/WIRELESS_REGDB
+
+		rm -rf ../wireless-regdb/ || true
+
+		${git_bin} reset --hard HEAD^
+
+		start_cleanup
+
+		${git} "${DIR}/patches/wireless_regdb/0001-Add-wireless-regdb-regulatory-database-file.patch"
+
+		wdir="wireless_regdb"
+		number=1
+		cleanup
+	fi
+
+	dir 'wireless_regdb'
+}
+
 ti_pm_firmware () {
 	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
 	#regenerate="enable"
@@ -347,14 +392,6 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
-dtb_makefile_append_omap4 () {
-	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
-dtb_makefile_append_am5 () {
-	sed -i -e 's:am57xx-beagle-x15.dtb \\:am57xx-beagle-x15.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
-}
-
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -383,8 +420,6 @@ beagleboard_dtbs () {
 		mkdir -p arch/arm/boot/dts/overlays/
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
-
-		device="omap4-panda-es-b3.dtb" ; dtb_makefile_append_omap4
 
 		device="am335x-abbbi.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
@@ -429,6 +464,7 @@ aufs
 can_isotp
 wpanusb
 #rt
+wireless_regdb
 ti_pm_firmware
 beagleboard_dtbs
 #local_patch
@@ -468,7 +504,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12.5"
+	backport_tag="v5.12.7"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -484,7 +520,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12.5"
+	backport_tag="v5.12.7"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -524,6 +560,7 @@ backports () {
 
 		cp -rv ~/linux-src/drivers/net/wireless/broadcom/brcm80211/* ./drivers/net/wireless/broadcom/brcm80211/
 		cp -v ~/linux-src/include/uapi/linux/nl80211.h ./include/uapi/linux/nl80211.h
+		cp -v ~/linux-src/include/linux/mmc/sdio_ids.h ./include/linux/mmc/sdio_ids.h
 
 		post_backports
 
@@ -741,7 +778,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.38"
+		backport_tag="v5.10.40"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
