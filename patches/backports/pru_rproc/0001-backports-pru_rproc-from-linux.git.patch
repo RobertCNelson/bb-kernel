@@ -1,0 +1,2775 @@
+From def9b7fac843dbb6d073c96a7194aa933ed806d0 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Fri, 28 May 2021 16:28:08 -0500
+Subject: [PATCH] backports: pru_rproc: from: linux.git
+
+Reference: v5.13-rc3
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/remoteproc/Kconfig                 |   7 +-
+ drivers/remoteproc/imx_rproc.c             | 322 ++++++++++-
+ drivers/remoteproc/ingenic_rproc.c         |   2 +-
+ drivers/remoteproc/keystone_remoteproc.c   |   2 +-
+ drivers/remoteproc/mtk_scp.c               |   6 +-
+ drivers/remoteproc/omap_remoteproc.c       |   2 +-
+ drivers/remoteproc/pru_rproc.c             |   6 +-
+ drivers/remoteproc/qcom_q6v5_adsp.c        |   2 +-
+ drivers/remoteproc/qcom_q6v5_mss.c         |   8 +-
+ drivers/remoteproc/qcom_q6v5_pas.c         |  19 +-
+ drivers/remoteproc/qcom_q6v5_wcss.c        | 599 +++++++++++++++++++--
+ drivers/remoteproc/qcom_wcnss.c            |  10 +-
+ drivers/remoteproc/remoteproc_cdev.c       |  21 +-
+ drivers/remoteproc/remoteproc_core.c       | 337 ++++++++++--
+ drivers/remoteproc/remoteproc_coredump.c   |   8 +-
+ drivers/remoteproc/remoteproc_debugfs.c    |   2 +-
+ drivers/remoteproc/remoteproc_elf_loader.c |  21 +-
+ drivers/remoteproc/remoteproc_internal.h   |  12 +-
+ drivers/remoteproc/remoteproc_sysfs.c      |  21 +-
+ drivers/remoteproc/st_slim_rproc.c         |   2 +-
+ drivers/remoteproc/stm32_rproc.c           | 205 +++----
+ drivers/remoteproc/ti_k3_dsp_remoteproc.c  |   2 +-
+ drivers/remoteproc/ti_k3_r5_remoteproc.c   |   2 +-
+ drivers/remoteproc/wkup_m3_rproc.c         |   2 +-
+ include/linux/remoteproc.h                 |  25 +-
+ 25 files changed, 1395 insertions(+), 250 deletions(-)
+
+diff --git a/drivers/remoteproc/Kconfig b/drivers/remoteproc/Kconfig
+index 15d1574d129b..e68fcedc999c 100644
+--- a/drivers/remoteproc/Kconfig
++++ b/drivers/remoteproc/Kconfig
+@@ -24,11 +24,12 @@ config REMOTEPROC_CDEV
+ 	  It's safe to say N if you don't want to use this interface.
+ 
+ config IMX_REMOTEPROC
+-	tristate "IMX6/7 remoteproc support"
++	tristate "i.MX remoteproc support"
+ 	depends on ARCH_MXC
++	select MAILBOX
+ 	help
+-	  Say y here to support iMX's remote processors (Cortex M4
+-	  on iMX7D) via the remote processor framework.
++	  Say y here to support iMX's remote processors via the remote
++	  processor framework.
+ 
+ 	  It's safe to say N here.
+ 
+diff --git a/drivers/remoteproc/imx_rproc.c b/drivers/remoteproc/imx_rproc.c
+index 8957ed271d20..d6338872c6db 100644
+--- a/drivers/remoteproc/imx_rproc.c
++++ b/drivers/remoteproc/imx_rproc.c
+@@ -7,13 +7,18 @@
+ #include <linux/err.h>
+ #include <linux/interrupt.h>
+ #include <linux/kernel.h>
++#include <linux/mailbox_client.h>
+ #include <linux/mfd/syscon.h>
+ #include <linux/module.h>
+ #include <linux/of_address.h>
++#include <linux/of_reserved_mem.h>
+ #include <linux/of_device.h>
+ #include <linux/platform_device.h>
+ #include <linux/regmap.h>
+ #include <linux/remoteproc.h>
++#include <linux/workqueue.h>
++
++#include "remoteproc_internal.h"
+ 
+ #define IMX7D_SRC_SCR			0x0C
+ #define IMX7D_ENABLE_M4			BIT(3)
+@@ -43,7 +48,7 @@
+ 					 | IMX6SX_SW_M4C_NON_SCLR_RST \
+ 					 | IMX6SX_SW_M4C_RST)
+ 
+-#define IMX7D_RPROC_MEM_MAX		8
++#define IMX_RPROC_MEM_MAX		32
+ 
+ /**
+  * struct imx_rproc_mem - slim internal memory structure
+@@ -83,8 +88,42 @@ struct imx_rproc {
+ 	struct regmap			*regmap;
+ 	struct rproc			*rproc;
+ 	const struct imx_rproc_dcfg	*dcfg;
+-	struct imx_rproc_mem		mem[IMX7D_RPROC_MEM_MAX];
++	struct imx_rproc_mem		mem[IMX_RPROC_MEM_MAX];
+ 	struct clk			*clk;
++	struct mbox_client		cl;
++	struct mbox_chan		*tx_ch;
++	struct mbox_chan		*rx_ch;
++	struct work_struct		rproc_work;
++	struct workqueue_struct		*workqueue;
++	void __iomem			*rsc_table;
++};
++
++static const struct imx_rproc_att imx_rproc_att_imx8mq[] = {
++	/* dev addr , sys addr  , size	    , flags */
++	/* TCML - alias */
++	{ 0x00000000, 0x007e0000, 0x00020000, 0 },
++	/* OCRAM_S */
++	{ 0x00180000, 0x00180000, 0x00008000, 0 },
++	/* OCRAM */
++	{ 0x00900000, 0x00900000, 0x00020000, 0 },
++	/* OCRAM */
++	{ 0x00920000, 0x00920000, 0x00020000, 0 },
++	/* QSPI Code - alias */
++	{ 0x08000000, 0x08000000, 0x08000000, 0 },
++	/* DDR (Code) - alias */
++	{ 0x10000000, 0x80000000, 0x0FFE0000, 0 },
++	/* TCML */
++	{ 0x1FFE0000, 0x007E0000, 0x00020000, ATT_OWN },
++	/* TCMU */
++	{ 0x20000000, 0x00800000, 0x00020000, ATT_OWN },
++	/* OCRAM_S */
++	{ 0x20180000, 0x00180000, 0x00008000, ATT_OWN },
++	/* OCRAM */
++	{ 0x20200000, 0x00900000, 0x00020000, ATT_OWN },
++	/* OCRAM */
++	{ 0x20220000, 0x00920000, 0x00020000, ATT_OWN },
++	/* DDR (Data) */
++	{ 0x40000000, 0x40000000, 0x80000000, 0 },
+ };
+ 
+ static const struct imx_rproc_att imx_rproc_att_imx7d[] = {
+@@ -137,6 +176,15 @@ static const struct imx_rproc_att imx_rproc_att_imx6sx[] = {
+ 	{ 0x80000000, 0x80000000, 0x60000000, 0 },
+ };
+ 
++static const struct imx_rproc_dcfg imx_rproc_cfg_imx8mq = {
++	.src_reg	= IMX7D_SRC_SCR,
++	.src_mask	= IMX7D_M4_RST_MASK,
++	.src_start	= IMX7D_M4_START,
++	.src_stop	= IMX7D_M4_STOP,
++	.att		= imx_rproc_att_imx8mq,
++	.att_size	= ARRAY_SIZE(imx_rproc_att_imx8mq),
++};
++
+ static const struct imx_rproc_dcfg imx_rproc_cfg_imx7d = {
+ 	.src_reg	= IMX7D_SRC_SCR,
+ 	.src_mask	= IMX7D_M4_RST_MASK,
+@@ -208,7 +256,7 @@ static int imx_rproc_da_to_sys(struct imx_rproc *priv, u64 da,
+ 	return -ENOENT;
+ }
+ 
+-static void *imx_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *imx_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct imx_rproc *priv = rproc->priv;
+ 	void *va = NULL;
+@@ -225,7 +273,7 @@ static void *imx_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
+ 	if (imx_rproc_da_to_sys(priv, da, len, &sys))
+ 		return NULL;
+ 
+-	for (i = 0; i < IMX7D_RPROC_MEM_MAX; i++) {
++	for (i = 0; i < IMX_RPROC_MEM_MAX; i++) {
+ 		if (sys >= priv->mem[i].sys_addr && sys + len <
+ 		    priv->mem[i].sys_addr +  priv->mem[i].size) {
+ 			unsigned int offset = sys - priv->mem[i].sys_addr;
+@@ -241,10 +289,143 @@ static void *imx_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
+ 	return va;
+ }
+ 
++static int imx_rproc_mem_alloc(struct rproc *rproc,
++			       struct rproc_mem_entry *mem)
++{
++	struct device *dev = rproc->dev.parent;
++	void *va;
++
++	dev_dbg(dev, "map memory: %p+%zx\n", &mem->dma, mem->len);
++	va = ioremap_wc(mem->dma, mem->len);
++	if (IS_ERR_OR_NULL(va)) {
++		dev_err(dev, "Unable to map memory region: %p+%zx\n",
++			&mem->dma, mem->len);
++		return -ENOMEM;
++	}
++
++	/* Update memory entry va */
++	mem->va = va;
++
++	return 0;
++}
++
++static int imx_rproc_mem_release(struct rproc *rproc,
++				 struct rproc_mem_entry *mem)
++{
++	dev_dbg(rproc->dev.parent, "unmap memory: %pa\n", &mem->dma);
++	iounmap(mem->va);
++
++	return 0;
++}
++
++static int imx_rproc_prepare(struct rproc *rproc)
++{
++	struct imx_rproc *priv = rproc->priv;
++	struct device_node *np = priv->dev->of_node;
++	struct of_phandle_iterator it;
++	struct rproc_mem_entry *mem;
++	struct reserved_mem *rmem;
++	u32 da;
++
++	/* Register associated reserved memory regions */
++	of_phandle_iterator_init(&it, np, "memory-region", NULL, 0);
++	while (of_phandle_iterator_next(&it) == 0) {
++		/*
++		 * Ignore the first memory region which will be used vdev buffer.
++		 * No need to do extra handlings, rproc_add_virtio_dev will handle it.
++		 */
++		if (!strcmp(it.node->name, "vdev0buffer"))
++			continue;
++
++		rmem = of_reserved_mem_lookup(it.node);
++		if (!rmem) {
++			dev_err(priv->dev, "unable to acquire memory-region\n");
++			return -EINVAL;
++		}
++
++		/* No need to translate pa to da, i.MX use same map */
++		da = rmem->base;
++
++		/* Register memory region */
++		mem = rproc_mem_entry_init(priv->dev, NULL, (dma_addr_t)rmem->base, rmem->size, da,
++					   imx_rproc_mem_alloc, imx_rproc_mem_release,
++					   it.node->name);
++
++		if (mem)
++			rproc_coredump_add_segment(rproc, da, rmem->size);
++		else
++			return -ENOMEM;
++
++		rproc_add_carveout(rproc, mem);
++	}
++
++	return  0;
++}
++
++static int imx_rproc_parse_fw(struct rproc *rproc, const struct firmware *fw)
++{
++	int ret;
++
++	ret = rproc_elf_load_rsc_table(rproc, fw);
++	if (ret)
++		dev_info(&rproc->dev, "No resource table in elf\n");
++
++	return 0;
++}
++
++static void imx_rproc_kick(struct rproc *rproc, int vqid)
++{
++	struct imx_rproc *priv = rproc->priv;
++	int err;
++	__u32 mmsg;
++
++	if (!priv->tx_ch) {
++		dev_err(priv->dev, "No initialized mbox tx channel\n");
++		return;
++	}
++
++	/*
++	 * Send the index of the triggered virtqueue as the mu payload.
++	 * Let remote processor know which virtqueue is used.
++	 */
++	mmsg = vqid << 16;
++
++	err = mbox_send_message(priv->tx_ch, (void *)&mmsg);
++	if (err < 0)
++		dev_err(priv->dev, "%s: failed (%d, err:%d)\n",
++			__func__, vqid, err);
++}
++
++static int imx_rproc_attach(struct rproc *rproc)
++{
++	return 0;
++}
++
++static struct resource_table *imx_rproc_get_loaded_rsc_table(struct rproc *rproc, size_t *table_sz)
++{
++	struct imx_rproc *priv = rproc->priv;
++
++	/* The resource table has already been mapped in imx_rproc_addr_init */
++	if (!priv->rsc_table)
++		return NULL;
++
++	*table_sz = SZ_1K;
++	return (struct resource_table *)priv->rsc_table;
++}
++
+ static const struct rproc_ops imx_rproc_ops = {
++	.prepare	= imx_rproc_prepare,
++	.attach		= imx_rproc_attach,
+ 	.start		= imx_rproc_start,
+ 	.stop		= imx_rproc_stop,
++	.kick		= imx_rproc_kick,
+ 	.da_to_va       = imx_rproc_da_to_va,
++	.load		= rproc_elf_load_segments,
++	.parse_fw	= imx_rproc_parse_fw,
++	.find_loaded_rsc_table = rproc_elf_find_loaded_rsc_table,
++	.get_loaded_rsc_table = imx_rproc_get_loaded_rsc_table,
++	.sanity_check	= rproc_elf_sanity_check,
++	.get_boot_addr	= rproc_elf_get_boot_addr,
+ };
+ 
+ static int imx_rproc_addr_init(struct imx_rproc *priv,
+@@ -262,13 +443,13 @@ static int imx_rproc_addr_init(struct imx_rproc *priv,
+ 		if (!(att->flags & ATT_OWN))
+ 			continue;
+ 
+-		if (b >= IMX7D_RPROC_MEM_MAX)
++		if (b >= IMX_RPROC_MEM_MAX)
+ 			break;
+ 
+ 		priv->mem[b].cpu_addr = devm_ioremap(&pdev->dev,
+ 						     att->sa, att->size);
+ 		if (!priv->mem[b].cpu_addr) {
+-			dev_err(dev, "devm_ioremap_resource failed\n");
++			dev_err(dev, "failed to remap %#x bytes from %#x\n", att->size, att->sa);
+ 			return -ENOMEM;
+ 		}
+ 		priv->mem[b].sys_addr = att->sa;
+@@ -287,29 +468,115 @@ static int imx_rproc_addr_init(struct imx_rproc *priv,
+ 		struct resource res;
+ 
+ 		node = of_parse_phandle(np, "memory-region", a);
++		/* Not map vdev region */
++		if (!strcmp(node->name, "vdev"))
++			continue;
+ 		err = of_address_to_resource(node, 0, &res);
+ 		if (err) {
+ 			dev_err(dev, "unable to resolve memory region\n");
+ 			return err;
+ 		}
+ 
+-		if (b >= IMX7D_RPROC_MEM_MAX)
++		of_node_put(node);
++
++		if (b >= IMX_RPROC_MEM_MAX)
+ 			break;
+ 
+-		priv->mem[b].cpu_addr = devm_ioremap_resource(&pdev->dev, &res);
+-		if (IS_ERR(priv->mem[b].cpu_addr)) {
+-			dev_err(dev, "devm_ioremap_resource failed\n");
+-			err = PTR_ERR(priv->mem[b].cpu_addr);
+-			return err;
++		/* Not use resource version, because we might share region */
++		priv->mem[b].cpu_addr = devm_ioremap(&pdev->dev, res.start, resource_size(&res));
++		if (!priv->mem[b].cpu_addr) {
++			dev_err(dev, "failed to remap %pr\n", &res);
++			return -ENOMEM;
+ 		}
+ 		priv->mem[b].sys_addr = res.start;
+ 		priv->mem[b].size = resource_size(&res);
++		if (!strcmp(node->name, "rsc_table"))
++			priv->rsc_table = priv->mem[b].cpu_addr;
+ 		b++;
+ 	}
+ 
+ 	return 0;
+ }
+ 
++static void imx_rproc_vq_work(struct work_struct *work)
++{
++	struct imx_rproc *priv = container_of(work, struct imx_rproc,
++					      rproc_work);
++
++	rproc_vq_interrupt(priv->rproc, 0);
++	rproc_vq_interrupt(priv->rproc, 1);
++}
++
++static void imx_rproc_rx_callback(struct mbox_client *cl, void *msg)
++{
++	struct rproc *rproc = dev_get_drvdata(cl->dev);
++	struct imx_rproc *priv = rproc->priv;
++
++	queue_work(priv->workqueue, &priv->rproc_work);
++}
++
++static int imx_rproc_xtr_mbox_init(struct rproc *rproc)
++{
++	struct imx_rproc *priv = rproc->priv;
++	struct device *dev = priv->dev;
++	struct mbox_client *cl;
++	int ret;
++
++	if (!of_get_property(dev->of_node, "mbox-names", NULL))
++		return 0;
++
++	cl = &priv->cl;
++	cl->dev = dev;
++	cl->tx_block = true;
++	cl->tx_tout = 100;
++	cl->knows_txdone = false;
++	cl->rx_callback = imx_rproc_rx_callback;
++
++	priv->tx_ch = mbox_request_channel_byname(cl, "tx");
++	if (IS_ERR(priv->tx_ch)) {
++		ret = PTR_ERR(priv->tx_ch);
++		return dev_err_probe(cl->dev, ret,
++				     "failed to request tx mailbox channel: %d\n", ret);
++	}
++
++	priv->rx_ch = mbox_request_channel_byname(cl, "rx");
++	if (IS_ERR(priv->rx_ch)) {
++		mbox_free_channel(priv->tx_ch);
++		ret = PTR_ERR(priv->rx_ch);
++		return dev_err_probe(cl->dev, ret,
++				     "failed to request rx mailbox channel: %d\n", ret);
++	}
++
++	return 0;
++}
++
++static void imx_rproc_free_mbox(struct rproc *rproc)
++{
++	struct imx_rproc *priv = rproc->priv;
++
++	mbox_free_channel(priv->tx_ch);
++	mbox_free_channel(priv->rx_ch);
++}
++
++static int imx_rproc_detect_mode(struct imx_rproc *priv)
++{
++	const struct imx_rproc_dcfg *dcfg = priv->dcfg;
++	struct device *dev = priv->dev;
++	int ret;
++	u32 val;
++
++	ret = regmap_read(priv->regmap, dcfg->src_reg, &val);
++	if (ret) {
++		dev_err(dev, "Failed to read src\n");
++		return ret;
++	}
++
++	if (!(val & dcfg->src_stop))
++		priv->rproc->state = RPROC_DETACHED;
++
++	return 0;
++}
++
+ static int imx_rproc_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -347,18 +614,32 @@ static int imx_rproc_probe(struct platform_device *pdev)
+ 	priv->dev = dev;
+ 
+ 	dev_set_drvdata(dev, rproc);
++	priv->workqueue = create_workqueue(dev_name(dev));
++	if (!priv->workqueue) {
++		dev_err(dev, "cannot create workqueue\n");
++		ret = -ENOMEM;
++		goto err_put_rproc;
++	}
++
++	ret = imx_rproc_xtr_mbox_init(rproc);
++	if (ret)
++		goto err_put_wkq;
+ 
+ 	ret = imx_rproc_addr_init(priv, pdev);
+ 	if (ret) {
+ 		dev_err(dev, "failed on imx_rproc_addr_init\n");
+-		goto err_put_rproc;
++		goto err_put_mbox;
+ 	}
+ 
++	ret = imx_rproc_detect_mode(priv);
++	if (ret)
++		goto err_put_mbox;
++
+ 	priv->clk = devm_clk_get(dev, NULL);
+ 	if (IS_ERR(priv->clk)) {
+ 		dev_err(dev, "Failed to get clock\n");
+ 		ret = PTR_ERR(priv->clk);
+-		goto err_put_rproc;
++		goto err_put_mbox;
+ 	}
+ 
+ 	/*
+@@ -368,9 +649,11 @@ static int imx_rproc_probe(struct platform_device *pdev)
+ 	ret = clk_prepare_enable(priv->clk);
+ 	if (ret) {
+ 		dev_err(&rproc->dev, "Failed to enable clock\n");
+-		goto err_put_rproc;
++		goto err_put_mbox;
+ 	}
+ 
++	INIT_WORK(&priv->rproc_work, imx_rproc_vq_work);
++
+ 	ret = rproc_add(rproc);
+ 	if (ret) {
+ 		dev_err(dev, "rproc_add failed\n");
+@@ -381,6 +664,10 @@ static int imx_rproc_probe(struct platform_device *pdev)
+ 
+ err_put_clk:
+ 	clk_disable_unprepare(priv->clk);
++err_put_mbox:
++	imx_rproc_free_mbox(rproc);
++err_put_wkq:
++	destroy_workqueue(priv->workqueue);
+ err_put_rproc:
+ 	rproc_free(rproc);
+ 
+@@ -394,6 +681,7 @@ static int imx_rproc_remove(struct platform_device *pdev)
+ 
+ 	clk_disable_unprepare(priv->clk);
+ 	rproc_del(rproc);
++	imx_rproc_free_mbox(rproc);
+ 	rproc_free(rproc);
+ 
+ 	return 0;
+@@ -402,6 +690,8 @@ static int imx_rproc_remove(struct platform_device *pdev)
+ static const struct of_device_id imx_rproc_of_match[] = {
+ 	{ .compatible = "fsl,imx7d-cm4", .data = &imx_rproc_cfg_imx7d },
+ 	{ .compatible = "fsl,imx6sx-cm4", .data = &imx_rproc_cfg_imx6sx },
++	{ .compatible = "fsl,imx8mq-cm4", .data = &imx_rproc_cfg_imx8mq },
++	{ .compatible = "fsl,imx8mm-cm4", .data = &imx_rproc_cfg_imx8mq },
+ 	{},
+ };
+ MODULE_DEVICE_TABLE(of, imx_rproc_of_match);
+@@ -418,5 +708,5 @@ static struct platform_driver imx_rproc_driver = {
+ module_platform_driver(imx_rproc_driver);
+ 
+ MODULE_LICENSE("GPL v2");
+-MODULE_DESCRIPTION("IMX6SX/7D remote processor control driver");
++MODULE_DESCRIPTION("i.MX remote processor control driver");
+ MODULE_AUTHOR("Oleksij Rempel <o.rempel@pengutronix.de>");
+diff --git a/drivers/remoteproc/ingenic_rproc.c b/drivers/remoteproc/ingenic_rproc.c
+index e2618c36eaab..a356738160a4 100644
+--- a/drivers/remoteproc/ingenic_rproc.c
++++ b/drivers/remoteproc/ingenic_rproc.c
+@@ -121,7 +121,7 @@ static void ingenic_rproc_kick(struct rproc *rproc, int vqid)
+ 	writel(vqid, vpu->aux_base + REG_CORE_MSG);
+ }
+ 
+-static void *ingenic_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *ingenic_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct vpu *vpu = rproc->priv;
+ 	void __iomem *va = NULL;
+diff --git a/drivers/remoteproc/keystone_remoteproc.c b/drivers/remoteproc/keystone_remoteproc.c
+index cd266163a65f..54781f553f4e 100644
+--- a/drivers/remoteproc/keystone_remoteproc.c
++++ b/drivers/remoteproc/keystone_remoteproc.c
+@@ -246,7 +246,7 @@ static void keystone_rproc_kick(struct rproc *rproc, int vqid)
+  * can be used either by the remoteproc core for loading (when using kernel
+  * remoteproc loader), or by any rpmsg bus drivers.
+  */
+-static void *keystone_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *keystone_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct keystone_rproc *ksproc = rproc->priv;
+ 	void __iomem *va = NULL;
+diff --git a/drivers/remoteproc/mtk_scp.c b/drivers/remoteproc/mtk_scp.c
+index ce727598c41c..9679cc26895e 100644
+--- a/drivers/remoteproc/mtk_scp.c
++++ b/drivers/remoteproc/mtk_scp.c
+@@ -272,7 +272,7 @@ static int scp_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
+ 		}
+ 
+ 		/* grab the kernel address for this device address */
+-		ptr = (void __iomem *)rproc_da_to_va(rproc, da, memsz);
++		ptr = (void __iomem *)rproc_da_to_va(rproc, da, memsz, NULL);
+ 		if (!ptr) {
+ 			dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, memsz);
+ 			ret = -EINVAL;
+@@ -509,7 +509,7 @@ static void *mt8192_scp_da_to_va(struct mtk_scp *scp, u64 da, size_t len)
+ 	return NULL;
+ }
+ 
+-static void *scp_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *scp_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct mtk_scp *scp = (struct mtk_scp *)rproc->priv;
+ 
+@@ -627,7 +627,7 @@ void *scp_mapping_dm_addr(struct mtk_scp *scp, u32 mem_addr)
+ {
+ 	void *ptr;
+ 
+-	ptr = scp_da_to_va(scp->rproc, mem_addr, 0);
++	ptr = scp_da_to_va(scp->rproc, mem_addr, 0, NULL);
+ 	if (!ptr)
+ 		return ERR_PTR(-EINVAL);
+ 
+diff --git a/drivers/remoteproc/omap_remoteproc.c b/drivers/remoteproc/omap_remoteproc.c
+index d94b7391bf9d..43531caa1959 100644
+--- a/drivers/remoteproc/omap_remoteproc.c
++++ b/drivers/remoteproc/omap_remoteproc.c
+@@ -728,7 +728,7 @@ static int omap_rproc_stop(struct rproc *rproc)
+  * Return: translated virtual address in kernel memory space on success,
+  *         or NULL on failure.
+  */
+-static void *omap_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *omap_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct omap_rproc *oproc = rproc->priv;
+ 	int i;
+diff --git a/drivers/remoteproc/pru_rproc.c b/drivers/remoteproc/pru_rproc.c
+index 549ed3fed625..e5778e476245 100644
+--- a/drivers/remoteproc/pru_rproc.c
++++ b/drivers/remoteproc/pru_rproc.c
+@@ -244,8 +244,8 @@ static int pru_rproc_debug_ss_get(void *data, u64 *val)
+ 
+ 	return 0;
+ }
+-DEFINE_SIMPLE_ATTRIBUTE(pru_rproc_debug_ss_fops, pru_rproc_debug_ss_get,
+-			pru_rproc_debug_ss_set, "%llu\n");
++DEFINE_DEBUGFS_ATTRIBUTE(pru_rproc_debug_ss_fops, pru_rproc_debug_ss_get,
++			 pru_rproc_debug_ss_set, "%llu\n");
+ 
+ /*
+  * Create PRU-specific debugfs entries
+@@ -506,7 +506,7 @@ static void *pru_i_da_to_va(struct pru_rproc *pru, u32 da, size_t len)
+  * core for any PRU client drivers. The PRU Instruction RAM access is restricted
+  * only to the PRU loader code.
+  */
+-static void *pru_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *pru_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct pru_rproc *pru = rproc->priv;
+ 
+diff --git a/drivers/remoteproc/qcom_q6v5_adsp.c b/drivers/remoteproc/qcom_q6v5_adsp.c
+index e02450225e4a..8b0d8bbacd2e 100644
+--- a/drivers/remoteproc/qcom_q6v5_adsp.c
++++ b/drivers/remoteproc/qcom_q6v5_adsp.c
+@@ -281,7 +281,7 @@ static int adsp_stop(struct rproc *rproc)
+ 	return ret;
+ }
+ 
+-static void *adsp_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *adsp_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct qcom_adsp *adsp = (struct qcom_adsp *)rproc->priv;
+ 	int offset;
+diff --git a/drivers/remoteproc/qcom_q6v5_mss.c b/drivers/remoteproc/qcom_q6v5_mss.c
+index 14e0ce5f18f5..423b31dfa574 100644
+--- a/drivers/remoteproc/qcom_q6v5_mss.c
++++ b/drivers/remoteproc/qcom_q6v5_mss.c
+@@ -1679,8 +1679,10 @@ static int q6v5_probe(struct platform_device *pdev)
+ 	mba_image = desc->hexagon_mba_image;
+ 	ret = of_property_read_string_index(pdev->dev.of_node, "firmware-name",
+ 					    0, &mba_image);
+-	if (ret < 0 && ret != -EINVAL)
++	if (ret < 0 && ret != -EINVAL) {
++		dev_err(&pdev->dev, "unable to read mba firmware-name\n");
+ 		return ret;
++	}
+ 
+ 	rproc = rproc_alloc(&pdev->dev, pdev->name, &q6v5_ops,
+ 			    mba_image, sizeof(*qproc));
+@@ -1698,8 +1700,10 @@ static int q6v5_probe(struct platform_device *pdev)
+ 	qproc->hexagon_mdt_image = "modem.mdt";
+ 	ret = of_property_read_string_index(pdev->dev.of_node, "firmware-name",
+ 					    1, &qproc->hexagon_mdt_image);
+-	if (ret < 0 && ret != -EINVAL)
++	if (ret < 0 && ret != -EINVAL) {
++		dev_err(&pdev->dev, "unable to read mpss firmware-name\n");
+ 		goto free_rproc;
++	}
+ 
+ 	platform_set_drvdata(pdev, qproc);
+ 
+diff --git a/drivers/remoteproc/qcom_q6v5_pas.c b/drivers/remoteproc/qcom_q6v5_pas.c
+index e635454d6170..b921fc26cd04 100644
+--- a/drivers/remoteproc/qcom_q6v5_pas.c
++++ b/drivers/remoteproc/qcom_q6v5_pas.c
+@@ -242,7 +242,7 @@ static int adsp_stop(struct rproc *rproc)
+ 	return ret;
+ }
+ 
+-static void *adsp_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *adsp_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct qcom_adsp *adsp = (struct qcom_adsp *)rproc->priv;
+ 	int offset;
+@@ -785,6 +785,22 @@ static const struct adsp_data wcss_resource_init = {
+ 	.ssctl_id = 0x12,
+ };
+ 
++static const struct adsp_data sdx55_mpss_resource = {
++	.crash_reason_smem = 421,
++	.firmware_name = "modem.mdt",
++	.pas_id = 4,
++	.has_aggre2_clk = false,
++	.auto_boot = true,
++	.proxy_pd_names = (char*[]){
++		"cx",
++		"mss",
++		NULL
++	},
++	.ssr_name = "mpss",
++	.sysmon_name = "modem",
++	.ssctl_id = 0x22,
++};
++
+ static const struct of_device_id adsp_of_match[] = {
+ 	{ .compatible = "qcom,msm8974-adsp-pil", .data = &adsp_resource_init},
+ 	{ .compatible = "qcom,msm8996-adsp-pil", .data = &adsp_resource_init},
+@@ -797,6 +813,7 @@ static const struct of_device_id adsp_of_match[] = {
+ 	{ .compatible = "qcom,sc7180-mpss-pas", .data = &mpss_resource_init},
+ 	{ .compatible = "qcom,sdm845-adsp-pas", .data = &adsp_resource_init},
+ 	{ .compatible = "qcom,sdm845-cdsp-pas", .data = &cdsp_resource_init},
++	{ .compatible = "qcom,sdx55-mpss-pas", .data = &sdx55_mpss_resource},
+ 	{ .compatible = "qcom,sm8150-adsp-pas", .data = &sm8150_adsp_resource},
+ 	{ .compatible = "qcom,sm8150-cdsp-pas", .data = &sm8150_cdsp_resource},
+ 	{ .compatible = "qcom,sm8150-mpss-pas", .data = &mpss_resource_init},
+diff --git a/drivers/remoteproc/qcom_q6v5_wcss.c b/drivers/remoteproc/qcom_q6v5_wcss.c
+index 78ebe1168b33..20d50ec7eff1 100644
+--- a/drivers/remoteproc/qcom_q6v5_wcss.c
++++ b/drivers/remoteproc/qcom_q6v5_wcss.c
+@@ -4,13 +4,18 @@
+  * Copyright (C) 2014 Sony Mobile Communications AB
+  * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+  */
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/io.h>
+ #include <linux/iopoll.h>
+ #include <linux/kernel.h>
+ #include <linux/mfd/syscon.h>
+ #include <linux/module.h>
++#include <linux/of_address.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/platform_device.h>
+ #include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
+ #include <linux/reset.h>
+ #include <linux/soc/qcom/mdt_loader.h>
+ #include "qcom_common.h"
+@@ -24,6 +29,9 @@
+ #define Q6SS_GFMUX_CTL_REG		0x020
+ #define Q6SS_PWR_CTL_REG		0x030
+ #define Q6SS_MEM_PWR_CTL		0x0B0
++#define Q6SS_STRAP_ACC			0x110
++#define Q6SS_CGC_OVERRIDE		0x034
++#define Q6SS_BCR_REG			0x6000
+ 
+ /* AXI Halt Register Offsets */
+ #define AXI_HALTREQ_REG			0x0
+@@ -37,14 +45,19 @@
+ #define Q6SS_CORE_ARES			BIT(1)
+ #define Q6SS_BUS_ARES_ENABLE		BIT(2)
+ 
++/* Q6SS_BRC_RESET */
++#define Q6SS_BRC_BLK_ARES		BIT(0)
++
+ /* Q6SS_GFMUX_CTL */
+ #define Q6SS_CLK_ENABLE			BIT(1)
++#define Q6SS_SWITCH_CLK_SRC		BIT(8)
+ 
+ /* Q6SS_PWR_CTL */
+ #define Q6SS_L2DATA_STBY_N		BIT(18)
+ #define Q6SS_SLP_RET_N			BIT(19)
+ #define Q6SS_CLAMP_IO			BIT(20)
+ #define QDSS_BHS_ON			BIT(21)
++#define QDSS_Q6_MEMORIES		GENMASK(15, 0)
+ 
+ /* Q6SS parameters */
+ #define Q6SS_LDO_BYP		BIT(25)
+@@ -53,6 +66,7 @@
+ #define Q6SS_CLAMP_QMC_MEM		BIT(22)
+ #define HALT_CHECK_MAX_LOOPS		200
+ #define Q6SS_XO_CBCR		GENMASK(5, 3)
++#define Q6SS_SLEEP_CBCR		GENMASK(5, 2)
+ 
+ /* Q6SS config/status registers */
+ #define TCSR_GLOBAL_CFG0	0x0
+@@ -71,6 +85,25 @@
+ #define TCSR_WCSS_CLK_MASK	0x1F
+ #define TCSR_WCSS_CLK_ENABLE	0x14
+ 
++#define MAX_HALT_REG		3
++enum {
++	WCSS_IPQ8074,
++	WCSS_QCS404,
++};
++
++struct wcss_data {
++	const char *firmware_name;
++	unsigned int crash_reason_smem;
++	u32 version;
++	bool aon_reset_required;
++	bool wcss_q6_reset_required;
++	const char *ssr_name;
++	const char *sysmon_name;
++	int ssctl_id;
++	const struct rproc_ops *ops;
++	bool requires_force_stop;
++};
++
+ struct q6v5_wcss {
+ 	struct device *dev;
+ 
+@@ -82,9 +115,26 @@ struct q6v5_wcss {
+ 	u32 halt_wcss;
+ 	u32 halt_nc;
+ 
++	struct clk *xo;
++	struct clk *ahbfabric_cbcr_clk;
++	struct clk *gcc_abhs_cbcr;
++	struct clk *gcc_axim_cbcr;
++	struct clk *lcc_csr_cbcr;
++	struct clk *ahbs_cbcr;
++	struct clk *tcm_slave_cbcr;
++	struct clk *qdsp6ss_abhm_cbcr;
++	struct clk *qdsp6ss_sleep_cbcr;
++	struct clk *qdsp6ss_axim_cbcr;
++	struct clk *qdsp6ss_xo_cbcr;
++	struct clk *qdsp6ss_core_gfmux;
++	struct clk *lcc_bcr_sleep;
++	struct regulator *cx_supply;
++	struct qcom_sysmon *sysmon;
++
+ 	struct reset_control *wcss_aon_reset;
+ 	struct reset_control *wcss_reset;
+ 	struct reset_control *wcss_q6_reset;
++	struct reset_control *wcss_q6_bcr_reset;
+ 
+ 	struct qcom_q6v5 q6v5;
+ 
+@@ -93,6 +143,10 @@ struct q6v5_wcss {
+ 	void *mem_region;
+ 	size_t mem_size;
+ 
++	unsigned int crash_reason_smem;
++	u32 version;
++	bool requires_force_stop;
++
+ 	struct qcom_rproc_glink glink_subdev;
+ 	struct qcom_rproc_ssr ssr_subdev;
+ };
+@@ -237,6 +291,207 @@ static int q6v5_wcss_start(struct rproc *rproc)
+ 	return ret;
+ }
+ 
++static int q6v5_wcss_qcs404_power_on(struct q6v5_wcss *wcss)
++{
++	unsigned long val;
++	int ret, idx;
++
++	/* Toggle the restart */
++	reset_control_assert(wcss->wcss_reset);
++	usleep_range(200, 300);
++	reset_control_deassert(wcss->wcss_reset);
++	usleep_range(200, 300);
++
++	/* Enable GCC_WDSP_Q6SS_AHBS_CBCR clock */
++	ret = clk_prepare_enable(wcss->gcc_abhs_cbcr);
++	if (ret)
++		return ret;
++
++	/* Remove reset to the WCNSS QDSP6SS */
++	reset_control_deassert(wcss->wcss_q6_bcr_reset);
++
++	/* Enable Q6SSTOP_AHBFABRIC_CBCR clock */
++	ret = clk_prepare_enable(wcss->ahbfabric_cbcr_clk);
++	if (ret)
++		goto disable_gcc_abhs_cbcr_clk;
++
++	/* Enable the LCCCSR CBC clock, Q6SSTOP_Q6SSTOP_LCC_CSR_CBCR clock */
++	ret = clk_prepare_enable(wcss->lcc_csr_cbcr);
++	if (ret)
++		goto disable_ahbfabric_cbcr_clk;
++
++	/* Enable the Q6AHBS CBC, Q6SSTOP_Q6SS_AHBS_CBCR clock */
++	ret = clk_prepare_enable(wcss->ahbs_cbcr);
++	if (ret)
++		goto disable_csr_cbcr_clk;
++
++	/* Enable the TCM slave CBC, Q6SSTOP_Q6SS_TCM_SLAVE_CBCR clock */
++	ret = clk_prepare_enable(wcss->tcm_slave_cbcr);
++	if (ret)
++		goto disable_ahbs_cbcr_clk;
++
++	/* Enable the Q6SS AHB master CBC, Q6SSTOP_Q6SS_AHBM_CBCR clock */
++	ret = clk_prepare_enable(wcss->qdsp6ss_abhm_cbcr);
++	if (ret)
++		goto disable_tcm_slave_cbcr_clk;
++
++	/* Enable the Q6SS AXI master CBC, Q6SSTOP_Q6SS_AXIM_CBCR clock */
++	ret = clk_prepare_enable(wcss->qdsp6ss_axim_cbcr);
++	if (ret)
++		goto disable_abhm_cbcr_clk;
++
++	/* Enable the Q6SS XO CBC */
++	val = readl(wcss->reg_base + Q6SS_XO_CBCR);
++	val |= BIT(0);
++	writel(val, wcss->reg_base + Q6SS_XO_CBCR);
++	/* Read CLKOFF bit to go low indicating CLK is enabled */
++	ret = readl_poll_timeout(wcss->reg_base + Q6SS_XO_CBCR,
++				 val, !(val & BIT(31)), 1,
++				 HALT_CHECK_MAX_LOOPS);
++	if (ret) {
++		dev_err(wcss->dev,
++			"xo cbcr enabling timed out (rc:%d)\n", ret);
++		return ret;
++	}
++
++	writel(0, wcss->reg_base + Q6SS_CGC_OVERRIDE);
++
++	/* Enable QDSP6 sleep clock clock */
++	val = readl(wcss->reg_base + Q6SS_SLEEP_CBCR);
++	val |= BIT(0);
++	writel(val, wcss->reg_base + Q6SS_SLEEP_CBCR);
++
++	/* Enable the Enable the Q6 AXI clock, GCC_WDSP_Q6SS_AXIM_CBCR*/
++	ret = clk_prepare_enable(wcss->gcc_axim_cbcr);
++	if (ret)
++		goto disable_sleep_cbcr_clk;
++
++	/* Assert resets, stop core */
++	val = readl(wcss->reg_base + Q6SS_RESET_REG);
++	val |= Q6SS_CORE_ARES | Q6SS_BUS_ARES_ENABLE | Q6SS_STOP_CORE;
++	writel(val, wcss->reg_base + Q6SS_RESET_REG);
++
++	/* Program the QDSP6SS PWR_CTL register */
++	writel(0x01700000, wcss->reg_base + Q6SS_PWR_CTL_REG);
++
++	writel(0x03700000, wcss->reg_base + Q6SS_PWR_CTL_REG);
++
++	writel(0x03300000, wcss->reg_base + Q6SS_PWR_CTL_REG);
++
++	writel(0x033C0000, wcss->reg_base + Q6SS_PWR_CTL_REG);
++
++	/*
++	 * Enable memories by turning on the QDSP6 memory foot/head switch, one
++	 * bank at a time to avoid in-rush current
++	 */
++	for (idx = 28; idx >= 0; idx--) {
++		writel((readl(wcss->reg_base + Q6SS_MEM_PWR_CTL) |
++			(1 << idx)), wcss->reg_base + Q6SS_MEM_PWR_CTL);
++	}
++
++	writel(0x031C0000, wcss->reg_base + Q6SS_PWR_CTL_REG);
++	writel(0x030C0000, wcss->reg_base + Q6SS_PWR_CTL_REG);
++
++	val = readl(wcss->reg_base + Q6SS_RESET_REG);
++	val &= ~Q6SS_CORE_ARES;
++	writel(val, wcss->reg_base + Q6SS_RESET_REG);
++
++	/* Enable the Q6 core clock at the GFM, Q6SSTOP_QDSP6SS_GFMUX_CTL */
++	val = readl(wcss->reg_base + Q6SS_GFMUX_CTL_REG);
++	val |= Q6SS_CLK_ENABLE | Q6SS_SWITCH_CLK_SRC;
++	writel(val, wcss->reg_base + Q6SS_GFMUX_CTL_REG);
++
++	/* Enable sleep clock branch needed for BCR circuit */
++	ret = clk_prepare_enable(wcss->lcc_bcr_sleep);
++	if (ret)
++		goto disable_core_gfmux_clk;
++
++	return 0;
++
++disable_core_gfmux_clk:
++	val = readl(wcss->reg_base + Q6SS_GFMUX_CTL_REG);
++	val &= ~(Q6SS_CLK_ENABLE | Q6SS_SWITCH_CLK_SRC);
++	writel(val, wcss->reg_base + Q6SS_GFMUX_CTL_REG);
++	clk_disable_unprepare(wcss->gcc_axim_cbcr);
++disable_sleep_cbcr_clk:
++	val = readl(wcss->reg_base + Q6SS_SLEEP_CBCR);
++	val &= ~Q6SS_CLK_ENABLE;
++	writel(val, wcss->reg_base + Q6SS_SLEEP_CBCR);
++	val = readl(wcss->reg_base + Q6SS_XO_CBCR);
++	val &= ~Q6SS_CLK_ENABLE;
++	writel(val, wcss->reg_base + Q6SS_XO_CBCR);
++	clk_disable_unprepare(wcss->qdsp6ss_axim_cbcr);
++disable_abhm_cbcr_clk:
++	clk_disable_unprepare(wcss->qdsp6ss_abhm_cbcr);
++disable_tcm_slave_cbcr_clk:
++	clk_disable_unprepare(wcss->tcm_slave_cbcr);
++disable_ahbs_cbcr_clk:
++	clk_disable_unprepare(wcss->ahbs_cbcr);
++disable_csr_cbcr_clk:
++	clk_disable_unprepare(wcss->lcc_csr_cbcr);
++disable_ahbfabric_cbcr_clk:
++	clk_disable_unprepare(wcss->ahbfabric_cbcr_clk);
++disable_gcc_abhs_cbcr_clk:
++	clk_disable_unprepare(wcss->gcc_abhs_cbcr);
++
++	return ret;
++}
++
++static inline int q6v5_wcss_qcs404_reset(struct q6v5_wcss *wcss)
++{
++	unsigned long val;
++
++	writel(0x80800000, wcss->reg_base + Q6SS_STRAP_ACC);
++
++	/* Start core execution */
++	val = readl(wcss->reg_base + Q6SS_RESET_REG);
++	val &= ~Q6SS_STOP_CORE;
++	writel(val, wcss->reg_base + Q6SS_RESET_REG);
++
++	return 0;
++}
++
++static int q6v5_qcs404_wcss_start(struct rproc *rproc)
++{
++	struct q6v5_wcss *wcss = rproc->priv;
++	int ret;
++
++	ret = clk_prepare_enable(wcss->xo);
++	if (ret)
++		return ret;
++
++	ret = regulator_enable(wcss->cx_supply);
++	if (ret)
++		goto disable_xo_clk;
++
++	qcom_q6v5_prepare(&wcss->q6v5);
++
++	ret = q6v5_wcss_qcs404_power_on(wcss);
++	if (ret) {
++		dev_err(wcss->dev, "wcss clk_enable failed\n");
++		goto disable_cx_supply;
++	}
++
++	writel(rproc->bootaddr >> 4, wcss->reg_base + Q6SS_RST_EVB);
++
++	q6v5_wcss_qcs404_reset(wcss);
++
++	ret = qcom_q6v5_wait_for_start(&wcss->q6v5, 5 * HZ);
++	if (ret == -ETIMEDOUT) {
++		dev_err(wcss->dev, "start timed out\n");
++		goto disable_cx_supply;
++	}
++
++	return 0;
++
++disable_cx_supply:
++	regulator_disable(wcss->cx_supply);
++disable_xo_clk:
++	clk_disable_unprepare(wcss->xo);
++
++	return ret;
++}
++
+ static void q6v5_wcss_halt_axi_port(struct q6v5_wcss *wcss,
+ 				    struct regmap *halt_map,
+ 				    u32 offset)
+@@ -271,6 +526,70 @@ static void q6v5_wcss_halt_axi_port(struct q6v5_wcss *wcss,
+ 	regmap_write(halt_map, offset + AXI_HALTREQ_REG, 0);
+ }
+ 
++static int q6v5_qcs404_wcss_shutdown(struct q6v5_wcss *wcss)
++{
++	unsigned long val;
++	int ret;
++
++	q6v5_wcss_halt_axi_port(wcss, wcss->halt_map, wcss->halt_wcss);
++
++	/* assert clamps to avoid MX current inrush */
++	val = readl(wcss->reg_base + Q6SS_PWR_CTL_REG);
++	val |= (Q6SS_CLAMP_IO | Q6SS_CLAMP_WL | Q6SS_CLAMP_QMC_MEM);
++	writel(val, wcss->reg_base + Q6SS_PWR_CTL_REG);
++
++	/* Disable memories by turning off memory foot/headswitch */
++	writel((readl(wcss->reg_base + Q6SS_MEM_PWR_CTL) &
++		~QDSS_Q6_MEMORIES),
++		wcss->reg_base + Q6SS_MEM_PWR_CTL);
++
++	/* Clear the BHS_ON bit */
++	val = readl(wcss->reg_base + Q6SS_PWR_CTL_REG);
++	val &= ~Q6SS_BHS_ON;
++	writel(val, wcss->reg_base + Q6SS_PWR_CTL_REG);
++
++	clk_disable_unprepare(wcss->ahbfabric_cbcr_clk);
++	clk_disable_unprepare(wcss->lcc_csr_cbcr);
++	clk_disable_unprepare(wcss->tcm_slave_cbcr);
++	clk_disable_unprepare(wcss->qdsp6ss_abhm_cbcr);
++	clk_disable_unprepare(wcss->qdsp6ss_axim_cbcr);
++
++	val = readl(wcss->reg_base + Q6SS_SLEEP_CBCR);
++	val &= ~BIT(0);
++	writel(val, wcss->reg_base + Q6SS_SLEEP_CBCR);
++
++	val = readl(wcss->reg_base + Q6SS_XO_CBCR);
++	val &= ~BIT(0);
++	writel(val, wcss->reg_base + Q6SS_XO_CBCR);
++
++	clk_disable_unprepare(wcss->ahbs_cbcr);
++	clk_disable_unprepare(wcss->lcc_bcr_sleep);
++
++	val = readl(wcss->reg_base + Q6SS_GFMUX_CTL_REG);
++	val &= ~(Q6SS_CLK_ENABLE | Q6SS_SWITCH_CLK_SRC);
++	writel(val, wcss->reg_base + Q6SS_GFMUX_CTL_REG);
++
++	clk_disable_unprepare(wcss->gcc_abhs_cbcr);
++
++	ret = reset_control_assert(wcss->wcss_reset);
++	if (ret) {
++		dev_err(wcss->dev, "wcss_reset failed\n");
++		return ret;
++	}
++	usleep_range(200, 300);
++
++	ret = reset_control_deassert(wcss->wcss_reset);
++	if (ret) {
++		dev_err(wcss->dev, "wcss_reset failed\n");
++		return ret;
++	}
++	usleep_range(200, 300);
++
++	clk_disable_unprepare(wcss->gcc_axim_cbcr);
++
++	return 0;
++}
++
+ static int q6v5_wcss_powerdown(struct q6v5_wcss *wcss)
+ {
+ 	int ret;
+@@ -390,27 +709,35 @@ static int q6v5_wcss_stop(struct rproc *rproc)
+ 	int ret;
+ 
+ 	/* WCSS powerdown */
+-	ret = qcom_q6v5_request_stop(&wcss->q6v5, NULL);
+-	if (ret == -ETIMEDOUT) {
+-		dev_err(wcss->dev, "timed out on wait\n");
+-		return ret;
++	if (wcss->requires_force_stop) {
++		ret = qcom_q6v5_request_stop(&wcss->q6v5, NULL);
++		if (ret == -ETIMEDOUT) {
++			dev_err(wcss->dev, "timed out on wait\n");
++			return ret;
++		}
+ 	}
+ 
+-	ret = q6v5_wcss_powerdown(wcss);
+-	if (ret)
+-		return ret;
+-
+-	/* Q6 Power down */
+-	ret = q6v5_q6_powerdown(wcss);
+-	if (ret)
+-		return ret;
++	if (wcss->version == WCSS_QCS404) {
++		ret = q6v5_qcs404_wcss_shutdown(wcss);
++		if (ret)
++			return ret;
++	} else {
++		ret = q6v5_wcss_powerdown(wcss);
++		if (ret)
++			return ret;
++
++		/* Q6 Power down */
++		ret = q6v5_q6_powerdown(wcss);
++		if (ret)
++			return ret;
++	}
+ 
+ 	qcom_q6v5_unprepare(&wcss->q6v5);
+ 
+ 	return 0;
+ }
+ 
+-static void *q6v5_wcss_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *q6v5_wcss_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct q6v5_wcss *wcss = rproc->priv;
+ 	int offset;
+@@ -438,7 +765,7 @@ static int q6v5_wcss_load(struct rproc *rproc, const struct firmware *fw)
+ 	return ret;
+ }
+ 
+-static const struct rproc_ops q6v5_wcss_ops = {
++static const struct rproc_ops q6v5_wcss_ipq8074_ops = {
+ 	.start = q6v5_wcss_start,
+ 	.stop = q6v5_wcss_stop,
+ 	.da_to_va = q6v5_wcss_da_to_va,
+@@ -446,26 +773,46 @@ static const struct rproc_ops q6v5_wcss_ops = {
+ 	.get_boot_addr = rproc_elf_get_boot_addr,
+ };
+ 
+-static int q6v5_wcss_init_reset(struct q6v5_wcss *wcss)
++static const struct rproc_ops q6v5_wcss_qcs404_ops = {
++	.start = q6v5_qcs404_wcss_start,
++	.stop = q6v5_wcss_stop,
++	.da_to_va = q6v5_wcss_da_to_va,
++	.load = q6v5_wcss_load,
++	.get_boot_addr = rproc_elf_get_boot_addr,
++	.parse_fw = qcom_register_dump_segments,
++};
++
++static int q6v5_wcss_init_reset(struct q6v5_wcss *wcss,
++				const struct wcss_data *desc)
+ {
+ 	struct device *dev = wcss->dev;
+ 
+-	wcss->wcss_aon_reset = devm_reset_control_get(dev, "wcss_aon_reset");
+-	if (IS_ERR(wcss->wcss_aon_reset)) {
+-		dev_err(wcss->dev, "unable to acquire wcss_aon_reset\n");
+-		return PTR_ERR(wcss->wcss_aon_reset);
++	if (desc->aon_reset_required) {
++		wcss->wcss_aon_reset = devm_reset_control_get_exclusive(dev, "wcss_aon_reset");
++		if (IS_ERR(wcss->wcss_aon_reset)) {
++			dev_err(wcss->dev, "fail to acquire wcss_aon_reset\n");
++			return PTR_ERR(wcss->wcss_aon_reset);
++		}
+ 	}
+ 
+-	wcss->wcss_reset = devm_reset_control_get(dev, "wcss_reset");
++	wcss->wcss_reset = devm_reset_control_get_exclusive(dev, "wcss_reset");
+ 	if (IS_ERR(wcss->wcss_reset)) {
+ 		dev_err(wcss->dev, "unable to acquire wcss_reset\n");
+ 		return PTR_ERR(wcss->wcss_reset);
+ 	}
+ 
+-	wcss->wcss_q6_reset = devm_reset_control_get(dev, "wcss_q6_reset");
+-	if (IS_ERR(wcss->wcss_q6_reset)) {
+-		dev_err(wcss->dev, "unable to acquire wcss_q6_reset\n");
+-		return PTR_ERR(wcss->wcss_q6_reset);
++	if (desc->wcss_q6_reset_required) {
++		wcss->wcss_q6_reset = devm_reset_control_get_exclusive(dev, "wcss_q6_reset");
++		if (IS_ERR(wcss->wcss_q6_reset)) {
++			dev_err(wcss->dev, "unable to acquire wcss_q6_reset\n");
++			return PTR_ERR(wcss->wcss_q6_reset);
++		}
++	}
++
++	wcss->wcss_q6_bcr_reset = devm_reset_control_get_exclusive(dev, "wcss_q6_bcr_reset");
++	if (IS_ERR(wcss->wcss_q6_bcr_reset)) {
++		dev_err(wcss->dev, "unable to acquire wcss_q6_bcr_reset\n");
++		return PTR_ERR(wcss->wcss_q6_bcr_reset);
+ 	}
+ 
+ 	return 0;
+@@ -474,35 +821,48 @@ static int q6v5_wcss_init_reset(struct q6v5_wcss *wcss)
+ static int q6v5_wcss_init_mmio(struct q6v5_wcss *wcss,
+ 			       struct platform_device *pdev)
+ {
+-	struct of_phandle_args args;
++	unsigned int halt_reg[MAX_HALT_REG] = {0};
++	struct device_node *syscon;
+ 	struct resource *res;
+ 	int ret;
+ 
+ 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "qdsp6");
+-	wcss->reg_base = devm_ioremap_resource(&pdev->dev, res);
+-	if (IS_ERR(wcss->reg_base))
+-		return PTR_ERR(wcss->reg_base);
++	wcss->reg_base = devm_ioremap(&pdev->dev, res->start,
++				      resource_size(res));
++	if (!wcss->reg_base)
++		return -ENOMEM;
+ 
+-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "rmb");
+-	wcss->rmb_base = devm_ioremap_resource(&pdev->dev, res);
+-	if (IS_ERR(wcss->rmb_base))
+-		return PTR_ERR(wcss->rmb_base);
++	if (wcss->version == WCSS_IPQ8074) {
++		res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "rmb");
++		wcss->rmb_base = devm_ioremap_resource(&pdev->dev, res);
++		if (IS_ERR(wcss->rmb_base))
++			return PTR_ERR(wcss->rmb_base);
++	}
+ 
+-	ret = of_parse_phandle_with_fixed_args(pdev->dev.of_node,
+-					       "qcom,halt-regs", 3, 0, &args);
+-	if (ret < 0) {
++	syscon = of_parse_phandle(pdev->dev.of_node,
++				  "qcom,halt-regs", 0);
++	if (!syscon) {
+ 		dev_err(&pdev->dev, "failed to parse qcom,halt-regs\n");
+ 		return -EINVAL;
+ 	}
+ 
+-	wcss->halt_map = syscon_node_to_regmap(args.np);
+-	of_node_put(args.np);
++	wcss->halt_map = syscon_node_to_regmap(syscon);
++	of_node_put(syscon);
+ 	if (IS_ERR(wcss->halt_map))
+ 		return PTR_ERR(wcss->halt_map);
+ 
+-	wcss->halt_q6 = args.args[0];
+-	wcss->halt_wcss = args.args[1];
+-	wcss->halt_nc = args.args[2];
++	ret = of_property_read_variable_u32_array(pdev->dev.of_node,
++						  "qcom,halt-regs",
++						  halt_reg, 0,
++						  MAX_HALT_REG);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "failed to parse qcom,halt-regs\n");
++		return -EINVAL;
++	}
++
++	wcss->halt_q6 = halt_reg[0];
++	wcss->halt_wcss = halt_reg[1];
++	wcss->halt_nc = halt_reg[2];
+ 
+ 	return 0;
+ }
+@@ -536,14 +896,120 @@ static int q6v5_alloc_memory_region(struct q6v5_wcss *wcss)
+ 	return 0;
+ }
+ 
++static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)
++{
++	int ret;
++
++	wcss->xo = devm_clk_get(wcss->dev, "xo");
++	if (IS_ERR(wcss->xo)) {
++		ret = PTR_ERR(wcss->xo);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get xo clock");
++		return ret;
++	}
++
++	wcss->gcc_abhs_cbcr = devm_clk_get(wcss->dev, "gcc_abhs_cbcr");
++	if (IS_ERR(wcss->gcc_abhs_cbcr)) {
++		ret = PTR_ERR(wcss->gcc_abhs_cbcr);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get gcc abhs clock");
++		return ret;
++	}
++
++	wcss->gcc_axim_cbcr = devm_clk_get(wcss->dev, "gcc_axim_cbcr");
++	if (IS_ERR(wcss->gcc_axim_cbcr)) {
++		ret = PTR_ERR(wcss->gcc_axim_cbcr);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get gcc axim clock\n");
++		return ret;
++	}
++
++	wcss->ahbfabric_cbcr_clk = devm_clk_get(wcss->dev,
++						"lcc_ahbfabric_cbc");
++	if (IS_ERR(wcss->ahbfabric_cbcr_clk)) {
++		ret = PTR_ERR(wcss->ahbfabric_cbcr_clk);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get ahbfabric clock\n");
++		return ret;
++	}
++
++	wcss->lcc_csr_cbcr = devm_clk_get(wcss->dev, "tcsr_lcc_cbc");
++	if (IS_ERR(wcss->lcc_csr_cbcr)) {
++		ret = PTR_ERR(wcss->lcc_csr_cbcr);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get csr cbcr clk\n");
++		return ret;
++	}
++
++	wcss->ahbs_cbcr = devm_clk_get(wcss->dev,
++				       "lcc_abhs_cbc");
++	if (IS_ERR(wcss->ahbs_cbcr)) {
++		ret = PTR_ERR(wcss->ahbs_cbcr);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get ahbs_cbcr clk\n");
++		return ret;
++	}
++
++	wcss->tcm_slave_cbcr = devm_clk_get(wcss->dev,
++					    "lcc_tcm_slave_cbc");
++	if (IS_ERR(wcss->tcm_slave_cbcr)) {
++		ret = PTR_ERR(wcss->tcm_slave_cbcr);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get tcm cbcr clk\n");
++		return ret;
++	}
++
++	wcss->qdsp6ss_abhm_cbcr = devm_clk_get(wcss->dev, "lcc_abhm_cbc");
++	if (IS_ERR(wcss->qdsp6ss_abhm_cbcr)) {
++		ret = PTR_ERR(wcss->qdsp6ss_abhm_cbcr);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get abhm cbcr clk\n");
++		return ret;
++	}
++
++	wcss->qdsp6ss_axim_cbcr = devm_clk_get(wcss->dev, "lcc_axim_cbc");
++	if (IS_ERR(wcss->qdsp6ss_axim_cbcr)) {
++		ret = PTR_ERR(wcss->qdsp6ss_axim_cbcr);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get axim cbcr clk\n");
++		return ret;
++	}
++
++	wcss->lcc_bcr_sleep = devm_clk_get(wcss->dev, "lcc_bcr_sleep");
++	if (IS_ERR(wcss->lcc_bcr_sleep)) {
++		ret = PTR_ERR(wcss->lcc_bcr_sleep);
++		if (ret != -EPROBE_DEFER)
++			dev_err(wcss->dev, "failed to get bcr cbcr clk\n");
++		return ret;
++	}
++
++	return 0;
++}
++
++static int q6v5_wcss_init_regulator(struct q6v5_wcss *wcss)
++{
++	wcss->cx_supply = devm_regulator_get(wcss->dev, "cx");
++	if (IS_ERR(wcss->cx_supply))
++		return PTR_ERR(wcss->cx_supply);
++
++	regulator_set_load(wcss->cx_supply, 100000);
++
++	return 0;
++}
++
+ static int q6v5_wcss_probe(struct platform_device *pdev)
+ {
++	const struct wcss_data *desc;
+ 	struct q6v5_wcss *wcss;
+ 	struct rproc *rproc;
+ 	int ret;
+ 
+-	rproc = rproc_alloc(&pdev->dev, pdev->name, &q6v5_wcss_ops,
+-			    "IPQ8074/q6_fw.mdt", sizeof(*wcss));
++	desc = device_get_match_data(&pdev->dev);
++	if (!desc)
++		return -EINVAL;
++
++	rproc = rproc_alloc(&pdev->dev, pdev->name, desc->ops,
++			    desc->firmware_name, sizeof(*wcss));
+ 	if (!rproc) {
+ 		dev_err(&pdev->dev, "failed to allocate rproc\n");
+ 		return -ENOMEM;
+@@ -551,6 +1017,10 @@ static int q6v5_wcss_probe(struct platform_device *pdev)
+ 
+ 	wcss = rproc->priv;
+ 	wcss->dev = &pdev->dev;
++	wcss->version = desc->version;
++
++	wcss->version = desc->version;
++	wcss->requires_force_stop = desc->requires_force_stop;
+ 
+ 	ret = q6v5_wcss_init_mmio(wcss, pdev);
+ 	if (ret)
+@@ -560,17 +1030,33 @@ static int q6v5_wcss_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto free_rproc;
+ 
+-	ret = q6v5_wcss_init_reset(wcss);
++	if (wcss->version == WCSS_QCS404) {
++		ret = q6v5_wcss_init_clock(wcss);
++		if (ret)
++			goto free_rproc;
++
++		ret = q6v5_wcss_init_regulator(wcss);
++		if (ret)
++			goto free_rproc;
++	}
++
++	ret = q6v5_wcss_init_reset(wcss, desc);
+ 	if (ret)
+ 		goto free_rproc;
+ 
+-	ret = qcom_q6v5_init(&wcss->q6v5, pdev, rproc, WCSS_CRASH_REASON, NULL);
++	ret = qcom_q6v5_init(&wcss->q6v5, pdev, rproc, desc->crash_reason_smem,
++			     NULL);
+ 	if (ret)
+ 		goto free_rproc;
+ 
+ 	qcom_add_glink_subdev(rproc, &wcss->glink_subdev, "q6wcss");
+ 	qcom_add_ssr_subdev(rproc, &wcss->ssr_subdev, "q6wcss");
+ 
++	if (desc->ssctl_id)
++		wcss->sysmon = qcom_add_sysmon_subdev(rproc,
++						      desc->sysmon_name,
++						      desc->ssctl_id);
++
+ 	ret = rproc_add(rproc);
+ 	if (ret)
+ 		goto free_rproc;
+@@ -595,8 +1081,31 @@ static int q6v5_wcss_remove(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
++static const struct wcss_data wcss_ipq8074_res_init = {
++	.firmware_name = "IPQ8074/q6_fw.mdt",
++	.crash_reason_smem = WCSS_CRASH_REASON,
++	.aon_reset_required = true,
++	.wcss_q6_reset_required = true,
++	.ops = &q6v5_wcss_ipq8074_ops,
++	.requires_force_stop = true,
++};
++
++static const struct wcss_data wcss_qcs404_res_init = {
++	.crash_reason_smem = WCSS_CRASH_REASON,
++	.firmware_name = "wcnss.mdt",
++	.version = WCSS_QCS404,
++	.aon_reset_required = false,
++	.wcss_q6_reset_required = false,
++	.ssr_name = "mpss",
++	.sysmon_name = "wcnss",
++	.ssctl_id = 0x12,
++	.ops = &q6v5_wcss_qcs404_ops,
++	.requires_force_stop = false,
++};
++
+ static const struct of_device_id q6v5_wcss_of_match[] = {
+-	{ .compatible = "qcom,ipq8074-wcss-pil" },
++	{ .compatible = "qcom,ipq8074-wcss-pil", .data = &wcss_ipq8074_res_init },
++	{ .compatible = "qcom,qcs404-wcss-pil", .data = &wcss_qcs404_res_init },
+ 	{ },
+ };
+ MODULE_DEVICE_TABLE(of, q6v5_wcss_of_match);
+diff --git a/drivers/remoteproc/qcom_wcnss.c b/drivers/remoteproc/qcom_wcnss.c
+index 2a6a23cb14ca..5f3455aa7e0e 100644
+--- a/drivers/remoteproc/qcom_wcnss.c
++++ b/drivers/remoteproc/qcom_wcnss.c
+@@ -320,7 +320,7 @@ static int wcnss_stop(struct rproc *rproc)
+ 	return ret;
+ }
+ 
+-static void *wcnss_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *wcnss_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct qcom_wcnss *wcnss = (struct qcom_wcnss *)rproc->priv;
+ 	int offset;
+@@ -530,6 +530,7 @@ static int wcnss_alloc_memory_region(struct qcom_wcnss *wcnss)
+ 
+ static int wcnss_probe(struct platform_device *pdev)
+ {
++	const char *fw_name = WCNSS_FIRMWARE_NAME;
+ 	const struct wcnss_data *data;
+ 	struct qcom_wcnss *wcnss;
+ 	struct resource *res;
+@@ -547,8 +548,13 @@ static int wcnss_probe(struct platform_device *pdev)
+ 		return -ENXIO;
+ 	}
+ 
++	ret = of_property_read_string(pdev->dev.of_node, "firmware-name",
++				      &fw_name);
++	if (ret < 0 && ret != -EINVAL)
++		return ret;
++
+ 	rproc = rproc_alloc(&pdev->dev, pdev->name, &wcnss_ops,
+-			    WCNSS_FIRMWARE_NAME, sizeof(*wcnss));
++			    fw_name, sizeof(*wcnss));
+ 	if (!rproc) {
+ 		dev_err(&pdev->dev, "unable to allocate remoteproc\n");
+ 		return -ENOMEM;
+diff --git a/drivers/remoteproc/remoteproc_cdev.c b/drivers/remoteproc/remoteproc_cdev.c
+index b19ea3057bde..0b8a84c04f76 100644
+--- a/drivers/remoteproc/remoteproc_cdev.c
++++ b/drivers/remoteproc/remoteproc_cdev.c
+@@ -32,15 +32,22 @@ static ssize_t rproc_cdev_write(struct file *filp, const char __user *buf, size_
+ 		return -EFAULT;
+ 
+ 	if (!strncmp(cmd, "start", len)) {
+-		if (rproc->state == RPROC_RUNNING)
++		if (rproc->state == RPROC_RUNNING ||
++		    rproc->state == RPROC_ATTACHED)
+ 			return -EBUSY;
+ 
+ 		ret = rproc_boot(rproc);
+ 	} else if (!strncmp(cmd, "stop", len)) {
+-		if (rproc->state != RPROC_RUNNING)
++		if (rproc->state != RPROC_RUNNING &&
++		    rproc->state != RPROC_ATTACHED)
+ 			return -EINVAL;
+ 
+ 		rproc_shutdown(rproc);
++	} else if (!strncmp(cmd, "detach", len)) {
++		if (rproc->state != RPROC_ATTACHED)
++			return -EINVAL;
++
++		ret = rproc_detach(rproc);
+ 	} else {
+ 		dev_err(&rproc->dev, "Unrecognized option\n");
+ 		ret = -EINVAL;
+@@ -79,11 +86,17 @@ static long rproc_device_ioctl(struct file *filp, unsigned int ioctl, unsigned l
+ static int rproc_cdev_release(struct inode *inode, struct file *filp)
+ {
+ 	struct rproc *rproc = container_of(inode->i_cdev, struct rproc, cdev);
++	int ret = 0;
+ 
+-	if (rproc->cdev_put_on_release && rproc->state == RPROC_RUNNING)
++	if (!rproc->cdev_put_on_release)
++		return 0;
++
++	if (rproc->state == RPROC_RUNNING)
+ 		rproc_shutdown(rproc);
++	else if (rproc->state == RPROC_ATTACHED)
++		ret = rproc_detach(rproc);
+ 
+-	return 0;
++	return ret;
+ }
+ 
+ static const struct file_operations rproc_fops = {
+diff --git a/drivers/remoteproc/remoteproc_core.c b/drivers/remoteproc/remoteproc_core.c
+index ab150765d124..626a6b90fba2 100644
+--- a/drivers/remoteproc/remoteproc_core.c
++++ b/drivers/remoteproc/remoteproc_core.c
+@@ -189,13 +189,13 @@ EXPORT_SYMBOL(rproc_va_to_pa);
+  * here the output of the DMA API for the carveouts, which should be more
+  * correct.
+  */
+-void *rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++void *rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct rproc_mem_entry *carveout;
+ 	void *ptr = NULL;
+ 
+ 	if (rproc->ops->da_to_va) {
+-		ptr = rproc->ops->da_to_va(rproc, da, len);
++		ptr = rproc->ops->da_to_va(rproc, da, len, is_iomem);
+ 		if (ptr)
+ 			goto out;
+ 	}
+@@ -217,6 +217,9 @@ void *rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
+ 
+ 		ptr = carveout->va + offset;
+ 
++		if (is_iomem)
++			*is_iomem = carveout->is_iomem;
++
+ 		break;
+ 	}
+ 
+@@ -482,7 +485,7 @@ static int copy_dma_range_map(struct device *to, struct device *from)
+ /**
+  * rproc_handle_vdev() - handle a vdev fw resource
+  * @rproc: the remote processor
+- * @rsc: the vring resource descriptor
++ * @ptr: the vring resource descriptor
+  * @offset: offset of the resource entry
+  * @avail: size of available data (for sanity checking the image)
+  *
+@@ -507,9 +510,10 @@ static int copy_dma_range_map(struct device *to, struct device *from)
+  *
+  * Returns 0 on success, or an appropriate error code otherwise
+  */
+-static int rproc_handle_vdev(struct rproc *rproc, struct fw_rsc_vdev *rsc,
++static int rproc_handle_vdev(struct rproc *rproc, void *ptr,
+ 			     int offset, int avail)
+ {
++	struct fw_rsc_vdev *rsc = ptr;
+ 	struct device *dev = &rproc->dev;
+ 	struct rproc_vdev *rvdev;
+ 	int i, ret;
+@@ -627,7 +631,7 @@ void rproc_vdev_release(struct kref *ref)
+ /**
+  * rproc_handle_trace() - handle a shared trace buffer resource
+  * @rproc: the remote processor
+- * @rsc: the trace resource descriptor
++ * @ptr: the trace resource descriptor
+  * @offset: offset of the resource entry
+  * @avail: size of available data (for sanity checking the image)
+  *
+@@ -641,9 +645,10 @@ void rproc_vdev_release(struct kref *ref)
+  *
+  * Returns 0 on success, or an appropriate error code otherwise
+  */
+-static int rproc_handle_trace(struct rproc *rproc, struct fw_rsc_trace *rsc,
++static int rproc_handle_trace(struct rproc *rproc, void *ptr,
+ 			      int offset, int avail)
+ {
++	struct fw_rsc_trace *rsc = ptr;
+ 	struct rproc_debug_trace *trace;
+ 	struct device *dev = &rproc->dev;
+ 	char name[15];
+@@ -693,7 +698,7 @@ static int rproc_handle_trace(struct rproc *rproc, struct fw_rsc_trace *rsc,
+ /**
+  * rproc_handle_devmem() - handle devmem resource entry
+  * @rproc: remote processor handle
+- * @rsc: the devmem resource entry
++ * @ptr: the devmem resource entry
+  * @offset: offset of the resource entry
+  * @avail: size of available data (for sanity checking the image)
+  *
+@@ -716,9 +721,10 @@ static int rproc_handle_trace(struct rproc *rproc, struct fw_rsc_trace *rsc,
+  * and not allow firmwares to request access to physical addresses that
+  * are outside those ranges.
+  */
+-static int rproc_handle_devmem(struct rproc *rproc, struct fw_rsc_devmem *rsc,
++static int rproc_handle_devmem(struct rproc *rproc, void *ptr,
+ 			       int offset, int avail)
+ {
++	struct fw_rsc_devmem *rsc = ptr;
+ 	struct rproc_mem_entry *mapping;
+ 	struct device *dev = &rproc->dev;
+ 	int ret;
+@@ -896,7 +902,7 @@ static int rproc_release_carveout(struct rproc *rproc,
+ /**
+  * rproc_handle_carveout() - handle phys contig memory allocation requests
+  * @rproc: rproc handle
+- * @rsc: the resource entry
++ * @ptr: the resource entry
+  * @offset: offset of the resource entry
+  * @avail: size of available data (for image validation)
+  *
+@@ -913,9 +919,9 @@ static int rproc_release_carveout(struct rproc *rproc,
+  * pressure is important; it may have a substantial impact on performance.
+  */
+ static int rproc_handle_carveout(struct rproc *rproc,
+-				 struct fw_rsc_carveout *rsc,
+-				 int offset, int avail)
++				 void *ptr, int offset, int avail)
+ {
++	struct fw_rsc_carveout *rsc = ptr;
+ 	struct rproc_mem_entry *carveout;
+ 	struct device *dev = &rproc->dev;
+ 
+@@ -1097,10 +1103,10 @@ EXPORT_SYMBOL(rproc_of_parse_firmware);
+  * enum fw_resource_type.
+  */
+ static rproc_handle_resource_t rproc_loading_handlers[RSC_LAST] = {
+-	[RSC_CARVEOUT] = (rproc_handle_resource_t)rproc_handle_carveout,
+-	[RSC_DEVMEM] = (rproc_handle_resource_t)rproc_handle_devmem,
+-	[RSC_TRACE] = (rproc_handle_resource_t)rproc_handle_trace,
+-	[RSC_VDEV] = (rproc_handle_resource_t)rproc_handle_vdev,
++	[RSC_CARVEOUT] = rproc_handle_carveout,
++	[RSC_DEVMEM] = rproc_handle_devmem,
++	[RSC_TRACE] = rproc_handle_trace,
++	[RSC_VDEV] = rproc_handle_vdev,
+ };
+ 
+ /* handle firmware resource entries before booting the remote processor */
+@@ -1416,7 +1422,7 @@ static int rproc_start(struct rproc *rproc, const struct firmware *fw)
+ 	return ret;
+ }
+ 
+-static int rproc_attach(struct rproc *rproc)
++static int __rproc_attach(struct rproc *rproc)
+ {
+ 	struct device *dev = &rproc->dev;
+ 	int ret;
+@@ -1444,7 +1450,7 @@ static int rproc_attach(struct rproc *rproc)
+ 		goto stop_rproc;
+ 	}
+ 
+-	rproc->state = RPROC_RUNNING;
++	rproc->state = RPROC_ATTACHED;
+ 
+ 	dev_info(dev, "remote processor %s is now attached\n", rproc->name);
+ 
+@@ -1537,11 +1543,149 @@ static int rproc_fw_boot(struct rproc *rproc, const struct firmware *fw)
+ 	return ret;
+ }
+ 
++static int rproc_set_rsc_table(struct rproc *rproc)
++{
++	struct resource_table *table_ptr;
++	struct device *dev = &rproc->dev;
++	size_t table_sz;
++	int ret;
++
++	table_ptr = rproc_get_loaded_rsc_table(rproc, &table_sz);
++	if (!table_ptr) {
++		/* Not having a resource table is acceptable */
++		return 0;
++	}
++
++	if (IS_ERR(table_ptr)) {
++		ret = PTR_ERR(table_ptr);
++		dev_err(dev, "can't load resource table: %d\n", ret);
++		return ret;
++	}
++
++	/*
++	 * If it is possible to detach the remote processor, keep an untouched
++	 * copy of the resource table.  That way we can start fresh again when
++	 * the remote processor is re-attached, that is:
++	 *
++	 *      DETACHED -> ATTACHED -> DETACHED -> ATTACHED
++	 *
++	 * Free'd in rproc_reset_rsc_table_on_detach() and
++	 * rproc_reset_rsc_table_on_stop().
++	 */
++	if (rproc->ops->detach) {
++		rproc->clean_table = kmemdup(table_ptr, table_sz, GFP_KERNEL);
++		if (!rproc->clean_table)
++			return -ENOMEM;
++	} else {
++		rproc->clean_table = NULL;
++	}
++
++	rproc->cached_table = NULL;
++	rproc->table_ptr = table_ptr;
++	rproc->table_sz = table_sz;
++
++	return 0;
++}
++
++static int rproc_reset_rsc_table_on_detach(struct rproc *rproc)
++{
++	struct resource_table *table_ptr;
++
++	/* A resource table was never retrieved, nothing to do here */
++	if (!rproc->table_ptr)
++		return 0;
++
++	/*
++	 * If we made it to this point a clean_table _must_ have been
++	 * allocated in rproc_set_rsc_table().  If one isn't present
++	 * something went really wrong and we must complain.
++	 */
++	if (WARN_ON(!rproc->clean_table))
++		return -EINVAL;
++
++	/* Remember where the external entity installed the resource table */
++	table_ptr = rproc->table_ptr;
++
++	/*
++	 * If we made it here the remote processor was started by another
++	 * entity and a cache table doesn't exist.  As such make a copy of
++	 * the resource table currently used by the remote processor and
++	 * use that for the rest of the shutdown process.  The memory
++	 * allocated here is free'd in rproc_detach().
++	 */
++	rproc->cached_table = kmemdup(rproc->table_ptr,
++				      rproc->table_sz, GFP_KERNEL);
++	if (!rproc->cached_table)
++		return -ENOMEM;
++
++	/*
++	 * Use a copy of the resource table for the remainder of the
++	 * shutdown process.
++	 */
++	rproc->table_ptr = rproc->cached_table;
++
++	/*
++	 * Reset the memory area where the firmware loaded the resource table
++	 * to its original value.  That way when we re-attach the remote
++	 * processor the resource table is clean and ready to be used again.
++	 */
++	memcpy(table_ptr, rproc->clean_table, rproc->table_sz);
++
++	/*
++	 * The clean resource table is no longer needed.  Allocated in
++	 * rproc_set_rsc_table().
++	 */
++	kfree(rproc->clean_table);
++
++	return 0;
++}
++
++static int rproc_reset_rsc_table_on_stop(struct rproc *rproc)
++{
++	/* A resource table was never retrieved, nothing to do here */
++	if (!rproc->table_ptr)
++		return 0;
++
++	/*
++	 * If a cache table exists the remote processor was started by
++	 * the remoteproc core.  That cache table should be used for
++	 * the rest of the shutdown process.
++	 */
++	if (rproc->cached_table)
++		goto out;
++
++	/*
++	 * If we made it here the remote processor was started by another
++	 * entity and a cache table doesn't exist.  As such make a copy of
++	 * the resource table currently used by the remote processor and
++	 * use that for the rest of the shutdown process.  The memory
++	 * allocated here is free'd in rproc_shutdown().
++	 */
++	rproc->cached_table = kmemdup(rproc->table_ptr,
++				      rproc->table_sz, GFP_KERNEL);
++	if (!rproc->cached_table)
++		return -ENOMEM;
++
++	/*
++	 * Since the remote processor is being switched off the clean table
++	 * won't be needed.  Allocated in rproc_set_rsc_table().
++	 */
++	kfree(rproc->clean_table);
++
++out:
++	/*
++	 * Use a copy of the resource table for the remainder of the
++	 * shutdown process.
++	 */
++	rproc->table_ptr = rproc->cached_table;
++	return 0;
++}
++
+ /*
+  * Attach to remote processor - similar to rproc_fw_boot() but without
+  * the steps that deal with the firmware image.
+  */
+-static int rproc_actuate(struct rproc *rproc)
++static int rproc_attach(struct rproc *rproc)
+ {
+ 	struct device *dev = &rproc->dev;
+ 	int ret;
+@@ -1556,6 +1700,19 @@ static int rproc_actuate(struct rproc *rproc)
+ 		return ret;
+ 	}
+ 
++	/* Do anything that is needed to boot the remote processor */
++	ret = rproc_prepare_device(rproc);
++	if (ret) {
++		dev_err(dev, "can't prepare rproc %s: %d\n", rproc->name, ret);
++		goto disable_iommu;
++	}
++
++	ret = rproc_set_rsc_table(rproc);
++	if (ret) {
++		dev_err(dev, "can't load resource table: %d\n", ret);
++		goto unprepare_device;
++	}
++
+ 	/* reset max_notifyid */
+ 	rproc->max_notifyid = -1;
+ 
+@@ -1570,7 +1727,7 @@ static int rproc_actuate(struct rproc *rproc)
+ 	ret = rproc_handle_resources(rproc, rproc_loading_handlers);
+ 	if (ret) {
+ 		dev_err(dev, "Failed to process resources: %d\n", ret);
+-		goto disable_iommu;
++		goto unprepare_device;
+ 	}
+ 
+ 	/* Allocate carveout resources associated to rproc */
+@@ -1581,7 +1738,7 @@ static int rproc_actuate(struct rproc *rproc)
+ 		goto clean_up_resources;
+ 	}
+ 
+-	ret = rproc_attach(rproc);
++	ret = __rproc_attach(rproc);
+ 	if (ret)
+ 		goto clean_up_resources;
+ 
+@@ -1589,6 +1746,9 @@ static int rproc_actuate(struct rproc *rproc)
+ 
+ clean_up_resources:
+ 	rproc_resource_cleanup(rproc);
++unprepare_device:
++	/* release HW resources if needed */
++	rproc_unprepare_device(rproc);
+ disable_iommu:
+ 	rproc_disable_iommu(rproc);
+ 	return ret;
+@@ -1642,11 +1802,20 @@ static int rproc_stop(struct rproc *rproc, bool crashed)
+ 	struct device *dev = &rproc->dev;
+ 	int ret;
+ 
++	/* No need to continue if a stop() operation has not been provided */
++	if (!rproc->ops->stop)
++		return -EINVAL;
++
+ 	/* Stop any subdevices for the remote processor */
+ 	rproc_stop_subdevices(rproc, crashed);
+ 
+ 	/* the installed resource table is no longer accessible */
+-	rproc->table_ptr = rproc->cached_table;
++	ret = rproc_reset_rsc_table_on_stop(rproc);
++	if (ret) {
++		dev_err(dev, "can't reset resource table: %d\n", ret);
++		return ret;
++	}
++
+ 
+ 	/* power off the remote processor */
+ 	ret = rproc->ops->stop(rproc);
+@@ -1659,19 +1828,48 @@ static int rproc_stop(struct rproc *rproc, bool crashed)
+ 
+ 	rproc->state = RPROC_OFFLINE;
+ 
+-	/*
+-	 * The remote processor has been stopped and is now offline, which means
+-	 * that the next time it is brought back online the remoteproc core will
+-	 * be responsible to load its firmware.  As such it is no longer
+-	 * autonomous.
+-	 */
+-	rproc->autonomous = false;
+-
+ 	dev_info(dev, "stopped remote processor %s\n", rproc->name);
+ 
+ 	return 0;
+ }
+ 
++/*
++ * __rproc_detach(): Does the opposite of __rproc_attach()
++ */
++static int __rproc_detach(struct rproc *rproc)
++{
++	struct device *dev = &rproc->dev;
++	int ret;
++
++	/* No need to continue if a detach() operation has not been provided */
++	if (!rproc->ops->detach)
++		return -EINVAL;
++
++	/* Stop any subdevices for the remote processor */
++	rproc_stop_subdevices(rproc, false);
++
++	/* the installed resource table is no longer accessible */
++	ret = rproc_reset_rsc_table_on_detach(rproc);
++	if (ret) {
++		dev_err(dev, "can't reset resource table: %d\n", ret);
++		return ret;
++	}
++
++	/* Tell the remote processor the core isn't available anymore */
++	ret = rproc->ops->detach(rproc);
++	if (ret) {
++		dev_err(dev, "can't detach from rproc: %d\n", ret);
++		return ret;
++	}
++
++	rproc_unprepare_subdevices(rproc);
++
++	rproc->state = RPROC_DETACHED;
++
++	dev_info(dev, "detached remote processor %s\n", rproc->name);
++
++	return 0;
++}
+ 
+ /**
+  * rproc_trigger_recovery() - recover a remoteproc
+@@ -1802,7 +2000,7 @@ int rproc_boot(struct rproc *rproc)
+ 	if (rproc->state == RPROC_DETACHED) {
+ 		dev_info(dev, "attaching to %s\n", rproc->name);
+ 
+-		ret = rproc_actuate(rproc);
++		ret = rproc_attach(rproc);
+ 	} else {
+ 		dev_info(dev, "powering up %s\n", rproc->name);
+ 
+@@ -1884,6 +2082,65 @@ void rproc_shutdown(struct rproc *rproc)
+ }
+ EXPORT_SYMBOL(rproc_shutdown);
+ 
++/**
++ * rproc_detach() - Detach the remote processor from the
++ * remoteproc core
++ *
++ * @rproc: the remote processor
++ *
++ * Detach a remote processor (previously attached to with rproc_attach()).
++ *
++ * In case @rproc is still being used by an additional user(s), then
++ * this function will just decrement the power refcount and exit,
++ * without disconnecting the device.
++ *
++ * Function rproc_detach() calls __rproc_detach() in order to let a remote
++ * processor know that services provided by the application processor are
++ * no longer available.  From there it should be possible to remove the
++ * platform driver and even power cycle the application processor (if the HW
++ * supports it) without needing to switch off the remote processor.
++ */
++int rproc_detach(struct rproc *rproc)
++{
++	struct device *dev = &rproc->dev;
++	int ret;
++
++	ret = mutex_lock_interruptible(&rproc->lock);
++	if (ret) {
++		dev_err(dev, "can't lock rproc %s: %d\n", rproc->name, ret);
++		return ret;
++	}
++
++	/* if the remote proc is still needed, bail out */
++	if (!atomic_dec_and_test(&rproc->power)) {
++		ret = 0;
++		goto out;
++	}
++
++	ret = __rproc_detach(rproc);
++	if (ret) {
++		atomic_inc(&rproc->power);
++		goto out;
++	}
++
++	/* clean up all acquired resources */
++	rproc_resource_cleanup(rproc);
++
++	/* release HW resources if needed */
++	rproc_unprepare_device(rproc);
++
++	rproc_disable_iommu(rproc);
++
++	/* Free the copy of the resource table */
++	kfree(rproc->cached_table);
++	rproc->cached_table = NULL;
++	rproc->table_ptr = NULL;
++out:
++	mutex_unlock(&rproc->lock);
++	return ret;
++}
++EXPORT_SYMBOL(rproc_detach);
++
+ /**
+  * rproc_get_by_phandle() - find a remote processor by phandle
+  * @phandle: phandle to the rproc
+@@ -2077,16 +2334,6 @@ int rproc_add(struct rproc *rproc)
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	/*
+-	 * Remind ourselves the remote processor has been attached to rather
+-	 * than booted by the remoteproc core.  This is important because the
+-	 * RPROC_DETACHED state will be lost as soon as the remote processor
+-	 * has been attached to.  Used in firmware_show() and reset in
+-	 * rproc_stop().
+-	 */
+-	if (rproc->state == RPROC_DETACHED)
+-		rproc->autonomous = true;
+-
+ 	/* if rproc is marked always-on, request it to boot */
+ 	if (rproc->auto_boot) {
+ 		ret = rproc_trigger_auto_boot(rproc);
+@@ -2347,10 +2594,8 @@ int rproc_del(struct rproc *rproc)
+ 	if (!rproc)
+ 		return -EINVAL;
+ 
+-	/* if rproc is marked always-on, rproc_add() booted it */
+ 	/* TODO: make sure this works with rproc->power > 1 */
+-	if (rproc->auto_boot)
+-		rproc_shutdown(rproc);
++	rproc_shutdown(rproc);
+ 
+ 	mutex_lock(&rproc->lock);
+ 	rproc->state = RPROC_DELETED;
+@@ -2492,7 +2737,11 @@ static int rproc_panic_handler(struct notifier_block *nb, unsigned long event,
+ 
+ 	rcu_read_lock();
+ 	list_for_each_entry_rcu(rproc, &rproc_list, node) {
+-		if (!rproc->ops->panic || rproc->state != RPROC_RUNNING)
++		if (!rproc->ops->panic)
++			continue;
++
++		if (rproc->state != RPROC_RUNNING &&
++		    rproc->state != RPROC_ATTACHED)
+ 			continue;
+ 
+ 		d = rproc->ops->panic(rproc);
+diff --git a/drivers/remoteproc/remoteproc_coredump.c b/drivers/remoteproc/remoteproc_coredump.c
+index 81ec154a6a5e..aee657cc08c6 100644
+--- a/drivers/remoteproc/remoteproc_coredump.c
++++ b/drivers/remoteproc/remoteproc_coredump.c
+@@ -153,18 +153,22 @@ static void rproc_copy_segment(struct rproc *rproc, void *dest,
+ 			       size_t offset, size_t size)
+ {
+ 	void *ptr;
++	bool is_iomem;
+ 
+ 	if (segment->dump) {
+ 		segment->dump(rproc, segment, dest, offset, size);
+ 	} else {
+-		ptr = rproc_da_to_va(rproc, segment->da + offset, size);
++		ptr = rproc_da_to_va(rproc, segment->da + offset, size, &is_iomem);
+ 		if (!ptr) {
+ 			dev_err(&rproc->dev,
+ 				"invalid copy request for segment %pad with offset %zu and size %zu)\n",
+ 				&segment->da, offset, size);
+ 			memset(dest, 0xff, size);
+ 		} else {
+-			memcpy(dest, ptr, size);
++			if (is_iomem)
++				memcpy_fromio(dest, ptr, size);
++			else
++				memcpy(dest, ptr, size);
+ 		}
+ 	}
+ }
+diff --git a/drivers/remoteproc/remoteproc_debugfs.c b/drivers/remoteproc/remoteproc_debugfs.c
+index 7e5845376e9f..b5a1e3b697d9 100644
+--- a/drivers/remoteproc/remoteproc_debugfs.c
++++ b/drivers/remoteproc/remoteproc_debugfs.c
+@@ -132,7 +132,7 @@ static ssize_t rproc_trace_read(struct file *filp, char __user *userbuf,
+ 	char buf[100];
+ 	int len;
+ 
+-	va = rproc_da_to_va(data->rproc, trace->da, trace->len);
++	va = rproc_da_to_va(data->rproc, trace->da, trace->len, NULL);
+ 
+ 	if (!va) {
+ 		len = scnprintf(buf, sizeof(buf), "Trace %s not available\n",
+diff --git a/drivers/remoteproc/remoteproc_elf_loader.c b/drivers/remoteproc/remoteproc_elf_loader.c
+index df68d87752e4..11423588965a 100644
+--- a/drivers/remoteproc/remoteproc_elf_loader.c
++++ b/drivers/remoteproc/remoteproc_elf_loader.c
+@@ -175,6 +175,7 @@ int rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
+ 		u64 offset = elf_phdr_get_p_offset(class, phdr);
+ 		u32 type = elf_phdr_get_p_type(class, phdr);
+ 		void *ptr;
++		bool is_iomem;
+ 
+ 		if (type != PT_LOAD)
+ 			continue;
+@@ -204,7 +205,7 @@ int rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
+ 		}
+ 
+ 		/* grab the kernel address for this device address */
+-		ptr = rproc_da_to_va(rproc, da, memsz);
++		ptr = rproc_da_to_va(rproc, da, memsz, &is_iomem);
+ 		if (!ptr) {
+ 			dev_err(dev, "bad phdr da 0x%llx mem 0x%llx\n", da,
+ 				memsz);
+@@ -213,8 +214,12 @@ int rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
+ 		}
+ 
+ 		/* put the segment where the remote processor expects it */
+-		if (filesz)
+-			memcpy(ptr, elf_data + offset, filesz);
++		if (filesz) {
++			if (is_iomem)
++				memcpy_fromio(ptr, (void __iomem *)(elf_data + offset), filesz);
++			else
++				memcpy(ptr, elf_data + offset, filesz);
++		}
+ 
+ 		/*
+ 		 * Zero out remaining memory for this segment.
+@@ -223,8 +228,12 @@ int rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
+ 		 * did this for us. albeit harmless, we may consider removing
+ 		 * this.
+ 		 */
+-		if (memsz > filesz)
+-			memset(ptr + filesz, 0, memsz - filesz);
++		if (memsz > filesz) {
++			if (is_iomem)
++				memset_io((void __iomem *)(ptr + filesz), 0, memsz - filesz);
++			else
++				memset(ptr + filesz, 0, memsz - filesz);
++		}
+ 	}
+ 
+ 	return ret;
+@@ -377,6 +386,6 @@ struct resource_table *rproc_elf_find_loaded_rsc_table(struct rproc *rproc,
+ 		return NULL;
+ 	}
+ 
+-	return rproc_da_to_va(rproc, sh_addr, sh_size);
++	return rproc_da_to_va(rproc, sh_addr, sh_size, NULL);
+ }
+ EXPORT_SYMBOL(rproc_elf_find_loaded_rsc_table);
+diff --git a/drivers/remoteproc/remoteproc_internal.h b/drivers/remoteproc/remoteproc_internal.h
+index c34002888d2c..a328e634b1de 100644
+--- a/drivers/remoteproc/remoteproc_internal.h
++++ b/drivers/remoteproc/remoteproc_internal.h
+@@ -84,7 +84,7 @@ static inline void  rproc_char_device_remove(struct rproc *rproc)
+ void rproc_free_vring(struct rproc_vring *rvring);
+ int rproc_alloc_vring(struct rproc_vdev *rvdev, int i);
+ 
+-void *rproc_da_to_va(struct rproc *rproc, u64 da, size_t len);
++void *rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem);
+ phys_addr_t rproc_va_to_pa(void *cpu_addr);
+ int rproc_trigger_recovery(struct rproc *rproc);
+ 
+@@ -177,6 +177,16 @@ struct resource_table *rproc_find_loaded_rsc_table(struct rproc *rproc,
+ 	return NULL;
+ }
+ 
++static inline
++struct resource_table *rproc_get_loaded_rsc_table(struct rproc *rproc,
++						  size_t *size)
++{
++	if (rproc->ops->get_loaded_rsc_table)
++		return rproc->ops->get_loaded_rsc_table(rproc, size);
++
++	return NULL;
++}
++
+ static inline
+ bool rproc_u64_fit_in_size_t(u64 val)
+ {
+diff --git a/drivers/remoteproc/remoteproc_sysfs.c b/drivers/remoteproc/remoteproc_sysfs.c
+index 1dbef895e65e..ea8b89f97d7b 100644
+--- a/drivers/remoteproc/remoteproc_sysfs.c
++++ b/drivers/remoteproc/remoteproc_sysfs.c
+@@ -15,7 +15,7 @@ static ssize_t recovery_show(struct device *dev,
+ {
+ 	struct rproc *rproc = to_rproc(dev);
+ 
+-	return sprintf(buf, "%s", rproc->recovery_disabled ? "disabled\n" : "enabled\n");
++	return sysfs_emit(buf, "%s", rproc->recovery_disabled ? "disabled\n" : "enabled\n");
+ }
+ 
+ /*
+@@ -82,7 +82,7 @@ static ssize_t coredump_show(struct device *dev,
+ {
+ 	struct rproc *rproc = to_rproc(dev);
+ 
+-	return sprintf(buf, "%s\n", rproc_coredump_str[rproc->dump_conf]);
++	return sysfs_emit(buf, "%s\n", rproc_coredump_str[rproc->dump_conf]);
+ }
+ 
+ /*
+@@ -138,11 +138,8 @@ static ssize_t firmware_show(struct device *dev, struct device_attribute *attr,
+ 	 * If the remote processor has been started by an external
+ 	 * entity we have no idea of what image it is running.  As such
+ 	 * simply display a generic string rather then rproc->firmware.
+-	 *
+-	 * Here we rely on the autonomous flag because a remote processor
+-	 * may have been attached to and currently in a running state.
+ 	 */
+-	if (rproc->autonomous)
++	if (rproc->state == RPROC_ATTACHED)
+ 		firmware = "unknown";
+ 
+ 	return sprintf(buf, "%s\n", firmware);
+@@ -172,6 +169,7 @@ static const char * const rproc_state_string[] = {
+ 	[RPROC_RUNNING]		= "running",
+ 	[RPROC_CRASHED]		= "crashed",
+ 	[RPROC_DELETED]		= "deleted",
++	[RPROC_ATTACHED]	= "attached",
+ 	[RPROC_DETACHED]	= "detached",
+ 	[RPROC_LAST]		= "invalid",
+ };
+@@ -196,17 +194,24 @@ static ssize_t state_store(struct device *dev,
+ 	int ret = 0;
+ 
+ 	if (sysfs_streq(buf, "start")) {
+-		if (rproc->state == RPROC_RUNNING)
++		if (rproc->state == RPROC_RUNNING ||
++		    rproc->state == RPROC_ATTACHED)
+ 			return -EBUSY;
+ 
+ 		ret = rproc_boot(rproc);
+ 		if (ret)
+ 			dev_err(&rproc->dev, "Boot failed: %d\n", ret);
+ 	} else if (sysfs_streq(buf, "stop")) {
+-		if (rproc->state != RPROC_RUNNING)
++		if (rproc->state != RPROC_RUNNING &&
++		    rproc->state != RPROC_ATTACHED)
+ 			return -EINVAL;
+ 
+ 		rproc_shutdown(rproc);
++	} else if (sysfs_streq(buf, "detach")) {
++		if (rproc->state != RPROC_ATTACHED)
++			return -EINVAL;
++
++		ret = rproc_detach(rproc);
+ 	} else {
+ 		dev_err(&rproc->dev, "Unrecognised option: %s\n", buf);
+ 		ret = -EINVAL;
+diff --git a/drivers/remoteproc/st_slim_rproc.c b/drivers/remoteproc/st_slim_rproc.c
+index 09bcb4d8b9e0..22096adc1ad3 100644
+--- a/drivers/remoteproc/st_slim_rproc.c
++++ b/drivers/remoteproc/st_slim_rproc.c
+@@ -174,7 +174,7 @@ static int slim_rproc_stop(struct rproc *rproc)
+ 	return 0;
+ }
+ 
+-static void *slim_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *slim_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct st_slim_rproc *slim_rproc = rproc->priv;
+ 	void *va = NULL;
+diff --git a/drivers/remoteproc/stm32_rproc.c b/drivers/remoteproc/stm32_rproc.c
+index ccb3c14a0023..7353f9e7e7af 100644
+--- a/drivers/remoteproc/stm32_rproc.c
++++ b/drivers/remoteproc/stm32_rproc.c
+@@ -28,7 +28,7 @@
+ #define RELEASE_BOOT		1
+ 
+ #define MBOX_NB_VQ		2
+-#define MBOX_NB_MBX		3
++#define MBOX_NB_MBX		4
+ 
+ #define STM32_SMC_RCC		0x82001000
+ #define STM32_SMC_REG_WRITE	0x1
+@@ -38,6 +38,7 @@
+ #define STM32_MBX_VQ1		"vq1"
+ #define STM32_MBX_VQ1_ID	1
+ #define STM32_MBX_SHUTDOWN	"shutdown"
++#define STM32_MBX_DETACH	"detach"
+ 
+ #define RSC_TBL_SIZE		1024
+ 
+@@ -207,16 +208,7 @@ static int stm32_rproc_mbox_idx(struct rproc *rproc, const unsigned char *name)
+ 	return -EINVAL;
+ }
+ 
+-static int stm32_rproc_elf_load_rsc_table(struct rproc *rproc,
+-					  const struct firmware *fw)
+-{
+-	if (rproc_elf_load_rsc_table(rproc, fw))
+-		dev_warn(&rproc->dev, "no resource table found for this firmware\n");
+-
+-	return 0;
+-}
+-
+-static int stm32_rproc_parse_memory_regions(struct rproc *rproc)
++static int stm32_rproc_prepare(struct rproc *rproc)
+ {
+ 	struct device *dev = rproc->dev.parent;
+ 	struct device_node *np = dev->of_node;
+@@ -274,12 +266,10 @@ static int stm32_rproc_parse_memory_regions(struct rproc *rproc)
+ 
+ static int stm32_rproc_parse_fw(struct rproc *rproc, const struct firmware *fw)
+ {
+-	int ret = stm32_rproc_parse_memory_regions(rproc);
+-
+-	if (ret)
+-		return ret;
++	if (rproc_elf_load_rsc_table(rproc, fw))
++		dev_warn(&rproc->dev, "no resource table found for this firmware\n");
+ 
+-	return stm32_rproc_elf_load_rsc_table(rproc, fw);
++	return 0;
+ }
+ 
+ static irqreturn_t stm32_rproc_wdg(int irq, void *data)
+@@ -347,6 +337,15 @@ static const struct stm32_mbox stm32_rproc_mbox[MBOX_NB_MBX] = {
+ 			.tx_done = NULL,
+ 			.tx_tout = 500, /* 500 ms time out */
+ 		},
++	},
++	{
++		.name = STM32_MBX_DETACH,
++		.vq_id = -1,
++		.client = {
++			.tx_block = true,
++			.tx_done = NULL,
++			.tx_tout = 200, /* 200 ms time out to detach should be fair enough */
++		},
+ 	}
+ };
+ 
+@@ -472,6 +471,25 @@ static int stm32_rproc_attach(struct rproc *rproc)
+ 	return stm32_rproc_set_hold_boot(rproc, true);
+ }
+ 
++static int stm32_rproc_detach(struct rproc *rproc)
++{
++	struct stm32_rproc *ddata = rproc->priv;
++	int err, dummy_data, idx;
++
++	/* Inform the remote processor of the detach */
++	idx = stm32_rproc_mbox_idx(rproc, STM32_MBX_DETACH);
++	if (idx >= 0 && ddata->mb[idx].chan) {
++		/* A dummy data is sent to allow to block on transmit */
++		err = mbox_send_message(ddata->mb[idx].chan,
++					&dummy_data);
++		if (err < 0)
++			dev_warn(&rproc->dev, "warning: remote FW detach without ack\n");
++	}
++
++	/* Allow remote processor to auto-reboot */
++	return stm32_rproc_set_hold_boot(rproc, false);
++}
++
+ static int stm32_rproc_stop(struct rproc *rproc)
+ {
+ 	struct stm32_rproc *ddata = rproc->priv;
+@@ -546,14 +564,89 @@ static void stm32_rproc_kick(struct rproc *rproc, int vqid)
+ 	}
+ }
+ 
++static int stm32_rproc_da_to_pa(struct rproc *rproc,
++				u64 da, phys_addr_t *pa)
++{
++	struct stm32_rproc *ddata = rproc->priv;
++	struct device *dev = rproc->dev.parent;
++	struct stm32_rproc_mem *p_mem;
++	unsigned int i;
++
++	for (i = 0; i < ddata->nb_rmems; i++) {
++		p_mem = &ddata->rmems[i];
++
++		if (da < p_mem->dev_addr ||
++		    da >= p_mem->dev_addr + p_mem->size)
++			continue;
++
++		*pa = da - p_mem->dev_addr + p_mem->bus_addr;
++		dev_dbg(dev, "da %llx to pa %#x\n", da, *pa);
++
++		return 0;
++	}
++
++	dev_err(dev, "can't translate da %llx\n", da);
++
++	return -EINVAL;
++}
++
++static struct resource_table *
++stm32_rproc_get_loaded_rsc_table(struct rproc *rproc, size_t *table_sz)
++{
++	struct stm32_rproc *ddata = rproc->priv;
++	struct device *dev = rproc->dev.parent;
++	phys_addr_t rsc_pa;
++	u32 rsc_da;
++	int err;
++
++	/* The resource table has already been mapped, nothing to do */
++	if (ddata->rsc_va)
++		goto done;
++
++	err = regmap_read(ddata->rsctbl.map, ddata->rsctbl.reg, &rsc_da);
++	if (err) {
++		dev_err(dev, "failed to read rsc tbl addr\n");
++		return ERR_PTR(-EINVAL);
++	}
++
++	if (!rsc_da)
++		/* no rsc table */
++		return ERR_PTR(-ENOENT);
++
++	err = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
++	if (err)
++		return ERR_PTR(err);
++
++	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
++	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
++		dev_err(dev, "Unable to map memory region: %pa+%zx\n",
++			&rsc_pa, RSC_TBL_SIZE);
++		ddata->rsc_va = NULL;
++		return ERR_PTR(-ENOMEM);
++	}
++
++done:
++	/*
++	 * Assuming the resource table fits in 1kB is fair.
++	 * Notice for the detach, that this 1 kB memory area has to be reserved in the coprocessor
++	 * firmware for the resource table. On detach, the remoteproc core re-initializes this
++	 * entire area by overwriting it with the initial values stored in rproc->clean_table.
++	 */
++	*table_sz = RSC_TBL_SIZE;
++	return (struct resource_table *)ddata->rsc_va;
++}
++
+ static const struct rproc_ops st_rproc_ops = {
++	.prepare	= stm32_rproc_prepare,
+ 	.start		= stm32_rproc_start,
+ 	.stop		= stm32_rproc_stop,
+ 	.attach		= stm32_rproc_attach,
++	.detach		= stm32_rproc_detach,
+ 	.kick		= stm32_rproc_kick,
+ 	.load		= rproc_elf_load_segments,
+ 	.parse_fw	= stm32_rproc_parse_fw,
+ 	.find_loaded_rsc_table = rproc_elf_find_loaded_rsc_table,
++	.get_loaded_rsc_table = stm32_rproc_get_loaded_rsc_table,
+ 	.sanity_check	= rproc_elf_sanity_check,
+ 	.get_boot_addr	= rproc_elf_get_boot_addr,
+ };
+@@ -695,75 +788,6 @@ static int stm32_rproc_get_m4_status(struct stm32_rproc *ddata,
+ 	return regmap_read(ddata->m4_state.map, ddata->m4_state.reg, state);
+ }
+ 
+-static int stm32_rproc_da_to_pa(struct platform_device *pdev,
+-				struct stm32_rproc *ddata,
+-				u64 da, phys_addr_t *pa)
+-{
+-	struct device *dev = &pdev->dev;
+-	struct stm32_rproc_mem *p_mem;
+-	unsigned int i;
+-
+-	for (i = 0; i < ddata->nb_rmems; i++) {
+-		p_mem = &ddata->rmems[i];
+-
+-		if (da < p_mem->dev_addr ||
+-		    da >= p_mem->dev_addr + p_mem->size)
+-			continue;
+-
+-		*pa = da - p_mem->dev_addr + p_mem->bus_addr;
+-		dev_dbg(dev, "da %llx to pa %#x\n", da, *pa);
+-
+-		return 0;
+-	}
+-
+-	dev_err(dev, "can't translate da %llx\n", da);
+-
+-	return -EINVAL;
+-}
+-
+-static int stm32_rproc_get_loaded_rsc_table(struct platform_device *pdev,
+-					    struct rproc *rproc,
+-					    struct stm32_rproc *ddata)
+-{
+-	struct device *dev = &pdev->dev;
+-	phys_addr_t rsc_pa;
+-	u32 rsc_da;
+-	int err;
+-
+-	err = regmap_read(ddata->rsctbl.map, ddata->rsctbl.reg, &rsc_da);
+-	if (err) {
+-		dev_err(dev, "failed to read rsc tbl addr\n");
+-		return err;
+-	}
+-
+-	if (!rsc_da)
+-		/* no rsc table */
+-		return 0;
+-
+-	err = stm32_rproc_da_to_pa(pdev, ddata, rsc_da, &rsc_pa);
+-	if (err)
+-		return err;
+-
+-	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
+-	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
+-		dev_err(dev, "Unable to map memory region: %pa+%zx\n",
+-			&rsc_pa, RSC_TBL_SIZE);
+-		ddata->rsc_va = NULL;
+-		return -ENOMEM;
+-	}
+-
+-	/*
+-	 * The resource table is already loaded in device memory, no need
+-	 * to work with a cached table.
+-	 */
+-	rproc->cached_table = NULL;
+-	/* Assuming the resource table fits in 1kB is fair */
+-	rproc->table_sz = RSC_TBL_SIZE;
+-	rproc->table_ptr = (struct resource_table *)ddata->rsc_va;
+-
+-	return 0;
+-}
+-
+ static int stm32_rproc_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -797,18 +821,9 @@ static int stm32_rproc_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto free_rproc;
+ 
+-	if (state == M4_STATE_CRUN) {
++	if (state == M4_STATE_CRUN)
+ 		rproc->state = RPROC_DETACHED;
+ 
+-		ret = stm32_rproc_parse_memory_regions(rproc);
+-		if (ret)
+-			goto free_resources;
+-
+-		ret = stm32_rproc_get_loaded_rsc_table(pdev, rproc, ddata);
+-		if (ret)
+-			goto free_resources;
+-	}
+-
+ 	rproc->has_iommu = false;
+ 	ddata->workqueue = create_workqueue(dev_name(dev));
+ 	if (!ddata->workqueue) {
+diff --git a/drivers/remoteproc/ti_k3_dsp_remoteproc.c b/drivers/remoteproc/ti_k3_dsp_remoteproc.c
+index 863c0214e0a8..fd4eb67a6681 100644
+--- a/drivers/remoteproc/ti_k3_dsp_remoteproc.c
++++ b/drivers/remoteproc/ti_k3_dsp_remoteproc.c
+@@ -354,7 +354,7 @@ static int k3_dsp_rproc_stop(struct rproc *rproc)
+  * can be used either by the remoteproc core for loading (when using kernel
+  * remoteproc loader), or by any rpmsg bus drivers.
+  */
+-static void *k3_dsp_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *k3_dsp_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct k3_dsp_rproc *kproc = rproc->priv;
+ 	void __iomem *va = NULL;
+diff --git a/drivers/remoteproc/ti_k3_r5_remoteproc.c b/drivers/remoteproc/ti_k3_r5_remoteproc.c
+index 62b5a4c29456..5cf8d030a1f0 100644
+--- a/drivers/remoteproc/ti_k3_r5_remoteproc.c
++++ b/drivers/remoteproc/ti_k3_r5_remoteproc.c
+@@ -590,7 +590,7 @@ static int k3_r5_rproc_stop(struct rproc *rproc)
+  * present in a DSP or IPU device). The translated addresses can be used
+  * either by the remoteproc core for loading, or by any rpmsg bus drivers.
+  */
+-static void *k3_r5_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *k3_r5_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct k3_r5_rproc *kproc = rproc->priv;
+ 	struct k3_r5_core *core = kproc->core;
+diff --git a/drivers/remoteproc/wkup_m3_rproc.c b/drivers/remoteproc/wkup_m3_rproc.c
+index 92d387dfc03b..484f7605823e 100644
+--- a/drivers/remoteproc/wkup_m3_rproc.c
++++ b/drivers/remoteproc/wkup_m3_rproc.c
+@@ -89,7 +89,7 @@ static int wkup_m3_rproc_stop(struct rproc *rproc)
+ 	return error;
+ }
+ 
+-static void *wkup_m3_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
++static void *wkup_m3_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len, bool *is_iomem)
+ {
+ 	struct wkup_m3_rproc *wkupm3 = rproc->priv;
+ 	void *va = NULL;
+diff --git a/include/linux/remoteproc.h b/include/linux/remoteproc.h
+index f28ee75d1005..8b795b544f75 100644
+--- a/include/linux/remoteproc.h
++++ b/include/linux/remoteproc.h
+@@ -315,6 +315,7 @@ struct rproc;
+ /**
+  * struct rproc_mem_entry - memory entry descriptor
+  * @va:	virtual address
++ * @is_iomem: io memory
+  * @dma: dma address
+  * @len: length, in bytes
+  * @da: device address
+@@ -329,6 +330,7 @@ struct rproc;
+  */
+ struct rproc_mem_entry {
+ 	void *va;
++	bool is_iomem;
+ 	dma_addr_t dma;
+ 	size_t len;
+ 	u32 da;
+@@ -361,6 +363,7 @@ enum rsc_handling_status {
+  * @start:	power on the device and boot it
+  * @stop:	power off the device
+  * @attach:	attach to a device that his already powered up
++ * @detach:	detach from a device, leaving it powered up
+  * @kick:	kick a virtqueue (virtqueue id given as a parameter)
+  * @da_to_va:	optional platform hook to perform address translations
+  * @parse_fw:	parse firmware to extract information (e.g. resource table)
+@@ -368,7 +371,9 @@ enum rsc_handling_status {
+  * RSC_HANDLED if resource was handled, RSC_IGNORED if not handled and a
+  * negative value on error
+  * @load_rsc_table:	load resource table from firmware image
+- * @find_loaded_rsc_table: find the loaded resouce table
++ * @find_loaded_rsc_table: find the loaded resource table from firmware image
++ * @get_loaded_rsc_table: get resource table installed in memory
++ *			  by external entity
+  * @load:		load firmware to memory, where the remote processor
+  *			expects to find it
+  * @sanity_check:	sanity check the fw image
+@@ -383,13 +388,16 @@ struct rproc_ops {
+ 	int (*start)(struct rproc *rproc);
+ 	int (*stop)(struct rproc *rproc);
+ 	int (*attach)(struct rproc *rproc);
++	int (*detach)(struct rproc *rproc);
+ 	void (*kick)(struct rproc *rproc, int vqid);
+-	void * (*da_to_va)(struct rproc *rproc, u64 da, size_t len);
++	void * (*da_to_va)(struct rproc *rproc, u64 da, size_t len, bool *is_iomem);
+ 	int (*parse_fw)(struct rproc *rproc, const struct firmware *fw);
+ 	int (*handle_rsc)(struct rproc *rproc, u32 rsc_type, void *rsc,
+ 			  int offset, int avail);
+ 	struct resource_table *(*find_loaded_rsc_table)(
+ 				struct rproc *rproc, const struct firmware *fw);
++	struct resource_table *(*get_loaded_rsc_table)(
++				struct rproc *rproc, size_t *size);
+ 	int (*load)(struct rproc *rproc, const struct firmware *fw);
+ 	int (*sanity_check)(struct rproc *rproc, const struct firmware *fw);
+ 	u64 (*get_boot_addr)(struct rproc *rproc, const struct firmware *fw);
+@@ -405,6 +413,8 @@ struct rproc_ops {
+  * @RPROC_RUNNING:	device is up and running
+  * @RPROC_CRASHED:	device has crashed; need to start recovery
+  * @RPROC_DELETED:	device is deleted
++ * @RPROC_ATTACHED:	device has been booted by another entity and the core
++ *			has attached to it
+  * @RPROC_DETACHED:	device has been booted by another entity and waiting
+  *			for the core to attach to it
+  * @RPROC_LAST:		just keep this one at the end
+@@ -421,8 +431,9 @@ enum rproc_state {
+ 	RPROC_RUNNING	= 2,
+ 	RPROC_CRASHED	= 3,
+ 	RPROC_DELETED	= 4,
+-	RPROC_DETACHED	= 5,
+-	RPROC_LAST	= 6,
++	RPROC_ATTACHED	= 5,
++	RPROC_DETACHED	= 6,
++	RPROC_LAST	= 7,
+ };
+ 
+ /**
+@@ -505,11 +516,12 @@ struct rproc_dump_segment {
+  * @recovery_disabled: flag that state if recovery was disabled
+  * @max_notifyid: largest allocated notify id.
+  * @table_ptr: pointer to the resource table in effect
++ * @clean_table: copy of the resource table without modifications.  Used
++ *		 when a remote processor is attached or detached from the core
+  * @cached_table: copy of the resource table
+  * @table_sz: size of @cached_table
+  * @has_iommu: flag to indicate if remote processor is behind an MMU
+  * @auto_boot: flag to indicate if remote processor should be auto-started
+- * @autonomous: true if an external entity has booted the remote processor
+  * @dump_segments: list of segments in the firmware
+  * @nb_vdev: number of vdev currently handled by rproc
+  * @char_dev: character device of the rproc
+@@ -542,11 +554,11 @@ struct rproc {
+ 	bool recovery_disabled;
+ 	int max_notifyid;
+ 	struct resource_table *table_ptr;
++	struct resource_table *clean_table;
+ 	struct resource_table *cached_table;
+ 	size_t table_sz;
+ 	bool has_iommu;
+ 	bool auto_boot;
+-	bool autonomous;
+ 	struct list_head dump_segments;
+ 	int nb_vdev;
+ 	u8 elf_class;
+@@ -655,6 +667,7 @@ rproc_of_resm_mem_entry_init(struct device *dev, u32 of_resm_idx, size_t len,
+ 
+ int rproc_boot(struct rproc *rproc);
+ void rproc_shutdown(struct rproc *rproc);
++int rproc_detach(struct rproc *rproc);
+ int rproc_set_firmware(struct rproc *rproc, const char *fw_name);
+ void rproc_report_crash(struct rproc *rproc, enum rproc_crash_type type);
+ void rproc_coredump_using_sections(struct rproc *rproc);
+-- 
+2.30.2
+
