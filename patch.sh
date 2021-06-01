@@ -530,7 +530,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.190"
+	backport_tag="v4.19.192"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -546,7 +546,7 @@ backports () {
 		${git} "${DIR}/patches/backports/greybus/0002-greybus-drivers-staging-greybus-module.c-no-struct_s.patch"
 	fi
 
-	backport_tag="v5.4.118"
+	backport_tag="v5.4.123"
 
 	subsystem="wiznet"
 	#regenerate="enable"
@@ -554,6 +554,24 @@ backports () {
 		pre_backports
 
 		cp -rv ~/linux-src/drivers/net/ethernet/wiznet/* ./drivers/net/ethernet/wiznet/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	backport_tag="v4.14.234"
+
+	subsystem="iio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
+		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
+		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
+		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
 		post_backports
 		exit 2
