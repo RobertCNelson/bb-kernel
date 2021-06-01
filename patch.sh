@@ -574,7 +574,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12.7"
+	backport_tag="v5.12.8"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -590,7 +590,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12.7"
+	backport_tag="v5.12.8"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -813,6 +813,24 @@ backports () {
 	fi
 
 	dir 'cypress'
+
+	backport_tag="v5.4.123"
+
+	subsystem="iio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
+		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
+		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
+		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
 }
 
 reverts () {
@@ -849,6 +867,7 @@ drivers () {
 	dir 'drivers/ti/gpio'
 	dir 'drivers/ti/mmc'
 	dir 'drivers/greybus'
+	dir 'drivers/usb'
 }
 
 soc () {
@@ -870,7 +889,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.40"
+		backport_tag="v5.10.41"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
