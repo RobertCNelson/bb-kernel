@@ -377,10 +377,10 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-#		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-#		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-#		device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
 
 		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
@@ -543,7 +543,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.39"
+		backport_tag="v5.10.41"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
