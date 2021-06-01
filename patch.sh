@@ -529,7 +529,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.4.118"
+	backport_tag="v5.4.123"
 
 	subsystem="wiznet"
 	#regenerate="enable"
@@ -558,6 +558,24 @@ backports () {
 		exit 2
 	else
 		patch_backports
+	fi
+
+	backport_tag="v4.19.192"
+
+	subsystem="iio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
+		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
+		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
+		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+
+		post_backports
+		exit 2
+	#else
+	#	patch_backports
 	fi
 
 	backport_tag="v5.3.18"
