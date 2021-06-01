@@ -1,0 +1,78 @@
+From d48a56e84e6eca73b391f81430cb70e8a150e4c5 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Tue, 1 Jun 2021 16:48:49 -0500
+Subject: [PATCH] backports: iio: from: linux.git
+
+Reference: v4.14.234
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/iio/gyro/mpu3050-core.c                   | 13 +++++++++++--
+ drivers/iio/light/tsl2583.c                       |  8 ++++++++
+ drivers/iio/proximity/pulsedlight-lidar-lite-v2.c |  1 +
+ 3 files changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iio/gyro/mpu3050-core.c b/drivers/iio/gyro/mpu3050-core.c
+index 3db843206db3..1096226a0612 100644
+--- a/drivers/iio/gyro/mpu3050-core.c
++++ b/drivers/iio/gyro/mpu3050-core.c
+@@ -270,7 +270,16 @@ static int mpu3050_read_raw(struct iio_dev *indio_dev,
+ 	case IIO_CHAN_INFO_OFFSET:
+ 		switch (chan->type) {
+ 		case IIO_TEMP:
+-			/* The temperature scaling is (x+23000)/280 Celsius */
++			/*
++			 * The temperature scaling is (x+23000)/280 Celsius
++			 * for the "best fit straight line" temperature range
++			 * of -30C..85C.  The 23000 includes room temperature
++			 * offset of +35C, 280 is the precision scale and x is
++			 * the 16-bit signed integer reported by hardware.
++			 *
++			 * Temperature value itself represents temperature of
++			 * the sensor die.
++			 */
+ 			*val = 23000;
+ 			return IIO_VAL_INT;
+ 		default:
+@@ -327,7 +336,7 @@ static int mpu3050_read_raw(struct iio_dev *indio_dev,
+ 				goto out_read_raw_unlock;
+ 			}
+ 
+-			*val = be16_to_cpu(raw_val);
++			*val = (s16)be16_to_cpu(raw_val);
+ 			ret = IIO_VAL_INT;
+ 
+ 			goto out_read_raw_unlock;
+diff --git a/drivers/iio/light/tsl2583.c b/drivers/iio/light/tsl2583.c
+index fb711ed4862e..87ed9adec7e1 100644
+--- a/drivers/iio/light/tsl2583.c
++++ b/drivers/iio/light/tsl2583.c
+@@ -350,6 +350,14 @@ static int tsl2583_als_calibrate(struct iio_dev *indio_dev)
+ 		return lux_val;
+ 	}
+ 
++	/* Avoid division by zero of lux_value later on */
++	if (lux_val == 0) {
++		dev_err(&chip->client->dev,
++			"%s: lux_val of 0 will produce out of range trim_value\n",
++			__func__);
++		return -ENODATA;
++	}
++
+ 	gain_trim_val = (unsigned int)(((chip->als_settings.als_cal_target)
+ 			* chip->als_settings.als_gain_trim) / lux_val);
+ 	if ((gain_trim_val < 250) || (gain_trim_val > 4000)) {
+diff --git a/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c b/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
+index 36c1ddc251aa..c033db701bb5 100644
+--- a/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
++++ b/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
+@@ -166,6 +166,7 @@ static int lidar_get_measurement(struct lidar_data *data, u16 *reg)
+ 	ret = lidar_write_control(data, LIDAR_REG_CONTROL_ACQUIRE);
+ 	if (ret < 0) {
+ 		dev_err(&client->dev, "cannot send start measurement command");
++		pm_runtime_put_noidle(&client->dev);
+ 		return ret;
+ 	}
+ 
+-- 
+2.30.2
+
