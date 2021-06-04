@@ -1,14 +1,14 @@
-From d1369214db4b3370bb418b0b6253788d87aa3a42 Mon Sep 17 00:00:00 2001
+From 4e64a410e86d24681712b77d01b4f893fea3e07a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 26 May 2021 11:28:48 -0500
+Date: Fri, 4 Jun 2021 12:10:08 -0500
 Subject: [PATCH] merge: can-isotp: https://github.com/hartkopp/can-isotp
 
-https://github.com/hartkopp/can-isotp/commit/b312dbd5e720833cb69bc65af3670a52dd1e93ca
+https://github.com/hartkopp/can-isotp/commit/593c79fb0f4d6e36f1cce5d1c880e26664bc574e
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  include/uapi/linux/can/isotp.h |  136 +++
- net/can/isotp.c                | 1556 ++++++++++++++++++++++++++++++++
- 2 files changed, 1692 insertions(+)
+ net/can/isotp.c                | 1582 ++++++++++++++++++++++++++++++++
+ 2 files changed, 1718 insertions(+)
  create mode 100644 include/uapi/linux/can/isotp.h
  create mode 100644 net/can/isotp.c
 
@@ -156,10 +156,10 @@ index 000000000000..88831772f9ee
 +#endif
 diff --git a/net/can/isotp.c b/net/can/isotp.c
 new file mode 100644
-index 000000000000..e77252122980
+index 000000000000..4271839b1c3b
 --- /dev/null
 +++ b/net/can/isotp.c
-@@ -0,0 +1,1556 @@
+@@ -0,0 +1,1582 @@
 +// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
 +/* isotp.c - ISO 15765-2 CAN transport protocol for protocol family CAN
 + *
@@ -258,6 +258,12 @@ index 000000000000..e77252122980
 +				   __func__, ##args))
 +#undef DBG
 +#define DBG(fmt, args...)
++
++#define ISOTP_REQUIRED_SIZE(struct_type, member) \
++	(offsetof(typeof(struct_type), member) + \
++	sizeof(((typeof(struct_type) *)(NULL))->member))
++
++#define ISOTP_MIN_NAMELEN ISOTP_REQUIRED_SIZE(struct sockaddr_can, can_addr.tp)
 +
 +#define SINGLE_MASK(id) (((id) & CAN_EFF_FLAG) ? \
 +			 (CAN_EFF_MASK | CAN_EFF_FLAG | CAN_RTR_FLAG) : \
@@ -1186,7 +1192,7 @@ index 000000000000..e77252122980
 +	sock_recv_timestamp(msg, sk, skb);
 +
 +	if (msg->msg_name) {
-+		msg->msg_namelen = sizeof(struct sockaddr_can);
++		msg->msg_namelen = ISOTP_MIN_NAMELEN;
 +		memcpy(msg->msg_name, skb->cb, msg->msg_namelen);
 +	}
 +
@@ -1261,25 +1267,8 @@ index 000000000000..e77252122980
 +	int notify_enetdown = 0;
 +	int do_rx_reg = 1;
 +
-+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
-+	if (len < CAN_REQUIRED_SIZE(struct sockaddr_can, can_addr.tp))
-+#else
-+	if (len < sizeof(*addr))
-+#endif
++	if (len < ISOTP_MIN_NAMELEN)
 +		return -EINVAL;
-+
-+	/* do not register frame reception for functional addressing */
-+	if (so->opt.flags & CAN_ISOTP_SF_BROADCAST)
-+		do_rx_reg = 0;
-+
-+	/* do not validate rx address for functional addressing */
-+	if (do_rx_reg) {
-+		if (addr->can_addr.tp.rx_id == addr->can_addr.tp.tx_id)
-+			return -EADDRNOTAVAIL;
-+
-+		if (addr->can_addr.tp.rx_id & (CAN_ERR_FLAG | CAN_RTR_FLAG))
-+			return -EADDRNOTAVAIL;
-+	}
 +
 +	if (addr->can_addr.tp.tx_id & (CAN_ERR_FLAG | CAN_RTR_FLAG))
 +		return -EADDRNOTAVAIL;
@@ -1288,6 +1277,23 @@ index 000000000000..e77252122980
 +		return -ENODEV;
 +
 +	lock_sock(sk);
++
++	/* do not register frame reception for functional addressing */
++	if (so->opt.flags & CAN_ISOTP_SF_BROADCAST)
++		do_rx_reg = 0;
++
++	/* do not validate rx address for functional addressing */
++	if (do_rx_reg) {
++		if (addr->can_addr.tp.rx_id == addr->can_addr.tp.tx_id) {
++			err = -EADDRNOTAVAIL;
++			goto out;
++		}
++
++		if (addr->can_addr.tp.rx_id & (CAN_ERR_FLAG | CAN_RTR_FLAG)) {
++			err = -EADDRNOTAVAIL;
++			goto out;
++		}
++	}
 +
 +	if (so->bound && addr->can_ifindex == so->ifindex &&
 +	    addr->can_addr.tp.rx_id == so->rxid &&
@@ -1380,16 +1386,16 @@ index 000000000000..e77252122980
 +	if (peer)
 +		return -EOPNOTSUPP;
 +
-+	memset(addr, 0, sizeof(*addr));
++	memset(addr, 0, ISOTP_MIN_NAMELEN);
 +	addr->can_family = AF_CAN;
 +	addr->can_ifindex = so->ifindex;
 +	addr->can_addr.tp.rx_id = so->rxid;
 +	addr->can_addr.tp.tx_id = so->txid;
 +
 +#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-+	return sizeof(*addr);
++	return ISOTP_MIN_NAMELEN;
 +#else
-+	*len = sizeof(*addr);
++	*len = ISOTP_MIN_NAMELEN;
 +
 +	return 0;
 +#endif
@@ -1397,22 +1403,19 @@ index 000000000000..e77252122980
 +
 +#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
 +#define copy_from_user copy_from_sockptr
-+static int isotp_setsockopt(struct socket *sock, int level, int optname,
-+			    sockptr_t optval, unsigned int optlen)
++static int isotp_setsockopt_locked(struct socket *sock, int level, int optname,
++				   sockptr_t optval, unsigned int optlen)
 +#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
-+static int isotp_setsockopt(struct socket *sock, int level, int optname,
-+			    char __user *optval, unsigned int optlen)
++static int isotp_setsockopt_locked(struct socket *sock, int level, int optname,
++				   char __user *optval, unsigned int optlen)
 +#else
-+static int isotp_setsockopt(struct socket *sock, int level, int optname,
-+			    char __user *optval, int optlen)
++static int isotp_setsockopt_locked(struct socket *sock, int level, int optname,
++				   char __user *optval, int optlen)
 +#endif
 +{
 +	struct sock *sk = sock->sk;
 +	struct isotp_sock *so = isotp_sk(sk);
 +	int ret = 0;
-+
-+	if (level != SOL_CAN_ISOTP)
-+		return -EINVAL;
 +
 +	if (so->bound)
 +		return -EISCONN;
@@ -1485,6 +1488,29 @@ index 000000000000..e77252122980
 +		ret = -ENOPROTOOPT;
 +	}
 +
++	return ret;
++}
++
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
++static int isotp_setsockopt(struct socket *sock, int level, int optname,
++			    sockptr_t optval, unsigned int optlen)
++#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
++static int isotp_setsockopt(struct socket *sock, int level, int optname,
++			    char __user *optval, unsigned int optlen)
++#else
++static int isotp_setsockopt(struct socket *sock, int level, int optname,
++			    char __user *optval, int optlen)
++#endif
++{
++	struct sock *sk = sock->sk;
++	int ret;
++
++	if (level != SOL_CAN_ISOTP)
++		return -EINVAL;
++
++	lock_sock(sk);
++	ret = isotp_setsockopt_locked(sock, level, optname, optval, optlen);
++	release_sock(sk);
 +	return ret;
 +}
 +
