@@ -35,10 +35,10 @@ toolchain="gcc_10_arm"
 
 #Kernel
 KERNEL_REL=5.12
-KERNEL_TAG=${KERNEL_REL}.8
+KERNEL_TAG=${KERNEL_REL}.9
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}19
+BUILD=${build_prefix}19.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
