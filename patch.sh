@@ -493,7 +493,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13-rc4"
+	backport_tag="v5.13-rc5"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -508,7 +508,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13-rc4"
+	backport_tag="v5.13-rc5"
 
 	subsystem="pru_rproc"
 	#regenerate="enable"
