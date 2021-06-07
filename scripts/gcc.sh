@@ -143,6 +143,20 @@ gcc_toolchain () {
 
 		binary="bin/arm-linux-gnueabi-"
 		;;
+	gcc_11_arm)
+		#
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/11.1.0/x86_64-gcc-11.1.0-nolibc-arm-linux-gnueabi.tar.xz
+		#
+
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/11.1.0/"
+		gcc_filename_prefix="x86_64-gcc-11.1.0-nolibc-arm-linux-gnueabi"
+		extracted_dir="gcc-11.1.0-nolibc/arm-linux-gnueabi"
+		gcc_banner="arm-linux-gcc (GCC) 11.1.0"
+		gcc_copyright="2021"
+		datestamp="2021.11.1.0-arm-linux-gnueabi"
+
+		binary="bin/arm-linux-gnueabi-"
+		;;
 	gcc_linaro_aarch64_gnu_6|gcc_6_aarch64)
 		#
 		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/6.5.0/x86_64-gcc-6.5.0-nolibc-aarch64-linux.tar.xz
@@ -213,6 +227,20 @@ gcc_toolchain () {
 
 		binary="bin/aarch64-linux-"
 		;;
+	gcc_11_aarch64)
+		#
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/11.1.0/x86_64-gcc-11.1.0-nolibc-aarch64-linux.tar.xz
+		#
+
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/11.1.0/"
+		gcc_filename_prefix="x86_64-gcc-11.1.0-nolibc-aarch64-linux"
+		extracted_dir="gcc-11.1.0-nolibc/aarch64-linux"
+		gcc_banner="aarch64-linux-gcc (GCC) 11.1.0"
+		gcc_copyright="2021"
+		datestamp="2021.11.1.0-aarch64-linux-gcc"
+
+		binary="bin/aarch64-linux-"
+		;;
 	gcc_7_riscv64)
 		#
 		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/7.5.0/x86_64-gcc-7.5.0-nolibc-riscv64-linux.tar.xz
@@ -266,6 +294,20 @@ gcc_toolchain () {
 		gcc_banner="riscv64-linux-gcc (GCC) 10.3.0"
 		gcc_copyright="2020"
 		datestamp="2020.10.3.0-riscv64-linux-gcc"
+
+		binary="bin/riscv64-linux-"
+		;;
+	gcc_11_riscv64)
+		#
+		#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/11.1.0/x86_64-gcc-11.1.0-nolibc-riscv64-linux.tar.xz
+		#
+
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/11.1.0/"
+		gcc_filename_prefix="x86_64-gcc-11.1.0-nolibc-riscv64-linux"
+		extracted_dir="gcc-11.1.0-nolibc/riscv64-linux"
+		gcc_banner="riscv64-linux-gcc (GCC) 11.1.0"
+		gcc_copyright="2021"
+		datestamp="2021.11.1.0-riscv64-linux-gcc"
 
 		binary="bin/riscv64-linux-"
 		;;

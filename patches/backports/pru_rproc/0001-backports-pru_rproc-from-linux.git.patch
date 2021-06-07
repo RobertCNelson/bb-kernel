@@ -1,9 +1,9 @@
-From 873c68bd7769dd26b55de2e5da1455e4abc8b4d2 Mon Sep 17 00:00:00 2001
+From 25ed92d1a62b8c61c5ab5c1cbec54181b47618ce Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 4 Jun 2021 11:43:56 -0500
+Date: Mon, 7 Jun 2021 16:40:31 -0500
 Subject: [PATCH] backports: pru_rproc: from: linux.git
 
-Reference: v5.13-rc4
+Reference: v5.13-rc5
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  drivers/remoteproc/Kconfig                  |  46 +-
@@ -21,7 +21,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/remoteproc/qcom_q6v5.c              |   8 +-
  drivers/remoteproc/qcom_q6v5.h              |   3 +-
  drivers/remoteproc/qcom_q6v5_adsp.c         |   4 +-
- drivers/remoteproc/qcom_q6v5_mss.c          | 145 +++-
+ drivers/remoteproc/qcom_q6v5_mss.c          | 115 ++-
  drivers/remoteproc/qcom_q6v5_pas.c          | 112 ++-
  drivers/remoteproc/qcom_q6v5_wcss.c         | 599 ++++++++++++-
  drivers/remoteproc/qcom_sysmon.c            |  93 +-
@@ -42,7 +42,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/remoteproc/wkup_m3_rproc.c          |  43 +-
  include/linux/remoteproc.h                  |  29 +-
  include/linux/remoteproc/qcom_rproc.h       |   4 +-
- 36 files changed, 3441 insertions(+), 447 deletions(-)
+ 36 files changed, 3417 insertions(+), 441 deletions(-)
  create mode 100644 drivers/remoteproc/pru_rproc.c
  create mode 100644 drivers/remoteproc/pru_rproc.h
 
@@ -2361,7 +2361,7 @@ index 9eb599701f9b..8b0d8bbacd2e 100644
  	struct qcom_adsp *adsp = (struct qcom_adsp *)rproc->priv;
  	int offset;
 diff --git a/drivers/remoteproc/qcom_q6v5_mss.c b/drivers/remoteproc/qcom_q6v5_mss.c
-index ba6f7551242d..423b31dfa574 100644
+index ebc3e755bcbc..423b31dfa574 100644
 --- a/drivers/remoteproc/qcom_q6v5_mss.c
 +++ b/drivers/remoteproc/qcom_q6v5_mss.c
 @@ -132,6 +132,7 @@ struct qcom_mss_reg_res {
@@ -2505,75 +2505,7 @@ index ba6f7551242d..423b31dfa574 100644
  		q6v5_regulator_disable(qproc, qproc->proxy_regs,
  				       qproc->proxy_reg_count);
  	}
-@@ -1182,7 +1210,15 @@ static int q6v5_mpss_load(struct q6v5 *qproc)
- 			goto release_firmware;
- 		}
- 
--		ptr = ioremap_wc(qproc->mpss_phys + offset, phdr->p_memsz);
-+		if (phdr->p_filesz > phdr->p_memsz) {
-+			dev_err(qproc->dev,
-+				"refusing to load segment %d with p_filesz > p_memsz\n",
-+				i);
-+			ret = -EINVAL;
-+			goto release_firmware;
-+		}
-+
-+		ptr = memremap(qproc->mpss_phys + offset, phdr->p_memsz, MEMREMAP_WC);
- 		if (!ptr) {
- 			dev_err(qproc->dev,
- 				"unable to map memory region: %pa+%zx-%x\n",
-@@ -1197,7 +1233,7 @@ static int q6v5_mpss_load(struct q6v5 *qproc)
- 					"failed to load segment %d from truncated file %s\n",
- 					i, fw_name);
- 				ret = -EINVAL;
--				iounmap(ptr);
-+				memunmap(ptr);
- 				goto release_firmware;
- 			}
- 
-@@ -1209,7 +1245,17 @@ static int q6v5_mpss_load(struct q6v5 *qproc)
- 							ptr, phdr->p_filesz);
- 			if (ret) {
- 				dev_err(qproc->dev, "failed to load %s\n", fw_name);
--				iounmap(ptr);
-+				memunmap(ptr);
-+				goto release_firmware;
-+			}
-+
-+			if (seg_fw->size != phdr->p_filesz) {
-+				dev_err(qproc->dev,
-+					"failed to load segment %d from truncated file %s\n",
-+					i, fw_name);
-+				ret = -EINVAL;
-+				release_firmware(seg_fw);
-+				memunmap(ptr);
- 				goto release_firmware;
- 			}
- 
-@@ -1220,7 +1266,7 @@ static int q6v5_mpss_load(struct q6v5 *qproc)
- 			memset(ptr + phdr->p_filesz, 0,
- 			       phdr->p_memsz - phdr->p_filesz);
- 		}
--		iounmap(ptr);
-+		memunmap(ptr);
- 		size += phdr->p_memsz;
- 
- 		code_length = readl(qproc->rmb_base + RMB_PMI_CODE_LENGTH_REG);
-@@ -1287,11 +1333,11 @@ static void qcom_q6v5_dump_segment(struct rproc *rproc,
- 	}
- 
- 	if (!ret)
--		ptr = ioremap_wc(qproc->mpss_phys + offset + cp_offset, size);
-+		ptr = memremap(qproc->mpss_phys + offset + cp_offset, size, MEMREMAP_WC);
- 
- 	if (ptr) {
- 		memcpy(dest, ptr, size);
--		iounmap(ptr);
-+		memunmap(ptr);
- 	} else {
- 		memset(dest, 0xff, size);
- 	}
-@@ -1358,7 +1404,7 @@ static int q6v5_stop(struct rproc *rproc)
+@@ -1376,7 +1404,7 @@ static int q6v5_stop(struct rproc *rproc)
  	struct q6v5 *qproc = (struct q6v5 *)rproc->priv;
  	int ret;
  
@@ -2582,7 +2514,7 @@ index ba6f7551242d..423b31dfa574 100644
  	if (ret == -ETIMEDOUT)
  		dev_err(qproc->dev, "timed out on wait\n");
  
-@@ -1426,6 +1472,8 @@ static void qcom_msa_handover(struct qcom_q6v5 *q6v5)
+@@ -1444,6 +1472,8 @@ static void qcom_msa_handover(struct qcom_q6v5 *q6v5)
  			 qproc->proxy_clk_count);
  	q6v5_regulator_disable(qproc, qproc->proxy_regs,
  			       qproc->proxy_reg_count);
@@ -2591,7 +2523,7 @@ index ba6f7551242d..423b31dfa574 100644
  	q6v5_pds_disable(qproc, qproc->proxy_pds, qproc->proxy_pd_count);
  }
  
-@@ -1591,12 +1639,6 @@ static int q6v5_alloc_memory_region(struct q6v5 *qproc)
+@@ -1609,12 +1639,6 @@ static int q6v5_alloc_memory_region(struct q6v5 *qproc)
  
  	qproc->mba_phys = r.start;
  	qproc->mba_size = resource_size(&r);
@@ -2604,7 +2536,7 @@ index ba6f7551242d..423b31dfa574 100644
  
  	if (!child) {
  		node = of_parse_phandle(qproc->dev->of_node,
-@@ -1637,8 +1679,10 @@ static int q6v5_probe(struct platform_device *pdev)
+@@ -1655,8 +1679,10 @@ static int q6v5_probe(struct platform_device *pdev)
  	mba_image = desc->hexagon_mba_image;
  	ret = of_property_read_string_index(pdev->dev.of_node, "firmware-name",
  					    0, &mba_image);
@@ -2616,7 +2548,7 @@ index ba6f7551242d..423b31dfa574 100644
  
  	rproc = rproc_alloc(&pdev->dev, pdev->name, &q6v5_ops,
  			    mba_image, sizeof(*qproc));
-@@ -1656,8 +1700,10 @@ static int q6v5_probe(struct platform_device *pdev)
+@@ -1674,8 +1700,10 @@ static int q6v5_probe(struct platform_device *pdev)
  	qproc->hexagon_mdt_image = "modem.mdt";
  	ret = of_property_read_string_index(pdev->dev.of_node, "firmware-name",
  					    1, &qproc->hexagon_mdt_image);
@@ -2628,7 +2560,7 @@ index ba6f7551242d..423b31dfa574 100644
  
  	platform_set_drvdata(pdev, qproc);
  
-@@ -1720,11 +1766,22 @@ static int q6v5_probe(struct platform_device *pdev)
+@@ -1738,11 +1766,22 @@ static int q6v5_probe(struct platform_device *pdev)
  
  	ret = q6v5_pds_attach(&pdev->dev, qproc->proxy_pds,
  			      desc->proxy_pd_names);
@@ -2653,7 +2585,7 @@ index ba6f7551242d..423b31dfa574 100644
  
  	qproc->has_alt_reset = desc->has_alt_reset;
  	ret = q6v5_init_reset(qproc);
-@@ -1925,6 +1982,13 @@ static const struct rproc_hexagon_res msm8996_mss = {
+@@ -1943,6 +1982,13 @@ static const struct rproc_hexagon_res msm8996_mss = {
  static const struct rproc_hexagon_res msm8916_mss = {
  	.hexagon_mba_image = "mba.mbn",
  	.proxy_supply = (struct qcom_mss_reg_res[]) {
@@ -2667,7 +2599,7 @@ index ba6f7551242d..423b31dfa574 100644
  		{
  			.supply = "mx",
  			.uV = 1050000,
-@@ -1933,10 +1997,6 @@ static const struct rproc_hexagon_res msm8916_mss = {
+@@ -1951,10 +1997,6 @@ static const struct rproc_hexagon_res msm8916_mss = {
  			.supply = "cx",
  			.uA = 100000,
  		},
@@ -2678,7 +2610,7 @@ index ba6f7551242d..423b31dfa574 100644
  		{}
  	},
  	.proxy_clk_names = (char*[]){
-@@ -1949,6 +2009,11 @@ static const struct rproc_hexagon_res msm8916_mss = {
+@@ -1967,6 +2009,11 @@ static const struct rproc_hexagon_res msm8916_mss = {
  		"mem",
  		NULL
  	},
@@ -2690,7 +2622,7 @@ index ba6f7551242d..423b31dfa574 100644
  	.need_mem_protection = false,
  	.has_alt_reset = false,
  	.has_mba_logs = false,
-@@ -1959,6 +2024,13 @@ static const struct rproc_hexagon_res msm8916_mss = {
+@@ -1977,6 +2024,13 @@ static const struct rproc_hexagon_res msm8916_mss = {
  static const struct rproc_hexagon_res msm8974_mss = {
  	.hexagon_mba_image = "mba.b00",
  	.proxy_supply = (struct qcom_mss_reg_res[]) {
@@ -2704,7 +2636,7 @@ index ba6f7551242d..423b31dfa574 100644
  		{
  			.supply = "mx",
  			.uV = 1050000,
-@@ -1967,10 +2039,6 @@ static const struct rproc_hexagon_res msm8974_mss = {
+@@ -1985,10 +2039,6 @@ static const struct rproc_hexagon_res msm8974_mss = {
  			.supply = "cx",
  			.uA = 100000,
  		},
@@ -2715,7 +2647,7 @@ index ba6f7551242d..423b31dfa574 100644
  		{}
  	},
  	.active_supply = (struct qcom_mss_reg_res[]) {
-@@ -1991,6 +2059,11 @@ static const struct rproc_hexagon_res msm8974_mss = {
+@@ -2009,6 +2059,11 @@ static const struct rproc_hexagon_res msm8974_mss = {
  		"mem",
  		NULL
  	},
