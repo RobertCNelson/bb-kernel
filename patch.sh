@@ -377,10 +377,10 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-		#device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
 
 		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
@@ -511,7 +511,7 @@ reverts () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	#dir 'RPi'
+	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
@@ -521,10 +521,9 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
-#	dir 'drivers/mikrobus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-#	dir 'fixes'
+	dir 'drivers/usb'
 }
 
 soc () {
@@ -543,7 +542,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.41"
+		backport_tag="v5.10.42"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
