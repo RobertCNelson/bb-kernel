@@ -1,92 +1,177 @@
-From ad40bfd3331d8000eb0c8cb0b4c3ebc89f1aeb38 Mon Sep 17 00:00:00 2001
+From fbf3c6656ed3fcb35271cf71963e9e86d29a02d4 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 1 Jun 2021 15:29:15 -0500
+Date: Thu, 10 Jun 2021 17:19:26 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
-Reference: v5.4.123
+Reference: v5.4.125
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/iio/accel/adis16201.c                     |  2 +-
- drivers/iio/gyro/mpu3050-core.c                   | 13 +++++++++++--
- drivers/iio/light/tsl2583.c                       |  8 ++++++++
- drivers/iio/proximity/pulsedlight-lidar-lite-v2.c |  1 +
- 4 files changed, 21 insertions(+), 3 deletions(-)
+ drivers/iio/adc/ad7124.c           | 36 +++++++++++++++++-------------
+ drivers/iio/adc/ad7768-1.c         |  8 +++++--
+ drivers/iio/adc/ad7793.c           |  1 +
+ drivers/iio/gyro/fxas21002c_core.c |  2 ++
+ drivers/staging/iio/cdc/ad7746.c   |  1 -
+ 5 files changed, 29 insertions(+), 19 deletions(-)
 
-diff --git a/drivers/iio/accel/adis16201.c b/drivers/iio/accel/adis16201.c
-index c4810c73b2a2..2de45587569a 100644
---- a/drivers/iio/accel/adis16201.c
-+++ b/drivers/iio/accel/adis16201.c
-@@ -215,7 +215,7 @@ static const struct iio_chan_spec adis16201_channels[] = {
- 	ADIS_AUX_ADC_CHAN(ADIS16201_AUX_ADC_REG, ADIS16201_SCAN_AUX_ADC, 0, 12),
- 	ADIS_INCLI_CHAN(X, ADIS16201_XINCL_OUT_REG, ADIS16201_SCAN_INCLI_X,
- 			BIT(IIO_CHAN_INFO_CALIBBIAS), 0, 14),
--	ADIS_INCLI_CHAN(X, ADIS16201_YINCL_OUT_REG, ADIS16201_SCAN_INCLI_Y,
-+	ADIS_INCLI_CHAN(Y, ADIS16201_YINCL_OUT_REG, ADIS16201_SCAN_INCLI_Y,
- 			BIT(IIO_CHAN_INFO_CALIBBIAS), 0, 14),
- 	IIO_CHAN_SOFT_TIMESTAMP(7)
- };
-diff --git a/drivers/iio/gyro/mpu3050-core.c b/drivers/iio/gyro/mpu3050-core.c
-index 7046bca1d7eb..75db410b5054 100644
---- a/drivers/iio/gyro/mpu3050-core.c
-+++ b/drivers/iio/gyro/mpu3050-core.c
-@@ -271,7 +271,16 @@ static int mpu3050_read_raw(struct iio_dev *indio_dev,
- 	case IIO_CHAN_INFO_OFFSET:
- 		switch (chan->type) {
- 		case IIO_TEMP:
--			/* The temperature scaling is (x+23000)/280 Celsius */
-+			/*
-+			 * The temperature scaling is (x+23000)/280 Celsius
-+			 * for the "best fit straight line" temperature range
-+			 * of -30C..85C.  The 23000 includes room temperature
-+			 * offset of +35C, 280 is the precision scale and x is
-+			 * the 16-bit signed integer reported by hardware.
-+			 *
-+			 * Temperature value itself represents temperature of
-+			 * the sensor die.
-+			 */
- 			*val = 23000;
- 			return IIO_VAL_INT;
- 		default:
-@@ -328,7 +337,7 @@ static int mpu3050_read_raw(struct iio_dev *indio_dev,
- 				goto out_read_raw_unlock;
- 			}
+diff --git a/drivers/iio/adc/ad7124.c b/drivers/iio/adc/ad7124.c
+index 306bf15023a7..fa808f9c0d9a 100644
+--- a/drivers/iio/adc/ad7124.c
++++ b/drivers/iio/adc/ad7124.c
+@@ -473,6 +473,13 @@ static int ad7124_of_parse_channel_config(struct iio_dev *indio_dev,
+ 		if (ret)
+ 			goto err;
  
--			*val = be16_to_cpu(raw_val);
-+			*val = (s16)be16_to_cpu(raw_val);
- 			ret = IIO_VAL_INT;
- 
- 			goto out_read_raw_unlock;
-diff --git a/drivers/iio/light/tsl2583.c b/drivers/iio/light/tsl2583.c
-index a760d14e146a..fe6001afb7b4 100644
---- a/drivers/iio/light/tsl2583.c
-+++ b/drivers/iio/light/tsl2583.c
-@@ -341,6 +341,14 @@ static int tsl2583_als_calibrate(struct iio_dev *indio_dev)
- 		return lux_val;
- 	}
- 
-+	/* Avoid division by zero of lux_value later on */
-+	if (lux_val == 0) {
-+		dev_err(&chip->client->dev,
-+			"%s: lux_val of 0 will produce out of range trim_value\n",
-+			__func__);
-+		return -ENODATA;
-+	}
++		if (channel >= indio_dev->num_channels) {
++			dev_err(indio_dev->dev.parent,
++				"Channel index >= number of channels\n");
++			ret = -EINVAL;
++			goto err;
++		}
 +
- 	gain_trim_val = (unsigned int)(((chip->als_settings.als_cal_target)
- 			* chip->als_settings.als_gain_trim) / lux_val);
- 	if ((gain_trim_val < 250) || (gain_trim_val > 4000)) {
-diff --git a/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c b/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
-index 47af54f14756..67f85268b63d 100644
---- a/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
-+++ b/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
-@@ -158,6 +158,7 @@ static int lidar_get_measurement(struct lidar_data *data, u16 *reg)
- 	ret = lidar_write_control(data, LIDAR_REG_CONTROL_ACQUIRE);
- 	if (ret < 0) {
- 		dev_err(&client->dev, "cannot send start measurement command");
-+		pm_runtime_put_noidle(&client->dev);
- 		return ret;
+ 		ret = of_property_read_u32_array(child, "diff-channels",
+ 						 ain, 2);
+ 		if (ret)
+@@ -564,6 +571,11 @@ static int ad7124_setup(struct ad7124_state *st)
+ 	return ret;
+ }
+ 
++static void ad7124_reg_disable(void *r)
++{
++	regulator_disable(r);
++}
++
+ static int ad7124_probe(struct spi_device *spi)
+ {
+ 	const struct spi_device_id *id;
+@@ -607,17 +619,20 @@ static int ad7124_probe(struct spi_device *spi)
+ 		ret = regulator_enable(st->vref[i]);
+ 		if (ret)
+ 			return ret;
++
++		ret = devm_add_action_or_reset(&spi->dev, ad7124_reg_disable,
++					       st->vref[i]);
++		if (ret)
++			return ret;
  	}
  
+ 	st->mclk = devm_clk_get(&spi->dev, "mclk");
+-	if (IS_ERR(st->mclk)) {
+-		ret = PTR_ERR(st->mclk);
+-		goto error_regulator_disable;
+-	}
++	if (IS_ERR(st->mclk))
++		return PTR_ERR(st->mclk);
+ 
+ 	ret = clk_prepare_enable(st->mclk);
+ 	if (ret < 0)
+-		goto error_regulator_disable;
++		return ret;
+ 
+ 	ret = ad7124_soft_reset(st);
+ 	if (ret < 0)
+@@ -643,11 +658,6 @@ static int ad7124_probe(struct spi_device *spi)
+ 	ad_sd_cleanup_buffer_and_trigger(indio_dev);
+ error_clk_disable_unprepare:
+ 	clk_disable_unprepare(st->mclk);
+-error_regulator_disable:
+-	for (i = ARRAY_SIZE(st->vref) - 1; i >= 0; i--) {
+-		if (!IS_ERR_OR_NULL(st->vref[i]))
+-			regulator_disable(st->vref[i]);
+-	}
+ 
+ 	return ret;
+ }
+@@ -656,17 +666,11 @@ static int ad7124_remove(struct spi_device *spi)
+ {
+ 	struct iio_dev *indio_dev = spi_get_drvdata(spi);
+ 	struct ad7124_state *st = iio_priv(indio_dev);
+-	int i;
+ 
+ 	iio_device_unregister(indio_dev);
+ 	ad_sd_cleanup_buffer_and_trigger(indio_dev);
+ 	clk_disable_unprepare(st->mclk);
+ 
+-	for (i = ARRAY_SIZE(st->vref) - 1; i >= 0; i--) {
+-		if (!IS_ERR_OR_NULL(st->vref[i]))
+-			regulator_disable(st->vref[i]);
+-	}
+-
+ 	return 0;
+ }
+ 
+diff --git a/drivers/iio/adc/ad7768-1.c b/drivers/iio/adc/ad7768-1.c
+index 0d132708c429..0f6c1be1cda2 100644
+--- a/drivers/iio/adc/ad7768-1.c
++++ b/drivers/iio/adc/ad7768-1.c
+@@ -166,6 +166,10 @@ struct ad7768_state {
+ 	 * transfer buffers to live in their own cache lines.
+ 	 */
+ 	union {
++		struct {
++			__be32 chan;
++			s64 timestamp;
++		} scan;
+ 		__be32 d32;
+ 		u8 d8[2];
+ 	} data ____cacheline_aligned;
+@@ -459,11 +463,11 @@ static irqreturn_t ad7768_trigger_handler(int irq, void *p)
+ 
+ 	mutex_lock(&st->lock);
+ 
+-	ret = spi_read(st->spi, &st->data.d32, 3);
++	ret = spi_read(st->spi, &st->data.scan.chan, 3);
+ 	if (ret < 0)
+ 		goto err_unlock;
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, &st->data.d32,
++	iio_push_to_buffers_with_timestamp(indio_dev, &st->data.scan,
+ 					   iio_get_time_ns(indio_dev));
+ 
+ 	iio_trigger_notify_done(indio_dev->trig);
+diff --git a/drivers/iio/adc/ad7793.c b/drivers/iio/adc/ad7793.c
+index 6ed6d1410201..947d6c777234 100644
+--- a/drivers/iio/adc/ad7793.c
++++ b/drivers/iio/adc/ad7793.c
+@@ -278,6 +278,7 @@ static int ad7793_setup(struct iio_dev *indio_dev,
+ 	id &= AD7793_ID_MASK;
+ 
+ 	if (id != st->chip_info->id) {
++		ret = -ENODEV;
+ 		dev_err(&st->sd.spi->dev, "device ID query failed\n");
+ 		goto out;
+ 	}
+diff --git a/drivers/iio/gyro/fxas21002c_core.c b/drivers/iio/gyro/fxas21002c_core.c
+index 89d2bb2282ea..958cf8b6002c 100644
+--- a/drivers/iio/gyro/fxas21002c_core.c
++++ b/drivers/iio/gyro/fxas21002c_core.c
+@@ -333,6 +333,7 @@ static int fxas21002c_temp_get(struct fxas21002c_data *data, int *val)
+ 	ret = regmap_field_read(data->regmap_fields[F_TEMP], &temp);
+ 	if (ret < 0) {
+ 		dev_err(dev, "failed to read temp: %d\n", ret);
++		fxas21002c_pm_put(data);
+ 		goto data_unlock;
+ 	}
+ 
+@@ -366,6 +367,7 @@ static int fxas21002c_axis_get(struct fxas21002c_data *data,
+ 			       &axis_be, sizeof(axis_be));
+ 	if (ret < 0) {
+ 		dev_err(dev, "failed to read axis: %d: %d\n", index, ret);
++		fxas21002c_pm_put(data);
+ 		goto data_unlock;
+ 	}
+ 
+diff --git a/drivers/staging/iio/cdc/ad7746.c b/drivers/staging/iio/cdc/ad7746.c
+index 21527d84f940..004f123bb070 100644
+--- a/drivers/staging/iio/cdc/ad7746.c
++++ b/drivers/staging/iio/cdc/ad7746.c
+@@ -702,7 +702,6 @@ static int ad7746_probe(struct i2c_client *client,
+ 		indio_dev->num_channels = ARRAY_SIZE(ad7746_channels);
+ 	else
+ 		indio_dev->num_channels =  ARRAY_SIZE(ad7746_channels) - 2;
+-	indio_dev->num_channels = ARRAY_SIZE(ad7746_channels);
+ 	indio_dev->modes = INDIO_DIRECT_MODE;
+ 
+ 	if (pdata) {
 -- 
 2.30.2
 

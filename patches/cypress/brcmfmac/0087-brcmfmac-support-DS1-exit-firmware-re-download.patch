@@ -1,7 +1,7 @@
 From dd581f95d0fdb0c73f6b83ce6747560826c0869a Mon Sep 17 00:00:00 2001
 From: Praveen Babu C <pucn@cypress.com>
 Date: Tue, 9 Jan 2018 11:33:10 +0530
-Subject: [PATCH 087/138] brcmfmac: support DS1 exit firmware re-download
+Subject: [PATCH 087/149] brcmfmac: support DS1 exit firmware re-download
 
 In deep sleep mode (DS1) ARM is off and once exit trigger comes than
 mailbox Interrupt comes to host and whole reinitiation should be done
@@ -23,23 +23,23 @@ Signed-off-by: Naveen Gupta <nagu@cypress.com>
 [Merge from 4.14.77 to 5.4.18; set BRCMF_SDIO_MAX_ACCESS_ERRORS to 20]
 Signed-off-by: Chi-hsien Lin <chi-hsien.lin@cypress.com>
 ---
- .../net/wireless/broadcom/brcm80211/brcmfmac/bus.h |   2 +-
- .../wireless/broadcom/brcm80211/brcmfmac/common.c  |  39 ++++
- .../wireless/broadcom/brcm80211/brcmfmac/core.c    |  13 +-
- .../wireless/broadcom/brcm80211/brcmfmac/debug.h   |   1 +
- .../wireless/broadcom/brcm80211/brcmfmac/fweh.h    |  27 ++-
- .../wireless/broadcom/brcm80211/brcmfmac/pcie.c    |   2 +-
- .../wireless/broadcom/brcm80211/brcmfmac/sdio.c    | 258 ++++++++++++++++++++-
- .../wireless/broadcom/brcm80211/brcmfmac/sdio.h    | 110 +++++++++
- .../net/wireless/broadcom/brcm80211/brcmfmac/usb.c |   4 +-
- .../broadcom/brcm80211/include/chipcommon.h        |   2 +
+ .../broadcom/brcm80211/brcmfmac/bus.h         |   2 +-
+ .../broadcom/brcm80211/brcmfmac/common.c      |  39 +++
+ .../broadcom/brcm80211/brcmfmac/core.c        |  13 +-
+ .../broadcom/brcm80211/brcmfmac/debug.h       |   1 +
+ .../broadcom/brcm80211/brcmfmac/fweh.h        |  27 +-
+ .../broadcom/brcm80211/brcmfmac/pcie.c        |   2 +-
+ .../broadcom/brcm80211/brcmfmac/sdio.c        | 258 +++++++++++++++++-
+ .../broadcom/brcm80211/brcmfmac/sdio.h        | 110 ++++++++
+ .../broadcom/brcm80211/brcmfmac/usb.c         |   4 +-
+ .../broadcom/brcm80211/include/chipcommon.h   |   2 +
  10 files changed, 441 insertions(+), 17 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h
-index c8063ca..e62c348 100644
+index c8063ca50611..e62c34849b4c 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h
-@@ -255,7 +255,7 @@ int brcmf_bus_reset(struct brcmf_bus *bus)
+@@ -255,7 +255,7 @@ void brcmf_rx_event(struct device *dev, struct sk_buff *rxp);
  
  int brcmf_alloc(struct device *dev, struct brcmf_mp_device *settings);
  /* Indication from bus module regarding presence/insertion of dongle. */
@@ -49,7 +49,7 @@ index c8063ca..e62c348 100644
  void brcmf_detach(struct device *dev);
  void brcmf_free(struct device *dev);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c
-index 75beeb4..e9bf5f9 100644
+index 75beeb4c9548..e9bf5f95a5bb 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c
 @@ -21,6 +21,8 @@
@@ -113,7 +113,7 @@ index 75beeb4..e9bf5f9 100644
  	err = brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_SCAN_CHANNEL_TIME,
  				    BRCMF_DEFAULT_SCAN_CHANNEL_TIME);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
-index ec7c5a9..f290a5f 100644
+index ec7c5a901794..f290a5f3cdc2 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
 @@ -1249,7 +1249,7 @@ int brcmf_alloc(struct device *dev, struct brcmf_mp_device *settings)
@@ -144,7 +144,7 @@ index ec7c5a9..f290a5f 100644
  
  	return 0;
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/debug.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/debug.h
-index d61508b..f67f54c 100644
+index d61508b62d2c..f67f54c30d9e 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/debug.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/debug.h
 @@ -29,6 +29,7 @@
@@ -156,10 +156,10 @@ index d61508b..f67f54c 100644
  /* set default print format */
  #undef pr_fmt
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
-index 8210509f..e740c2f 100644
+index 8210509f03f3..e740c2f00d3b 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
-@@ -91,7 +91,8 @@
+@@ -91,7 +91,8 @@ struct brcmf_cfg80211_info;
  	BRCMF_ENUM_DEF(ACTION_FRAME_RX, 75) \
  	BRCMF_ENUM_DEF(TDLS_PEER_EVENT, 92) \
  	BRCMF_ENUM_DEF(PHY_TEMP, 111) \
@@ -208,7 +208,7 @@ index 8210509f..e740c2f 100644
  				    const struct brcmf_event_msg *evtmsg,
  				    void *data);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
-index fbe4392..d8ab8fb0 100644
+index fbe4392ba362..d8ab8fb04d16 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 @@ -2071,7 +2071,7 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
@@ -221,7 +221,7 @@ index fbe4392..d8ab8fb0 100644
  		goto fail;
  
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
-index ec19258..b9e21d3 100644
+index ec19258b2056..b9e21d3df32a 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
 @@ -35,9 +35,11 @@
@@ -566,7 +566,7 @@ index ec19258..b9e21d3 100644
 +	return err;
 +}
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.h
-index cb0d71d..d008689 100644
+index cb0d71d024ee..d008689d0d24 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.h
 @@ -165,6 +165,35 @@ struct brcmf_sdreg {
@@ -614,7 +614,7 @@ index cb0d71d..d008689 100644
  };
  
  /* sdio core registers */
-@@ -380,4 +411,83 @@ static inline void brcmf_sdiod_freezer_uncount(struct brcmf_sdio_dev *sdiodev)
+@@ -380,4 +411,83 @@ void brcmf_sdio_wowl_config(struct device *dev, bool enabled);
  int brcmf_sdio_sleep(struct brcmf_sdio *bus, bool sleep);
  void brcmf_sdio_trigger_dpc(struct brcmf_sdio *bus);
  
@@ -699,7 +699,7 @@ index cb0d71d..d008689 100644
 +
  #endif /* BRCMFMAC_SDIO_H */
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
-index ba7d659..95dfcee 100644
+index ba7d659b0b79..95dfcee6444b 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/usb.c
 @@ -1227,7 +1227,7 @@ static void brcmf_usb_probe_phase2(struct device *dev, int ret,
@@ -721,7 +721,7 @@ index ba7d659..95dfcee 100644
  			goto fail;
  
 diff --git a/drivers/net/wireless/broadcom/brcm80211/include/chipcommon.h b/drivers/net/wireless/broadcom/brcm80211/include/chipcommon.h
-index 0340bba..090a75b 100644
+index 0340bba96868..090a75bcd728 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/include/chipcommon.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/include/chipcommon.h
 @@ -308,4 +308,6 @@ struct chipcregs {
@@ -732,5 +732,5 @@ index 0340bba..090a75b 100644
 +
  #endif				/* _SBCHIPC_H */
 -- 
-1.9.1
+2.17.1
 
