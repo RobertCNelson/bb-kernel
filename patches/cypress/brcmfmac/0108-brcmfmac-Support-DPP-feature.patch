@@ -1,7 +1,7 @@
 From 910359c16cc7a54b92576dc6e6253c58860d028d Mon Sep 17 00:00:00 2001
 From: Kurt Lee <kurt.lee@cypress.com>
 Date: Tue, 12 May 2020 05:55:29 -0500
-Subject: [PATCH 108/138] brcmfmac: Support DPP feature
+Subject: [PATCH 108/149] brcmfmac: Support DPP feature
 
 Let driver parse DPP frames from upper layer and do conresponding
 configuration to firmware.
@@ -9,14 +9,14 @@ This change supports DPP handshake based on wpa_supplicant v2.9.
 
 Signed-off-by: Kurt Lee <kurt.lee@cypress.com>
 ---
- .../broadcom/brcm80211/brcmfmac/cfg80211.c         | 85 +++++++++++++---------
- .../net/wireless/broadcom/brcm80211/brcmfmac/p2p.c | 72 ++++++++++++++----
- .../net/wireless/broadcom/brcm80211/brcmfmac/p2p.h |  4 +-
- .../broadcom/brcm80211/include/brcmu_wifi.h        |  5 ++
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    | 85 ++++++++++++-------
+ .../broadcom/brcm80211/brcmfmac/p2p.c         | 72 ++++++++++++----
+ .../broadcom/brcm80211/brcmfmac/p2p.h         |  4 +-
+ .../broadcom/brcm80211/include/brcmu_wifi.h   |  5 ++
  4 files changed, 117 insertions(+), 49 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
-index a4b84ea..49a84cd 100644
+index a4b84ea116f2..49a84cde4768 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
 @@ -62,6 +62,9 @@
@@ -29,7 +29,7 @@ index a4b84ea..49a84cd 100644
  #define VNDR_IE_CMD_LEN			4	/* length of the set command
  						 * string :"add", "del" (+ NUL)
  						 */
-@@ -1749,6 +1752,9 @@ static s32 brcmf_set_auth_type(struct net_device *ndev,
+@@ -1749,6 +1752,9 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
  			val = WPA2_AUTH_PSK | WPA2_AUTH_FT;
  			profile->is_ft = true;
  			break;
@@ -52,7 +52,7 @@ index a4b84ea..49a84cd 100644
  static s32
  brcmf_configure_wpaie(struct brcmf_if *ifp,
  		      const struct brcmf_vs_tlv *wpa_ie,
-@@ -4185,42 +4197,47 @@ static bool brcmf_valid_wpa_oui(u8 *oui, bool is_rsn_ie)
+@@ -4185,42 +4197,47 @@ brcmf_configure_wpaie(struct brcmf_if *ifp,
  		goto exit;
  	}
  	for (i = 0; i < count; i++) {
@@ -132,7 +132,7 @@ index a4b84ea..49a84cd 100644
  		offset++;
  	}
  
-@@ -4240,10 +4257,12 @@ static bool brcmf_valid_wpa_oui(u8 *oui, bool is_rsn_ie)
+@@ -4240,10 +4257,12 @@ brcmf_configure_wpaie(struct brcmf_if *ifp,
  				 */
  				if (!(wpa_auth & (WPA2_AUTH_PSK_SHA256 |
  						  WPA2_AUTH_1X_SHA256 |
@@ -145,7 +145,7 @@ index a4b84ea..49a84cd 100644
  				/* Firmware has requirement that WPA2_AUTH_PSK/
  				 * WPA2_AUTH_UNSPECIFIED be set, if SHA256 OUI
  				 * is to be included in the rsn ie.
-@@ -5183,7 +5202,7 @@ static int brcmf_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *ndev)
+@@ -5183,7 +5202,7 @@ brcmf_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
  			  *cookie, le16_to_cpu(action_frame->len), freq);
  
  		ack = brcmf_p2p_send_action_frame(cfg, cfg_to_ndev(cfg),
@@ -155,7 +155,7 @@ index a4b84ea..49a84cd 100644
  		cfg80211_mgmt_tx_status(wdev, *cookie, buf, len, ack,
  					GFP_KERNEL);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c
-index 8eb6d4f..6fc2752 100644
+index 8eb6d4f74b28..6fc27524c9f0 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.c
 @@ -231,7 +231,35 @@ static bool brcmf_p2p_is_pub_action(void *frame, u32 frame_len)
@@ -318,7 +318,7 @@ index 8eb6d4f..6fc2752 100644
  	if (p2pdev_forced) {
  		err_ptr = brcmf_p2p_create_p2pdev(p2p, NULL, NULL);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.h
-index d2ecee5..bbc4552 100644
+index d2ecee565bf2..bbc455238707 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/p2p.h
 @@ -138,6 +138,7 @@ struct brcmf_p2p_info {
@@ -340,7 +340,7 @@ index d2ecee5..bbc4552 100644
  					   struct brcmf_bss_info_le *bi);
  s32 brcmf_p2p_notify_rx_mgmt_p2p_probereq(struct brcmf_if *ifp,
 diff --git a/drivers/net/wireless/broadcom/brcm80211/include/brcmu_wifi.h b/drivers/net/wireless/broadcom/brcm80211/include/brcmu_wifi.h
-index 7552bdb9..3a9cad3 100644
+index 7552bdb91991..3a9cad3730b8 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/include/brcmu_wifi.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/include/brcmu_wifi.h
 @@ -233,6 +233,11 @@ static inline bool ac_bitmap_tst(u8 bitmap, int prec)
@@ -356,5 +356,5 @@ index 7552bdb9..3a9cad3 100644
  #define DOT11_DEFAULT_FRAG_LEN		2346
  
 -- 
-1.9.1
+2.17.1
 
