@@ -581,6 +581,7 @@ drivers () {
 	dir 'drivers/sound'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
+	dir 'drivers/mmc'
 
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
@@ -591,7 +592,6 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/iio'
 	dir 'drivers/fb_ssd1306'
-	dir 'drivers/mmc'
 	dir 'fixes'
 }
 
