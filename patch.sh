@@ -701,13 +701,13 @@ backports () {
 		${git_bin} format-patch -1 -o ../patches/cypress/
 
 		exit 2
-	else
-		patch_backports
+#	else
+#		patch_backports
 	fi
 
-	dir 'cypress'
+#	dir 'cypress'
 	#exit 2
-	dir 'cypress/fixes'
+#	dir 'cypress/fixes'
 }
 
 reverts () {
@@ -736,6 +736,7 @@ drivers () {
 	dir 'drivers/sound'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
+	dir 'drivers/mmc'
 
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
