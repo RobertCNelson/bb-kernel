@@ -85,4 +85,10 @@ config="CONFIG_WIMAX_I2400M_USB" ; config_disable
 #PHY: CONFIG_DP83867_PHY
 config="CONFIG_DP83867_PHY" ; config_enable
 
+#PRU: CONFIG_PRU_REMOTEPROC
+config="CONFIG_REMOTEPROC" ; config_enable
+config="CONFIG_REMOTEPROC_CDEV" ; config_enable
+config="CONFIG_WKUP_M3_RPROC" ; config_enable
+config="CONFIG_PRU_REMOTEPROC" ; config_module
+
 cd ${DIR}/

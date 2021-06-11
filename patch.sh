@@ -504,7 +504,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12.7"
+	backport_tag="v5.12.10"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -520,7 +520,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12.7"
+	backport_tag="v5.12.10"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -710,20 +710,33 @@ backports () {
 		patch -p1 < ../patches/cypress/brcmfmac/0137-brcmfmac-fix-CERT-P2P-5.1.10-failure.patch
 		patch -p1 < ../patches/cypress/brcmfmac/0138-brcmfmac-Fix-for-when-connect-request-is-not-success.patch
 
+		#v5.4.18-2021_0527
+		patch -p1 < ../patches/cypress/brcmfmac/0139-brcmfmac-Avoiding-Connection-delay.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0140-non-upstream-Revert-brcm80211-select-WANT_DEV_COREDU.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0141-brcmfmac-Fix-connecting-enterprise-AP-failure.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0142-brcmfmac-Fix-for-skbuf-allocation-failure-in-memory-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0143-brcmfmac-Update-SSID-of-hidden-AP-while-informing-it.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0144-brcmfmac-Fix-PCIE-suspend-resume-issue.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0145-brcmfmac-disable-mpc-when-power_save-is-disabled.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0146-brcmfmac-Fix-authentication-latency-caused-by-OBSS-s.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0147-brcmfmac-support-external-SAE-authentication-in-stat.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0148-brcmfmac-fix-sdio-watchdog-timer-start-fail-issue.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0149-brcmfmac-Frameburst-vendor-command-addition.patch
+
 		#exit 2
 
 		${git_bin} add .
-		${git_bin} commit -a -m "cypress fmac patchset" -m "v5.4.18-2021_0114" -s
+		${git_bin} commit -a -m "cypress fmac patchset" -m "v5.4.18-2021_0527" -s
 		${git_bin} format-patch -1 -o ../patches/cypress/
 
 		exit 2
-	else
-		patch_backports
+	#else
+	#	patch_backports
 	fi
 
-	dir 'cypress'
+	#dir 'cypress'
 	#exit 2
-	dir 'cypress/fixes'
+	#dir 'cypress/fixes'
 }
 
 reverts () {
@@ -778,7 +791,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.40"
+		backport_tag="v5.10.43"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
