@@ -421,7 +421,6 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#device="am335x-abbbi.dtb" ; dtb_makefile_append
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
@@ -504,7 +503,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12.7"
+	backport_tag="v5.12.12"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -520,7 +519,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12.7"
+	backport_tag="v5.12.12"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -700,14 +699,14 @@ backports () {
 		${git_bin} commit -a -m "cypress fmac patchset" -m "v5.4.18-2021_0114" -s
 		${git_bin} format-patch -1 -o ../patches/cypress/
 
-		exit 2
-#	else
-#		patch_backports
+	#	exit 2
+	#else
+		patch_backports
 	fi
 
-#	dir 'cypress'
+	#dir 'cypress'
 	#exit 2
-#	dir 'cypress/fixes'
+	#dir 'cypress/fixes'
 }
 
 reverts () {
@@ -742,7 +741,9 @@ drivers () {
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
+#	dir 'drivers/ti/mmc'
 	dir 'drivers/greybus'
+	dir 'drivers/bluetooth'
 }
 
 soc () {
@@ -763,7 +764,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.40"
+		backport_tag="v5.10.45"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
