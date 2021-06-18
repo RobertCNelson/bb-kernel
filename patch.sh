@@ -504,7 +504,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12.10"
+	backport_tag="v5.12.12"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -520,7 +520,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12.10"
+	backport_tag="v5.12.12"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -729,9 +729,9 @@ backports () {
 		${git_bin} commit -a -m "cypress fmac patchset" -m "v5.4.18-2021_0527" -s
 		${git_bin} format-patch -1 -o ../patches/cypress/
 
-		exit 2
+	#	exit 2
 	#else
-	#	patch_backports
+		patch_backports
 	fi
 
 	#dir 'cypress'
@@ -770,7 +770,9 @@ drivers () {
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
+#	dir 'drivers/ti/mmc'
 	dir 'drivers/greybus'
+	dir 'drivers/bluetooth'
 }
 
 soc () {
@@ -791,7 +793,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.43"
+		backport_tag="v5.10.45"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
