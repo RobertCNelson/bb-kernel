@@ -40,6 +40,11 @@ else
 fi
 
 dl_gcc_generic () {
+	gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
+	gcc_filename_prefix="x86_64-gcc-${gcc_selected}-nolibc-${gcc_prefix}"
+	extracted_dir="gcc-${gcc_selected}-nolibc/${gcc_prefix}"
+	binary="bin/${gcc_prefix}-"
+
 	WGET="wget -c --directory-prefix=${gcc_dir}/"
 	if [ "x${extracted_dir}" = "x" ] ; then
 		filename_prefix=${gcc_filename_prefix}
@@ -83,140 +88,89 @@ gcc_toolchain () {
 
 	case "${toolchain}" in
 	gcc_linaro_gnueabihf_6|gcc_6_arm)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc6}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc6}-nolibc-arm-linux-gnueabi"
-		extracted_dir="gcc-${gcc6}-nolibc/arm-linux-gnueabi"
-		datestamp="2017.${gcc6}-arm-linux-gnueabi"
-
-		binary="bin/arm-linux-gnueabi-"
+		gcc_selected=${gcc6}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2017.${gcc_selected}-${gcc_prefix}"
 		;;
 	gcc_linaro_gnueabihf_7|gcc_arm_eabi_7|gcc_7_arm)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc7}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc7}-nolibc-arm-linux-gnueabi"
-		extracted_dir="gcc-${gcc7}-nolibc/arm-linux-gnueabi"
-		datestamp="2017.${gcc7}-arm-linux-gnueabi"
-
-		binary="bin/arm-linux-gnueabi-"
+		gcc_selected=${gcc7}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2017.${gcc_selected}-${gcc_prefix}"
 		;;
 	gcc_arm_gnueabihf_8|gcc_arm_eabi_8|gcc_8_arm)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc8}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc8}-nolibc-arm-linux-gnueabi"
-		extracted_dir="gcc-${gcc8}-nolibc/arm-linux-gnueabi"
-		datestamp="2018.${gcc8}-arm-linux-gnueabi"
-
-		binary="bin/arm-linux-gnueabi-"
+		gcc_selected=${gcc8}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2018.${gcc_selected}-${gcc_prefix}"
 		;;
 	gcc_arm_gnueabihf_9|gcc_arm_eabi_9|gcc_9_arm)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc9}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc9}-nolibc-arm-linux-gnueabi"
-		extracted_dir="gcc-${gcc9}-nolibc/arm-linux-gnueabi"
-		datestamp="2019.${gcc9}-arm-linux-gnueabi"
-
-		binary="bin/arm-linux-gnueabi-"
+		gcc_selected=${gcc9}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2019.${gcc_selected}-${gcc_prefix}"
 		;;
 	gcc_arm_gnueabihf_10|gcc_arm_eabi_10|gcc_10_arm)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc10}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc10}-nolibc-arm-linux-gnueabi"
-		extracted_dir="gcc-${gcc10}-nolibc/arm-linux-gnueabi"
-		datestamp="2020.${gcc10}-arm-linux-gnueabi"
-
-		binary="bin/arm-linux-gnueabi-"
+		gcc_selected=${gcc10}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2020.${gcc_selected}-${gcc_prefix}"
 		;;
 	gcc_11_arm)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc11}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc11}-nolibc-arm-linux-gnueabi"
-		extracted_dir="gcc-${gcc11}-nolibc/arm-linux-gnueabi"
-		datestamp="2021.${gcc11}-arm-linux-gnueabi"
-
-		binary="bin/arm-linux-gnueabi-"
+		gcc_selected=${gcc11}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2021.${gcc_selected}-${gcc_prefix}"
 		;;
 	gcc_linaro_aarch64_gnu_6|gcc_6_aarch64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc6}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc6}-nolibc-aarch64-linux"
-		extracted_dir="gcc-${gcc6}-nolibc/aarch64-linux"
-		datestamp="2017.${gcc6}-aarch64-linux-gcc"
-
-		binary="bin/aarch64-linux-"
+		gcc_selected=${gcc6}
+		gcc_prefix="aarch64-linux"
+		datestamp="2017.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_linaro_aarch64_gnu_7|gcc_7_aarch64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc7}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc7}-nolibc-aarch64-linux"
-		extracted_dir="gcc-${gcc7}-nolibc/aarch64-linux"
-		datestamp="2017.${gcc7}-aarch64-linux-gcc"
-
-		binary="bin/aarch64-linux-"
+		gcc_selected=${gcc7}
+		gcc_prefix="aarch64-linux"
+		datestamp="2017.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_arm_aarch64_gnu_8|gcc_8_aarch64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc8}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc8}-nolibc-aarch64-linux"
-		extracted_dir="gcc-${gcc8}-nolibc/aarch64-linux"
-		datestamp="2018.${gcc8}-aarch64-linux-gcc"
-
-		binary="bin/aarch64-linux-"
+		gcc_selected=${gcc8}
+		gcc_prefix="aarch64-linux"
+		datestamp="2018.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_arm_aarch64_gnu_9|gcc_9_aarch64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc9}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc9}-nolibc-aarch64-linux"
-		extracted_dir="gcc-${gcc9}-nolibc/aarch64-linux"
-		datestamp="2019.${gcc9}-aarch64-linux-gcc"
-
-		binary="bin/aarch64-linux-"
+		gcc_selected=${gcc9}
+		gcc_prefix="aarch64-linux"
+		datestamp="2019.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_arm_aarch64_gnu_10|gcc_10_aarch64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc10}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc10}-nolibc-aarch64-linux"
-		extracted_dir="gcc-${gcc10}-nolibc/aarch64-linux"
-		datestamp="2020.${gcc10}-aarch64-linux-gcc"
-
-		binary="bin/aarch64-linux-"
+		gcc_selected=${gcc10}
+		gcc_prefix="aarch64-linux"
+		datestamp="2020.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_11_aarch64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc11}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc11}-nolibc-aarch64-linux"
-		extracted_dir="gcc-${gcc11}-nolibc/aarch64-linux"
-		datestamp="2021.${gcc11}-aarch64-linux-gcc"
-
-		binary="bin/aarch64-linux-"
+		gcc_selected=${gcc11}
+		gcc_prefix="aarch64-linux"
+		datestamp="2021.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_7_riscv64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc7}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc7}-nolibc-riscv64-linux"
-		extracted_dir="gcc-${gcc7}-nolibc/riscv64-linux"
-		datestamp="2017.${gcc7}-riscv64-linux-gcc"
-
-		binary="bin/riscv64-linux-"
+		gcc_selected=${gcc7}
+		gcc_prefix="riscv64-linux"
+		datestamp="2017.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_8_riscv64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc8}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc8}-nolibc-riscv64-linux"
-		extracted_dir="gcc-${gcc8}-nolibc/riscv64-linux"
-		datestamp="2018.${gcc8}-riscv64-linux-gcc"
-
-		binary="bin/riscv64-linux-"
+		gcc_selected=${gcc8}
+		gcc_prefix="riscv64-linux"
+		datestamp="2018.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_9_riscv64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc9}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc9}-nolibc-riscv64-linux"
-		extracted_dir="gcc-${gcc9}-nolibc/riscv64-linux"
-		datestamp="2019.${gcc9}-riscv64-linux-gcc"
-
-		binary="bin/riscv64-linux-"
+		gcc_selected=${gcc9}
+		gcc_prefix="riscv64-linux"
+		datestamp="2019.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_10_riscv64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc10}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc10}-nolibc-riscv64-linux"
-		extracted_dir="gcc-${gcc10}-nolibc/riscv64-linux"
-		datestamp="2020.${gcc10}-riscv64-linux-gcc"
-
-		binary="bin/riscv64-linux-"
+		gcc_selected=${gcc10}
+		gcc_prefix="riscv64-linux"
+		datestamp="2020.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	gcc_11_riscv64)
-		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc11}/"
-		gcc_filename_prefix="x86_64-gcc-${gcc11}-nolibc-riscv64-linux"
-		extracted_dir="gcc-${gcc11}-nolibc/riscv64-linux"
-		datestamp="2021.${gcc11}-riscv64-linux-gcc"
-
-		binary="bin/riscv64-linux-"
+		gcc_selected=${gcc11}
+		gcc_prefix="riscv64-linux"
+		datestamp="2021.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	*)
 		echo "bug: maintainer forgot to set:"
