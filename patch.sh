@@ -384,7 +384,7 @@ beagleboard_dtbs () {
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 		device="am335x-sancloud-bbe-lite.dtb" ; dtb_makefile_append
 
-		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 		#device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
 
 		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
