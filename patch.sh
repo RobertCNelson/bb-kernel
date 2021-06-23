@@ -378,14 +378,15 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		device="am335x-sancloud-bbe-lite.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-		device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
 
-		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-sancloud-bbe-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-sancloud-bbe-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -462,7 +463,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12.11"
+	backport_tag="v5.12.13"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -478,7 +479,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12.11"
+	backport_tag="v5.12.13"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -493,7 +494,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13-rc6"
+	backport_tag="v5.13-rc7"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -508,7 +509,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13-rc6"
+	backport_tag="v5.13-rc7"
 
 	subsystem="pru_rproc"
 	#regenerate="enable"
@@ -527,7 +528,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.10.44"
+	backport_tag="v5.10.46"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -576,7 +577,6 @@ drivers () {
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
-	dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
 	dir 'drivers/mikrobus'
 	dir 'drivers/serdev'
@@ -605,7 +605,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.44"
+		backport_tag="v5.10.46"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
