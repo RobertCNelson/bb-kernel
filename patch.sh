@@ -348,6 +348,10 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
+sancloud_next () {
+	dir 'dts/sancloud'
+}
+
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -378,9 +382,10 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		device="am335x-sancloud-bbe-lite.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-		device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
 
 		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
@@ -420,6 +425,7 @@ wpanusb
 #rt
 wireless_regdb
 ti_pm_firmware
+sancloud_next
 beagleboard_dtbs
 #local_patch
 
@@ -519,7 +525,6 @@ drivers () {
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
-	dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
