@@ -1,14 +1,14 @@
-From 9946fbbfde86fdb332c2f17dc435b6175ae035a4 Mon Sep 17 00:00:00 2001
+From 445f64047e9c4c00d7236be8cda1af2e14404395 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 18 Jun 2021 17:56:27 -0500
+Date: Wed, 14 Jul 2021 13:10:12 -0500
 Subject: [PATCH] merge: can-isotp: https://github.com/hartkopp/can-isotp
 
-https://github.com/hartkopp/can-isotp/commit/593c79fb0f4d6e36f1cce5d1c880e26664bc574e
+https://github.com/hartkopp/can-isotp/commit/beb4650660179963a8ed5b5cbf2085cc1b34f608
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  include/uapi/linux/can/isotp.h |  136 +++
- net/can/isotp.c                | 1582 ++++++++++++++++++++++++++++++++
- 2 files changed, 1718 insertions(+)
+ net/can/isotp.c                | 1618 ++++++++++++++++++++++++++++++++
+ 2 files changed, 1754 insertions(+)
  create mode 100644 include/uapi/linux/can/isotp.h
  create mode 100644 net/can/isotp.c
 
@@ -156,10 +156,10 @@ index 000000000000..88831772f9ee
 +#endif
 diff --git a/net/can/isotp.c b/net/can/isotp.c
 new file mode 100644
-index 000000000000..4271839b1c3b
+index 000000000000..ef6644beb8ff
 --- /dev/null
 +++ b/net/can/isotp.c
-@@ -0,0 +1,1582 @@
+@@ -0,0 +1,1618 @@
 +// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
 +/* isotp.c - ISO 15765-2 CAN transport protocol for protocol family CAN
 + *
@@ -239,7 +239,7 @@ index 000000000000..4271839b1c3b
 +#include "compat.h"
 +#endif
 +
-+#define CAN_ISOTP_VERSION "20201014 - out-of-tree"
++#define CAN_ISOTP_VERSION "20210620 - out-of-tree"
 +
 +MODULE_DESCRIPTION("PF_CAN isotp 15765-2:2016 protocol");
 +MODULE_LICENSE("Dual BSD/GPL");
@@ -330,9 +330,13 @@ index 000000000000..4271839b1c3b
 +	u32 force_tx_stmin;
 +	u32 force_rx_stmin;
 +	struct tpcon rx, tx;
-+	struct notifier_block notifier;
++	struct list_head notifier;
 +	wait_queue_head_t wait;
 +};
++
++static LIST_HEAD(isotp_notifier_list);
++static DEFINE_SPINLOCK(isotp_notifier_lock);
++static struct isotp_sock *isotp_busy_notifier;
 +
 +static inline struct isotp_sock *isotp_sk(const struct sock *sk)
 +{
@@ -1216,13 +1220,16 @@ index 000000000000..4271839b1c3b
 +	/* wait for complete transmission of current pdu */
 +	wait_event_interruptible(so->wait, so->tx.state == ISOTP_IDLE);
 +
-+	unregister_netdevice_notifier(&so->notifier);
++	spin_lock(&isotp_notifier_lock);
++	while (isotp_busy_notifier == so) {
++		spin_unlock(&isotp_notifier_lock);
++		schedule_timeout_uninterruptible(1);
++		spin_lock(&isotp_notifier_lock);
++	}
++	list_del(&so->notifier);
++	spin_unlock(&isotp_notifier_lock);
 +
 +	lock_sock(sk);
-+
-+	hrtimer_cancel(&so->txtimer);
-+	hrtimer_cancel(&so->rxtimer);
-+	tasklet_kill(&so->txtsklet);
 +
 +	/* remove current filters & unregister */
 +	if (so->bound && (!(so->opt.flags & CAN_ISOTP_SF_BROADCAST))) {
@@ -1239,9 +1246,14 @@ index 000000000000..4271839b1c3b
 +						  SINGLE_MASK(so->rxid),
 +						  isotp_rcv, sk);
 +				dev_put(dev);
++				synchronize_rcu();
 +			}
 +		}
 +	}
++
++	hrtimer_cancel(&so->txtimer);
++	hrtimer_cancel(&so->rxtimer);
++	tasklet_kill(&so->txtsklet);
 +
 +	so->ifindex = 0;
 +	so->bound = 0;
@@ -1566,36 +1578,24 @@ index 000000000000..4271839b1c3b
 +	return 0;
 +}
 +
-+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)
-+static int isotp_notifier(struct notifier_block *nb, unsigned long msg,
-+			  void *ptr)
++static void isotp_notify(struct isotp_sock *so, unsigned long msg,
++			 struct net_device *dev)
 +{
-+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
-+#else
-+static int isotp_notifier(struct notifier_block *nb,
-+			unsigned long msg, void *data)
-+{
-+	struct net_device *dev = (struct net_device *)data;
-+#endif
-+	struct isotp_sock *so = container_of(nb, struct isotp_sock, notifier);
 +	struct sock *sk = &so->sk;
 +
 +#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,12,0)
 +	if (!net_eq(dev_net(dev), sock_net(sk)))
-+		return NOTIFY_DONE;
++		return;
 +#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
 +	if (dev_net(dev) != &init_net)
-+		return NOTIFY_DONE;
++		return;
 +#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
 +	if (dev->nd_net != &init_net)
-+		return NOTIFY_DONE;
++		return;
 +#endif
 +
-+	if (dev->type != ARPHRD_CAN)
-+		return NOTIFY_DONE;
-+
 +	if (so->ifindex != dev->ifindex)
-+		return NOTIFY_DONE;
++		return;
 +
 +	switch (msg) {
 +
@@ -1626,7 +1626,35 @@ index 000000000000..4271839b1c3b
 +			sk->sk_error_report(sk);
 +		break;
 +	}
++}
 +
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)
++static int isotp_notifier(struct notifier_block *nb, unsigned long msg,
++			  void *ptr)
++{
++	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
++#else
++static int isotp_notifier(struct notifier_block *nb, unsigned long msg,
++			  void *data)
++{
++	struct net_device *dev = (struct net_device *)data;
++#endif
++
++	if (dev->type != ARPHRD_CAN)
++		return NOTIFY_DONE;
++	if (msg != NETDEV_UNREGISTER && msg != NETDEV_DOWN)
++		return NOTIFY_DONE;
++	if (unlikely(isotp_busy_notifier)) /* Check for reentrant bug. */
++		return NOTIFY_DONE;
++
++	spin_lock(&isotp_notifier_lock);
++	list_for_each_entry(isotp_busy_notifier, &isotp_notifier_list, notifier) {
++		spin_unlock(&isotp_notifier_lock);
++		isotp_notify(isotp_busy_notifier, msg, dev);
++		spin_lock(&isotp_notifier_lock);
++	}
++	isotp_busy_notifier = NULL;
++	spin_unlock(&isotp_notifier_lock);
 +	return NOTIFY_DONE;
 +}
 +
@@ -1665,8 +1693,9 @@ index 000000000000..4271839b1c3b
 +
 +	init_waitqueue_head(&so->wait);
 +
-+	so->notifier.notifier_call = isotp_notifier;
-+	register_netdevice_notifier(&so->notifier);
++	spin_lock(&isotp_notifier_lock);
++	list_add_tail(&so->notifier, &isotp_notifier_list);
++	spin_unlock(&isotp_notifier_lock);
 +
 +	return 0;
 +}
@@ -1722,6 +1751,10 @@ index 000000000000..4271839b1c3b
 +	.prot = &isotp_proto,
 +};
 +
++static struct notifier_block canisotp_notifier = {
++	.notifier_call = isotp_notifier
++};
++
 +static __init int isotp_module_init(void)
 +{
 +	int err;
@@ -1731,6 +1764,8 @@ index 000000000000..4271839b1c3b
 +	err = can_proto_register(&isotp_can_proto);
 +	if (err < 0)
 +		printk(KERN_ERR "can: registration of isotp protocol failed\n");
++	else
++		register_netdevice_notifier(&canisotp_notifier);
 +
 +	return err;
 +}
@@ -1738,6 +1773,7 @@ index 000000000000..4271839b1c3b
 +static __exit void isotp_module_exit(void)
 +{
 +	can_proto_unregister(&isotp_can_proto);
++	unregister_netdevice_notifier(&canisotp_notifier);
 +}
 +
 +module_init(isotp_module_init);
