@@ -429,7 +429,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 wpanusb
 #rt
 wireless_regdb
@@ -473,35 +473,20 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12"
+	backport_tag="v4.x-y"
 
-	subsystem="greybus"
+	subsystem="xyz"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
+		mkdir -p ./x/
+		cp -v ~/linux-src/x/* ./x/
 
 		post_backports
 		exit 2
-#	else
-#		patch_backports
-	fi
-
-	backport_tag="v5.12"
-
-	subsystem="wlcore"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
-
-		post_backports
-		exit 2
-#	else
-#		patch_backports
+	else
+		patch_backports
 	fi
 }
 
@@ -534,10 +519,10 @@ drivers () {
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
+	dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-	dir 'drivers/bluetooth'
 }
 
 soc () {
@@ -556,7 +541,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.46"
+		backport_tag="v5.10.50"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
