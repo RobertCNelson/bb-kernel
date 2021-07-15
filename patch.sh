@@ -109,11 +109,11 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.13
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.14
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.13
+		KERNEL_REL=5.14
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -154,7 +154,7 @@ aufs () {
 			cd -
 		fi
 		cd ./KERNEL/
-		KERNEL_REL=5.13
+		KERNEL_REL=5.14
 
 		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -363,7 +363,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.13.x"
+	branch="v5.14.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -403,7 +403,7 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $branch" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
 		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
 
@@ -413,7 +413,7 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-DTBS-$branch.patch"
+		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
 		wdir="soc/ti/beagleboard_dtbs"
 		number=1
@@ -429,7 +429,7 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 wpanusb
 #rt
 wireless_regdb
@@ -537,6 +537,10 @@ soc () {
 #reverts
 drivers
 soc
+
+#Testing:
+#https://github.com/hakavlad/le9-patch
+dir 'le9'
 
 packaging () {
 	#do_backport="enable"
