@@ -348,8 +348,9 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
-sancloud_next () {
-	dir 'dts/sancloud'
+next_dtbs () {
+	dir 'dts/omap'
+	dir 'dts/omap_pruss'
 }
 
 cleanup_dts_builds () {
@@ -391,15 +392,8 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
-		device="am335x-sancloud-bbe-lite.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-		#device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
-
-		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
-		#device="am335x-sancloud-bbe-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -434,8 +428,8 @@ wpanusb
 #rt
 wireless_regdb
 ti_pm_firmware
-sancloud_next
-beagleboard_dtbs
+next_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -511,7 +505,7 @@ reverts () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	dir 'RPi'
+	#dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
@@ -519,7 +513,7 @@ drivers () {
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
-	dir 'drivers/ti/gpio'
+	#dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
