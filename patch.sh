@@ -513,7 +513,7 @@ drivers () {
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
-	#dir 'drivers/ti/gpio'
+	dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
