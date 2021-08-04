@@ -1,9 +1,9 @@
-From be32a6d1cff92decafff986c611fab6d926a29e9 Mon Sep 17 00:00:00 2001
+From 93a7bfc19f9e7ebf4ce34cbe18889bc39be6388e Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 19 Jul 2021 16:56:33 -0500
+Date: Wed, 4 Aug 2021 09:27:21 -0500
 Subject: [PATCH] backports: pru_rproc: from: linux.git
 
-Reference: v5.13.3
+Reference: v5.13.8
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  drivers/remoteproc/Kconfig                 |  32 +-
@@ -20,21 +20,21 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/remoteproc/qcom_q6v5_wcss.c        | 599 +++++++++++++++++++--
  drivers/remoteproc/qcom_wcnss.c            |  12 +-
  drivers/remoteproc/qcom_wcnss_iris.c       |   1 +
- drivers/remoteproc/remoteproc_cdev.c       |  21 +-
- drivers/remoteproc/remoteproc_core.c       | 339 ++++++++++--
+ drivers/remoteproc/remoteproc_cdev.c       |  23 +-
+ drivers/remoteproc/remoteproc_core.c       | 341 ++++++++++--
  drivers/remoteproc/remoteproc_coredump.c   |   8 +-
  drivers/remoteproc/remoteproc_debugfs.c    |   2 +-
  drivers/remoteproc/remoteproc_elf_loader.c |  21 +-
  drivers/remoteproc/remoteproc_internal.h   |  12 +-
  drivers/remoteproc/remoteproc_sysfs.c      |  21 +-
  drivers/remoteproc/st_slim_rproc.c         |   2 +-
- drivers/remoteproc/stm32_rproc.c           | 228 ++++----
+ drivers/remoteproc/stm32_rproc.c           | 234 ++++----
  drivers/remoteproc/ti_k3_dsp_remoteproc.c  |   2 +-
- drivers/remoteproc/ti_k3_r5_remoteproc.c   |   2 +-
+ drivers/remoteproc/ti_k3_r5_remoteproc.c   |   4 +-
  drivers/remoteproc/wkup_m3_rproc.c         |   2 +-
  include/linux/remoteproc.h                 |  25 +-
  include/linux/remoteproc/qcom_rproc.h      |   4 +-
- 28 files changed, 1565 insertions(+), 273 deletions(-)
+ 28 files changed, 1569 insertions(+), 281 deletions(-)
 
 diff --git a/drivers/remoteproc/Kconfig b/drivers/remoteproc/Kconfig
 index 9e7efe542f69..e68fcedc999c 100644
@@ -1892,7 +1892,7 @@ index 0e0ae1e764ea..169acd305ae3 100644
  	{}
  };
 diff --git a/drivers/remoteproc/remoteproc_cdev.c b/drivers/remoteproc/remoteproc_cdev.c
-index b19ea3057bde..0b8a84c04f76 100644
+index b19ea3057bde..4ad98b0b8caa 100644
 --- a/drivers/remoteproc/remoteproc_cdev.c
 +++ b/drivers/remoteproc/remoteproc_cdev.c
 @@ -32,15 +32,22 @@ static ssize_t rproc_cdev_write(struct file *filp, const char __user *buf, size_
@@ -1940,8 +1940,17 @@ index b19ea3057bde..0b8a84c04f76 100644
  }
  
  static const struct file_operations rproc_fops = {
+@@ -111,7 +124,7 @@ int rproc_char_device_add(struct rproc *rproc)
+ 
+ void rproc_char_device_remove(struct rproc *rproc)
+ {
+-	__unregister_chrdev(MAJOR(rproc->dev.devt), rproc->index, 1, "remoteproc");
++	cdev_del(&rproc->cdev);
+ }
+ 
+ void __init rproc_init_cdev(void)
 diff --git a/drivers/remoteproc/remoteproc_core.c b/drivers/remoteproc/remoteproc_core.c
-index 2394eef383e3..626a6b90fba2 100644
+index 2394eef383e3..203e2bd8ebb4 100644
 --- a/drivers/remoteproc/remoteproc_core.c
 +++ b/drivers/remoteproc/remoteproc_core.c
 @@ -189,13 +189,13 @@ EXPORT_SYMBOL(rproc_va_to_pa);
@@ -2466,7 +2475,7 @@ index 2394eef383e3..626a6b90fba2 100644
  	/* if rproc is marked always-on, request it to boot */
  	if (rproc->auto_boot) {
  		ret = rproc_trigger_auto_boot(rproc);
-@@ -2347,10 +2594,8 @@ int rproc_del(struct rproc *rproc)
+@@ -2347,17 +2594,14 @@ int rproc_del(struct rproc *rproc)
  	if (!rproc)
  		return -EINVAL;
  
@@ -2478,6 +2487,21 @@ index 2394eef383e3..626a6b90fba2 100644
  
  	mutex_lock(&rproc->lock);
  	rproc->state = RPROC_DELETED;
+ 	mutex_unlock(&rproc->lock);
+ 
+ 	rproc_delete_debug_dir(rproc);
+-	rproc_char_device_remove(rproc);
+ 
+ 	/* the rproc is downref'ed as soon as it's removed from the klist */
+ 	mutex_lock(&rproc_list_mutex);
+@@ -2368,6 +2612,7 @@ int rproc_del(struct rproc *rproc)
+ 	synchronize_rcu();
+ 
+ 	device_del(&rproc->dev);
++	rproc_char_device_remove(rproc);
+ 
+ 	return 0;
+ }
 @@ -2492,7 +2737,11 @@ static int rproc_panic_handler(struct notifier_block *nb, unsigned long event,
  
  	rcu_read_lock();
@@ -2706,7 +2730,7 @@ index 09bcb4d8b9e0..22096adc1ad3 100644
  	struct st_slim_rproc *slim_rproc = rproc->priv;
  	void *va = NULL;
 diff --git a/drivers/remoteproc/stm32_rproc.c b/drivers/remoteproc/stm32_rproc.c
-index a180aeae9675..7353f9e7e7af 100644
+index a180aeae9675..b643efcf995a 100644
 --- a/drivers/remoteproc/stm32_rproc.c
 +++ b/drivers/remoteproc/stm32_rproc.c
 @@ -28,7 +28,7 @@
@@ -2791,21 +2815,19 @@ index a180aeae9675..7353f9e7e7af 100644
  			dev_warn(dev, "cannot get %s mbox\n", name);
  			ddata->mb[i].chan = NULL;
  		}
-@@ -467,6 +471,25 @@ static int stm32_rproc_attach(struct rproc *rproc)
+@@ -467,18 +471,33 @@ static int stm32_rproc_attach(struct rproc *rproc)
  	return stm32_rproc_set_hold_boot(rproc, true);
  }
  
 +static int stm32_rproc_detach(struct rproc *rproc)
 +{
 +	struct stm32_rproc *ddata = rproc->priv;
-+	int err, dummy_data, idx;
++	int err, idx;
 +
 +	/* Inform the remote processor of the detach */
 +	idx = stm32_rproc_mbox_idx(rproc, STM32_MBX_DETACH);
 +	if (idx >= 0 && ddata->mb[idx].chan) {
-+		/* A dummy data is sent to allow to block on transmit */
-+		err = mbox_send_message(ddata->mb[idx].chan,
-+					&dummy_data);
++		err = mbox_send_message(ddata->mb[idx].chan, "stop");
 +		if (err < 0)
 +			dev_warn(&rproc->dev, "warning: remote FW detach without ack\n");
 +	}
@@ -2817,7 +2839,30 @@ index a180aeae9675..7353f9e7e7af 100644
  static int stm32_rproc_stop(struct rproc *rproc)
  {
  	struct stm32_rproc *ddata = rproc->priv;
-@@ -541,14 +564,89 @@ static void stm32_rproc_kick(struct rproc *rproc, int vqid)
+-	int err, dummy_data, idx;
++	int err, idx;
+ 
+ 	/* request shutdown of the remote processor */
+ 	if (rproc->state != RPROC_OFFLINE) {
+ 		idx = stm32_rproc_mbox_idx(rproc, STM32_MBX_SHUTDOWN);
+ 		if (idx >= 0 && ddata->mb[idx].chan) {
+-			/* a dummy data is sent to allow to block on transmit */
+-			err = mbox_send_message(ddata->mb[idx].chan,
+-						&dummy_data);
++			err = mbox_send_message(ddata->mb[idx].chan, "detach");
+ 			if (err < 0)
+ 				dev_warn(&rproc->dev, "warning: remote FW shutdown without ack\n");
+ 		}
+@@ -533,7 +552,7 @@ static void stm32_rproc_kick(struct rproc *rproc, int vqid)
+ 			continue;
+ 		if (!ddata->mb[i].chan)
+ 			return;
+-		err = mbox_send_message(ddata->mb[i].chan, (void *)(long)vqid);
++		err = mbox_send_message(ddata->mb[i].chan, "kick");
+ 		if (err < 0)
+ 			dev_err(&rproc->dev, "%s: failed (%s, err:%d)\n",
+ 				__func__, ddata->mb[i].name, err);
+@@ -541,14 +560,89 @@ static void stm32_rproc_kick(struct rproc *rproc, int vqid)
  	}
  }
  
@@ -2837,7 +2882,7 @@ index a180aeae9675..7353f9e7e7af 100644
 +			continue;
 +
 +		*pa = da - p_mem->dev_addr + p_mem->bus_addr;
-+		dev_dbg(dev, "da %llx to pa %#x\n", da, *pa);
++		dev_dbg(dev, "da %llx to pa %pap\n", da, pa);
 +
 +		return 0;
 +	}
@@ -2907,7 +2952,7 @@ index a180aeae9675..7353f9e7e7af 100644
  	.sanity_check	= rproc_elf_sanity_check,
  	.get_boot_addr	= rproc_elf_get_boot_addr,
  };
-@@ -592,15 +690,14 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
+@@ -592,15 +686,14 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
  
  	irq = platform_get_irq(pdev, 0);
  	if (irq == -EPROBE_DEFER)
@@ -2927,7 +2972,7 @@ index a180aeae9675..7353f9e7e7af 100644
  
  		ddata->wdg_irq = irq;
  
-@@ -613,10 +710,9 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
+@@ -613,10 +706,9 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
  	}
  
  	ddata->rst = devm_reset_control_get_by_index(dev, 0);
@@ -2941,7 +2986,7 @@ index a180aeae9675..7353f9e7e7af 100644
  
  	/*
  	 * if platform is secured the hold boot bit must be written by
-@@ -692,75 +788,6 @@ static int stm32_rproc_get_m4_status(struct stm32_rproc *ddata,
+@@ -692,75 +784,6 @@ static int stm32_rproc_get_m4_status(struct stm32_rproc *ddata,
  	return regmap_read(ddata->m4_state.map, ddata->m4_state.reg, state);
  }
  
@@ -3017,7 +3062,7 @@ index a180aeae9675..7353f9e7e7af 100644
  static int stm32_rproc_probe(struct platform_device *pdev)
  {
  	struct device *dev = &pdev->dev;
-@@ -794,18 +821,9 @@ static int stm32_rproc_probe(struct platform_device *pdev)
+@@ -794,18 +817,9 @@ static int stm32_rproc_probe(struct platform_device *pdev)
  	if (ret)
  		goto free_rproc;
  
@@ -3051,7 +3096,7 @@ index 863c0214e0a8..fd4eb67a6681 100644
  	struct k3_dsp_rproc *kproc = rproc->priv;
  	void __iomem *va = NULL;
 diff --git a/drivers/remoteproc/ti_k3_r5_remoteproc.c b/drivers/remoteproc/ti_k3_r5_remoteproc.c
-index 62b5a4c29456..5cf8d030a1f0 100644
+index 62b5a4c29456..4104e4846dbf 100644
 --- a/drivers/remoteproc/ti_k3_r5_remoteproc.c
 +++ b/drivers/remoteproc/ti_k3_r5_remoteproc.c
 @@ -590,7 +590,7 @@ static int k3_r5_rproc_stop(struct rproc *rproc)
@@ -3063,6 +3108,17 @@ index 62b5a4c29456..5cf8d030a1f0 100644
  {
  	struct k3_r5_rproc *kproc = rproc->priv;
  	struct k3_r5_core *core = kproc->core;
+@@ -1272,9 +1272,9 @@ static int k3_r5_core_of_init(struct platform_device *pdev)
+ 
+ 	core->tsp = k3_r5_core_of_get_tsp(dev, core->ti_sci);
+ 	if (IS_ERR(core->tsp)) {
++		ret = PTR_ERR(core->tsp);
+ 		dev_err(dev, "failed to construct ti-sci proc control, ret = %d\n",
+ 			ret);
+-		ret = PTR_ERR(core->tsp);
+ 		goto err;
+ 	}
+ 
 diff --git a/drivers/remoteproc/wkup_m3_rproc.c b/drivers/remoteproc/wkup_m3_rproc.c
 index 92d387dfc03b..484f7605823e 100644
 --- a/drivers/remoteproc/wkup_m3_rproc.c
