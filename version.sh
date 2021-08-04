@@ -38,10 +38,10 @@ toolchain="gcc_10_arm"
 
 #Kernel
 KERNEL_REL=5.10
-KERNEL_TAG=${KERNEL_REL}.47
-kernel_rt=".47-rt46"
+KERNEL_TAG=${KERNEL_REL}.52
+kernel_rt=".52-rt47"
 #Kernel Build
-BUILD=${build_prefix}44
+BUILD=${build_prefix}44.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
