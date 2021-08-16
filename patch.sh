@@ -462,7 +462,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.13.9"
+	backport_tag="v5.13.11"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -478,7 +478,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.9"
+	backport_tag="v5.13.11"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -493,7 +493,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.9"
+	backport_tag="v5.13.11"
 
 	subsystem="pinctrl"
 	#regenerate="enable"
@@ -509,7 +509,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.9"
+	backport_tag="v5.13.11"
 
 	subsystem="pru_rproc"
 	#regenerate="enable"
@@ -580,7 +580,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.57"
+		backport_tag="v5.10.59"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
