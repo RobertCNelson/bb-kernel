@@ -423,10 +423,6 @@ debian_regs () {
 
 		#Future Debian Code names:
 		case "${deb_distro}" in
-		bookworm)
-			#12 bookworm: https://wiki.debian.org/DebianBookworm
-			deb_distro="sid"
-			;;
 		trixie)
 			#13 trixie: https://wiki.debian.org/DebianTrixie
 			deb_distro="sid"
@@ -436,12 +432,13 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		jessie|stretch|buster|bullseye|sid)
+		jessie|stretch|buster|bullseye|bookworm|sid)
 			#https://wiki.debian.org/LTS
 			#8 jessie: https://wiki.debian.org/DebianJessie
 			#9 stretch: https://wiki.debian.org/DebianStretch
 			#10 buster: https://wiki.debian.org/DebianBuster
 			#11 bullseye: https://wiki.debian.org/DebianBullseye
+			#12 bookworm: https://wiki.debian.org/DebianBookworm
 			unset warn_eol_distro
 			;;
 		squeeze|wheezy)
