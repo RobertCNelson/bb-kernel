@@ -512,7 +512,7 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $branch" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
 		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
 
@@ -522,7 +522,7 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-DTBS-$branch.patch"
+		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
 		wdir="soc/ti/beagleboard_dtbs"
 		number=1
@@ -583,7 +583,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.12.16"
+	backport_tag="v5.12.19"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -599,7 +599,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.12.16"
+	backport_tag="v5.12.19"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -815,7 +815,7 @@ backports () {
 
 	dir 'cypress'
 
-	backport_tag="v5.4.131"
+	backport_tag="v5.4.142"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -827,10 +827,10 @@ backports () {
 		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
-	#	post_backports
-	#	exit 2
-	#else
-	#	patch_backports
+		post_backports
+		exit 2
+	else
+		patch_backports
 	fi
 }
 
@@ -890,7 +890,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.49"
+		backport_tag="v5.10.60"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
