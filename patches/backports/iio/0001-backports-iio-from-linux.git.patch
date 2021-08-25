@@ -1,177 +1,74 @@
-From c2c53a44c34f3ba235f1e80520e5067667936119 Mon Sep 17 00:00:00 2001
+From cf85f6795db366a2a34073c01a212069ffe02e82 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 18 Jun 2021 14:47:36 -0500
+Date: Wed, 25 Aug 2021 10:29:09 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
-Reference: v5.4.127
+Reference: v5.4.142
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/iio/adc/ad7124.c           | 36 +++++++++++++++++-------------
- drivers/iio/adc/ad7768-1.c         |  8 +++++--
- drivers/iio/adc/ad7793.c           |  1 +
- drivers/iio/gyro/fxas21002c_core.c |  2 ++
- drivers/staging/iio/cdc/ad7746.c   |  1 -
- 5 files changed, 29 insertions(+), 19 deletions(-)
+ drivers/iio/adc/palmas_gpadc.c | 4 ++--
+ drivers/iio/adc/ti-ads7950.c   | 1 -
+ drivers/iio/humidity/hdc100x.c | 6 ++++--
+ 3 files changed, 6 insertions(+), 5 deletions(-)
 
-diff --git a/drivers/iio/adc/ad7124.c b/drivers/iio/adc/ad7124.c
-index 306bf15023a7..fa808f9c0d9a 100644
---- a/drivers/iio/adc/ad7124.c
-+++ b/drivers/iio/adc/ad7124.c
-@@ -473,6 +473,13 @@ static int ad7124_of_parse_channel_config(struct iio_dev *indio_dev,
- 		if (ret)
- 			goto err;
+diff --git a/drivers/iio/adc/palmas_gpadc.c b/drivers/iio/adc/palmas_gpadc.c
+index 46e595eb889f..2bd785e9e42a 100644
+--- a/drivers/iio/adc/palmas_gpadc.c
++++ b/drivers/iio/adc/palmas_gpadc.c
+@@ -656,8 +656,8 @@ static int palmas_adc_wakeup_configure(struct palmas_gpadc *adc)
  
-+		if (channel >= indio_dev->num_channels) {
-+			dev_err(indio_dev->dev.parent,
-+				"Channel index >= number of channels\n");
-+			ret = -EINVAL;
-+			goto err;
-+		}
-+
- 		ret = of_property_read_u32_array(child, "diff-channels",
- 						 ain, 2);
- 		if (ret)
-@@ -564,6 +571,11 @@ static int ad7124_setup(struct ad7124_state *st)
- 	return ret;
- }
+ 	adc_period = adc->auto_conversion_period;
+ 	for (i = 0; i < 16; ++i) {
+-		if (((1000 * (1 << i)) / 32) < adc_period)
+-			continue;
++		if (((1000 * (1 << i)) / 32) >= adc_period)
++			break;
+ 	}
+ 	if (i > 0)
+ 		i--;
+diff --git a/drivers/iio/adc/ti-ads7950.c b/drivers/iio/adc/ti-ads7950.c
+index 2e66e4d586ff..7a1a9fe47072 100644
+--- a/drivers/iio/adc/ti-ads7950.c
++++ b/drivers/iio/adc/ti-ads7950.c
+@@ -569,7 +569,6 @@ static int ti_ads7950_probe(struct spi_device *spi)
+ 	st->ring_xfer.tx_buf = &st->tx_buf[0];
+ 	st->ring_xfer.rx_buf = &st->rx_buf[0];
+ 	/* len will be set later */
+-	st->ring_xfer.cs_change = true;
  
-+static void ad7124_reg_disable(void *r)
-+{
-+	regulator_disable(r);
-+}
+ 	spi_message_add_tail(&st->ring_xfer, &st->ring_msg);
+ 
+diff --git a/drivers/iio/humidity/hdc100x.c b/drivers/iio/humidity/hdc100x.c
+index 7618cdf59efd..05af6410ca13 100644
+--- a/drivers/iio/humidity/hdc100x.c
++++ b/drivers/iio/humidity/hdc100x.c
+@@ -24,6 +24,8 @@
+ #include <linux/iio/trigger_consumer.h>
+ #include <linux/iio/triggered_buffer.h>
+ 
++#include <linux/time.h>
 +
- static int ad7124_probe(struct spi_device *spi)
+ #define HDC100X_REG_TEMP			0x00
+ #define HDC100X_REG_HUMIDITY			0x01
+ 
+@@ -165,7 +167,7 @@ static int hdc100x_get_measurement(struct hdc100x_data *data,
+ 				   struct iio_chan_spec const *chan)
  {
- 	const struct spi_device_id *id;
-@@ -607,17 +619,20 @@ static int ad7124_probe(struct spi_device *spi)
- 		ret = regulator_enable(st->vref[i]);
- 		if (ret)
- 			return ret;
-+
-+		ret = devm_add_action_or_reset(&spi->dev, ad7124_reg_disable,
-+					       st->vref[i]);
-+		if (ret)
-+			return ret;
- 	}
+ 	struct i2c_client *client = data->client;
+-	int delay = data->adc_int_us[chan->address];
++	int delay = data->adc_int_us[chan->address] + 1*USEC_PER_MSEC;
+ 	int ret;
+ 	__be16 val;
  
- 	st->mclk = devm_clk_get(&spi->dev, "mclk");
--	if (IS_ERR(st->mclk)) {
--		ret = PTR_ERR(st->mclk);
--		goto error_regulator_disable;
--	}
-+	if (IS_ERR(st->mclk))
-+		return PTR_ERR(st->mclk);
+@@ -322,7 +324,7 @@ static irqreturn_t hdc100x_trigger_handler(int irq, void *p)
+ 	struct iio_dev *indio_dev = pf->indio_dev;
+ 	struct hdc100x_data *data = iio_priv(indio_dev);
+ 	struct i2c_client *client = data->client;
+-	int delay = data->adc_int_us[0] + data->adc_int_us[1];
++	int delay = data->adc_int_us[0] + data->adc_int_us[1] + 2*USEC_PER_MSEC;
+ 	int ret;
  
- 	ret = clk_prepare_enable(st->mclk);
- 	if (ret < 0)
--		goto error_regulator_disable;
-+		return ret;
- 
- 	ret = ad7124_soft_reset(st);
- 	if (ret < 0)
-@@ -643,11 +658,6 @@ static int ad7124_probe(struct spi_device *spi)
- 	ad_sd_cleanup_buffer_and_trigger(indio_dev);
- error_clk_disable_unprepare:
- 	clk_disable_unprepare(st->mclk);
--error_regulator_disable:
--	for (i = ARRAY_SIZE(st->vref) - 1; i >= 0; i--) {
--		if (!IS_ERR_OR_NULL(st->vref[i]))
--			regulator_disable(st->vref[i]);
--	}
- 
- 	return ret;
- }
-@@ -656,17 +666,11 @@ static int ad7124_remove(struct spi_device *spi)
- {
- 	struct iio_dev *indio_dev = spi_get_drvdata(spi);
- 	struct ad7124_state *st = iio_priv(indio_dev);
--	int i;
- 
- 	iio_device_unregister(indio_dev);
- 	ad_sd_cleanup_buffer_and_trigger(indio_dev);
- 	clk_disable_unprepare(st->mclk);
- 
--	for (i = ARRAY_SIZE(st->vref) - 1; i >= 0; i--) {
--		if (!IS_ERR_OR_NULL(st->vref[i]))
--			regulator_disable(st->vref[i]);
--	}
--
- 	return 0;
- }
- 
-diff --git a/drivers/iio/adc/ad7768-1.c b/drivers/iio/adc/ad7768-1.c
-index 0d132708c429..0f6c1be1cda2 100644
---- a/drivers/iio/adc/ad7768-1.c
-+++ b/drivers/iio/adc/ad7768-1.c
-@@ -166,6 +166,10 @@ struct ad7768_state {
- 	 * transfer buffers to live in their own cache lines.
- 	 */
- 	union {
-+		struct {
-+			__be32 chan;
-+			s64 timestamp;
-+		} scan;
- 		__be32 d32;
- 		u8 d8[2];
- 	} data ____cacheline_aligned;
-@@ -459,11 +463,11 @@ static irqreturn_t ad7768_trigger_handler(int irq, void *p)
- 
- 	mutex_lock(&st->lock);
- 
--	ret = spi_read(st->spi, &st->data.d32, 3);
-+	ret = spi_read(st->spi, &st->data.scan.chan, 3);
- 	if (ret < 0)
- 		goto err_unlock;
- 
--	iio_push_to_buffers_with_timestamp(indio_dev, &st->data.d32,
-+	iio_push_to_buffers_with_timestamp(indio_dev, &st->data.scan,
- 					   iio_get_time_ns(indio_dev));
- 
- 	iio_trigger_notify_done(indio_dev->trig);
-diff --git a/drivers/iio/adc/ad7793.c b/drivers/iio/adc/ad7793.c
-index 6ed6d1410201..947d6c777234 100644
---- a/drivers/iio/adc/ad7793.c
-+++ b/drivers/iio/adc/ad7793.c
-@@ -278,6 +278,7 @@ static int ad7793_setup(struct iio_dev *indio_dev,
- 	id &= AD7793_ID_MASK;
- 
- 	if (id != st->chip_info->id) {
-+		ret = -ENODEV;
- 		dev_err(&st->sd.spi->dev, "device ID query failed\n");
- 		goto out;
- 	}
-diff --git a/drivers/iio/gyro/fxas21002c_core.c b/drivers/iio/gyro/fxas21002c_core.c
-index 89d2bb2282ea..958cf8b6002c 100644
---- a/drivers/iio/gyro/fxas21002c_core.c
-+++ b/drivers/iio/gyro/fxas21002c_core.c
-@@ -333,6 +333,7 @@ static int fxas21002c_temp_get(struct fxas21002c_data *data, int *val)
- 	ret = regmap_field_read(data->regmap_fields[F_TEMP], &temp);
- 	if (ret < 0) {
- 		dev_err(dev, "failed to read temp: %d\n", ret);
-+		fxas21002c_pm_put(data);
- 		goto data_unlock;
- 	}
- 
-@@ -366,6 +367,7 @@ static int fxas21002c_axis_get(struct fxas21002c_data *data,
- 			       &axis_be, sizeof(axis_be));
- 	if (ret < 0) {
- 		dev_err(dev, "failed to read axis: %d: %d\n", index, ret);
-+		fxas21002c_pm_put(data);
- 		goto data_unlock;
- 	}
- 
-diff --git a/drivers/staging/iio/cdc/ad7746.c b/drivers/staging/iio/cdc/ad7746.c
-index 21527d84f940..004f123bb070 100644
---- a/drivers/staging/iio/cdc/ad7746.c
-+++ b/drivers/staging/iio/cdc/ad7746.c
-@@ -702,7 +702,6 @@ static int ad7746_probe(struct i2c_client *client,
- 		indio_dev->num_channels = ARRAY_SIZE(ad7746_channels);
- 	else
- 		indio_dev->num_channels =  ARRAY_SIZE(ad7746_channels) - 2;
--	indio_dev->num_channels = ARRAY_SIZE(ad7746_channels);
- 	indio_dev->modes = INDIO_DIRECT_MODE;
- 
- 	if (pdata) {
+ 	/* dual read starts at temp register */
 -- 
 2.30.2
 
