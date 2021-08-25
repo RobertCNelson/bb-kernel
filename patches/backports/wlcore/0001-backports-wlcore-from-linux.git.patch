@@ -1,19 +1,19 @@
-From a56885aef649faf82aaa68d0347ae183ecf6d117 Mon Sep 17 00:00:00 2001
+From 94d31f8ff32979c6f73238ad4582da99cf3aae4a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 13 Jul 2021 15:36:46 -0500
+Date: Wed, 25 Aug 2021 08:03:58 -0500
 Subject: [PATCH] backports: wlcore: from: linux.git
 
-Reference: v5.12.16
+Reference: v5.12.19
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  drivers/net/wireless/ti/Kconfig          |   4 +-
  drivers/net/wireless/ti/wl1251/Kconfig   |   6 +-
- drivers/net/wireless/ti/wl1251/cmd.c     |  38 +++----
+ drivers/net/wireless/ti/wl1251/cmd.c     |  47 ++++----
  drivers/net/wireless/ti/wl1251/debugfs.c |   2 +-
  drivers/net/wireless/ti/wl1251/main.c    |   2 +-
  drivers/net/wireless/ti/wl1251/reg.h     |   2 +-
  drivers/net/wireless/ti/wl12xx/Kconfig   |   2 +-
- drivers/net/wireless/ti/wl12xx/main.c    |   3 -
+ drivers/net/wireless/ti/wl12xx/main.c    |  10 +-
  drivers/net/wireless/ti/wl12xx/reg.h     |   2 +-
  drivers/net/wireless/ti/wl18xx/Kconfig   |   2 +-
  drivers/net/wireless/ti/wlcore/Kconfig   |   6 +-
@@ -26,7 +26,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/net/wireless/ti/wlcore/sysfs.c   |   2 +-
  drivers/net/wireless/ti/wlcore/tx.c      |   1 +
  drivers/net/wireless/ti/wlcore/wlcore.h  |   3 -
- 20 files changed, 108 insertions(+), 143 deletions(-)
+ 20 files changed, 121 insertions(+), 146 deletions(-)
 
 diff --git a/drivers/net/wireless/ti/Kconfig b/drivers/net/wireless/ti/Kconfig
 index b81f2e41a63a..7c0b17a76fe2 100644
@@ -82,7 +82,7 @@ index 7d39f0a4ba5b..de1c70e10cda 100644
  	  TI wl1251 chipset.  Select this if your platform is using
  	  the SDIO bus.
 diff --git a/drivers/net/wireless/ti/wl1251/cmd.c b/drivers/net/wireless/ti/wl1251/cmd.c
-index 9547aea01b0f..498c8db2eb48 100644
+index 9547aea01b0f..d7a869106782 100644
 --- a/drivers/net/wireless/ti/wl1251/cmd.c
 +++ b/drivers/net/wireless/ti/wl1251/cmd.c
 @@ -63,7 +63,7 @@ int wl1251_cmd_send(struct wl1251 *wl, u16 id, void *buf, size_t len)
@@ -172,6 +172,22 @@ index 9547aea01b0f..498c8db2eb48 100644
  
  	cmd->size = cpu_to_le16(buf_len);
  
+@@ -466,9 +454,12 @@ int wl1251_cmd_scan(struct wl1251 *wl, u8 *ssid, size_t ssid_len,
+ 		cmd->channels[i].channel = channels[i]->hw_value;
+ 	}
+ 
+-	cmd->params.ssid_len = ssid_len;
+-	if (ssid)
+-		memcpy(cmd->params.ssid, ssid, ssid_len);
++	if (ssid) {
++		int len = clamp_val(ssid_len, 0, IEEE80211_MAX_SSID_LEN);
++
++		cmd->params.ssid_len = len;
++		memcpy(cmd->params.ssid, ssid, len);
++	}
+ 
+ 	ret = wl1251_cmd_send(wl, CMD_SCAN, cmd, sizeof(*cmd));
+ 	if (ret < 0) {
 diff --git a/drivers/net/wireless/ti/wl1251/debugfs.c b/drivers/net/wireless/ti/wl1251/debugfs.c
 index d48746e640cc..a1b778a0fda0 100644
 --- a/drivers/net/wireless/ti/wl1251/debugfs.c
@@ -225,7 +241,7 @@ index 9c4511604b67..786fff288505 100644
  	  wl1273, wl1281 and wl1283 chipsets. This module does *not* include
  	  support for wl1251.  For wl1251 support, use the separate homonymous
 diff --git a/drivers/net/wireless/ti/wl12xx/main.c b/drivers/net/wireless/ti/wl12xx/main.c
-index 3c9c623bb428..9d7dbfe7fe0c 100644
+index 3c9c623bb428..c6da0cfb4afb 100644
 --- a/drivers/net/wireless/ti/wl12xx/main.c
 +++ b/drivers/net/wireless/ti/wl12xx/main.c
 @@ -635,7 +635,6 @@ static int wl12xx_identify_chip(struct wl1271 *wl)
@@ -252,6 +268,20 @@ index 3c9c623bb428..9d7dbfe7fe0c 100644
  			      WLCORE_QUIRK_AP_ZERO_SESSION_ID;
  
  		wlcore_set_min_fw_ver(wl, WL128X_CHIP_VER,
+@@ -1506,6 +1503,13 @@ static int wl12xx_get_fuse_mac(struct wl1271 *wl)
+ 	u32 mac1, mac2;
+ 	int ret;
+ 
++	/* Device may be in ELP from the bootloader or kexec */
++	ret = wlcore_write32(wl, WL12XX_WELP_ARM_COMMAND, WELP_ARM_COMMAND_VAL);
++	if (ret < 0)
++		goto out;
++
++	usleep_range(500000, 700000);
++
+ 	ret = wlcore_set_partition(wl, &wl->ptable[PART_DRPW]);
+ 	if (ret < 0)
+ 		goto out;
 diff --git a/drivers/net/wireless/ti/wl12xx/reg.h b/drivers/net/wireless/ti/wl12xx/reg.h
 index 247f558ba630..8ff018808020 100644
 --- a/drivers/net/wireless/ti/wl12xx/reg.h
