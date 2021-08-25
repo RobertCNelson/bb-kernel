@@ -497,7 +497,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.11"
+	backport_tag="v5.13.12"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -512,26 +512,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.11"
-
-	subsystem="pru_rproc"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/irqchip/irq-pruss-intc.c ./drivers/irqchip/
-		cp -rv ~/linux-src/drivers/remoteproc/* ./drivers/remoteproc/
-		cp -v ~/linux-src/include/linux/remoteproc.h ./include/linux/remoteproc.h
-		cp -rv ~/linux-src/include/linux/remoteproc/* ./include/linux/remoteproc/
-		cp -v ~/linux-src/include/linux/pruss_driver.h ./include/linux/pruss_driver.h
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.10.59"
+	backport_tag="v5.10.60"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -544,9 +525,9 @@ backports () {
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
 		post_backports
-	#	exit 2
-	#else
-	#	patch_backports
+		exit 2
+	else
+		patch_backports
 	fi
 }
 
@@ -607,7 +588,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.59"
+		backport_tag="v5.10.60"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
