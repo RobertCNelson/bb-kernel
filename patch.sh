@@ -518,6 +518,7 @@ drivers () {
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
+	dir 'drivers/mikrobus'
 }
 
 soc () {
