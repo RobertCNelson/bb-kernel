@@ -591,6 +591,7 @@ reverts () {
 }
 
 drivers () {
+	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
@@ -614,12 +615,6 @@ drivers () {
 }
 
 soc () {
-#	dir 'soc/imx/udoo'
-#	dir 'soc/imx/wandboard'
-#	dir 'soc/imx/imx6'
-#	dir 'soc/imx/imx7'
-
-#	dir 'soc/ti/omap4'
 	dir 'bootup_hacks'
 	dir 'fixes'
 }
