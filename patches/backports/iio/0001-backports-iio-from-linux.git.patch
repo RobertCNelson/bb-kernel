@@ -1,45 +1,964 @@
-From 58555060dcf061b36e7f5aef37ac4834cd7c6e7a Mon Sep 17 00:00:00 2001
+From c0feaa8bb71576e2ca0e0dd57201fce8b0f56520 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 1 Jun 2021 16:10:19 -0500
+Date: Thu, 2 Sep 2021 17:43:20 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
-Reference: v4.19.192
+Reference: v4.19.205
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/iio/adc/Kconfig  | 7 -------
- drivers/iio/adc/Makefile | 1 -
- 2 files changed, 8 deletions(-)
+ drivers/iio/accel/bma180.c                    | 85 ++++++++++++-------
+ drivers/iio/accel/bma220_spi.c                | 10 ++-
+ drivers/iio/accel/hid-sensor-accel-3d.c       | 13 +--
+ drivers/iio/accel/kxcjk-1013.c                | 24 +++---
+ drivers/iio/accel/stk8312.c                   | 12 ++-
+ drivers/iio/accel/stk8ba50.c                  | 17 ++--
+ drivers/iio/adc/ad7793.c                      |  1 +
+ drivers/iio/adc/hx711.c                       |  4 +-
+ drivers/iio/adc/mxs-lradc-adc.c               |  3 +-
+ drivers/iio/adc/palmas_gpadc.c                |  4 +-
+ drivers/iio/adc/ti-ads1015.c                  | 12 ++-
+ drivers/iio/adc/ti-ads8688.c                  |  3 +-
+ drivers/iio/adc/vf610_adc.c                   | 10 ++-
+ drivers/iio/dac/ds4424.c                      |  6 --
+ drivers/iio/gyro/bmg160_core.c                | 10 ++-
+ drivers/iio/humidity/am2315.c                 | 16 ++--
+ drivers/iio/humidity/hdc100x.c                |  6 +-
+ drivers/iio/imu/adis_buffer.c                 |  3 -
+ drivers/iio/light/isl29125.c                  | 10 ++-
+ drivers/iio/light/ltr501.c                    | 15 +++-
+ drivers/iio/light/tcs3414.c                   | 10 ++-
+ drivers/iio/light/tcs3472.c                   | 16 ++--
+ drivers/iio/potentiostat/lmp91000.c           |  4 +-
+ drivers/iio/proximity/as3935.c                | 10 ++-
+ drivers/iio/proximity/isl29501.c              |  2 +-
+ .../iio/proximity/pulsedlight-lidar-lite-v2.c | 10 ++-
+ drivers/iio/proximity/srf08.c                 | 14 +--
+ drivers/staging/iio/cdc/ad7746.c              |  1 -
+ 28 files changed, 206 insertions(+), 125 deletions(-)
 
-diff --git a/drivers/iio/adc/Kconfig b/drivers/iio/adc/Kconfig
-index a21d5a8d231a..1dabd366ec0b 100644
---- a/drivers/iio/adc/Kconfig
-+++ b/drivers/iio/adc/Kconfig
-@@ -706,13 +706,6 @@ config STM32_DFSDM_ADC
- 	  This driver can also be built as a module.  If so, the module
- 	  will be called stm32-dfsdm-adc.
+diff --git a/drivers/iio/accel/bma180.c b/drivers/iio/accel/bma180.c
+index cb9765a3de60..52275dddab3e 100644
+--- a/drivers/iio/accel/bma180.c
++++ b/drivers/iio/accel/bma180.c
+@@ -50,7 +50,7 @@ struct bma180_part_info {
  
--config STMPE_ADC
--	tristate "STMicroelectronics STMPE ADC driver"
--	depends on OF && MFD_STMPE
--	help
--	  Say yes here to build support for ST Microelectronics STMPE
--	  built-in ADC block (stmpe811).
+ 	u8 int_reset_reg, int_reset_mask;
+ 	u8 sleep_reg, sleep_mask;
+-	u8 bw_reg, bw_mask;
++	u8 bw_reg, bw_mask, bw_offset;
+ 	u8 scale_reg, scale_mask;
+ 	u8 power_reg, power_mask, lowpower_val;
+ 	u8 int_enable_reg, int_enable_mask;
+@@ -106,6 +106,7 @@ struct bma180_part_info {
+ 
+ #define BMA250_RANGE_MASK	GENMASK(3, 0) /* Range of accel values */
+ #define BMA250_BW_MASK		GENMASK(4, 0) /* Accel bandwidth */
++#define BMA250_BW_OFFSET	8
+ #define BMA250_SUSPEND_MASK	BIT(7) /* chip will sleep */
+ #define BMA250_LOWPOWER_MASK	BIT(6)
+ #define BMA250_DATA_INTEN_MASK	BIT(4)
+@@ -121,7 +122,11 @@ struct bma180_data {
+ 	int scale;
+ 	int bw;
+ 	bool pmode;
+-	u8 buff[16]; /* 3x 16-bit + 8-bit + padding + timestamp */
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		s16 chan[4];
++		s64 timestamp __aligned(8);
++	} scan;
+ };
+ 
+ enum bma180_chan {
+@@ -239,7 +244,8 @@ static int bma180_set_bw(struct bma180_data *data, int val)
+ 	for (i = 0; i < data->part_info->num_bw; ++i) {
+ 		if (data->part_info->bw_table[i] == val) {
+ 			ret = bma180_set_bits(data, data->part_info->bw_reg,
+-				data->part_info->bw_mask, i);
++				data->part_info->bw_mask,
++				i + data->part_info->bw_offset);
+ 			if (ret) {
+ 				dev_err(&data->client->dev,
+ 					"failed to set bandwidth\n");
+@@ -621,32 +627,53 @@ static const struct iio_chan_spec bma250_channels[] = {
+ 
+ static const struct bma180_part_info bma180_part_info[] = {
+ 	[BMA180] = {
+-		bma180_channels, ARRAY_SIZE(bma180_channels),
+-		bma180_scale_table, ARRAY_SIZE(bma180_scale_table),
+-		bma180_bw_table, ARRAY_SIZE(bma180_bw_table),
+-		BMA180_CTRL_REG0, BMA180_RESET_INT,
+-		BMA180_CTRL_REG0, BMA180_SLEEP,
+-		BMA180_BW_TCS, BMA180_BW,
+-		BMA180_OFFSET_LSB1, BMA180_RANGE,
+-		BMA180_TCO_Z, BMA180_MODE_CONFIG, BMA180_LOW_POWER,
+-		BMA180_CTRL_REG3, BMA180_NEW_DATA_INT,
+-		BMA180_RESET,
+-		bma180_chip_config,
+-		bma180_chip_disable,
++		.channels = bma180_channels,
++		.num_channels = ARRAY_SIZE(bma180_channels),
++		.scale_table = bma180_scale_table,
++		.num_scales = ARRAY_SIZE(bma180_scale_table),
++		.bw_table = bma180_bw_table,
++		.num_bw = ARRAY_SIZE(bma180_bw_table),
++		.int_reset_reg = BMA180_CTRL_REG0,
++		.int_reset_mask = BMA180_RESET_INT,
++		.sleep_reg = BMA180_CTRL_REG0,
++		.sleep_mask = BMA180_SLEEP,
++		.bw_reg = BMA180_BW_TCS,
++		.bw_mask = BMA180_BW,
++		.scale_reg = BMA180_OFFSET_LSB1,
++		.scale_mask = BMA180_RANGE,
++		.power_reg = BMA180_TCO_Z,
++		.power_mask = BMA180_MODE_CONFIG,
++		.lowpower_val = BMA180_LOW_POWER,
++		.int_enable_reg = BMA180_CTRL_REG3,
++		.int_enable_mask = BMA180_NEW_DATA_INT,
++		.softreset_reg = BMA180_RESET,
++		.chip_config = bma180_chip_config,
++		.chip_disable = bma180_chip_disable,
+ 	},
+ 	[BMA250] = {
+-		bma250_channels, ARRAY_SIZE(bma250_channels),
+-		bma250_scale_table, ARRAY_SIZE(bma250_scale_table),
+-		bma250_bw_table, ARRAY_SIZE(bma250_bw_table),
+-		BMA250_INT_RESET_REG, BMA250_INT_RESET_MASK,
+-		BMA250_POWER_REG, BMA250_SUSPEND_MASK,
+-		BMA250_BW_REG, BMA250_BW_MASK,
+-		BMA250_RANGE_REG, BMA250_RANGE_MASK,
+-		BMA250_POWER_REG, BMA250_LOWPOWER_MASK, 1,
+-		BMA250_INT_ENABLE_REG, BMA250_DATA_INTEN_MASK,
+-		BMA250_RESET_REG,
+-		bma250_chip_config,
+-		bma250_chip_disable,
++		.channels = bma250_channels,
++		.num_channels = ARRAY_SIZE(bma250_channels),
++		.scale_table = bma250_scale_table,
++		.num_scales = ARRAY_SIZE(bma250_scale_table),
++		.bw_table = bma250_bw_table,
++		.num_bw = ARRAY_SIZE(bma250_bw_table),
++		.int_reset_reg = BMA250_INT_RESET_REG,
++		.int_reset_mask = BMA250_INT_RESET_MASK,
++		.sleep_reg = BMA250_POWER_REG,
++		.sleep_mask = BMA250_SUSPEND_MASK,
++		.bw_reg = BMA250_BW_REG,
++		.bw_mask = BMA250_BW_MASK,
++		.bw_offset = BMA250_BW_OFFSET,
++		.scale_reg = BMA250_RANGE_REG,
++		.scale_mask = BMA250_RANGE_MASK,
++		.power_reg = BMA250_POWER_REG,
++		.power_mask = BMA250_LOWPOWER_MASK,
++		.lowpower_val = 1,
++		.int_enable_reg = BMA250_INT_ENABLE_REG,
++		.int_enable_mask = BMA250_DATA_INTEN_MASK,
++		.softreset_reg = BMA250_RESET_REG,
++		.chip_config = bma250_chip_config,
++		.chip_disable = bma250_chip_disable,
+ 	},
+ };
+ 
+@@ -667,12 +694,12 @@ static irqreturn_t bma180_trigger_handler(int irq, void *p)
+ 			mutex_unlock(&data->mutex);
+ 			goto err;
+ 		}
+-		((s16 *)data->buff)[i++] = ret;
++		data->scan.chan[i++] = ret;
+ 	}
+ 
+ 	mutex_unlock(&data->mutex);
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buff, time_ns);
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan, time_ns);
+ err:
+ 	iio_trigger_notify_done(indio_dev->trig);
+ 
+diff --git a/drivers/iio/accel/bma220_spi.c b/drivers/iio/accel/bma220_spi.c
+index e25d91c017ed..a548dc11e7c7 100644
+--- a/drivers/iio/accel/bma220_spi.c
++++ b/drivers/iio/accel/bma220_spi.c
+@@ -76,7 +76,11 @@ static const int bma220_scale_table[][4] = {
+ struct bma220_data {
+ 	struct spi_device *spi_device;
+ 	struct mutex lock;
+-	s8 buffer[16]; /* 3x8-bit channels + 5x8 padding + 8x8 timestamp */
++	struct {
++		s8 chans[3];
++		/* Ensure timestamp is naturally aligned. */
++		s64 timestamp __aligned(8);
++	} scan;
+ 	u8 tx_buf[2] ____cacheline_aligned;
+ };
+ 
+@@ -107,12 +111,12 @@ static irqreturn_t bma220_trigger_handler(int irq, void *p)
+ 
+ 	mutex_lock(&data->lock);
+ 	data->tx_buf[0] = BMA220_REG_ACCEL_X | BMA220_READ_MASK;
+-	ret = spi_write_then_read(spi, data->tx_buf, 1, data->buffer,
++	ret = spi_write_then_read(spi, data->tx_buf, 1, &data->scan.chans,
+ 				  ARRAY_SIZE(bma220_channels) - 1);
+ 	if (ret < 0)
+ 		goto err;
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 					   pf->timestamp);
+ err:
+ 	mutex_unlock(&data->lock);
+diff --git a/drivers/iio/accel/hid-sensor-accel-3d.c b/drivers/iio/accel/hid-sensor-accel-3d.c
+index 38ff374a3ca4..32d5438d4519 100644
+--- a/drivers/iio/accel/hid-sensor-accel-3d.c
++++ b/drivers/iio/accel/hid-sensor-accel-3d.c
+@@ -42,8 +42,11 @@ struct accel_3d_state {
+ 	struct hid_sensor_hub_callbacks callbacks;
+ 	struct hid_sensor_common common_attributes;
+ 	struct hid_sensor_hub_attribute_info accel[ACCEL_3D_CHANNEL_MAX];
+-	/* Reserve for 3 channels + padding + timestamp */
+-	u32 accel_val[ACCEL_3D_CHANNEL_MAX + 3];
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		u32 accel_val[3];
++		s64 timestamp __aligned(8);
++	} scan;
+ 	int scale_pre_decml;
+ 	int scale_post_decml;
+ 	int scale_precision;
+@@ -254,8 +257,8 @@ static int accel_3d_proc_event(struct hid_sensor_hub_device *hsdev,
+ 			accel_state->timestamp = iio_get_time_ns(indio_dev);
+ 
+ 		hid_sensor_push_data(indio_dev,
+-				     accel_state->accel_val,
+-				     sizeof(accel_state->accel_val),
++				     &accel_state->scan,
++				     sizeof(accel_state->scan),
+ 				     accel_state->timestamp);
+ 
+ 		accel_state->timestamp = 0;
+@@ -280,7 +283,7 @@ static int accel_3d_capture_sample(struct hid_sensor_hub_device *hsdev,
+ 	case HID_USAGE_SENSOR_ACCEL_Y_AXIS:
+ 	case HID_USAGE_SENSOR_ACCEL_Z_AXIS:
+ 		offset = usage_id - HID_USAGE_SENSOR_ACCEL_X_AXIS;
+-		accel_state->accel_val[CHANNEL_SCAN_INDEX_X + offset] =
++		accel_state->scan.accel_val[CHANNEL_SCAN_INDEX_X + offset] =
+ 						*(u32 *)raw_data;
+ 		ret = 0;
+ 	break;
+diff --git a/drivers/iio/accel/kxcjk-1013.c b/drivers/iio/accel/kxcjk-1013.c
+index c22afc979206..0ca6f9de5192 100644
+--- a/drivers/iio/accel/kxcjk-1013.c
++++ b/drivers/iio/accel/kxcjk-1013.c
+@@ -140,12 +140,23 @@ enum kx_acpi_type {
+ 	ACPI_KIOX010A,
+ };
+ 
++enum kxcjk1013_axis {
++	AXIS_X,
++	AXIS_Y,
++	AXIS_Z,
++	AXIS_MAX
++};
++
+ struct kxcjk1013_data {
+ 	struct i2c_client *client;
+ 	struct iio_trigger *dready_trig;
+ 	struct iio_trigger *motion_trig;
+ 	struct mutex mutex;
+-	s16 buffer[8];
++	/* Ensure timestamp naturally aligned */
++	struct {
++		s16 chans[AXIS_MAX];
++		s64 timestamp __aligned(8);
++	} scan;
+ 	u8 odr_bits;
+ 	u8 range;
+ 	int wake_thres;
+@@ -159,13 +170,6 @@ struct kxcjk1013_data {
+ 	enum kx_acpi_type acpi_type;
+ };
+ 
+-enum kxcjk1013_axis {
+-	AXIS_X,
+-	AXIS_Y,
+-	AXIS_Z,
+-	AXIS_MAX,
+-};
 -
- config STX104
- 	tristate "Apex Embedded Systems STX104 driver"
- 	depends on PC104 && X86
-diff --git a/drivers/iio/adc/Makefile b/drivers/iio/adc/Makefile
-index 5ce8f8adce87..03db7b578f9c 100644
---- a/drivers/iio/adc/Makefile
-+++ b/drivers/iio/adc/Makefile
-@@ -67,7 +67,6 @@ obj-$(CONFIG_STM32_ADC_CORE) += stm32-adc-core.o
- obj-$(CONFIG_STM32_ADC) += stm32-adc.o
- obj-$(CONFIG_STM32_DFSDM_CORE) += stm32-dfsdm-core.o
- obj-$(CONFIG_STM32_DFSDM_ADC) += stm32-dfsdm-adc.o
--obj-$(CONFIG_STMPE_ADC) += stmpe-adc.o
- obj-$(CONFIG_TI_ADC081C) += ti-adc081c.o
- obj-$(CONFIG_TI_ADC0832) += ti-adc0832.o
- obj-$(CONFIG_TI_ADC084S021) += ti-adc084s021.o
+ enum kxcjk1013_mode {
+ 	STANDBY,
+ 	OPERATION,
+@@ -1086,12 +1090,12 @@ static irqreturn_t kxcjk1013_trigger_handler(int irq, void *p)
+ 	ret = i2c_smbus_read_i2c_block_data_or_emulated(data->client,
+ 							KXCJK1013_REG_XOUT_L,
+ 							AXIS_MAX * 2,
+-							(u8 *)data->buffer);
++							(u8 *)data->scan.chans);
+ 	mutex_unlock(&data->mutex);
+ 	if (ret < 0)
+ 		goto err;
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 					   data->timestamp);
+ err:
+ 	iio_trigger_notify_done(indio_dev->trig);
+diff --git a/drivers/iio/accel/stk8312.c b/drivers/iio/accel/stk8312.c
+index cacc0da2f874..52c33addf47b 100644
+--- a/drivers/iio/accel/stk8312.c
++++ b/drivers/iio/accel/stk8312.c
+@@ -106,7 +106,11 @@ struct stk8312_data {
+ 	u8 mode;
+ 	struct iio_trigger *dready_trig;
+ 	bool dready_trigger_on;
+-	s8 buffer[16]; /* 3x8-bit channels + 5x8 padding + 64-bit timestamp */
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		s8 chans[3];
++		s64 timestamp __aligned(8);
++	} scan;
+ };
+ 
+ static IIO_CONST_ATTR(in_accel_scale_available, STK8312_SCALE_AVAIL);
+@@ -441,7 +445,7 @@ static irqreturn_t stk8312_trigger_handler(int irq, void *p)
+ 		ret = i2c_smbus_read_i2c_block_data(data->client,
+ 						    STK8312_REG_XOUT,
+ 						    STK8312_ALL_CHANNEL_SIZE,
+-						    data->buffer);
++						    data->scan.chans);
+ 		if (ret < STK8312_ALL_CHANNEL_SIZE) {
+ 			dev_err(&data->client->dev, "register read failed\n");
+ 			mutex_unlock(&data->lock);
+@@ -455,12 +459,12 @@ static irqreturn_t stk8312_trigger_handler(int irq, void *p)
+ 				mutex_unlock(&data->lock);
+ 				goto err;
+ 			}
+-			data->buffer[i++] = ret;
++			data->scan.chans[i++] = ret;
+ 		}
+ 	}
+ 	mutex_unlock(&data->lock);
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 					   pf->timestamp);
+ err:
+ 	iio_trigger_notify_done(indio_dev->trig);
+diff --git a/drivers/iio/accel/stk8ba50.c b/drivers/iio/accel/stk8ba50.c
+index 576b6b140f08..0d9067d3ccc4 100644
+--- a/drivers/iio/accel/stk8ba50.c
++++ b/drivers/iio/accel/stk8ba50.c
+@@ -94,12 +94,11 @@ struct stk8ba50_data {
+ 	u8 sample_rate_idx;
+ 	struct iio_trigger *dready_trig;
+ 	bool dready_trigger_on;
+-	/*
+-	 * 3 x 16-bit channels (10-bit data, 6-bit padding) +
+-	 * 1 x 16 padding +
+-	 * 4 x 16 64-bit timestamp
+-	 */
+-	s16 buffer[8];
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		s16 chans[3];
++		s64 timetamp __aligned(8);
++	} scan;
+ };
+ 
+ #define STK8BA50_ACCEL_CHANNEL(index, reg, axis) {			\
+@@ -327,7 +326,7 @@ static irqreturn_t stk8ba50_trigger_handler(int irq, void *p)
+ 		ret = i2c_smbus_read_i2c_block_data(data->client,
+ 						    STK8BA50_REG_XOUT,
+ 						    STK8BA50_ALL_CHANNEL_SIZE,
+-						    (u8 *)data->buffer);
++						    (u8 *)data->scan.chans);
+ 		if (ret < STK8BA50_ALL_CHANNEL_SIZE) {
+ 			dev_err(&data->client->dev, "register read failed\n");
+ 			goto err;
+@@ -340,10 +339,10 @@ static irqreturn_t stk8ba50_trigger_handler(int irq, void *p)
+ 			if (ret < 0)
+ 				goto err;
+ 
+-			data->buffer[i++] = ret;
++			data->scan.chans[i++] = ret;
+ 		}
+ 	}
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 					   pf->timestamp);
+ err:
+ 	mutex_unlock(&data->lock);
+diff --git a/drivers/iio/adc/ad7793.c b/drivers/iio/adc/ad7793.c
+index 23a6e7baa396..b5952ee3031c 100644
+--- a/drivers/iio/adc/ad7793.c
++++ b/drivers/iio/adc/ad7793.c
+@@ -279,6 +279,7 @@ static int ad7793_setup(struct iio_dev *indio_dev,
+ 	id &= AD7793_ID_MASK;
+ 
+ 	if (id != st->chip_info->id) {
++		ret = -ENODEV;
+ 		dev_err(&st->sd.spi->dev, "device ID query failed\n");
+ 		goto out;
+ 	}
+diff --git a/drivers/iio/adc/hx711.c b/drivers/iio/adc/hx711.c
+index 6c5d81a89aec..0dc487dd1674 100644
+--- a/drivers/iio/adc/hx711.c
++++ b/drivers/iio/adc/hx711.c
+@@ -94,9 +94,9 @@ struct hx711_data {
+ 	struct mutex		lock;
+ 	/*
+ 	 * triggered buffer
+-	 * 2x32-bit channel + 64-bit timestamp
++	 * 2x32-bit channel + 64-bit naturally aligned timestamp
+ 	 */
+-	u32			buffer[4];
++	u32			buffer[4] __aligned(8);
+ 	/*
+ 	 * delay after a rising edge on SCK until the data is ready DOUT
+ 	 * this is dependent on the hx711 where the datasheet tells a
+diff --git a/drivers/iio/adc/mxs-lradc-adc.c b/drivers/iio/adc/mxs-lradc-adc.c
+index c627513d9f0f..fc8b70d8d64c 100644
+--- a/drivers/iio/adc/mxs-lradc-adc.c
++++ b/drivers/iio/adc/mxs-lradc-adc.c
+@@ -124,7 +124,8 @@ struct mxs_lradc_adc {
+ 	struct device		*dev;
+ 
+ 	void __iomem		*base;
+-	u32			buffer[10];
++	/* Maximum of 8 channels + 8 byte ts */
++	u32			buffer[10] __aligned(8);
+ 	struct iio_trigger	*trig;
+ 	struct completion	completion;
+ 	spinlock_t		lock;
+diff --git a/drivers/iio/adc/palmas_gpadc.c b/drivers/iio/adc/palmas_gpadc.c
+index 69b9affeef1e..7dcd4213d38a 100644
+--- a/drivers/iio/adc/palmas_gpadc.c
++++ b/drivers/iio/adc/palmas_gpadc.c
+@@ -659,8 +659,8 @@ static int palmas_adc_wakeup_configure(struct palmas_gpadc *adc)
+ 
+ 	adc_period = adc->auto_conversion_period;
+ 	for (i = 0; i < 16; ++i) {
+-		if (((1000 * (1 << i)) / 32) < adc_period)
+-			continue;
++		if (((1000 * (1 << i)) / 32) >= adc_period)
++			break;
+ 	}
+ 	if (i > 0)
+ 		i--;
+diff --git a/drivers/iio/adc/ti-ads1015.c b/drivers/iio/adc/ti-ads1015.c
+index dc8d859e4b92..b1cccc3eeea6 100644
+--- a/drivers/iio/adc/ti-ads1015.c
++++ b/drivers/iio/adc/ti-ads1015.c
+@@ -391,10 +391,14 @@ static irqreturn_t ads1015_trigger_handler(int irq, void *p)
+ 	struct iio_poll_func *pf = p;
+ 	struct iio_dev *indio_dev = pf->indio_dev;
+ 	struct ads1015_data *data = iio_priv(indio_dev);
+-	s16 buf[8]; /* 1x s16 ADC val + 3x s16 padding +  4x s16 timestamp */
++	/* Ensure natural alignment of timestamp */
++	struct {
++		s16 chan;
++		s64 timestamp __aligned(8);
++	} scan;
+ 	int chan, ret, res;
+ 
+-	memset(buf, 0, sizeof(buf));
++	memset(&scan, 0, sizeof(scan));
+ 
+ 	mutex_lock(&data->lock);
+ 	chan = find_first_bit(indio_dev->active_scan_mask,
+@@ -405,10 +409,10 @@ static irqreturn_t ads1015_trigger_handler(int irq, void *p)
+ 		goto err;
+ 	}
+ 
+-	buf[0] = res;
++	scan.chan = res;
+ 	mutex_unlock(&data->lock);
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, buf,
++	iio_push_to_buffers_with_timestamp(indio_dev, &scan,
+ 					   iio_get_time_ns(indio_dev));
+ 
+ err:
+diff --git a/drivers/iio/adc/ti-ads8688.c b/drivers/iio/adc/ti-ads8688.c
+index 7f16c77b99fb..9bcb05897c9d 100644
+--- a/drivers/iio/adc/ti-ads8688.c
++++ b/drivers/iio/adc/ti-ads8688.c
+@@ -386,7 +386,8 @@ static irqreturn_t ads8688_trigger_handler(int irq, void *p)
+ {
+ 	struct iio_poll_func *pf = p;
+ 	struct iio_dev *indio_dev = pf->indio_dev;
+-	u16 buffer[ADS8688_MAX_CHANNELS + sizeof(s64)/sizeof(u16)];
++	/* Ensure naturally aligned timestamp */
++	u16 buffer[ADS8688_MAX_CHANNELS + sizeof(s64)/sizeof(u16)] __aligned(8);
+ 	int i, j = 0;
+ 
+ 	for (i = 0; i < indio_dev->masklength; i++) {
+diff --git a/drivers/iio/adc/vf610_adc.c b/drivers/iio/adc/vf610_adc.c
+index bbcb7a4d7edf..3e480244ad9a 100644
+--- a/drivers/iio/adc/vf610_adc.c
++++ b/drivers/iio/adc/vf610_adc.c
+@@ -180,7 +180,11 @@ struct vf610_adc {
+ 	u32 sample_freq_avail[5];
+ 
+ 	struct completion completion;
+-	u16 buffer[8];
++	/* Ensure the timestamp is naturally aligned */
++	struct {
++		u16 chan;
++		s64 timestamp __aligned(8);
++	} scan;
+ };
+ 
+ static const u32 vf610_hw_avgs[] = { 1, 4, 8, 16, 32 };
+@@ -592,9 +596,9 @@ static irqreturn_t vf610_adc_isr(int irq, void *dev_id)
+ 	if (coco & VF610_ADC_HS_COCO0) {
+ 		info->value = vf610_adc_read_data(info);
+ 		if (iio_buffer_enabled(indio_dev)) {
+-			info->buffer[0] = info->value;
++			info->scan.chan = info->value;
+ 			iio_push_to_buffers_with_timestamp(indio_dev,
+-					info->buffer,
++					&info->scan,
+ 					iio_get_time_ns(indio_dev));
+ 			iio_trigger_notify_done(indio_dev->trig);
+ 		} else
+diff --git a/drivers/iio/dac/ds4424.c b/drivers/iio/dac/ds4424.c
+index 714a97f91319..ae9be792693b 100644
+--- a/drivers/iio/dac/ds4424.c
++++ b/drivers/iio/dac/ds4424.c
+@@ -236,12 +236,6 @@ static int ds4424_probe(struct i2c_client *client,
+ 	indio_dev->dev.of_node = client->dev.of_node;
+ 	indio_dev->dev.parent = &client->dev;
+ 
+-	if (!client->dev.of_node) {
+-		dev_err(&client->dev,
+-				"Not found DT.\n");
+-		return -ENODEV;
+-	}
+-
+ 	data->vcc_reg = devm_regulator_get(&client->dev, "vcc");
+ 	if (IS_ERR(data->vcc_reg)) {
+ 		dev_err(&client->dev,
+diff --git a/drivers/iio/gyro/bmg160_core.c b/drivers/iio/gyro/bmg160_core.c
+index 92c07ab826eb..ef8ef96201f6 100644
+--- a/drivers/iio/gyro/bmg160_core.c
++++ b/drivers/iio/gyro/bmg160_core.c
+@@ -103,7 +103,11 @@ struct bmg160_data {
+ 	struct iio_trigger *dready_trig;
+ 	struct iio_trigger *motion_trig;
+ 	struct mutex mutex;
+-	s16 buffer[8];
++	/* Ensure naturally aligned timestamp */
++	struct {
++		s16 chans[3];
++		s64 timestamp __aligned(8);
++	} scan;
+ 	u32 dps_range;
+ 	int ev_enable_state;
+ 	int slope_thres;
+@@ -872,12 +876,12 @@ static irqreturn_t bmg160_trigger_handler(int irq, void *p)
+ 
+ 	mutex_lock(&data->mutex);
+ 	ret = regmap_bulk_read(data->regmap, BMG160_REG_XOUT_L,
+-			       data->buffer, AXIS_MAX * 2);
++			       data->scan.chans, AXIS_MAX * 2);
+ 	mutex_unlock(&data->mutex);
+ 	if (ret < 0)
+ 		goto err;
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 					   pf->timestamp);
+ err:
+ 	iio_trigger_notify_done(indio_dev->trig);
+diff --git a/drivers/iio/humidity/am2315.c b/drivers/iio/humidity/am2315.c
+index 7d8669dc6547..b09bd0b39c9c 100644
+--- a/drivers/iio/humidity/am2315.c
++++ b/drivers/iio/humidity/am2315.c
+@@ -36,7 +36,11 @@
+ struct am2315_data {
+ 	struct i2c_client *client;
+ 	struct mutex lock;
+-	s16 buffer[8]; /* 2x16-bit channels + 2x16 padding + 4x16 timestamp */
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		s16 chans[2];
++		s64 timestamp __aligned(8);
++	} scan;
+ };
+ 
+ struct am2315_sensor_data {
+@@ -170,20 +174,20 @@ static irqreturn_t am2315_trigger_handler(int irq, void *p)
+ 
+ 	mutex_lock(&data->lock);
+ 	if (*(indio_dev->active_scan_mask) == AM2315_ALL_CHANNEL_MASK) {
+-		data->buffer[0] = sensor_data.hum_data;
+-		data->buffer[1] = sensor_data.temp_data;
++		data->scan.chans[0] = sensor_data.hum_data;
++		data->scan.chans[1] = sensor_data.temp_data;
+ 	} else {
+ 		i = 0;
+ 		for_each_set_bit(bit, indio_dev->active_scan_mask,
+ 				 indio_dev->masklength) {
+-			data->buffer[i] = (bit ? sensor_data.temp_data :
+-						 sensor_data.hum_data);
++			data->scan.chans[i] = (bit ? sensor_data.temp_data :
++					       sensor_data.hum_data);
+ 			i++;
+ 		}
+ 	}
+ 	mutex_unlock(&data->lock);
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 					   pf->timestamp);
+ err:
+ 	iio_trigger_notify_done(indio_dev->trig);
+diff --git a/drivers/iio/humidity/hdc100x.c b/drivers/iio/humidity/hdc100x.c
+index 0fcaa2c0b2f4..51ad5a9ed085 100644
+--- a/drivers/iio/humidity/hdc100x.c
++++ b/drivers/iio/humidity/hdc100x.c
+@@ -24,6 +24,8 @@
+ #include <linux/iio/trigger_consumer.h>
+ #include <linux/iio/triggered_buffer.h>
+ 
++#include <linux/time.h>
++
+ #define HDC100X_REG_TEMP			0x00
+ #define HDC100X_REG_HUMIDITY			0x01
+ 
+@@ -165,7 +167,7 @@ static int hdc100x_get_measurement(struct hdc100x_data *data,
+ 				   struct iio_chan_spec const *chan)
+ {
+ 	struct i2c_client *client = data->client;
+-	int delay = data->adc_int_us[chan->address];
++	int delay = data->adc_int_us[chan->address] + 1*USEC_PER_MSEC;
+ 	int ret;
+ 	__be16 val;
+ 
+@@ -322,7 +324,7 @@ static irqreturn_t hdc100x_trigger_handler(int irq, void *p)
+ 	struct iio_dev *indio_dev = pf->indio_dev;
+ 	struct hdc100x_data *data = iio_priv(indio_dev);
+ 	struct i2c_client *client = data->client;
+-	int delay = data->adc_int_us[0] + data->adc_int_us[1];
++	int delay = data->adc_int_us[0] + data->adc_int_us[1] + 2*USEC_PER_MSEC;
+ 	int ret;
+ 
+ 	/* dual read starts at temp register */
+diff --git a/drivers/iio/imu/adis_buffer.c b/drivers/iio/imu/adis_buffer.c
+index e59d0438de73..bde68462b5ed 100644
+--- a/drivers/iio/imu/adis_buffer.c
++++ b/drivers/iio/imu/adis_buffer.c
+@@ -83,9 +83,6 @@ static irqreturn_t adis_trigger_handler(int irq, void *p)
+ 	struct adis *adis = iio_device_get_drvdata(indio_dev);
+ 	int ret;
+ 
+-	if (!adis->buffer)
+-		return -ENOMEM;
+-
+ 	if (adis->data->has_paging) {
+ 		mutex_lock(&adis->txrx_lock);
+ 		if (adis->current_page != 0) {
+diff --git a/drivers/iio/light/isl29125.c b/drivers/iio/light/isl29125.c
+index ed38edcd5efe..d0f5fd42c0ec 100644
+--- a/drivers/iio/light/isl29125.c
++++ b/drivers/iio/light/isl29125.c
+@@ -54,7 +54,11 @@
+ struct isl29125_data {
+ 	struct i2c_client *client;
+ 	u8 conf1;
+-	u16 buffer[8]; /* 3x 16-bit, padding, 8 bytes timestamp */
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		u16 chans[3];
++		s64 timestamp __aligned(8);
++	} scan;
+ };
+ 
+ #define ISL29125_CHANNEL(_color, _si) { \
+@@ -187,10 +191,10 @@ static irqreturn_t isl29125_trigger_handler(int irq, void *p)
+ 		if (ret < 0)
+ 			goto done;
+ 
+-		data->buffer[j++] = ret;
++		data->scan.chans[j++] = ret;
+ 	}
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 		iio_get_time_ns(indio_dev));
+ 
+ done:
+diff --git a/drivers/iio/light/ltr501.c b/drivers/iio/light/ltr501.c
+index 947f17588024..f3fb79c231be 100644
+--- a/drivers/iio/light/ltr501.c
++++ b/drivers/iio/light/ltr501.c
+@@ -35,9 +35,12 @@
+ #define LTR501_PART_ID 0x86
+ #define LTR501_MANUFAC_ID 0x87
+ #define LTR501_ALS_DATA1 0x88 /* 16-bit, little endian */
++#define LTR501_ALS_DATA1_UPPER 0x89 /* upper 8 bits of LTR501_ALS_DATA1 */
+ #define LTR501_ALS_DATA0 0x8a /* 16-bit, little endian */
++#define LTR501_ALS_DATA0_UPPER 0x8b /* upper 8 bits of LTR501_ALS_DATA0 */
+ #define LTR501_ALS_PS_STATUS 0x8c
+ #define LTR501_PS_DATA 0x8d /* 16-bit, little endian */
++#define LTR501_PS_DATA_UPPER 0x8e /* upper 8 bits of LTR501_PS_DATA */
+ #define LTR501_INTR 0x8f /* output mode, polarity, mode */
+ #define LTR501_PS_THRESH_UP 0x90 /* 11 bit, ps upper threshold */
+ #define LTR501_PS_THRESH_LOW 0x92 /* 11 bit, ps lower threshold */
+@@ -408,18 +411,19 @@ static int ltr501_read_als(struct ltr501_data *data, __le16 buf[2])
+ 
+ static int ltr501_read_ps(struct ltr501_data *data)
+ {
+-	int ret, status;
++	__le16 status;
++	int ret;
+ 
+ 	ret = ltr501_drdy(data, LTR501_STATUS_PS_RDY);
+ 	if (ret < 0)
+ 		return ret;
+ 
+ 	ret = regmap_bulk_read(data->regmap, LTR501_PS_DATA,
+-			       &status, 2);
++			       &status, sizeof(status));
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	return status;
++	return le16_to_cpu(status);
+ }
+ 
+ static int ltr501_read_intr_prst(struct ltr501_data *data,
+@@ -1207,7 +1211,7 @@ static struct ltr501_chip_info ltr501_chip_info_tbl[] = {
+ 		.als_gain_tbl_size = ARRAY_SIZE(ltr559_als_gain_tbl),
+ 		.ps_gain = ltr559_ps_gain_tbl,
+ 		.ps_gain_tbl_size = ARRAY_SIZE(ltr559_ps_gain_tbl),
+-		.als_mode_active = BIT(1),
++		.als_mode_active = BIT(0),
+ 		.als_gain_mask = BIT(2) | BIT(3) | BIT(4),
+ 		.als_gain_shift = 2,
+ 		.info = &ltr501_info,
+@@ -1356,9 +1360,12 @@ static bool ltr501_is_volatile_reg(struct device *dev, unsigned int reg)
+ {
+ 	switch (reg) {
+ 	case LTR501_ALS_DATA1:
++	case LTR501_ALS_DATA1_UPPER:
+ 	case LTR501_ALS_DATA0:
++	case LTR501_ALS_DATA0_UPPER:
+ 	case LTR501_ALS_PS_STATUS:
+ 	case LTR501_PS_DATA:
++	case LTR501_PS_DATA_UPPER:
+ 		return true;
+ 	default:
+ 		return false;
+diff --git a/drivers/iio/light/tcs3414.c b/drivers/iio/light/tcs3414.c
+index 205e5659ce6b..c525420e7c62 100644
+--- a/drivers/iio/light/tcs3414.c
++++ b/drivers/iio/light/tcs3414.c
+@@ -56,7 +56,11 @@ struct tcs3414_data {
+ 	u8 control;
+ 	u8 gain;
+ 	u8 timing;
+-	u16 buffer[8]; /* 4x 16-bit + 8 bytes timestamp */
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		u16 chans[4];
++		s64 timestamp __aligned(8);
++	} scan;
+ };
+ 
+ #define TCS3414_CHANNEL(_color, _si, _addr) { \
+@@ -212,10 +216,10 @@ static irqreturn_t tcs3414_trigger_handler(int irq, void *p)
+ 		if (ret < 0)
+ 			goto done;
+ 
+-		data->buffer[j++] = ret;
++		data->scan.chans[j++] = ret;
+ 	}
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 		iio_get_time_ns(indio_dev));
+ 
+ done:
+diff --git a/drivers/iio/light/tcs3472.c b/drivers/iio/light/tcs3472.c
+index e7923b514d7a..82204414c7a1 100644
+--- a/drivers/iio/light/tcs3472.c
++++ b/drivers/iio/light/tcs3472.c
+@@ -67,7 +67,11 @@ struct tcs3472_data {
+ 	u8 control;
+ 	u8 atime;
+ 	u8 apers;
+-	u16 buffer[8]; /* 4 16-bit channels + 64-bit timestamp */
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		u16 chans[4];
++		s64 timestamp __aligned(8);
++	} scan;
+ };
+ 
+ static const struct iio_event_spec tcs3472_events[] = {
+@@ -389,10 +393,10 @@ static irqreturn_t tcs3472_trigger_handler(int irq, void *p)
+ 		if (ret < 0)
+ 			goto done;
+ 
+-		data->buffer[j++] = ret;
++		data->scan.chans[j++] = ret;
+ 	}
+ 
+-	iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++	iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 		iio_get_time_ns(indio_dev));
+ 
+ done:
+@@ -535,7 +539,8 @@ static int tcs3472_probe(struct i2c_client *client,
+ 	return 0;
+ 
+ free_irq:
+-	free_irq(client->irq, indio_dev);
++	if (client->irq)
++		free_irq(client->irq, indio_dev);
+ buffer_cleanup:
+ 	iio_triggered_buffer_cleanup(indio_dev);
+ 	return ret;
+@@ -563,7 +568,8 @@ static int tcs3472_remove(struct i2c_client *client)
+ 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
+ 
+ 	iio_device_unregister(indio_dev);
+-	free_irq(client->irq, indio_dev);
++	if (client->irq)
++		free_irq(client->irq, indio_dev);
+ 	iio_triggered_buffer_cleanup(indio_dev);
+ 	tcs3472_powerdown(iio_priv(indio_dev));
+ 
+diff --git a/drivers/iio/potentiostat/lmp91000.c b/drivers/iio/potentiostat/lmp91000.c
+index 90e895adf997..68f4f6fa27da 100644
+--- a/drivers/iio/potentiostat/lmp91000.c
++++ b/drivers/iio/potentiostat/lmp91000.c
+@@ -71,8 +71,8 @@ struct lmp91000_data {
+ 
+ 	struct completion completion;
+ 	u8 chan_select;
+-
+-	u32 buffer[4]; /* 64-bit data + 64-bit timestamp */
++	/* 64-bit data + 64-bit naturally aligned timestamp */
++	u32 buffer[4] __aligned(8);
+ };
+ 
+ static const struct iio_chan_spec lmp91000_channels[] = {
+diff --git a/drivers/iio/proximity/as3935.c b/drivers/iio/proximity/as3935.c
+index f130388a16a0..9069eec46093 100644
+--- a/drivers/iio/proximity/as3935.c
++++ b/drivers/iio/proximity/as3935.c
+@@ -61,7 +61,11 @@ struct as3935_state {
+ 	unsigned long noise_tripped;
+ 	u32 tune_cap;
+ 	u32 nflwdth_reg;
+-	u8 buffer[16]; /* 8-bit data + 56-bit padding + 64-bit timestamp */
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		u8 chan;
++		s64 timestamp __aligned(8);
++	} scan;
+ 	u8 buf[2] ____cacheline_aligned;
+ };
+ 
+@@ -227,8 +231,8 @@ static irqreturn_t as3935_trigger_handler(int irq, void *private)
+ 	if (ret)
+ 		goto err_read;
+ 
+-	st->buffer[0] = val & AS3935_DATA_MASK;
+-	iio_push_to_buffers_with_timestamp(indio_dev, &st->buffer,
++	st->scan.chan = val & AS3935_DATA_MASK;
++	iio_push_to_buffers_with_timestamp(indio_dev, &st->scan,
+ 					   iio_get_time_ns(indio_dev));
+ err_read:
+ 	iio_trigger_notify_done(indio_dev->trig);
+diff --git a/drivers/iio/proximity/isl29501.c b/drivers/iio/proximity/isl29501.c
+index e5e94540f404..a99d26023ef7 100644
+--- a/drivers/iio/proximity/isl29501.c
++++ b/drivers/iio/proximity/isl29501.c
+@@ -946,7 +946,7 @@ static irqreturn_t isl29501_trigger_handler(int irq, void *p)
+ 	struct iio_dev *indio_dev = pf->indio_dev;
+ 	struct isl29501_private *isl29501 = iio_priv(indio_dev);
+ 	const unsigned long *active_mask = indio_dev->active_scan_mask;
+-	u32 buffer[4] = {}; /* 1x16-bit + ts */
++	u32 buffer[4] __aligned(8) = {}; /* 1x16-bit + naturally aligned ts */
+ 
+ 	if (test_bit(ISL29501_DISTANCE_SCAN_INDEX, active_mask))
+ 		isl29501_register_read(isl29501, REG_DISTANCE, buffer);
+diff --git a/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c b/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
+index 67f85268b63d..0c7617022407 100644
+--- a/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
++++ b/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
+@@ -43,7 +43,11 @@ struct lidar_data {
+ 	int (*xfer)(struct lidar_data *data, u8 reg, u8 *val, int len);
+ 	int i2c_enabled;
+ 
+-	u16 buffer[8]; /* 2 byte distance + 8 byte timestamp */
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		u16 chan;
++		s64 timestamp __aligned(8);
++	} scan;
+ };
+ 
+ static const struct iio_chan_spec lidar_channels[] = {
+@@ -228,9 +232,9 @@ static irqreturn_t lidar_trigger_handler(int irq, void *private)
+ 	struct lidar_data *data = iio_priv(indio_dev);
+ 	int ret;
+ 
+-	ret = lidar_get_measurement(data, data->buffer);
++	ret = lidar_get_measurement(data, &data->scan.chan);
+ 	if (!ret) {
+-		iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
++		iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+ 						   iio_get_time_ns(indio_dev));
+ 	} else if (ret != -EINVAL) {
+ 		dev_err(&data->client->dev, "cannot read LIDAR measurement");
+diff --git a/drivers/iio/proximity/srf08.c b/drivers/iio/proximity/srf08.c
+index f2bf783f829a..5e8d3707738b 100644
+--- a/drivers/iio/proximity/srf08.c
++++ b/drivers/iio/proximity/srf08.c
+@@ -66,11 +66,11 @@ struct srf08_data {
+ 	int			range_mm;
+ 	struct mutex		lock;
+ 
+-	/*
+-	 * triggered buffer
+-	 * 1x16-bit channel + 3x16 padding + 4x16 timestamp
+-	 */
+-	s16			buffer[8];
++	/* Ensure timestamp is naturally aligned */
++	struct {
++		s16 chan;
++		s64 timestamp __aligned(8);
++	} scan;
+ 
+ 	/* Sensor-Type */
+ 	enum srf08_sensor_type	sensor_type;
+@@ -193,9 +193,9 @@ static irqreturn_t srf08_trigger_handler(int irq, void *p)
+ 
+ 	mutex_lock(&data->lock);
+ 
+-	data->buffer[0] = sensor_data;
++	data->scan.chan = sensor_data;
+ 	iio_push_to_buffers_with_timestamp(indio_dev,
+-						data->buffer, pf->timestamp);
++					   &data->scan, pf->timestamp);
+ 
+ 	mutex_unlock(&data->lock);
+ err:
+diff --git a/drivers/staging/iio/cdc/ad7746.c b/drivers/staging/iio/cdc/ad7746.c
+index f53612a6461d..18a73ee48e7c 100644
+--- a/drivers/staging/iio/cdc/ad7746.c
++++ b/drivers/staging/iio/cdc/ad7746.c
+@@ -703,7 +703,6 @@ static int ad7746_probe(struct i2c_client *client,
+ 		indio_dev->num_channels = ARRAY_SIZE(ad7746_channels);
+ 	else
+ 		indio_dev->num_channels =  ARRAY_SIZE(ad7746_channels) - 2;
+-	indio_dev->num_channels = ARRAY_SIZE(ad7746_channels);
+ 	indio_dev->modes = INDIO_DIRECT_MODE;
+ 
+ 	if (pdata) {
 -- 
 2.30.2
 
