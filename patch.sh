@@ -450,6 +450,7 @@ ti_pm_firmware () {
 }
 
 cleanup_dts_builds () {
+	rm -rf arch/arm/boot/dts/modules.order || true
 	rm -rf arch/arm/boot/dts/.*cmd || true
 	rm -rf arch/arm/boot/dts/.*tmp || true
 	rm -rf arch/arm/boot/dts/*dtb || true
@@ -872,11 +873,6 @@ drivers () {
 }
 
 soc () {
-#	dir 'soc/imx/udoo'
-#	dir 'soc/imx/wandboard'
-#	dir 'soc/imx/imx7'
-
-#	dir 'soc/ti/panda'
 	dir 'bootup_hacks'
 	dir 'fixes'
 }
