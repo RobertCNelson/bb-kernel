@@ -29,6 +29,10 @@ cat_files () {
 	if [ -f ./patches/git/WIREGUARD ] ; then
 		cat ./patches/git/WIREGUARD >> ${wfile}
 	fi
+
+	if [ -f ./patches/git/WIRELESS_REGDB ] ; then
+		cat ./patches/git/WIRELESS_REGDB >> ${wfile}
+	fi
 }
 
 DIR=$PWD

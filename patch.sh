@@ -310,6 +310,51 @@ wireguard () {
 	dir 'WireGuard'
 }
 
+wireless_regdb () {
+	#https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+
+		cd ../
+		if [ ! -d ./wireless-regdb ] ; then
+			${git_bin} clone git://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
+			cd ./wireless-regdb
+				wireless_regdb_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./wireless-regdb || true
+			${git_bin} clone git://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
+			cd ./wireless-regdb
+				wireless_regdb_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+		cd ./KERNEL/
+
+		mkdir -p ./firmware/ || true
+		cp -v ../wireless-regdb/regulatory.db ./firmware/
+		cp -v ../wireless-regdb/regulatory.db.p7s ./firmware/
+		${git_bin} add -f ./firmware/regulatory.*
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
+
+		${git_bin} format-patch -1 -o ../patches/wireless_regdb/
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/git/WIRELESS_REGDB
+
+		rm -rf ../wireless-regdb/ || true
+
+		${git_bin} reset --hard HEAD^
+
+		start_cleanup
+
+		${git} "${DIR}/patches/wireless_regdb/0001-Add-wireless-regdb-regulatory-database-file.patch"
+
+		wdir="wireless_regdb"
+		number=1
+		cleanup
+	fi
+
+	dir 'wireless_regdb'
+}
+
 ti_pm_firmware () {
 	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
 	#regenerate="enable"
@@ -354,6 +399,13 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
+cleanup_dts_builds () {
+	rm -rf arch/arm/boot/dts/modules.order || true
+	rm -rf arch/arm/boot/dts/.*cmd || true
+	rm -rf arch/arm/boot/dts/.*tmp || true
+	rm -rf arch/arm/boot/dts/*dtb || true
+}
+
 dtb_makefile_append_omap4 () {
 	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -387,6 +439,9 @@ beagleboard_dtbs () {
 		fi
 		cd ./KERNEL/
 
+		cleanup_dts_builds
+		rm -rf arch/arm/boot/dts/overlays/ || true
+
 		mkdir -p arch/arm/boot/dts/overlays/
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
@@ -406,7 +461,7 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $branch" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
 		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
 
@@ -416,7 +471,7 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-DTBS-$branch.patch"
+		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
 		wdir="soc/ti/beagleboard_dtbs"
 		number=1
@@ -436,6 +491,7 @@ aufs
 can_isotp
 #rt
 wireguard
+wireless_regdb
 ti_pm_firmware
 beagleboard_dtbs
 #local_patch
@@ -532,11 +588,6 @@ drivers () {
 }
 
 soc () {
-#	dir 'soc/imx/udoo'
-#	dir 'soc/imx/wandboard'
-#	dir 'soc/imx/imx7'
-
-#	dir 'soc/ti/panda'
 	dir 'bootup_hacks'
 	dir 'fixes'
 }
