@@ -843,12 +843,14 @@ reverts () {
 
 	## notes
 	##git revert --no-edit xyz -s
+	#Fix Bluetooth (and SMP enabled) on wl1835
+	#git revert --no-edit 52d322f91954254c4b895f94954f9a1f2cc0ffc5 -s
 
 	dir 'reverts'
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=1
+		number=5
 		cleanup
 	fi
 }
