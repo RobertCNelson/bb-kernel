@@ -727,6 +727,9 @@ reverts () {
 
 	## notes
 	##git revert --no-edit xyz -s
+	#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/kernel/kthread.c?h=linux-5.7.y&id=26c7295be0c5e6da3fa45970e9748be983175b1b
+	#git revert --no-edit 26c7295be0c5e6da3fa45970e9748be983175b1b -s
+	#exit 2
 
 	dir 'reverts'
 
@@ -762,7 +765,7 @@ soc () {
 
 ###
 backports
-#reverts
+reverts
 drivers
 soc
 
