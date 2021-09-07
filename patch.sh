@@ -648,6 +648,8 @@ reverts () {
 
 	## notes
 	##git revert --no-edit xyz -s
+	#git revert --no-edit 1c263d0e54f4348df126e4c3c1011253d7651544 -s
+	#git format-patch -1 -o ../patches/reverts/
 
 	dir 'reverts'
 
@@ -687,12 +689,11 @@ drivers () {
 
 soc () {
 	dir 'bootup_hacks'
-	dir 'fixes'
 }
 
 ###
 backports
-#reverts
+reverts
 drivers
 soc
 
