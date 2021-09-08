@@ -349,6 +349,7 @@ ti_pm_firmware () {
 }
 
 cleanup_dts_builds () {
+	rm -rf arch/arm/boot/dts/modules.order || true
 	rm -rf arch/arm/boot/dts/.*cmd || true
 	rm -rf arch/arm/boot/dts/.*tmp || true
 	rm -rf arch/arm/boot/dts/*dtb || true
@@ -390,6 +391,9 @@ beagleboard_dtbs () {
 		device="am335x-sancloud-bbe-lite.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+
+		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -533,6 +537,9 @@ reverts () {
 
 	## notes
 	##git revert --no-edit xyz -s
+	#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/kernel/kthread.c?h=linux-5.7.y&id=26c7295be0c5e6da3fa45970e9748be983175b1b
+	#git revert --no-edit 26c7295be0c5e6da3fa45970e9748be983175b1b -s
+	#exit 2
 
 	dir 'reverts'
 
@@ -563,16 +570,12 @@ drivers () {
 }
 
 soc () {
-#	dir 'soc/imx/udoo'
-#	dir 'soc/imx/imx7'
-
-#	dir 'soc/ti/panda'
 	dir 'bootup_hacks'
 }
 
 ###
 backports
-#reverts
+reverts
 drivers
 soc
 
