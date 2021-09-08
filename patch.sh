@@ -399,6 +399,13 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
+cleanup_dts_builds () {
+	rm -rf arch/arm/boot/dts/modules.order || true
+	rm -rf arch/arm/boot/dts/.*cmd || true
+	rm -rf arch/arm/boot/dts/.*tmp || true
+	rm -rf arch/arm/boot/dts/*dtb || true
+}
+
 dtb_makefile_append_omap4 () {
 	sed -i -e 's:omap4-panda.dtb \\:omap4-panda.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
@@ -432,6 +439,9 @@ beagleboard_dtbs () {
 		fi
 		cd ./KERNEL/
 
+		cleanup_dts_builds
+		rm -rf arch/arm/boot/dts/overlays/ || true
+
 		mkdir -p arch/arm/boot/dts/overlays/
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
@@ -459,7 +469,7 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $branch" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
 		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
 
@@ -469,7 +479,7 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-DTBS-$branch.patch"
+		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
 		wdir="soc/ti/beagleboard_dtbs"
 		number=1
@@ -529,7 +539,40 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.4.123"
+	backport_tag="v4.19.206"
+
+	subsystem="wlcore"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
+
+		post_backports
+		exit 2
+	#else
+	#	patch_backports
+	fi
+
+	backport_tag="v4.19.206"
+
+	subsystem="iio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
+		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
+		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
+		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+
+		post_backports
+		exit 2
+	#else
+	#	patch_backports
+	fi
+
+	backport_tag="v5.4.144"
 
 	subsystem="wiznet"
 	#regenerate="enable"
@@ -558,24 +601,6 @@ backports () {
 		exit 2
 	else
 		patch_backports
-	fi
-
-	backport_tag="v4.19.192"
-
-	subsystem="iio"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
-		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
-		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
-		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
-
-		post_backports
-		exit 2
-	#else
-	#	patch_backports
 	fi
 
 	backport_tag="v5.3.18"
@@ -623,6 +648,8 @@ reverts () {
 
 	## notes
 	##git revert --no-edit xyz -s
+	#git revert --no-edit 1c263d0e54f4348df126e4c3c1011253d7651544 -s
+	#git format-patch -1 -o ../patches/reverts/
 
 	dir 'reverts'
 
@@ -657,22 +684,16 @@ drivers () {
 	${git} "${DIR}/patches/drivers/ti/uio_pruss/0003-ARM-omap2-support-deasserting-reset-from-dts.patch"
 
 	dir 'drivers/greybus'
+	dir 'bluetooth'
 }
 
 soc () {
-#	dir 'soc/imx/udoo'
-#	dir 'soc/imx/wandboard'
-#	dir 'soc/imx/imx6'
-#	dir 'soc/imx/imx7'
-
-#	dir 'soc/ti/omap4'
 	dir 'bootup_hacks'
-	dir 'fixes'
 }
 
 ###
 backports
-#reverts
+reverts
 drivers
 soc
 
