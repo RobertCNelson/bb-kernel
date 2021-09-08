@@ -549,7 +549,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.12"
+	backport_tag="v5.13.14"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -624,7 +624,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.60"
+		backport_tag="v5.10.62"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
