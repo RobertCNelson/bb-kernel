@@ -816,7 +816,7 @@ backports () {
 
 	dir 'cypress'
 
-	backport_tag="v5.4.142"
+	backport_tag="v5.4.144"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -830,8 +830,8 @@ backports () {
 
 		post_backports
 		exit 2
-	else
-		patch_backports
+#	else
+#		patch_backports
 	fi
 }
 
@@ -850,7 +850,7 @@ reverts () {
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=5
+		number=1
 		cleanup
 	fi
 }
@@ -888,7 +888,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.60"
+		backport_tag="v5.10.63"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
