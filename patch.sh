@@ -497,7 +497,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.13"
+	backport_tag="v5.13.14"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -512,7 +512,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.13"
+	backport_tag="v5.13.14"
 
 	subsystem="pinctrl"
 	#regenerate="enable"
@@ -575,14 +575,14 @@ soc () {
 
 ###
 backports
-reverts
+#reverts
 drivers
 soc
 
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.61"
+		backport_tag="v5.10.62"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
