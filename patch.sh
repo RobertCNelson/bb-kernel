@@ -539,7 +539,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.205"
+	backport_tag="v4.19.206"
 
 	subsystem="wlcore"
 	#regenerate="enable"
@@ -550,11 +550,11 @@ backports () {
 
 		post_backports
 		exit 2
-	else
-		patch_backports
+	#else
+	#	patch_backports
 	fi
 
-	backport_tag="v4.19.205"
+	backport_tag="v4.19.206"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -568,11 +568,11 @@ backports () {
 
 		post_backports
 		exit 2
-	else
-		patch_backports
+	#else
+	#	patch_backports
 	fi
 
-	backport_tag="v5.4.143"
+	backport_tag="v5.4.144"
 
 	subsystem="wiznet"
 	#regenerate="enable"
