@@ -109,7 +109,7 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.14
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.15
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -366,7 +366,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.14.x"
+	branch="v5.15.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -428,13 +428,13 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 wpanusb
 #rt
 wireless_regdb
 ti_pm_firmware
-next_dtbs
-beagleboard_dtbs
+#next_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -522,7 +522,7 @@ drivers () {
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-	dir 'drivers/mikrobus'
+	#dir 'drivers/mikrobus'
 }
 
 soc () {
@@ -537,12 +537,12 @@ soc
 
 #Testing:
 #https://github.com/hakavlad/le9-patch
-dir 'le9'
+#dir 'le9'
 
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.62"
+		backport_tag="v5.10.64"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
