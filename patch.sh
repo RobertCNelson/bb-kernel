@@ -394,6 +394,7 @@ beagleboard_dtbs () {
 
 		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -501,7 +502,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.14"
+	backport_tag="v5.13.17"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -516,7 +517,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.10.62"
+	backport_tag="v5.10.65"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -591,7 +592,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.62"
+		backport_tag="v5.10.65"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
