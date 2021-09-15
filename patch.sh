@@ -399,6 +399,7 @@ beagleboard_dtbs () {
 
 		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -535,14 +536,10 @@ soc () {
 drivers
 soc
 
-#Testing:
-#https://github.com/hakavlad/le9-patch
-dir 'le9'
-
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.62"
+		backport_tag="v5.10.65"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
