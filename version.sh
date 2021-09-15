@@ -39,9 +39,9 @@ toolchain="gcc_8_arm"
 #Kernel
 KERNEL_REL=5.4
 KERNEL_TAG=${KERNEL_REL}.143
-kernel_rt=".143-rt63"
+kernel_rt=".143-rt64"
 #Kernel Build
-BUILD=${build_prefix}57
+BUILD=${build_prefix}57.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
