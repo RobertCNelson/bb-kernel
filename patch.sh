@@ -816,7 +816,7 @@ backports () {
 
 	dir 'cypress'
 
-	backport_tag="v5.4.146"
+	backport_tag="v5.4.147"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -888,7 +888,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.65"
+		backport_tag="v5.10.66"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
