@@ -515,7 +515,7 @@ drivers () {
 	dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
-	dir 'drivers/ti/cpsw'
+	#dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
@@ -542,7 +542,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.67"
+		backport_tag="v5.10.69"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
