@@ -393,12 +393,12 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
-		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -434,7 +434,7 @@ wpanusb
 wireless_regdb
 ti_pm_firmware
 #next_dtbs
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -542,7 +542,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.72"
+		backport_tag="v5.10.74"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
