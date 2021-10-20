@@ -539,22 +539,22 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.206"
+	backport_tag="v4.19.213"
 
-	subsystem="wlcore"
+	subsystem="musb"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
+		cp -rv ~/linux-src/drivers/usb/musb/musb_* ./drivers/usb/musb/
 
 		post_backports
 		exit 2
-	#else
-	#	patch_backports
+	else
+		patch_backports
 	fi
 
-	backport_tag="v4.19.206"
+	backport_tag="v4.19.213"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -568,11 +568,11 @@ backports () {
 
 		post_backports
 		exit 2
-	#else
-	#	patch_backports
+	else
+		patch_backports
 	fi
 
-	backport_tag="v5.4.147"
+	backport_tag="v5.4.155"
 
 	subsystem="wiznet"
 	#regenerate="enable"
