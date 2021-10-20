@@ -1,74 +1,157 @@
-From cf85f6795db366a2a34073c01a212069ffe02e82 Mon Sep 17 00:00:00 2001
+From 05cd4f1c9d81619276ad4f61bb69f4ef1be81761 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 25 Aug 2021 10:29:09 -0500
+Date: Wed, 20 Oct 2021 15:42:21 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
-Reference: v5.4.142
+Reference: v5.4.155
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/iio/adc/palmas_gpadc.c | 4 ++--
- drivers/iio/adc/ti-ads7950.c   | 1 -
- drivers/iio/humidity/hdc100x.c | 6 ++++--
- 3 files changed, 6 insertions(+), 5 deletions(-)
+ drivers/iio/adc/aspeed_adc.c             |  1 +
+ drivers/iio/adc/mt6577_auxadc.c          |  8 ++++++++
+ drivers/iio/adc/ti-adc128s052.c          |  6 ++++++
+ drivers/iio/common/ssp_sensors/ssp_spi.c | 11 +++++++++--
+ drivers/iio/dac/ti-dac5571.c             |  1 +
+ drivers/iio/light/opt3001.c              |  6 +++---
+ 6 files changed, 28 insertions(+), 5 deletions(-)
 
-diff --git a/drivers/iio/adc/palmas_gpadc.c b/drivers/iio/adc/palmas_gpadc.c
-index 46e595eb889f..2bd785e9e42a 100644
---- a/drivers/iio/adc/palmas_gpadc.c
-+++ b/drivers/iio/adc/palmas_gpadc.c
-@@ -656,8 +656,8 @@ static int palmas_adc_wakeup_configure(struct palmas_gpadc *adc)
+diff --git a/drivers/iio/adc/aspeed_adc.c b/drivers/iio/adc/aspeed_adc.c
+index d3fc39df535d..552baf327d0c 100644
+--- a/drivers/iio/adc/aspeed_adc.c
++++ b/drivers/iio/adc/aspeed_adc.c
+@@ -184,6 +184,7 @@ static int aspeed_adc_probe(struct platform_device *pdev)
  
- 	adc_period = adc->auto_conversion_period;
- 	for (i = 0; i < 16; ++i) {
--		if (((1000 * (1 << i)) / 32) < adc_period)
--			continue;
-+		if (((1000 * (1 << i)) / 32) >= adc_period)
-+			break;
- 	}
- 	if (i > 0)
- 		i--;
-diff --git a/drivers/iio/adc/ti-ads7950.c b/drivers/iio/adc/ti-ads7950.c
-index 2e66e4d586ff..7a1a9fe47072 100644
---- a/drivers/iio/adc/ti-ads7950.c
-+++ b/drivers/iio/adc/ti-ads7950.c
-@@ -569,7 +569,6 @@ static int ti_ads7950_probe(struct spi_device *spi)
- 	st->ring_xfer.tx_buf = &st->tx_buf[0];
- 	st->ring_xfer.rx_buf = &st->rx_buf[0];
- 	/* len will be set later */
--	st->ring_xfer.cs_change = true;
+ 	data = iio_priv(indio_dev);
+ 	data->dev = &pdev->dev;
++	platform_set_drvdata(pdev, indio_dev);
  
- 	spi_message_add_tail(&st->ring_xfer, &st->ring_msg);
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+ 	data->base = devm_ioremap_resource(&pdev->dev, res);
+diff --git a/drivers/iio/adc/mt6577_auxadc.c b/drivers/iio/adc/mt6577_auxadc.c
+index 2449d91e4766..9cdb9084c64e 100644
+--- a/drivers/iio/adc/mt6577_auxadc.c
++++ b/drivers/iio/adc/mt6577_auxadc.c
+@@ -82,6 +82,10 @@ static const struct iio_chan_spec mt6577_auxadc_iio_channels[] = {
+ 	MT6577_AUXADC_CHANNEL(15),
+ };
  
-diff --git a/drivers/iio/humidity/hdc100x.c b/drivers/iio/humidity/hdc100x.c
-index 7618cdf59efd..05af6410ca13 100644
---- a/drivers/iio/humidity/hdc100x.c
-+++ b/drivers/iio/humidity/hdc100x.c
-@@ -24,6 +24,8 @@
- #include <linux/iio/trigger_consumer.h>
- #include <linux/iio/triggered_buffer.h>
- 
-+#include <linux/time.h>
++/* For Voltage calculation */
++#define VOLTAGE_FULL_RANGE  1500	/* VA voltage */
++#define AUXADC_PRECISE      4096	/* 12 bits */
 +
- #define HDC100X_REG_TEMP			0x00
- #define HDC100X_REG_HUMIDITY			0x01
- 
-@@ -165,7 +167,7 @@ static int hdc100x_get_measurement(struct hdc100x_data *data,
- 				   struct iio_chan_spec const *chan)
+ static int mt_auxadc_get_cali_data(int rawdata, bool enable_cali)
  {
- 	struct i2c_client *client = data->client;
--	int delay = data->adc_int_us[chan->address];
-+	int delay = data->adc_int_us[chan->address] + 1*USEC_PER_MSEC;
- 	int ret;
- 	__be16 val;
+ 	return rawdata;
+@@ -191,6 +195,10 @@ static int mt6577_auxadc_read_raw(struct iio_dev *indio_dev,
+ 		}
+ 		if (adc_dev->dev_comp->sample_data_cali)
+ 			*val = mt_auxadc_get_cali_data(*val, true);
++
++		/* Convert adc raw data to voltage: 0 - 1500 mV */
++		*val = *val * VOLTAGE_FULL_RANGE / AUXADC_PRECISE;
++
+ 		return IIO_VAL_INT;
  
-@@ -322,7 +324,7 @@ static irqreturn_t hdc100x_trigger_handler(int irq, void *p)
- 	struct iio_dev *indio_dev = pf->indio_dev;
- 	struct hdc100x_data *data = iio_priv(indio_dev);
- 	struct i2c_client *client = data->client;
--	int delay = data->adc_int_us[0] + data->adc_int_us[1];
-+	int delay = data->adc_int_us[0] + data->adc_int_us[1] + 2*USEC_PER_MSEC;
- 	int ret;
+ 	default:
+diff --git a/drivers/iio/adc/ti-adc128s052.c b/drivers/iio/adc/ti-adc128s052.c
+index 1e5a936b5b6a..4267d756cd50 100644
+--- a/drivers/iio/adc/ti-adc128s052.c
++++ b/drivers/iio/adc/ti-adc128s052.c
+@@ -172,7 +172,13 @@ static int adc128_probe(struct spi_device *spi)
+ 	mutex_init(&adc->lock);
  
- 	/* dual read starts at temp register */
+ 	ret = iio_device_register(indio_dev);
++	if (ret)
++		goto err_disable_regulator;
+ 
++	return 0;
++
++err_disable_regulator:
++	regulator_disable(adc->reg);
+ 	return ret;
+ }
+ 
+diff --git a/drivers/iio/common/ssp_sensors/ssp_spi.c b/drivers/iio/common/ssp_sensors/ssp_spi.c
+index 7db3d5886e3e..d98e0a04add0 100644
+--- a/drivers/iio/common/ssp_sensors/ssp_spi.c
++++ b/drivers/iio/common/ssp_sensors/ssp_spi.c
+@@ -137,7 +137,7 @@ static int ssp_print_mcu_debug(char *data_frame, int *data_index,
+ 	if (length > received_len - *data_index || length <= 0) {
+ 		ssp_dbg("[SSP]: MSG From MCU-invalid debug length(%d/%d)\n",
+ 			length, received_len);
+-		return length ? length : -EPROTO;
++		return -EPROTO;
+ 	}
+ 
+ 	ssp_dbg("[SSP]: MSG From MCU - %s\n", &data_frame[*data_index]);
+@@ -273,6 +273,8 @@ static int ssp_parse_dataframe(struct ssp_data *data, char *dataframe, int len)
+ 	for (idx = 0; idx < len;) {
+ 		switch (dataframe[idx++]) {
+ 		case SSP_MSG2AP_INST_BYPASS_DATA:
++			if (idx >= len)
++				return -EPROTO;
+ 			sd = dataframe[idx++];
+ 			if (sd < 0 || sd >= SSP_SENSOR_MAX) {
+ 				dev_err(SSP_DEV,
+@@ -282,10 +284,13 @@ static int ssp_parse_dataframe(struct ssp_data *data, char *dataframe, int len)
+ 
+ 			if (indio_devs[sd]) {
+ 				spd = iio_priv(indio_devs[sd]);
+-				if (spd->process_data)
++				if (spd->process_data) {
++					if (idx >= len)
++						return -EPROTO;
+ 					spd->process_data(indio_devs[sd],
+ 							  &dataframe[idx],
+ 							  data->timestamp);
++				}
+ 			} else {
+ 				dev_err(SSP_DEV, "no client for frame\n");
+ 			}
+@@ -293,6 +298,8 @@ static int ssp_parse_dataframe(struct ssp_data *data, char *dataframe, int len)
+ 			idx += ssp_offset_map[sd];
+ 			break;
+ 		case SSP_MSG2AP_INST_DEBUG_DATA:
++			if (idx >= len)
++				return -EPROTO;
+ 			sd = ssp_print_mcu_debug(dataframe, &idx, len);
+ 			if (sd) {
+ 				dev_err(SSP_DEV,
+diff --git a/drivers/iio/dac/ti-dac5571.c b/drivers/iio/dac/ti-dac5571.c
+index 3a2bb0efe50d..51c41ccf00ad 100644
+--- a/drivers/iio/dac/ti-dac5571.c
++++ b/drivers/iio/dac/ti-dac5571.c
+@@ -352,6 +352,7 @@ static int dac5571_probe(struct i2c_client *client,
+ 		data->dac5571_pwrdwn = dac5571_pwrdwn_quad;
+ 		break;
+ 	default:
++		ret = -EINVAL;
+ 		goto err;
+ 	}
+ 
+diff --git a/drivers/iio/light/opt3001.c b/drivers/iio/light/opt3001.c
+index 92004a2563ea..5588066c8324 100644
+--- a/drivers/iio/light/opt3001.c
++++ b/drivers/iio/light/opt3001.c
+@@ -275,6 +275,8 @@ static int opt3001_get_lux(struct opt3001 *opt, int *val, int *val2)
+ 		ret = wait_event_timeout(opt->result_ready_queue,
+ 				opt->result_ready,
+ 				msecs_to_jiffies(OPT3001_RESULT_READY_LONG));
++		if (ret == 0)
++			return -ETIMEDOUT;
+ 	} else {
+ 		/* Sleep for result ready time */
+ 		timeout = (opt->int_time == OPT3001_INT_TIME_SHORT) ?
+@@ -311,9 +313,7 @@ static int opt3001_get_lux(struct opt3001 *opt, int *val, int *val2)
+ 		/* Disallow IRQ to access the device while lock is active */
+ 		opt->ok_to_ignore_lock = false;
+ 
+-	if (ret == 0)
+-		return -ETIMEDOUT;
+-	else if (ret < 0)
++	if (ret < 0)
+ 		return ret;
+ 
+ 	if (opt->use_irq) {
 -- 
 2.30.2
 
