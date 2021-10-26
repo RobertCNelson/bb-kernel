@@ -529,11 +529,16 @@ soc () {
 	dir 'bootup_hacks'
 }
 
+fixes () {
+	dir 'fixes/gcc'
+}
+
 ###
 #backports
 #reverts
 drivers
 soc
+fixes
 
 #Testing:
 #https://github.com/hakavlad/le9-patch
