@@ -1295,6 +1295,24 @@ bb_view_lcd () {
 	fi
 }
 
+more_fixes () {
+	echo "dir: more_fixes"
+	if [ -f /usr/bin/gcc-10 ] ; then
+		echo ""
+		echo ""
+		echo ""
+		echo "-----------------------------"
+		echo "WARNING: GCC-10 will not build the host files, make sure to install gcc-9 and g++-9, patching Makfile"
+		${git} "${DIR}/patches/more_fixes/0001-debian-HOST-use-max-of-gcc-9-g-9.patch"
+		echo "-----------------------------"
+		echo "sleep 5"
+		echo ""
+		echo ""
+		echo ""
+		sleep 5
+	fi
+}
+
 am33x
 arm
 omap
@@ -1315,6 +1333,7 @@ kdb_thumb_fixes
 touchscreens
 more_boards
 sirius
+more_fixes
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
