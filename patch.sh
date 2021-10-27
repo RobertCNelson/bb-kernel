@@ -1297,6 +1297,8 @@ bb_view_lcd () {
 
 more_fixes () {
 	echo "dir: more_fixes"
+	${git} "${DIR}/patches/more_fixes/0001-Add-wireless-regdb-regulatory-database-file.patch"
+
 	if [ -f /usr/bin/gcc-10 ] ; then
 		echo ""
 		echo ""
