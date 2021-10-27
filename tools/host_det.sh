@@ -508,7 +508,7 @@ debian_regs () {
 	if [ "${error_unknown_deb_distro}" ] ; then
 		echo "Unrecognized deb based system:"
 		echo "-----------------------------"
-		echo "Please cut, paste and email to: bugs@rcn-ee.com"
+		echo "Please cut, paste and email to: robertcnelson+bugs@gmail.com"
 		echo "-----------------------------"
 		echo "git: [$(${git_bin} rev-parse HEAD)]"
 		echo "git: [$(cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g')]"
@@ -520,7 +520,7 @@ debian_regs () {
 	fi
 
 	if [ "${deb_pkgs}" ] ; then
-		echo "Debian/Ubuntu/Mint: missing dependencies, please install:"
+		echo "Debian/Ubuntu/Mint: missing dependencies, please install these packages via:"
 		echo "-----------------------------"
 		if [ "${warn_dpkg_ia32}" ] ; then
 			echo "sudo dpkg --add-architecture i386"
@@ -595,6 +595,28 @@ elif [ "${git_major}" -eq "${compare_major}" ] ; then
 			build_git="true"
 		fi
 	fi
+fi
+
+echo "-----------------------------"
+unset NEEDS_COMMAND
+check_for_command () {
+	if ! which "$1" >/dev/null 2>&1 ; then
+		echo "You're missing command $1"
+		NEEDS_COMMAND=1
+	else
+		version=$(LC_ALL=C $1 $2 | head -n 1)
+		echo "$1: $version"
+	fi
+}
+
+unset NEEDS_COMMAND
+check_for_command cpio --version
+check_for_command lzop --version
+
+if [ "${NEEDS_COMMAND}" ] ; then
+	echo "Please install missing commands"
+	echo "-----------------------------"
+	exit 2
 fi
 
 case "$BUILD_HOST" in

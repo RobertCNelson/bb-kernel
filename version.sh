@@ -10,6 +10,7 @@ branch_postfix=""
 
 #arm
 KERNEL_ARCH=arm
+DEBARCH=armhf
 #toolchain="gcc_linaro_eabi_4_8"
 #toolchain="gcc_linaro_eabi_4_9"
 #toolchain="gcc_linaro_eabi_5"
@@ -24,6 +25,7 @@ toolchain="gcc_linaro_gnueabihf_4_7"
 #toolchain="gcc_linaro_gnueabihf_7"
 #arm64
 #KERNEL_ARCH=arm64
+#DEBARCH=arm64
 #toolchain="gcc_linaro_aarch64_gnu_5"
 #toolchain="gcc_linaro_aarch64_gnu_6"
 #toolchain="gcc_linaro_aarch64_gnu_7"
@@ -35,13 +37,12 @@ kernel_rt=".X-rtY"
 #Kernel Build
 BUILD=${build_prefix}86
 
-#v4.X-rcX + upto SHA
+#v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
-DISTRO=cross
-DEBARCH=armhf
+DISTRO=xross
 #
