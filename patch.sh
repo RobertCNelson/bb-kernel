@@ -551,6 +551,141 @@ backports () {
 	fi
 }
 
+brcmfmac () {
+	backport_tag="v5.10.9"
+
+	subsystem="brcm80211"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/net/wireless/broadcom/brcm80211/* ./drivers/net/wireless/broadcom/brcm80211/
+		cp -rv ~/linux-src/net/mac80211/* ./net/mac80211/
+		cp -rv ~/linux-src/net/wireless/* ./net/wireless/
+		cp -v ~/linux-src/include/linux/mmc/sdio_ids.h ./include/linux/mmc/sdio_ids.h
+		cp -v ~/linux-src/include/net/cfg80211.h ./include/net/cfg80211.h
+		cp -v ~/linux-src/include/uapi/linux/nl80211.h ./include/uapi/linux/nl80211.h
+		#cp -v ~/linux-src/include/linux/firmware.h ./include/linux/firmware.h
+
+		post_backports
+		#v5.10.9-2021_1020
+
+		patch -p1 < ../patches/cypress/brcmfmac/0001-non-upstream-add-sg-parameters-dts-parsing.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0002-brcmfmac-support-AP-isolation.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0003-non-upstream-make-firmware-eap_restrict-a-module-par.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0004-non-upstream-support-wake-on-ping-packet.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0005-non-upstream-remove-WOWL-configuration-in-disconnect.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0006-non-upstream-make-setting-SDIO-workqueue-WQ_HIGHPRI-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0007-non-upstream-avoid-network-disconnection-during-susp.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0008-non-upstream-Changes-to-improve-USB-Tx-throughput.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0009-brcmfmac-introduce-module-parameter-to-configure-def.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0010-non-upstream-configure-wowl-parameters-in-suspend-fu.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0011-non-upstream-disable-command-decode-in-sdio_aos-for-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0012-brcmfmac-increase-default-max-WOWL-patterns-to-16.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0013-non-upstream-Enable-Process-and-forward-PHY_TEMP-eve.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0014-non-upstream-fix-continuous-802.1x-tx-pending-timeou.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0015-non-upstream-add-sleep-in-bus-suspend-and-cfg80211-r.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0016-brcmfmac-add-CYW43570-PCIE-device.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0017-non-upstream-fix-scheduling-while-atomic-issue-when-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0018-brcmfmac-Support-89459-pcie.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0019-brcmfmac-Support-multiple-AP-interfaces-and-fix-STA-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0020-non-upstream-Support-custom-PCIE-BAR-window-size.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0021-brcmfmac-support-for-virtual-interface-creation-from.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0022-brcmfmac-increase-dcmd-maximum-buffer-size.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0023-brcmfmac-set-net-carrier-on-via-test-tool-for-AP-mod.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0024-nl80211-add-authorized-flag-back-to-ROAM-event.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0025-brcmfmac-set-authorized-flag-in-ROAM-event-for-offlo.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0026-brcmfmac-set-authorized-flag-in-ROAM-event-for-PMK-c.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0027-nl80211-add-authorized-flag-to-CONNECT-event.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0028-brcmfmac-set-authorized-flag-in-CONNECT-event-for-PM.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0029-brcmfmac-add-support-for-Opportunistic-Key-Caching.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0030-brcmfmac-To-support-printing-USB-console-messages.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0031-non-upstream-Fix-no-P2P-IE-in-probe-requests-issue.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0032-brcmfmac-add-54591-PCIE-device.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0033-non-upstream-support-DS1-exit-firmware-re-download.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0034-non-upstream-fix-43012-insmod-after-rmmod-in-DS1-fai.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0035-non-upstream-fix-43012-driver-reload-failure-after-D.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0036-brcmfmac-reset-PMU-backplane-all-cores-in-CYW4373-du.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0037-non-upstream-calling-skb_orphan-before-sending-skb-t.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0038-non-upstream-workaround-for-4373-USB-WMM-5.2.27-test.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0039-non-upstream-disable-command-decode-in-sdio_aos-for-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0040-non-upstream-disable-command-decode-in-sdio_aos-for-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0041-non-upstream-disable-command-decode-in-sdio_aos-for-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0042-brcmfmac-support-the-forwarding-packet.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0043-brcmfmac-add-a-variable-for-packet-forwarding-condit.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0044-brcmfmac-don-t-allow-arp-nd-offload-to-be-enabled-if.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0045-non-upstream-ignore-FW-BADARG-error-when-removing-no.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0046-brcmfmac-Support-DPP-feature.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0047-brcmfmac-move-firmware-path-to-cypress-folder.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0048-brcmfmac-add-support-for-sof-time-stammping-for-tx-p.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0049-non-upstream-free-eventmask_msg-after-updating-event.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0050-brcmfmac-fix-invalid-address-access-when-enabling-SC.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0051-brcmfmac-add-a-timer-to-read-console-periodically-in.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0052-brcmfmac-return-error-when-getting-invalid-max_flowr.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0053-brcmfmac-Fix-to-add-skb-free-for-TIM-update-info-whe.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0054-brcmfmac-Fix-to-add-brcmf_clear_assoc_ies-when-rmmod.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0055-brcmfmac-dump-dongle-memory-when-attaching-failed.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0056-brcmfmac-update-address-mode-via-test-tool-for-AP-mo.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0057-brcmfmac-load-54591-firmware-for-chip-ID-0x4355.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0058-brcmfmac-Fix-interoperating-DPP-and-other-encryption.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0059-brcmfmac-fix-SDIO-bus-errors-during-high-temp-tests.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0060-brcmfmac-Add-dump_survey-cfg80211-ops-for-HostApd-Au.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0061-revert-brcmfmac-set-state-of-hanger-slot-to-FREE-whe.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0062-brcmfmac-correctly-remove-all-p2p-vif.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0063-brcmfmac-fix-firmware-trap-while-dumping-obss-stats.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0064-brcmfmac-add-creating-station-interface-support.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0065-brcmfmac-support-station-interface-creation-version-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0066-brcmfmac-To-fix-crash-when-platform-does-not-contain.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0067-brcmfmac-Remove-the-call-to-dtim_assoc-IOVAR.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0068-brcmfmac-fix-CERT-P2P-5.1.10-failure.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0069-brcmfmac-Fix-for-when-connect-request-is-not-success.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0070-brcmfmac-Avoiding-Connection-delay.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0071-non-upstream-Revert-brcm80211-select-WANT_DEV_COREDU.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0072-brcmfmac-Fix-connecting-enterprise-AP-failure.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0073-brcmfmac-Fix-for-skbuf-allocation-failure-in-memory-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0074-brcmfmac-Update-SSID-of-hidden-AP-while-informing-it.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0075-brcmfmac-Fix-PCIE-suspend-resume-issue.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0076-brcmfmac-disable-mpc-when-power_save-is-disabled.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0077-brcmfmac-Fix-authentication-latency-caused-by-OBSS-s.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0078-brcmfmac-support-external-SAE-authentication-in-stat.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0079-brcmfmac-fix-sdio-watchdog-timer-start-fail-issue.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0080-brcmfmac-Frameburst-vendor-command-addition.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0081-brcmfmac-add-support-for-CYW43439-SDIO-chipset.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0082-brcmfmac-add-BT-shared-SDIO-support.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0083-brcmfmac-add-CYW43439-SR-related-changes.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0084-brcmfmac-add-support-for-CYW43439-with-blank-OTP.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0085-brcmfmac-support-43439-Cypress-Vendor-and-Device-ID.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0086-brcmfmac-fix-P2P-device-discovery-failure.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0087-brcmfmac-Add-SDIO-verdor-device-id-for-CYW89459-in-h.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0088-brcmfmac-Add-CYW89459-HW-ID-and-modify-sdio-F2-block.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0089-brcmfmac-Fix-AP-interface-delete-issue.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0090-brcmfmac-Revise-channel-info-for-WPA3-external-SAE.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0091-brcmfmac-Fix-structure-size-for-WPA3-external-SAE.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0092-brcmfmac-support-54590-54594-PCIe-device-id.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0093-Revert-non-upstream-make-setting-SDIO-workqueue-WQ_H.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0094-brcmfmac-Set-SDIO-workqueue-as-WQ_HIGHPRI.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0095-brcmfmac-revise-SoftAP-channel-setting.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0096-cfg80211-make-certificate-generation-more-robust.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0097-brcmfmac-Optimize-CYW4373-SDIO-current.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0098-brcmfmac-use-request_firmware_direct-for-loading-boa.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0099-brcmfmac-enable-pmk-catching-for-ext-sae-wpa3-ap.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0100-brcmfmac-fixes-CYW4373-SDIO-CMD53-error.patch
+
+		#exit 2
+
+		${git_bin} add .
+		${git_bin} commit -a -m "cypress fmac patchset" -m "v5.10.9-2021_1020" -s
+		${git_bin} format-patch -1 -o ../patches/cypress/
+
+		exit 2
+	else
+		patch_backports
+	fi
+
+	dir 'cypress'
+	dir 'cypress/fixes'
+}
+
 reverts () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -597,12 +732,18 @@ soc () {
 	dir 'bootup_hacks'
 }
 
+fixes () {
+	dir 'fixes/gcc'
+}
+
 ###
 backports
+brcmfmac
 reverts
 omap
 drivers
 soc
+fixes
 
 packaging () {
 	#do_backport="enable"
