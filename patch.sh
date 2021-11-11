@@ -232,6 +232,49 @@ wpanusb () {
 	dir 'wpanusb'
 }
 
+bcfserial () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./bcfserial ] ; then
+			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+			cd ./bcfserial
+				bcfserial_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./bcfserial || true
+			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+			cd ./wpanusb
+				bcfserial_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+
+		cd ./KERNEL/
+
+		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: bcfserial: https://github.com/statropy/bcfserial' -m "https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/bcfserial/
+		echo "BCFSERIAL: https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
+
+		rm -rf ../bcfserial/ || true
+
+		${git_bin} reset --hard HEAD~1
+
+		start_cleanup
+
+		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-github.com-statropy-bcfserial.patch"
+
+		wdir="bcfserial"
+		number=1
+		cleanup
+
+		exit 2
+	fi
+	dir 'bcfserial'
+}
+
 rt_cleanup () {
 	echo "rt: needs fixup"
 	exit 2
@@ -431,6 +474,7 @@ local_patch () {
 #external_git
 aufs
 wpanusb
+bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
@@ -544,7 +588,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.76"
+		backport_tag="v5.10.78"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
