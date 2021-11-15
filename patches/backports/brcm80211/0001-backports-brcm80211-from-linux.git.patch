@@ -1,14 +1,14 @@
-From 89c1675ad0e9b7a38f82ba50de3e8c1f0110743e Mon Sep 17 00:00:00 2001
+From ecd9eb8fb443e50eee00aa9daa50e164c4fd7af7 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 1 Nov 2021 15:06:41 -0500
+Date: Mon, 15 Nov 2021 13:54:55 -0600
 Subject: [PATCH] backports: brcm80211: from: linux.git
 
 Reference: v5.10.9
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  .../broadcom/brcm80211/brcmfmac/bcmsdh.c      |   8 +-
- .../broadcom/brcm80211/brcmfmac/bus.h         |  19 +--
- .../broadcom/brcm80211/brcmfmac/cfg80211.c    |  44 +++--
+ .../broadcom/brcm80211/brcmfmac/bus.h         |  19 +-
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    |  44 ++---
  .../broadcom/brcm80211/brcmfmac/core.c        |  42 +++--
  .../broadcom/brcm80211/brcmfmac/dmi.c         |  32 ----
  .../broadcom/brcm80211/brcmfmac/pcie.c        |  11 +-
@@ -16,7 +16,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../broadcom/brcm80211/brcmfmac/sdio.c        |   1 +
  .../broadcom/brcm80211/brcmfmac/usb.c         |   8 +-
  .../broadcom/brcm80211/brcmsmac/mac80211_if.c |   8 +-
- include/net/cfg80211.h                        |   4 +-
+ include/net/cfg80211.h                        |   6 +-
  net/mac80211/Kconfig                          |   2 +-
  net/mac80211/aead_api.c                       |   5 +-
  net/mac80211/aes_gmac.c                       |   5 +-
@@ -30,26 +30,30 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/mac80211/key.h                            |   2 -
  net/mac80211/main.c                           |  20 +--
  net/mac80211/mesh_hwmp.c                      |   2 +-
+ net/mac80211/mesh_pathtbl.c                   |   5 +-
  net/mac80211/mesh_ps.c                        |   3 +-
  net/mac80211/mlme.c                           |  33 ++--
  net/mac80211/rate.c                           |   3 +-
- net/mac80211/rx.c                             | 159 +++++-------------
+ net/mac80211/rx.c                             | 162 +++++-------------
  net/mac80211/scan.c                           |  21 +--
  net/mac80211/spectmgmt.c                      |  10 +-
  net/mac80211/sta_info.c                       |  22 ++-
  net/mac80211/sta_info.h                       |  33 +---
  net/mac80211/tx.c                             | 101 ++++-------
  net/mac80211/util.c                           |  24 +--
- net/mac80211/wpa.c                            |  19 +--
+ net/mac80211/wpa.c                            |  19 +-
  net/wireless/Makefile                         |   2 +-
- net/wireless/nl80211.c                        |  19 +--
+ net/wireless/core.c                           |   2 +-
+ net/wireless/core.h                           |   2 -
+ net/wireless/mlme.c                           |  26 ++-
+ net/wireless/nl80211.c                        |  19 +-
  net/wireless/pmsr.c                           |  16 +-
- net/wireless/scan.c                           |  18 +-
+ net/wireless/scan.c                           |  25 ++-
  net/wireless/sme.c                            |   2 +-
- net/wireless/util.c                           |  10 +-
+ net/wireless/util.c                           |  24 +--
  net/wireless/wext-core.c                      |   5 +-
  net/wireless/wext-spy.c                       |  14 +-
- 43 files changed, 300 insertions(+), 586 deletions(-)
+ 47 files changed, 326 insertions(+), 621 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
 index b6d0bc73923f..f9ebb98b0e3c 100644
@@ -411,10 +415,26 @@ index fb76b4a69a05..818e523f6025 100644
  
  static int brcms_suspend(struct bcma_device *pdev)
 diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
-index 8a1bf2dbadd0..d5ab8d99739f 100644
+index 2a819be384a7..d5ab8d99739f 100644
 --- a/include/net/cfg80211.h
 +++ b/include/net/cfg80211.h
-@@ -5624,7 +5624,7 @@ unsigned int ieee80211_get_mesh_hdrlen(struct ieee80211s_hdr *meshhdr);
+@@ -5202,6 +5202,7 @@ struct cfg80211_cqm_config;
+  *	netdev and may otherwise be used by driver read-only, will be update
+  *	by cfg80211 on change_interface
+  * @mgmt_registrations: list of registrations for management frames
++ * @mgmt_registrations_lock: lock for the list
+  * @mgmt_registrations_need_update: mgmt registrations were updated,
+  *	need to propagate the update to the driver
+  * @mtx: mutex used to lock data in this struct, may be used by drivers
+@@ -5248,6 +5249,7 @@ struct wireless_dev {
+ 	u32 identifier;
+ 
+ 	struct list_head mgmt_registrations;
++	spinlock_t mgmt_registrations_lock;
+ 	u8 mgmt_registrations_need_update:1;
+ 
+ 	struct mutex mtx;
+@@ -5622,7 +5624,7 @@ unsigned int ieee80211_get_mesh_hdrlen(struct ieee80211s_hdr *meshhdr);
   */
  int ieee80211_data_to_8023_exthdr(struct sk_buff *skb, struct ethhdr *ehdr,
  				  const u8 *addr, enum nl80211_iftype iftype,
@@ -423,7 +443,7 @@ index 8a1bf2dbadd0..d5ab8d99739f 100644
  
  /**
   * ieee80211_data_to_8023 - convert an 802.11 data frame to 802.3
-@@ -5636,7 +5636,7 @@ int ieee80211_data_to_8023_exthdr(struct sk_buff *skb, struct ethhdr *ehdr,
+@@ -5634,7 +5636,7 @@ int ieee80211_data_to_8023_exthdr(struct sk_buff *skb, struct ethhdr *ehdr,
  static inline int ieee80211_data_to_8023(struct sk_buff *skb, const u8 *addr,
  					 enum nl80211_iftype iftype)
  {
@@ -963,6 +983,22 @@ index 3db514c4c63a..313eee12410e 100644
  	return (u32)result;
  }
  
+diff --git a/net/mac80211/mesh_pathtbl.c b/net/mac80211/mesh_pathtbl.c
+index 870c8eafef92..620ecf922408 100644
+--- a/net/mac80211/mesh_pathtbl.c
++++ b/net/mac80211/mesh_pathtbl.c
+@@ -60,10 +60,7 @@ static struct mesh_table *mesh_table_alloc(void)
+ 	atomic_set(&newtbl->entries,  0);
+ 	spin_lock_init(&newtbl->gates_lock);
+ 	spin_lock_init(&newtbl->walk_lock);
+-	if (rhashtable_init(&newtbl->rhead, &mesh_rht_params)) {
+-		kfree(newtbl);
+-		return NULL;
+-	}
++	rhashtable_init(&newtbl->rhead, &mesh_rht_params);
+ 
+ 	return newtbl;
+ }
 diff --git a/net/mac80211/mesh_ps.c b/net/mac80211/mesh_ps.c
 index 3fbd0b9ff913..204830a55240 100644
 --- a/net/mac80211/mesh_ps.c
@@ -1102,7 +1138,7 @@ index 63652c39c8e0..45927202c71c 100644
  	ieee80211_sta_set_expected_throughput(pubsta, sta_get_expected_throughput(sta));
  
 diff --git a/net/mac80211/rx.c b/net/mac80211/rx.c
-index 38b5695c2a0c..2a5a11f92b03 100644
+index b7979c0bffd0..2a5a11f92b03 100644
 --- a/net/mac80211/rx.c
 +++ b/net/mac80211/rx.c
 @@ -6,7 +6,7 @@
@@ -1421,7 +1457,17 @@ index 38b5695c2a0c..2a5a11f92b03 100644
  	return __ieee80211_rx_h_amsdu(rx, 0);
  }
  
-@@ -4272,8 +4191,6 @@ void ieee80211_check_fast_rx(struct sta_info *sta)
+@@ -4064,8 +3983,7 @@ static bool ieee80211_accept_frame(struct ieee80211_rx_data *rx)
+ 		if (!bssid)
+ 			return false;
+ 		if (ether_addr_equal(sdata->vif.addr, hdr->addr2) ||
+-		    ether_addr_equal(sdata->u.ibss.bssid, hdr->addr2) ||
+-		    !is_valid_ether_addr(hdr->addr2))
++		    ether_addr_equal(sdata->u.ibss.bssid, hdr->addr2))
+ 			return false;
+ 		if (ieee80211_is_beacon(hdr->frame_control))
+ 			return true;
+@@ -4273,8 +4191,6 @@ void ieee80211_check_fast_rx(struct sta_info *sta)
  
  	rcu_read_lock();
  	key = rcu_dereference(sta->ptk[sta->ptk_idx]);
@@ -2049,6 +2095,154 @@ index af590ae606b6..2eee93985ab0 100644
  	  echo '};'; \
  	  echo 'unsigned int shipped_regdb_certs_len = sizeof(shipped_regdb_certs);'; \
  	 ) > $@
+diff --git a/net/wireless/core.c b/net/wireless/core.c
+index 3f4554723761..240282c083aa 100644
+--- a/net/wireless/core.c
++++ b/net/wireless/core.c
+@@ -501,7 +501,6 @@ struct wiphy *wiphy_new_nm(const struct cfg80211_ops *ops, int sizeof_priv,
+ 	INIT_WORK(&rdev->propagate_cac_done_wk, cfg80211_propagate_cac_done_wk);
+ 	INIT_WORK(&rdev->mgmt_registrations_update_wk,
+ 		  cfg80211_mgmt_registrations_update_wk);
+-	spin_lock_init(&rdev->mgmt_registrations_lock);
+ 
+ #ifdef CONFIG_CFG80211_DEFAULT_PS
+ 	rdev->wiphy.flags |= WIPHY_FLAG_PS_ON_BY_DEFAULT;
+@@ -1257,6 +1256,7 @@ void cfg80211_init_wdev(struct wireless_dev *wdev)
+ 	INIT_LIST_HEAD(&wdev->event_list);
+ 	spin_lock_init(&wdev->event_lock);
+ 	INIT_LIST_HEAD(&wdev->mgmt_registrations);
++	spin_lock_init(&wdev->mgmt_registrations_lock);
+ 	INIT_LIST_HEAD(&wdev->pmsr_list);
+ 	spin_lock_init(&wdev->pmsr_lock);
+ 	INIT_WORK(&wdev->pmsr_free_wk, cfg80211_pmsr_free_wk);
+diff --git a/net/wireless/core.h b/net/wireless/core.h
+index a3362a32acb3..7df91f940212 100644
+--- a/net/wireless/core.h
++++ b/net/wireless/core.h
+@@ -101,8 +101,6 @@ struct cfg80211_registered_device {
+ 	struct work_struct propagate_cac_done_wk;
+ 
+ 	struct work_struct mgmt_registrations_update_wk;
+-	/* lock for all wdev lists */
+-	spinlock_t mgmt_registrations_lock;
+ 
+ 	/* must be last because of the way we do wiphy_priv(),
+ 	 * and it should at least be aligned to NETDEV_ALIGN */
+diff --git a/net/wireless/mlme.c b/net/wireless/mlme.c
+index 6dcfc5a34874..0ac820780437 100644
+--- a/net/wireless/mlme.c
++++ b/net/wireless/mlme.c
+@@ -448,9 +448,9 @@ static void cfg80211_mgmt_registrations_update(struct wireless_dev *wdev)
+ 
+ 	ASSERT_RTNL();
+ 
+-	spin_lock_bh(&rdev->mgmt_registrations_lock);
++	spin_lock_bh(&wdev->mgmt_registrations_lock);
+ 	if (!wdev->mgmt_registrations_need_update) {
+-		spin_unlock_bh(&rdev->mgmt_registrations_lock);
++		spin_unlock_bh(&wdev->mgmt_registrations_lock);
+ 		return;
+ 	}
+ 
+@@ -475,7 +475,7 @@ static void cfg80211_mgmt_registrations_update(struct wireless_dev *wdev)
+ 	rcu_read_unlock();
+ 
+ 	wdev->mgmt_registrations_need_update = 0;
+-	spin_unlock_bh(&rdev->mgmt_registrations_lock);
++	spin_unlock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	rdev_update_mgmt_frame_registrations(rdev, wdev, &upd);
+ }
+@@ -499,7 +499,6 @@ int cfg80211_mlme_register_mgmt(struct wireless_dev *wdev, u32 snd_portid,
+ 				int match_len, bool multicast_rx,
+ 				struct netlink_ext_ack *extack)
+ {
+-	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wdev->wiphy);
+ 	struct cfg80211_mgmt_registration *reg, *nreg;
+ 	int err = 0;
+ 	u16 mgmt_type;
+@@ -545,7 +544,7 @@ int cfg80211_mlme_register_mgmt(struct wireless_dev *wdev, u32 snd_portid,
+ 	if (!nreg)
+ 		return -ENOMEM;
+ 
+-	spin_lock_bh(&rdev->mgmt_registrations_lock);
++	spin_lock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	list_for_each_entry(reg, &wdev->mgmt_registrations, list) {
+ 		int mlen = min(match_len, reg->match_len);
+@@ -580,7 +579,7 @@ int cfg80211_mlme_register_mgmt(struct wireless_dev *wdev, u32 snd_portid,
+ 		list_add(&nreg->list, &wdev->mgmt_registrations);
+ 	}
+ 	wdev->mgmt_registrations_need_update = 1;
+-	spin_unlock_bh(&rdev->mgmt_registrations_lock);
++	spin_unlock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	cfg80211_mgmt_registrations_update(wdev);
+ 
+@@ -588,7 +587,7 @@ int cfg80211_mlme_register_mgmt(struct wireless_dev *wdev, u32 snd_portid,
+ 
+  out:
+ 	kfree(nreg);
+-	spin_unlock_bh(&rdev->mgmt_registrations_lock);
++	spin_unlock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	return err;
+ }
+@@ -599,7 +598,7 @@ void cfg80211_mlme_unregister_socket(struct wireless_dev *wdev, u32 nlportid)
+ 	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wiphy);
+ 	struct cfg80211_mgmt_registration *reg, *tmp;
+ 
+-	spin_lock_bh(&rdev->mgmt_registrations_lock);
++	spin_lock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	list_for_each_entry_safe(reg, tmp, &wdev->mgmt_registrations, list) {
+ 		if (reg->nlportid != nlportid)
+@@ -612,7 +611,7 @@ void cfg80211_mlme_unregister_socket(struct wireless_dev *wdev, u32 nlportid)
+ 		schedule_work(&rdev->mgmt_registrations_update_wk);
+ 	}
+ 
+-	spin_unlock_bh(&rdev->mgmt_registrations_lock);
++	spin_unlock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	if (nlportid && rdev->crit_proto_nlportid == nlportid) {
+ 		rdev->crit_proto_nlportid = 0;
+@@ -625,16 +624,15 @@ void cfg80211_mlme_unregister_socket(struct wireless_dev *wdev, u32 nlportid)
+ 
+ void cfg80211_mlme_purge_registrations(struct wireless_dev *wdev)
+ {
+-	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wdev->wiphy);
+ 	struct cfg80211_mgmt_registration *reg, *tmp;
+ 
+-	spin_lock_bh(&rdev->mgmt_registrations_lock);
++	spin_lock_bh(&wdev->mgmt_registrations_lock);
+ 	list_for_each_entry_safe(reg, tmp, &wdev->mgmt_registrations, list) {
+ 		list_del(&reg->list);
+ 		kfree(reg);
+ 	}
+ 	wdev->mgmt_registrations_need_update = 1;
+-	spin_unlock_bh(&rdev->mgmt_registrations_lock);
++	spin_unlock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	cfg80211_mgmt_registrations_update(wdev);
+ }
+@@ -782,7 +780,7 @@ bool cfg80211_rx_mgmt_khz(struct wireless_dev *wdev, int freq, int sig_dbm,
+ 	data = buf + ieee80211_hdrlen(mgmt->frame_control);
+ 	data_len = len - ieee80211_hdrlen(mgmt->frame_control);
+ 
+-	spin_lock_bh(&rdev->mgmt_registrations_lock);
++	spin_lock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	list_for_each_entry(reg, &wdev->mgmt_registrations, list) {
+ 		if (reg->frame_type != ftype)
+@@ -806,7 +804,7 @@ bool cfg80211_rx_mgmt_khz(struct wireless_dev *wdev, int freq, int sig_dbm,
+ 		break;
+ 	}
+ 
+-	spin_unlock_bh(&rdev->mgmt_registrations_lock);
++	spin_unlock_bh(&wdev->mgmt_registrations_lock);
+ 
+ 	trace_cfg80211_return_bool(result);
+ 	return result;
 diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
 index 8fb0478888fb..535e34a84d65 100644
 --- a/net/wireless/nl80211.c
@@ -2138,10 +2332,30 @@ index a817d8e3e4b3..a95c79d18349 100644
  EXPORT_SYMBOL_GPL(cfg80211_pmsr_complete);
  
 diff --git a/net/wireless/scan.c b/net/wireless/scan.c
-index fab1f0d50403..3409f37d838b 100644
+index fd614a5a00b4..3409f37d838b 100644
 --- a/net/wireless/scan.c
 +++ b/net/wireless/scan.c
-@@ -1746,14 +1746,14 @@ cfg80211_bss_update(struct cfg80211_registered_device *rdev,
+@@ -418,17 +418,14 @@ cfg80211_add_nontrans_list(struct cfg80211_bss *trans_bss,
+ 	}
+ 	ssid_len = ssid[1];
+ 	ssid = ssid + 2;
++	rcu_read_unlock();
+ 
+ 	/* check if nontrans_bss is in the list */
+ 	list_for_each_entry(bss, &trans_bss->nontrans_list, nontrans_list) {
+-		if (is_bss(bss, nontrans_bss->bssid, ssid, ssid_len)) {
+-			rcu_read_unlock();
++		if (is_bss(bss, nontrans_bss->bssid, ssid, ssid_len))
+ 			return 0;
+-		}
+ 	}
+ 
+-	rcu_read_unlock();
+-
+ 	/* add to the list */
+ 	list_add_tail(&nontrans_bss->nontrans_list, &trans_bss->nontrans_list);
+ 	return 0;
+@@ -1749,14 +1746,14 @@ cfg80211_bss_update(struct cfg80211_registered_device *rdev,
  			 * be grouped with this beacon for updates ...
  			 */
  			if (!cfg80211_combine_bsses(rdev, new)) {
@@ -2158,7 +2372,7 @@ index fab1f0d50403..3409f37d838b 100644
  			goto drop;
  		}
  
-@@ -2351,16 +2351,14 @@ cfg80211_inform_single_bss_frame_data(struct wiphy *wiphy,
+@@ -2354,16 +2351,14 @@ cfg80211_inform_single_bss_frame_data(struct wiphy *wiphy,
  		return NULL;
  
  	if (ext) {
@@ -2195,7 +2409,7 @@ index 060e365c8259..38df713f2e2e 100644
  
  	wdev->conn = kzalloc(sizeof(*wdev->conn), GFP_KERNEL);
 diff --git a/net/wireless/util.c b/net/wireless/util.c
-index 4fb8d1b14e76..e4247c354356 100644
+index 3f8c46bb6d9a..e4247c354356 100644
 --- a/net/wireless/util.c
 +++ b/net/wireless/util.c
 @@ -541,7 +541,7 @@ EXPORT_SYMBOL(ieee80211_get_mesh_hdrlen);
@@ -2226,6 +2440,28 @@ index 4fb8d1b14e76..e4247c354356 100644
  
  		offset += sizeof(struct ethhdr);
  		last = remaining <= subframe_len + padding;
+@@ -1028,14 +1025,14 @@ int cfg80211_change_iface(struct cfg80211_registered_device *rdev,
+ 	    !(rdev->wiphy.interface_modes & (1 << ntype)))
+ 		return -EOPNOTSUPP;
+ 
+-	if (ntype != otype) {
+-		/* if it's part of a bridge, reject changing type to station/ibss */
+-		if (netif_is_bridge_port(dev) &&
+-		    (ntype == NL80211_IFTYPE_ADHOC ||
+-		     ntype == NL80211_IFTYPE_STATION ||
+-		     ntype == NL80211_IFTYPE_P2P_CLIENT))
+-			return -EBUSY;
++	/* if it's part of a bridge, reject changing type to station/ibss */
++	if (netif_is_bridge_port(dev) &&
++	    (ntype == NL80211_IFTYPE_ADHOC ||
++	     ntype == NL80211_IFTYPE_STATION ||
++	     ntype == NL80211_IFTYPE_P2P_CLIENT))
++		return -EBUSY;
+ 
++	if (ntype != otype) {
+ 		dev->ieee80211_ptr->use_4addr = false;
+ 		dev->ieee80211_ptr->mesh_id_up_len = 0;
+ 		wdev_lock(dev->ieee80211_ptr);
 @@ -1059,9 +1056,6 @@ int cfg80211_change_iface(struct cfg80211_registered_device *rdev,
  		case NL80211_IFTYPE_MESH_POINT:
  			/* mesh should be handled? */
