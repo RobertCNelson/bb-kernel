@@ -276,6 +276,49 @@ wpanusb () {
 	dir 'wpanusb'
 }
 
+bcfserial () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./bcfserial ] ; then
+			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+			cd ./bcfserial
+				bcfserial_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./bcfserial || true
+			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+			cd ./wpanusb
+				bcfserial_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+
+		cd ./KERNEL/
+
+		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: bcfserial: https://github.com/statropy/bcfserial' -m "https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/bcfserial/
+		echo "BCFSERIAL: https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
+
+		rm -rf ../bcfserial/ || true
+
+		${git_bin} reset --hard HEAD~1
+
+		start_cleanup
+
+		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-github.com-statropy-bcfserial.patch"
+
+		wdir="bcfserial"
+		number=1
+		cleanup
+
+		exit 2
+	fi
+	dir 'bcfserial'
+}
+
 rt_cleanup () {
 	echo "rt: needs fixup"
 	exit 2
@@ -542,6 +585,7 @@ local_patch () {
 aufs
 can_isotp
 wpanusb
+bcfserial
 #rt
 wireguard
 wireless_regdb
@@ -631,6 +675,42 @@ backports () {
 		patch_backports
 	fi
 
+
+	backport_tag="v5.4.159"
+
+	subsystem="musb"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/drivers/usb/musb/musb_* ./drivers/usb/musb/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	backport_tag="v5.4.159"
+
+	subsystem="iio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
+		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
+		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
+		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+}
+
+brcmfmac () {
 	backport_tag="v5.4.18"
 
 	subsystem="brcm80211"
@@ -815,39 +895,6 @@ backports () {
 	fi
 
 	dir 'cypress'
-
-	backport_tag="v5.4.155"
-
-	subsystem="musb"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/usb/musb/musb_* ./drivers/usb/musb/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.4.155"
-
-	subsystem="iio"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
-		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
-		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
-		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
 }
 
 reverts () {
@@ -896,6 +943,7 @@ soc () {
 
 ###
 backports
+brcmfmac
 reverts
 drivers
 soc
@@ -903,7 +951,7 @@ soc
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.75"
+		backport_tag="v5.10.79"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
