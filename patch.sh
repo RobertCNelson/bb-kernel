@@ -109,7 +109,7 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.15
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.16
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -230,6 +230,49 @@ wpanusb () {
 		exit 2
 	fi
 	dir 'wpanusb'
+}
+
+bcfserial () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./bcfserial ] ; then
+			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+			cd ./bcfserial
+				bcfserial_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./bcfserial || true
+			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+			cd ./wpanusb
+				bcfserial_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+
+		cd ./KERNEL/
+
+		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: bcfserial: https://github.com/statropy/bcfserial' -m "https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/bcfserial/
+		echo "BCFSERIAL: https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
+
+		rm -rf ../bcfserial/ || true
+
+		${git_bin} reset --hard HEAD~1
+
+		start_cleanup
+
+		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-github.com-statropy-bcfserial.patch"
+
+		wdir="bcfserial"
+		number=1
+		cleanup
+
+		exit 2
+	fi
+	dir 'bcfserial'
 }
 
 rt_cleanup () {
@@ -366,7 +409,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.15.x"
+	branch="v5.16.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -430,6 +473,7 @@ local_patch () {
 #external_git
 #aufs
 wpanusb
+bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
@@ -522,7 +566,7 @@ drivers () {
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-	dir 'drivers/mikrobus'
+	#dir 'drivers/mikrobus'
 }
 
 soc () {
@@ -540,14 +584,10 @@ drivers
 soc
 fixes
 
-#Testing:
-#https://github.com/hakavlad/le9-patch
-#dir 'le9'
-
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.76"
+		backport_tag="v5.15.2"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
