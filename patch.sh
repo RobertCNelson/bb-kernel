@@ -674,6 +674,7 @@ drivers () {
 
 soc () {
 	dir 'bootup_hacks'
+	dir 'fixes/gcc'
 }
 
 ###
