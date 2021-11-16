@@ -938,7 +938,7 @@ drivers () {
 
 soc () {
 	dir 'bootup_hacks'
-	#dir 'fixes'
+	dir 'fixes/gcc'
 }
 
 ###
