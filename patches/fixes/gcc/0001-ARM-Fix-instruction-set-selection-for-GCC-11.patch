@@ -1,0 +1,62 @@
+From de01d1487f4727770deb2e8cbed8fcf211682c5b Mon Sep 17 00:00:00 2001
+From: Juerg Haefliger <juerg.haefliger@canonical.com>
+Date: Tue, 10 Aug 2021 08:13:50 +0200
+Subject: [PATCH] ARM: Fix instruction set selection for GCC 11
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+GCC 11 on ARM now complains like the following when trying to determine if
+an arch is supported. Presumably because it enforces the default option
+'--with-float=hard' which GCC 10 didn't do?
+
+  $ arm-linux-gnueabihf-gcc-11 -march=armv7-a -c -x c /dev/null
+  cc1: error: ‘-mfloat-abi=hard’: selected architecture lacks an FPU
+
+Due to that, the kernel build system selects the wrong compiler options
+which throws errros like this during the build:
+
+  /tmp/ccrHfZPj.s: Assembler messages:
+  /tmp/ccrHfZPj.s:116: Error: selected processor does not support `dmb ish' in ARM mode
+  /tmp/ccrHfZPj.s:150: Error: selected processor does not support `isb ' in ARM mode
+  /tmp/ccrHfZPj.s:160: Error: selected processor does not support `mrrc p15,1,r4,r5,c14' in ARM mode
+  /tmp/ccrHfZPj.s:245: Error: selected processor does not support `dmb ish' in ARM mode
+  /tmp/ccrHfZPj.s:503: Error: selected processor does not support `dmb ish' in ARM mode
+  /tmp/ccrHfZPj.s:527: Error: selected processor does not support `dmb ish' in ARM mode
+  /tmp/ccrHfZPj.s:698: Error: selected processor does not support `dmb ish' in ARM mode
+  /tmp/ccrHfZPj.s:731: Error: selected processor does not support `isb ' in ARM mode
+
+Fix that by adding '-msoft-float' to KBUILD_CFLAGS before the definition of
+the 'arch-$(CONFIG_CPU_<foo>)' instruction selection macros.
+
+Signed-off-by: Juerg Haefliger <juergh@canonical.com>
+---
+ arch/arm/Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/Makefile b/arch/arm/Makefile
+index 847c31e7c368..bd0148ee8338 100644
+--- a/arch/arm/Makefile
++++ b/arch/arm/Makefile
+@@ -56,6 +56,9 @@ endif
+ #
+ KBUILD_CFLAGS	+= $(call cc-option,-fno-ipa-sra)
+ 
++# Need -msoft-float for gcc 11 for the below instruction set selection
++KBUILD_CFLAGS	+= -msoft-float
++
+ # This selects which instruction set is used.
+ # Note that GCC does not numerically define an architecture version
+ # macro, but instead defines a whole series of macros which makes
+@@ -125,7 +128,7 @@ AFLAGS_ISA	:=$(CFLAGS_ISA)
+ endif
+ 
+ # Need -Uarm for gcc < 3.x
+-KBUILD_CFLAGS	+=$(CFLAGS_ABI) $(CFLAGS_ISA) $(arch-y) $(tune-y) $(call cc-option,-mshort-load-bytes,$(call cc-option,-malignment-traps,)) -msoft-float -Uarm
++KBUILD_CFLAGS	+=$(CFLAGS_ABI) $(CFLAGS_ISA) $(arch-y) $(tune-y) $(call cc-option,-mshort-load-bytes,$(call cc-option,-malignment-traps,)) -Uarm
+ KBUILD_AFLAGS	+=$(CFLAGS_ABI) $(AFLAGS_ISA) $(arch-y) $(tune-y) -include asm/unified.h -msoft-float
+ 
+ CHECKFLAGS	+= -D__arm__
+-- 
+2.30.2
+
