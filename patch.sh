@@ -762,8 +762,8 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/iio'
 	dir 'drivers/fb_ssd1306'
-	dir 'fixes'
 	dir 'drivers/bluetooth'
+	dir 'fixes'
 }
 
 soc () {
