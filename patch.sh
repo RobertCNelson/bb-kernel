@@ -276,6 +276,49 @@ wpanusb () {
 	dir 'wpanusb'
 }
 
+bcfserial () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ ! -d ./bcfserial ] ; then
+			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+			cd ./bcfserial
+				bcfserial_hash=$(git rev-parse HEAD)
+			cd -
+		else
+			rm -rf ./bcfserial || true
+			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+			cd ./wpanusb
+				bcfserial_hash=$(git rev-parse HEAD)
+			cd -
+		fi
+
+		cd ./KERNEL/
+
+		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: bcfserial: https://github.com/statropy/bcfserial' -m "https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/bcfserial/
+		echo "BCFSERIAL: https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
+
+		rm -rf ../bcfserial/ || true
+
+		${git_bin} reset --hard HEAD~1
+
+		start_cleanup
+
+		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-github.com-statropy-bcfserial.patch"
+
+		wdir="bcfserial"
+		number=1
+		cleanup
+
+		exit 2
+	fi
+	dir 'bcfserial'
+}
+
 rt_cleanup () {
 	echo "rt: needs fixup"
 	exit 2
@@ -432,6 +475,7 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		device="am335x-sancloud-bbe-lite.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 		device="am335x-sancloud-bbe-uboot.dtb" ; dtb_makefile_append
@@ -472,6 +516,7 @@ local_patch () {
 aufs
 can_isotp
 wpanusb
+bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
@@ -549,7 +594,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.14"
+	backport_tag="v5.13.19"
 
 	subsystem="spidev"
 	#regenerate="enable"
@@ -600,7 +645,6 @@ drivers () {
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
-#	dir 'drivers/ti/mmc'
 	dir 'drivers/greybus'
 	dir 'drivers/mikrobus'
 	dir 'drivers/serdev'
@@ -614,17 +658,22 @@ soc () {
 	dir 'bootup_hacks'
 }
 
+fixes () {
+	dir 'fixes/gcc'
+}
+
 ###
 backports
 reverts
 omap
 drivers
 soc
+fixes
 
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.62"
+		backport_tag="v5.10.83"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"

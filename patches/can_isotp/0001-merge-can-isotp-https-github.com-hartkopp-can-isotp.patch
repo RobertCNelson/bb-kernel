@@ -1,14 +1,14 @@
-From 56a935ffc6d54ee681ddfc3362ef1e1e0517c0b0 Mon Sep 17 00:00:00 2001
+From f7ec35a796a586e91f24a5ab858344fb4c93bbac Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 7 Sep 2021 21:23:55 -0500
+Date: Tue, 7 Dec 2021 15:10:51 -0600
 Subject: [PATCH] merge: can-isotp: https://github.com/hartkopp/can-isotp
 
-https://github.com/hartkopp/can-isotp/commit/beb4650660179963a8ed5b5cbf2085cc1b34f608
+https://github.com/hartkopp/can-isotp/commit/6e2fd18f49ca4c335668a0a776eea0bcbef2ebf9
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  include/uapi/linux/can/isotp.h |  136 +++
- net/can/isotp.c                | 1618 ++++++++++++++++++++++++++++++++
- 2 files changed, 1754 insertions(+)
+ net/can/isotp.c                | 1639 ++++++++++++++++++++++++++++++++
+ 2 files changed, 1775 insertions(+)
  create mode 100644 include/uapi/linux/can/isotp.h
  create mode 100644 net/can/isotp.c
 
@@ -156,10 +156,10 @@ index 000000000000..88831772f9ee
 +#endif
 diff --git a/net/can/isotp.c b/net/can/isotp.c
 new file mode 100644
-index 000000000000..ef6644beb8ff
+index 000000000000..502daae4c85d
 --- /dev/null
 +++ b/net/can/isotp.c
-@@ -0,0 +1,1618 @@
+@@ -0,0 +1,1639 @@
 +// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
 +/* isotp.c - ISO 15765-2 CAN transport protocol for protocol family CAN
 + *
@@ -239,7 +239,7 @@ index 000000000000..ef6644beb8ff
 +#include "compat.h"
 +#endif
 +
-+#define CAN_ISOTP_VERSION "20210620 - out-of-tree"
++#define CAN_ISOTP_VERSION "20211201 - out-of-tree"
 +
 +MODULE_DESCRIPTION("PF_CAN isotp 15765-2:2016 protocol");
 +MODULE_LICENSE("Dual BSD/GPL");
@@ -307,7 +307,7 @@ index 000000000000..ef6644beb8ff
 +struct tpcon {
 +	int idx;
 +	int len;
-+	u8 state;
++	u32 state;
 +	u8 bs;
 +	u8 sn;
 +	u8 ll_dl;
@@ -1037,6 +1037,7 @@ index 000000000000..ef6644beb8ff
 +{
 +	struct sock *sk = sock->sk;
 +	struct isotp_sock *so = isotp_sk(sk);
++	u32 old_state = so->tx.state;
 +	struct sk_buff *skb;
 +	struct net_device *dev;
 +	struct canfd_frame *cf;
@@ -1049,24 +1050,33 @@ index 000000000000..ef6644beb8ff
 +		return -EADDRNOTAVAIL;
 +
 +	/* we do not support multiple buffers - for now */
-+	if (so->tx.state != ISOTP_IDLE) {
-+		if (msg->msg_flags & MSG_DONTWAIT)
-+			return -EAGAIN;
++	if (cmpxchg(&so->tx.state, ISOTP_IDLE, ISOTP_SENDING) != ISOTP_IDLE ||
++	    wq_has_sleeper(&so->wait)) {
++		if (msg->msg_flags & MSG_DONTWAIT) {
++			err = -EAGAIN;
++			goto err_out;
++		}
 +
 +		/* wait for complete transmission of current pdu */
-+		wait_event_interruptible(so->wait, so->tx.state == ISOTP_IDLE);
++		err = wait_event_interruptible(so->wait, so->tx.state == ISOTP_IDLE);
++		if (err)
++			goto err_out;
 +	}
 +
-+	if (!size || size > MAX_MSG_LENGTH)
-+		return -EINVAL;
++	if (!size || size > MAX_MSG_LENGTH) {
++		err = -EINVAL;
++		goto err_out;
++	}
 +
 +	/* take care of a potential SF_DL ESC offset for TX_DL > 8 */
 +	off = (so->tx.ll_dl > CAN_MAX_DLEN) ? 1 : 0;
 +
 +	/* does the given data fit into a single frame for SF_BROADCAST? */
 +	if ((so->opt.flags & CAN_ISOTP_SF_BROADCAST) &&
-+	    (size > so->tx.ll_dl - SF_PCI_SZ4 - ae - off))
-+		return -EINVAL;
++	    (size > so->tx.ll_dl - SF_PCI_SZ4 - ae - off)) {
++		err = -EINVAL;
++		goto err_out;
++	}
 +
 +#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
 +	err = memcpy_from_msg(so->tx.buf, msg, size);
@@ -1074,22 +1084,23 @@ index 000000000000..ef6644beb8ff
 +	err = memcpy_fromiovec(so->tx.buf, msg->msg_iov, size);
 +#endif
 +	if (err < 0)
-+		return err;
++		goto err_out;
 +
 +	dev = dev_get_by_index(sock_net(sk), so->ifindex);
-+	if (!dev)
-+		return -ENXIO;
++	if (!dev) {
++		err = -ENXIO;
++		goto err_out;
++	}
 +
 +	skb = sock_alloc_send_skb(sk, so->ll.mtu + CAN_SKBRES,
 +				  msg->msg_flags & MSG_DONTWAIT, &err);
 +	if (!skb) {
 +		dev_put(dev);
-+		return err;
++		goto err_out;
 +	}
 +
 +	isotp_skb_reserve(skb, dev);
 +
-+	so->tx.state = ISOTP_SENDING;
 +	so->tx.len = size;
 +	so->tx.idx = 0;
 +
@@ -1147,15 +1158,25 @@ index 000000000000..ef6644beb8ff
 +	if (err) {
 +		printk_once(KERN_NOTICE "can-isotp: %s: can_send_ret %d\n",
 +			    __func__, err);
-+		return err;
++		goto err_out;
 +	}
 +
 +	if (wait_tx_done) {
 +		/* wait for complete transmission of current pdu */
 +		wait_event_interruptible(so->wait, so->tx.state == ISOTP_IDLE);
++
++		if (sk->sk_err)
++			return -sk->sk_err;
 +	}
 +
 +	return size;
++
++err_out:
++	so->tx.state = old_state;
++	if (so->tx.state == ISOTP_IDLE)
++		wake_up_interruptible(&so->wait);
++
++	return err;
 +}
 +
 +#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
