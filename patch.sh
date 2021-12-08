@@ -113,7 +113,7 @@ aufs () {
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.14
+		KERNEL_REL=5.16
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -154,7 +154,7 @@ aufs () {
 			cd -
 		fi
 		cd ./KERNEL/
-		KERNEL_REL=5.14
+		KERNEL_REL=5.16
 
 		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -165,12 +165,19 @@ aufs () {
 
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" -s
-		${git_bin} format-patch -5 -o ../patches/aufs/
+
+		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt.patch
+		patch -p1 < rt.patch || aufs_fail
+		rm -rf rt.patch
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs-rt' -s
+
+		${git_bin} format-patch -6 -o ../patches/aufs/
 		echo "AUFS: https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" > ../patches/git/AUFS
 
 		rm -rf ../${aufs_prefix}standalone/ || true
 
-		${git_bin} reset --hard HEAD~5
+		${git_bin} reset --hard HEAD~6
 
 		start_cleanup
 
@@ -179,9 +186,10 @@ aufs () {
 		${git} "${DIR}/patches/aufs/0003-merge-aufs-mmap.patch"
 		${git} "${DIR}/patches/aufs/0004-merge-aufs-standalone.patch"
 		${git} "${DIR}/patches/aufs/0005-merge-aufs.patch"
+		${git} "${DIR}/patches/aufs/0006-merge-aufs-rt.patch"
 
 		wdir="aufs"
-		number=5
+		number=6
 		cleanup
 	fi
 
@@ -442,6 +450,7 @@ beagleboard_dtbs () {
 
 		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
