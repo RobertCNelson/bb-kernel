@@ -421,6 +421,20 @@ debian_regs () {
 			;;
 		esac
 
+		#Devuan: Compatibility Matrix
+		#https://en.wikipedia.org/wiki/Devuan
+		case "${deb_distro}" in
+		beowulf)
+			deb_distro="buster"
+			;;
+		chimaera)
+			deb_distro="bullseye"
+			;;
+		daedalus)
+			deb_distro="bookworm"
+			;;
+		esac
+
 		#Future Debian Code names:
 		case "${deb_distro}" in
 		trixie)
