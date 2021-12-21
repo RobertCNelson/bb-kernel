@@ -576,6 +576,7 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	#dir 'drivers/mikrobus'
+	dir 'drivers/smsc95xx'
 }
 
 soc () {
