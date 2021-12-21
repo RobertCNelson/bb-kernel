@@ -525,19 +525,15 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.15.5"
+	backport_tag="v4.x-y"
 
-	subsystem="smsc95xx"
+	subsystem="xyz"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		#Fixes regression from:
-		#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/log/drivers/net/usb/smsc95xx.c?h=v5.15.6
-		#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/drivers/net/usb/smsc95xx.c?h=v5.15.6&id=54619c356f6c0004ca1631cc98fe7cc4b1600b9d
-
-		cp -v ~/linux-src/drivers/net/usb/smsc95xx.c ./drivers/net/usb/
-		cp -v ~/linux-src/drivers/net/usb/smsc95xx.h ./drivers/net/usb/
+		mkdir -p ./x/
+		cp -v ~/linux-src/x/* ./x/
 
 		post_backports
 		exit 2
@@ -580,6 +576,7 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/mikrobus'
+	dir 'drivers/smsc95xx'
 }
 
 soc () {
@@ -591,7 +588,7 @@ fixes () {
 }
 
 ###
-backports
+#backports
 #reverts
 drivers
 soc
