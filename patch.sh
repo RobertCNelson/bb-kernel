@@ -109,7 +109,7 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.10
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.10.82
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -569,7 +569,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.10.83"
+	backport_tag="v5.10.88"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -786,7 +786,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.15.6"
+		backport_tag="v5.15.11"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
