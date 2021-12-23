@@ -1,78 +1,261 @@
-From d48a56e84e6eca73b391f81430cb70e8a150e4c5 Mon Sep 17 00:00:00 2001
+From ac5474812db56274546d039fd56f7d08eec05230 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 1 Jun 2021 16:48:49 -0500
+Date: Thu, 23 Dec 2021 13:58:13 -0600
 Subject: [PATCH] backports: iio: from: linux.git
 
-Reference: v4.14.234
+Reference: v4.14.259
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/iio/gyro/mpu3050-core.c                   | 13 +++++++++++--
- drivers/iio/light/tsl2583.c                       |  8 ++++++++
- drivers/iio/proximity/pulsedlight-lidar-lite-v2.c |  1 +
- 3 files changed, 20 insertions(+), 2 deletions(-)
+ drivers/iio/accel/kxcjk-1013.c            |  5 ++---
+ drivers/iio/accel/kxsd9.c                 |  6 +++---
+ drivers/iio/accel/mma8452.c               |  2 +-
+ drivers/iio/adc/axp20x_adc.c              | 18 +++---------------
+ drivers/iio/adc/dln2-adc.c                | 21 ++++++++++++---------
+ drivers/iio/gyro/itg3200_buffer.c         |  2 +-
+ drivers/iio/industrialio-trigger.c        |  1 -
+ drivers/iio/light/ltr501.c                |  2 +-
+ drivers/iio/light/stk3310.c               |  6 +++---
+ drivers/iio/trigger/stm32-timer-trigger.c |  2 +-
+ 10 files changed, 27 insertions(+), 38 deletions(-)
 
-diff --git a/drivers/iio/gyro/mpu3050-core.c b/drivers/iio/gyro/mpu3050-core.c
-index 3db843206db3..1096226a0612 100644
---- a/drivers/iio/gyro/mpu3050-core.c
-+++ b/drivers/iio/gyro/mpu3050-core.c
-@@ -270,7 +270,16 @@ static int mpu3050_read_raw(struct iio_dev *indio_dev,
- 	case IIO_CHAN_INFO_OFFSET:
- 		switch (chan->type) {
- 		case IIO_TEMP:
--			/* The temperature scaling is (x+23000)/280 Celsius */
-+			/*
-+			 * The temperature scaling is (x+23000)/280 Celsius
-+			 * for the "best fit straight line" temperature range
-+			 * of -30C..85C.  The 23000 includes room temperature
-+			 * offset of +35C, 280 is the precision scale and x is
-+			 * the 16-bit signed integer reported by hardware.
-+			 *
-+			 * Temperature value itself represents temperature of
-+			 * the sensor die.
-+			 */
- 			*val = 23000;
- 			return IIO_VAL_INT;
- 		default:
-@@ -327,7 +336,7 @@ static int mpu3050_read_raw(struct iio_dev *indio_dev,
- 				goto out_read_raw_unlock;
- 			}
+diff --git a/drivers/iio/accel/kxcjk-1013.c b/drivers/iio/accel/kxcjk-1013.c
+index 296fd00f0e97..031c150eafda 100644
+--- a/drivers/iio/accel/kxcjk-1013.c
++++ b/drivers/iio/accel/kxcjk-1013.c
+@@ -1326,8 +1326,7 @@ static int kxcjk1013_probe(struct i2c_client *client,
+ 	return 0;
  
--			*val = be16_to_cpu(raw_val);
-+			*val = (s16)be16_to_cpu(raw_val);
- 			ret = IIO_VAL_INT;
+ err_buffer_cleanup:
+-	if (data->dready_trig)
+-		iio_triggered_buffer_cleanup(indio_dev);
++	iio_triggered_buffer_cleanup(indio_dev);
+ err_trigger_unregister:
+ 	if (data->dready_trig)
+ 		iio_trigger_unregister(data->dready_trig);
+@@ -1350,8 +1349,8 @@ static int kxcjk1013_remove(struct i2c_client *client)
+ 	pm_runtime_set_suspended(&client->dev);
+ 	pm_runtime_put_noidle(&client->dev);
  
- 			goto out_read_raw_unlock;
-diff --git a/drivers/iio/light/tsl2583.c b/drivers/iio/light/tsl2583.c
-index fb711ed4862e..87ed9adec7e1 100644
---- a/drivers/iio/light/tsl2583.c
-+++ b/drivers/iio/light/tsl2583.c
-@@ -350,6 +350,14 @@ static int tsl2583_als_calibrate(struct iio_dev *indio_dev)
- 		return lux_val;
++	iio_triggered_buffer_cleanup(indio_dev);
+ 	if (data->dready_trig) {
+-		iio_triggered_buffer_cleanup(indio_dev);
+ 		iio_trigger_unregister(data->dready_trig);
+ 		iio_trigger_unregister(data->motion_trig);
+ 	}
+diff --git a/drivers/iio/accel/kxsd9.c b/drivers/iio/accel/kxsd9.c
+index 1bda730a71c0..c3ac798083f4 100644
+--- a/drivers/iio/accel/kxsd9.c
++++ b/drivers/iio/accel/kxsd9.c
+@@ -227,14 +227,14 @@ static irqreturn_t kxsd9_trigger_handler(int irq, void *p)
+ 			       hw_values.chan,
+ 			       sizeof(hw_values.chan));
+ 	if (ret) {
+-		dev_err(st->dev,
+-			"error reading data\n");
+-		return ret;
++		dev_err(st->dev, "error reading data: %d\n", ret);
++		goto out;
  	}
  
-+	/* Avoid division by zero of lux_value later on */
-+	if (lux_val == 0) {
-+		dev_err(&chip->client->dev,
-+			"%s: lux_val of 0 will produce out of range trim_value\n",
-+			__func__);
-+		return -ENODATA;
-+	}
-+
- 	gain_trim_val = (unsigned int)(((chip->als_settings.als_cal_target)
- 			* chip->als_settings.als_gain_trim) / lux_val);
- 	if ((gain_trim_val < 250) || (gain_trim_val > 4000)) {
-diff --git a/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c b/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
-index 36c1ddc251aa..c033db701bb5 100644
---- a/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
-+++ b/drivers/iio/proximity/pulsedlight-lidar-lite-v2.c
-@@ -166,6 +166,7 @@ static int lidar_get_measurement(struct lidar_data *data, u16 *reg)
- 	ret = lidar_write_control(data, LIDAR_REG_CONTROL_ACQUIRE);
- 	if (ret < 0) {
- 		dev_err(&client->dev, "cannot send start measurement command");
-+		pm_runtime_put_noidle(&client->dev);
+ 	iio_push_to_buffers_with_timestamp(indio_dev,
+ 					   &hw_values,
+ 					   iio_get_time_ns(indio_dev));
++out:
+ 	iio_trigger_notify_done(indio_dev->trig);
+ 
+ 	return IRQ_HANDLED;
+diff --git a/drivers/iio/accel/mma8452.c b/drivers/iio/accel/mma8452.c
+index 200ac4dad799..5dbbba365ce8 100644
+--- a/drivers/iio/accel/mma8452.c
++++ b/drivers/iio/accel/mma8452.c
+@@ -1396,7 +1396,7 @@ static int mma8452_trigger_setup(struct iio_dev *indio_dev)
+ 	if (ret)
  		return ret;
- 	}
  
+-	indio_dev->trig = trig;
++	indio_dev->trig = iio_trigger_get(trig);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/iio/adc/axp20x_adc.c b/drivers/iio/adc/axp20x_adc.c
+index 11e177180ea0..42730cd186cc 100644
+--- a/drivers/iio/adc/axp20x_adc.c
++++ b/drivers/iio/adc/axp20x_adc.c
+@@ -224,19 +224,8 @@ static int axp22x_adc_raw(struct iio_dev *indio_dev,
+ 			  struct iio_chan_spec const *chan, int *val)
+ {
+ 	struct axp20x_adc_iio *info = iio_priv(indio_dev);
+-	int size;
+ 
+-	/*
+-	 * N.B.: Unlike the Chinese datasheets tell, the charging current is
+-	 * stored on 12 bits, not 13 bits. Only discharging current is on 13
+-	 * bits.
+-	 */
+-	if (chan->type == IIO_CURRENT && chan->channel == AXP22X_BATT_DISCHRG_I)
+-		size = 13;
+-	else
+-		size = 12;
+-
+-	*val = axp20x_read_variable_width(info->regmap, chan->address, size);
++	*val = axp20x_read_variable_width(info->regmap, chan->address, 12);
+ 	if (*val < 0)
+ 		return *val;
+ 
+@@ -329,9 +318,8 @@ static int axp22x_adc_scale(struct iio_chan_spec const *chan, int *val,
+ 		return IIO_VAL_INT_PLUS_MICRO;
+ 
+ 	case IIO_CURRENT:
+-		*val = 0;
+-		*val2 = 500000;
+-		return IIO_VAL_INT_PLUS_MICRO;
++		*val = 1;
++		return IIO_VAL_INT;
+ 
+ 	case IIO_TEMP:
+ 		*val = 100;
+diff --git a/drivers/iio/adc/dln2-adc.c b/drivers/iio/adc/dln2-adc.c
+index 2a299bbd6acf..eef94e7b2858 100644
+--- a/drivers/iio/adc/dln2-adc.c
++++ b/drivers/iio/adc/dln2-adc.c
+@@ -251,7 +251,6 @@ static int dln2_adc_set_chan_period(struct dln2_adc *dln2,
+ static int dln2_adc_read(struct dln2_adc *dln2, unsigned int channel)
+ {
+ 	int ret, i;
+-	struct iio_dev *indio_dev = platform_get_drvdata(dln2->pdev);
+ 	u16 conflict;
+ 	__le16 value;
+ 	int olen = sizeof(value);
+@@ -260,13 +259,9 @@ static int dln2_adc_read(struct dln2_adc *dln2, unsigned int channel)
+ 		.chan = channel,
+ 	};
+ 
+-	ret = iio_device_claim_direct_mode(indio_dev);
+-	if (ret < 0)
+-		return ret;
+-
+ 	ret = dln2_adc_set_chan_enabled(dln2, channel, true);
+ 	if (ret < 0)
+-		goto release_direct;
++		return ret;
+ 
+ 	ret = dln2_adc_set_port_enabled(dln2, true, &conflict);
+ 	if (ret < 0) {
+@@ -303,8 +298,6 @@ static int dln2_adc_read(struct dln2_adc *dln2, unsigned int channel)
+ 	dln2_adc_set_port_enabled(dln2, false, NULL);
+ disable_chan:
+ 	dln2_adc_set_chan_enabled(dln2, channel, false);
+-release_direct:
+-	iio_device_release_direct_mode(indio_dev);
+ 
+ 	return ret;
+ }
+@@ -340,10 +333,16 @@ static int dln2_adc_read_raw(struct iio_dev *indio_dev,
+ 
+ 	switch (mask) {
+ 	case IIO_CHAN_INFO_RAW:
++		ret = iio_device_claim_direct_mode(indio_dev);
++		if (ret < 0)
++			return ret;
++
+ 		mutex_lock(&dln2->mutex);
+ 		ret = dln2_adc_read(dln2, chan->channel);
+ 		mutex_unlock(&dln2->mutex);
+ 
++		iio_device_release_direct_mode(indio_dev);
++
+ 		if (ret < 0)
+ 			return ret;
+ 
+@@ -675,7 +674,11 @@ static int dln2_adc_probe(struct platform_device *pdev)
+ 	}
+ 	dln2->trig->ops = &dln2_adc_trigger_ops;
+ 	iio_trigger_set_drvdata(dln2->trig, dln2);
+-	devm_iio_trigger_register(dev, dln2->trig);
++	ret = devm_iio_trigger_register(dev, dln2->trig);
++	if (ret) {
++		dev_err(dev, "failed to register trigger: %d\n", ret);
++		return ret;
++	}
+ 	iio_trigger_set_immutable(indio_dev, dln2->trig);
+ 
+ 	ret = devm_iio_triggered_buffer_setup(dev, indio_dev, NULL,
+diff --git a/drivers/iio/gyro/itg3200_buffer.c b/drivers/iio/gyro/itg3200_buffer.c
+index e04483254b28..7157b1a731a6 100644
+--- a/drivers/iio/gyro/itg3200_buffer.c
++++ b/drivers/iio/gyro/itg3200_buffer.c
+@@ -64,9 +64,9 @@ static irqreturn_t itg3200_trigger_handler(int irq, void *p)
+ 
+ 	iio_push_to_buffers_with_timestamp(indio_dev, &scan, pf->timestamp);
+ 
++error_ret:
+ 	iio_trigger_notify_done(indio_dev->trig);
+ 
+-error_ret:
+ 	return IRQ_HANDLED;
+ }
+ 
+diff --git a/drivers/iio/industrialio-trigger.c b/drivers/iio/industrialio-trigger.c
+index 4061fed93f1f..7cb706b2f737 100644
+--- a/drivers/iio/industrialio-trigger.c
++++ b/drivers/iio/industrialio-trigger.c
+@@ -549,7 +549,6 @@ static struct iio_trigger *viio_trigger_alloc(const char *fmt, va_list vargs)
+ 		irq_modify_status(trig->subirq_base + i,
+ 				  IRQ_NOREQUEST | IRQ_NOAUTOEN, IRQ_NOPROBE);
+ 	}
+-	get_device(&trig->dev);
+ 
+ 	return trig;
+ 
+diff --git a/drivers/iio/light/ltr501.c b/drivers/iio/light/ltr501.c
+index 3d75e155bd3e..68a7a6b20797 100644
+--- a/drivers/iio/light/ltr501.c
++++ b/drivers/iio/light/ltr501.c
+@@ -1279,7 +1279,7 @@ static irqreturn_t ltr501_trigger_handler(int irq, void *p)
+ 		ret = regmap_bulk_read(data->regmap, LTR501_ALS_DATA1,
+ 				       (u8 *)als_buf, sizeof(als_buf));
+ 		if (ret < 0)
+-			return ret;
++			goto done;
+ 		if (test_bit(0, indio_dev->active_scan_mask))
+ 			scan.channels[j++] = le16_to_cpu(als_buf[1]);
+ 		if (test_bit(1, indio_dev->active_scan_mask))
+diff --git a/drivers/iio/light/stk3310.c b/drivers/iio/light/stk3310.c
+index 45cf8b0a4363..ed9cf1ffec7b 100644
+--- a/drivers/iio/light/stk3310.c
++++ b/drivers/iio/light/stk3310.c
+@@ -546,9 +546,8 @@ static irqreturn_t stk3310_irq_event_handler(int irq, void *private)
+ 	mutex_lock(&data->lock);
+ 	ret = regmap_field_read(data->reg_flag_nf, &dir);
+ 	if (ret < 0) {
+-		dev_err(&data->client->dev, "register read failed\n");
+-		mutex_unlock(&data->lock);
+-		return ret;
++		dev_err(&data->client->dev, "register read failed: %d\n", ret);
++		goto out;
+ 	}
+ 	event = IIO_UNMOD_EVENT_CODE(IIO_PROXIMITY, 1,
+ 				     IIO_EV_TYPE_THRESH,
+@@ -560,6 +559,7 @@ static irqreturn_t stk3310_irq_event_handler(int irq, void *private)
+ 	ret = regmap_field_write(data->reg_flag_psint, 0);
+ 	if (ret < 0)
+ 		dev_err(&data->client->dev, "failed to reset interrupts\n");
++out:
+ 	mutex_unlock(&data->lock);
+ 
+ 	return IRQ_HANDLED;
+diff --git a/drivers/iio/trigger/stm32-timer-trigger.c b/drivers/iio/trigger/stm32-timer-trigger.c
+index 0e4da570f22f..fbe8213b16cb 100644
+--- a/drivers/iio/trigger/stm32-timer-trigger.c
++++ b/drivers/iio/trigger/stm32-timer-trigger.c
+@@ -886,6 +886,6 @@ static struct platform_driver stm32_timer_trigger_driver = {
+ };
+ module_platform_driver(stm32_timer_trigger_driver);
+ 
+-MODULE_ALIAS("platform: stm32-timer-trigger");
++MODULE_ALIAS("platform:stm32-timer-trigger");
+ MODULE_DESCRIPTION("STMicroelectronics STM32 Timer Trigger driver");
+ MODULE_LICENSE("GPL v2");
 -- 
 2.30.2
 

@@ -17,7 +17,7 @@ toolchain="gcc_7_arm"
 #toolchain="gcc_8_arm"
 #toolchain="gcc_9_arm"
 #toolchain="gcc_10_arm"
-toolchain="gcc_11_arm"
+#toolchain="gcc_11_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
@@ -38,10 +38,10 @@ toolchain="gcc_11_arm"
 
 #Kernel
 KERNEL_REL=4.14
-KERNEL_TAG=${KERNEL_REL}.232
-kernel_rt=".232-rt111"
+KERNEL_TAG=${KERNEL_REL}.256
+kernel_rt=".256-rt125"
 #Kernel Build
-BUILD=${build_prefix}52
+BUILD=${build_prefix}52.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
