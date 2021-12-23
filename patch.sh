@@ -460,7 +460,7 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org DTBS: $branch" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
 		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
 
@@ -470,7 +470,7 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-DTBS-$branch.patch"
+		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
 		wdir="soc/ti/beagleboard_dtbs"
 		number=1
@@ -530,7 +530,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.192"
+	backport_tag="v4.19.222"
 
 	subsystem="greybus"
 	#regenerate="enable"
@@ -546,7 +546,7 @@ backports () {
 		${git} "${DIR}/patches/backports/greybus/0002-greybus-drivers-staging-greybus-module.c-no-struct_s.patch"
 	fi
 
-	backport_tag="v5.4.123"
+	backport_tag="v5.4.168"
 
 	subsystem="wiznet"
 	#regenerate="enable"
@@ -561,7 +561,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v4.14.234"
+	backport_tag="v4.14.259"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -598,7 +598,7 @@ reverts () {
 
 	if [ "x${regenerate}" = "xenable" ] ; then
 		wdir="reverts"
-		number=4
+		number=2
 		cleanup
 	fi
 }
