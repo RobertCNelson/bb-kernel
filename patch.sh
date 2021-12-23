@@ -539,7 +539,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.217"
+	backport_tag="v4.19.222"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -557,7 +557,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.4.159"
+	backport_tag="v5.4.168"
 
 	subsystem="wiznet"
 	#regenerate="enable"
@@ -674,6 +674,9 @@ drivers () {
 
 soc () {
 	dir 'bootup_hacks'
+}
+
+fixes () {
 	dir 'fixes/gcc'
 }
 
@@ -682,6 +685,7 @@ backports
 reverts
 drivers
 soc
+fixes
 
 packaging () {
 	do_backport="enable"
