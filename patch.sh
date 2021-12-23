@@ -676,22 +676,7 @@ backports () {
 	fi
 
 
-	backport_tag="v5.4.159"
-
-	subsystem="musb"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/usb/musb/musb_* ./drivers/usb/musb/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.4.159"
+	backport_tag="v5.4.168"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -938,6 +923,9 @@ drivers () {
 
 soc () {
 	dir 'bootup_hacks'
+}
+
+fixes () {
 	dir 'fixes/gcc'
 }
 
@@ -947,11 +935,12 @@ brcmfmac
 reverts
 drivers
 soc
+fixes
 
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.79"
+		backport_tag="v5.10.88"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
