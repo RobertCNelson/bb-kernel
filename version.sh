@@ -4,8 +4,8 @@ ARCH=$(uname -m)
 
 config="omap2plus_defconfig"
 
-build_prefix="-bone"
-branch_prefix="am33x-v"
+build_prefix="-bone-rt-r"
+branch_prefix="am33x-rt-v"
 branch_postfix=""
 
 #https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.15-rc1
@@ -38,10 +38,10 @@ toolchain="gcc_11_arm"
 
 #Kernel
 KERNEL_REL=5.15
-KERNEL_TAG=${KERNEL_REL}.11
-kernel_rt=".X-rtY"
+KERNEL_TAG=${KERNEL_REL}.10
+kernel_rt=".10-rt24"
 #Kernel Build
-BUILD=${build_prefix}17
+BUILD=${build_prefix}17.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
