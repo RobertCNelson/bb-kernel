@@ -262,6 +262,22 @@ git_shallow () {
 	fi
 }
 
+# disable "uniform compression" for wheezy package
+dpkg_for_wheezy () {
+	# only disable for 3.8.13 kernels
+#	kernel_base=$(echo ${kernel_tag} | awk -F'-' '{print $1}')
+#	if [ "x${kernel_base}" != "x3.8.13" ] ; then
+#		return
+#	fi
+	# only disable for dpkg 1.19.0 or newer
+	dpkg_version_current=$(dpkg-query -f='${Version}' --show dpkg)
+	dpkg_version_uniform_compression="1.19.0"
+	dpkg --compare-versions $dpkg_version_current ge $dpkg_version_uniform_compression
+	if [ $? -eq "0" ] ; then
+		sed -i "s/dpkg --build/dpkg-deb --build --no-uniform-compression/" ${DIR}/KERNEL/scripts/package/builddeb
+	fi
+}
+
 . "${DIR}/version.sh"
 . "${DIR}/system.sh"
 
@@ -315,5 +331,7 @@ else
 	. "${DIR}/recipe.sh"
 	git_shallow
 fi
+
+#dpkg_for_wheezy
 
 #
