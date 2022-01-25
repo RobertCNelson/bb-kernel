@@ -109,11 +109,11 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.16
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.17
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.16
+		KERNEL_REL=5.17
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -399,12 +399,6 @@ ti_pm_firmware () {
 	dir 'drivers/ti/firmware'
 }
 
-next_dtbs () {
-	dir 'dts/omap'
-	dir 'dts/omap_pruss'
-	dir 'dts/omap_sancloud'
-}
-
 cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/modules.order || true
 	rm -rf arch/arm/boot/dts/.*cmd || true
@@ -417,7 +411,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.16.x"
+	branch="v5.17.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -480,14 +474,13 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 wpanusb
 bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-#next_dtbs
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -576,7 +569,6 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	#dir 'drivers/mikrobus'
-	dir 'drivers/smsc95xx'
 }
 
 soc () {
