@@ -166,18 +166,18 @@ aufs () {
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt.patch
-		patch -p1 < rt.patch || aufs_fail
-		rm -rf rt.patch
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs-rt' -s
+		#wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt.patch
+		#patch -p1 < rt.patch || aufs_fail
+		#rm -rf rt.patch
+		#${git_bin} add .
+		#${git_bin} commit -a -m 'merge: aufs-rt' -s
 
-		${git_bin} format-patch -6 -o ../patches/aufs/
+		${git_bin} format-patch -5 -o ../patches/aufs/
 		echo "AUFS: https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" > ../patches/git/AUFS
 
 		rm -rf ../${aufs_prefix}standalone/ || true
 
-		${git_bin} reset --hard HEAD~6
+		${git_bin} reset --hard HEAD~5
 
 		start_cleanup
 
@@ -186,10 +186,10 @@ aufs () {
 		${git} "${DIR}/patches/aufs/0003-merge-aufs-mmap.patch"
 		${git} "${DIR}/patches/aufs/0004-merge-aufs-standalone.patch"
 		${git} "${DIR}/patches/aufs/0005-merge-aufs.patch"
-		${git} "${DIR}/patches/aufs/0006-merge-aufs-rt.patch"
+		#${git} "${DIR}/patches/aufs/0006-merge-aufs-rt.patch"
 
 		wdir="aufs"
-		number=6
+		number=5
 		cleanup
 	fi
 
@@ -480,7 +480,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 wpanusb
 bcfserial
 #rt
@@ -597,7 +597,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.15.13"
+		backport_tag="v5.15.15"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
