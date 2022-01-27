@@ -525,15 +525,15 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.x-y"
+	backport_tag="v5.15.17"
 
-	subsystem="xyz"
+	subsystem="smsc95xx"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
 		mkdir -p ./x/
-		cp -v ~/linux-src/x/* ./x/
+		cp -v ~/linux-src/drivers/net/usb/smsc95xx.c ./drivers/net/usb/smsc95xx.c
 
 		post_backports
 		exit 2
@@ -576,7 +576,6 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/mikrobus'
-	dir 'drivers/smsc95xx'
 }
 
 soc () {
@@ -588,7 +587,7 @@ fixes () {
 }
 
 ###
-#backports
+backports
 #reverts
 drivers
 soc
@@ -597,7 +596,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.15.11"
+		backport_tag="v5.16.3"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
