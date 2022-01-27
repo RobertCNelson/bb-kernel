@@ -39,9 +39,9 @@ toolchain="gcc_11_arm"
 #Kernel
 KERNEL_REL=5.17
 KERNEL_TAG=${KERNEL_REL}-rc1
-kernel_rt=".2-rt19"
+kernel_rt="-rc1-rt2"
 #Kernel Build
-BUILD=${build_prefix}0
+BUILD=${build_prefix}0.1
 
 #v5.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
@@ -52,4 +52,3 @@ BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=xross
 #
-
