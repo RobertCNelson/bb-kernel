@@ -1,6 +1,6 @@
-From 8a99cdcd72ad6bb88fbceecf24edfb318583385e Mon Sep 17 00:00:00 2001
+From f45da7a54fe24c7c5ae328988ca0b7421ef863ba Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 22 Dec 2021 15:17:02 -0600
+Date: Thu, 27 Jan 2022 17:10:46 -0600
 Subject: [PATCH] backports: brcm80211: from: linux.git
 
 Reference: v5.10.9
@@ -20,9 +20,12 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/mac80211/Kconfig                          |   2 +-
  net/mac80211/aead_api.c                       |   5 +-
  net/mac80211/aes_gmac.c                       |   5 +-
- net/mac80211/cfg.c                            |  27 +--
+ net/mac80211/agg-rx.c                         |   5 +-
+ net/mac80211/agg-tx.c                         |  16 +-
+ net/mac80211/cfg.c                            |  30 +---
  net/mac80211/debugfs.c                        |  44 ++---
  net/mac80211/driver-ops.c                     |   5 +-
+ net/mac80211/driver-ops.h                     |   5 +-
  net/mac80211/ibss.c                           |   2 -
  net/mac80211/ieee80211_i.h                    |  41 +++--
  net/mac80211/iface.c                          |  28 ++-
@@ -32,15 +35,15 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/mac80211/mesh_hwmp.c                      |   2 +-
  net/mac80211/mesh_pathtbl.c                   |   5 +-
  net/mac80211/mesh_ps.c                        |   3 +-
- net/mac80211/mlme.c                           |  33 ++--
+ net/mac80211/mlme.c                           |  46 ++---
  net/mac80211/rate.c                           |   3 +-
  net/mac80211/rx.c                             | 165 +++++-------------
  net/mac80211/scan.c                           |  21 +--
  net/mac80211/spectmgmt.c                      |  10 +-
  net/mac80211/sta_info.c                       |  22 ++-
- net/mac80211/sta_info.h                       |  33 +---
+ net/mac80211/sta_info.h                       |  34 +---
  net/mac80211/tx.c                             | 101 ++++-------
- net/mac80211/util.c                           |  24 +--
+ net/mac80211/util.c                           |  31 ++--
  net/mac80211/wpa.c                            |  19 +-
  net/wireless/Makefile                         |   2 +-
  net/wireless/core.c                           |   2 +-
@@ -53,7 +56,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireless/util.c                           |  25 +--
  net/wireless/wext-core.c                      |   5 +-
  net/wireless/wext-spy.c                       |  14 +-
- 47 files changed, 327 insertions(+), 634 deletions(-)
+ 50 files changed, 339 insertions(+), 672 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
 index b6d0bc73923f..f9ebb98b0e3c 100644
@@ -532,8 +535,111 @@ index 512cab073f2e..6f3b3a0cc10a 100644
  }
  
  struct crypto_aead *ieee80211_aes_gmac_key_setup(const u8 key[],
+diff --git a/net/mac80211/agg-rx.c b/net/mac80211/agg-rx.c
+index 6ef8ded4ec76..cd4cf84a7f99 100644
+--- a/net/mac80211/agg-rx.c
++++ b/net/mac80211/agg-rx.c
+@@ -9,7 +9,7 @@
+  * Copyright 2007, Michael Wu <flamingice@sourmilk.net>
+  * Copyright 2007-2010, Intel Corporation
+  * Copyright(c) 2015-2017 Intel Deutschland GmbH
+- * Copyright (C) 2018-2021 Intel Corporation
++ * Copyright (C) 2018-2020 Intel Corporation
+  */
+ 
+ /**
+@@ -191,8 +191,7 @@ static void ieee80211_add_addbaext(struct ieee80211_sub_if_data *sdata,
+ 	sband = ieee80211_get_sband(sdata);
+ 	if (!sband)
+ 		return;
+-	he_cap = ieee80211_get_he_iftype_cap(sband,
+-					     ieee80211_vif_type_p2p(&sdata->vif));
++	he_cap = ieee80211_get_he_iftype_cap(sband, sdata->vif.type);
+ 	if (!he_cap)
+ 		return;
+ 
+diff --git a/net/mac80211/agg-tx.c b/net/mac80211/agg-tx.c
+index 190f300d8923..b37c8a983d88 100644
+--- a/net/mac80211/agg-tx.c
++++ b/net/mac80211/agg-tx.c
+@@ -9,7 +9,7 @@
+  * Copyright 2007, Michael Wu <flamingice@sourmilk.net>
+  * Copyright 2007-2010, Intel Corporation
+  * Copyright(c) 2015-2017 Intel Deutschland GmbH
+- * Copyright (C) 2018 - 2021 Intel Corporation
++ * Copyright (C) 2018 - 2020 Intel Corporation
+  */
+ 
+ #include <linux/ieee80211.h>
+@@ -106,7 +106,7 @@ static void ieee80211_send_addba_request(struct ieee80211_sub_if_data *sdata,
+ 	mgmt->u.action.u.addba_req.start_seq_num =
+ 					cpu_to_le16(start_seq_num << 4);
+ 
+-	ieee80211_tx_skb_tid(sdata, skb, tid);
++	ieee80211_tx_skb(sdata, skb);
+ }
+ 
+ void ieee80211_send_bar(struct ieee80211_vif *vif, u8 *ra, u16 tid, u16 ssn)
+@@ -213,8 +213,6 @@ ieee80211_agg_start_txq(struct sta_info *sta, int tid, bool enable)
+ 	struct ieee80211_txq *txq = sta->sta.txq[tid];
+ 	struct txq_info *txqi;
+ 
+-	lockdep_assert_held(&sta->ampdu_mlme.mtx);
+-
+ 	if (!txq)
+ 		return;
+ 
+@@ -292,6 +290,7 @@ static void ieee80211_remove_tid_tx(struct sta_info *sta, int tid)
+ 	ieee80211_assign_tid_tx(sta, tid, NULL);
+ 
+ 	ieee80211_agg_splice_finish(sta->sdata, tid);
++	ieee80211_agg_start_txq(sta, tid, false);
+ 
+ 	kfree_rcu(tid_tx, rcu_head);
+ }
+@@ -481,7 +480,8 @@ static void ieee80211_send_addba_with_timeout(struct sta_info *sta,
+ 
+ 	/* send AddBA request */
+ 	ieee80211_send_addba_request(sdata, sta->sta.addr, tid,
+-				     tid_tx->dialog_token, tid_tx->ssn,
++				     tid_tx->dialog_token,
++				     sta->tid_seq[tid] >> 4,
+ 				     buf_size, tid_tx->timeout);
+ 
+ 	WARN_ON(test_and_set_bit(HT_AGG_STATE_SENT_ADDBA, &tid_tx->state));
+@@ -523,7 +523,6 @@ void ieee80211_tx_ba_session_handle_start(struct sta_info *sta, int tid)
+ 
+ 	params.ssn = sta->tid_seq[tid] >> 4;
+ 	ret = drv_ampdu_action(local, sdata, &params);
+-	tid_tx->ssn = params.ssn;
+ 	if (ret == IEEE80211_AMPDU_TX_START_DELAY_ADDBA) {
+ 		return;
+ 	} else if (ret == IEEE80211_AMPDU_TX_START_IMMEDIATE) {
+@@ -890,7 +889,6 @@ void ieee80211_stop_tx_ba_cb(struct sta_info *sta, int tid,
+ {
+ 	struct ieee80211_sub_if_data *sdata = sta->sdata;
+ 	bool send_delba = false;
+-	bool start_txq = false;
+ 
+ 	ht_dbg(sdata, "Stopping Tx BA session for %pM tid %d\n",
+ 	       sta->sta.addr, tid);
+@@ -908,14 +906,10 @@ void ieee80211_stop_tx_ba_cb(struct sta_info *sta, int tid,
+ 		send_delba = true;
+ 
+ 	ieee80211_remove_tid_tx(sta, tid);
+-	start_txq = true;
+ 
+  unlock_sta:
+ 	spin_unlock_bh(&sta->lock);
+ 
+-	if (start_txq)
+-		ieee80211_agg_start_txq(sta, tid, false);
+-
+ 	if (send_delba)
+ 		ieee80211_send_delba(sdata, sta->sta.addr, tid,
+ 			WLAN_BACK_INITIATOR, WLAN_REASON_QSTA_NOT_USE);
 diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
-index e429dbb10df7..7276e66ae435 100644
+index d46ed4cbe771..7276e66ae435 100644
 --- a/net/mac80211/cfg.c
 +++ b/net/mac80211/cfg.c
 @@ -152,8 +152,6 @@ static int ieee80211_change_iface(struct wiphy *wiphy,
@@ -570,7 +676,18 @@ index e429dbb10df7..7276e66ae435 100644
  	}
  
  	if (sdata->vif.type == NL80211_IFTYPE_MONITOR) {
-@@ -1808,10 +1789,8 @@ static int ieee80211_change_station(struct wiphy *wiphy,
+@@ -1217,10 +1198,7 @@ static int ieee80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
+ 	return 0;
+ 
+ error:
+-	mutex_lock(&local->mtx);
+ 	ieee80211_vif_release_channel(sdata);
+-	mutex_unlock(&local->mtx);
+-
+ 	return err;
+ }
+ 
+@@ -1811,10 +1789,8 @@ static int ieee80211_change_station(struct wiphy *wiphy,
  		}
  
  		if (sta->sdata->vif.type == NL80211_IFTYPE_AP_VLAN &&
@@ -582,7 +699,7 @@ index e429dbb10df7..7276e66ae435 100644
  
  		if (test_sta_flag(sta, WLAN_STA_AUTHORIZED))
  			ieee80211_vif_dec_num_mcast(sta->sdata);
-@@ -2982,14 +2961,14 @@ static int ieee80211_set_bitrate_mask(struct wiphy *wiphy,
+@@ -2985,14 +2961,14 @@ static int ieee80211_set_bitrate_mask(struct wiphy *wiphy,
  			continue;
  
  		for (j = 0; j < IEEE80211_HT_MCS_MASK_LEN; j++) {
@@ -718,6 +835,23 @@ index 48322e45e7dd..c9a8a2433e8a 100644
  	} else if (old_state == IEEE80211_STA_ASSOC &&
  		   new_state == IEEE80211_STA_AUTH) {
  		drv_sta_remove(local, sdata, &sta->sta);
+diff --git a/net/mac80211/driver-ops.h b/net/mac80211/driver-ops.h
+index a172f69c7112..bcdfd19a596b 100644
+--- a/net/mac80211/driver-ops.h
++++ b/net/mac80211/driver-ops.h
+@@ -1201,11 +1201,8 @@ static inline void drv_wake_tx_queue(struct ieee80211_local *local,
+ {
+ 	struct ieee80211_sub_if_data *sdata = vif_to_sdata(txq->txq.vif);
+ 
+-	/* In reconfig don't transmit now, but mark for waking later */
+-	if (local->in_reconfig) {
+-		set_bit(IEEE80211_TXQ_STOP_NETIF_TX, &txq->flags);
++	if (local->in_reconfig)
+ 		return;
+-	}
+ 
+ 	if (!check_sdata_in_driver(sdata))
+ 		return;
 diff --git a/net/mac80211/ibss.c b/net/mac80211/ibss.c
 index a7ac53a2f00d..1f552f374e97 100644
 --- a/net/mac80211/ibss.c
@@ -1038,7 +1172,7 @@ index 3fbd0b9ff913..204830a55240 100644
  
  	if (!test_sta_flag(sta, WLAN_STA_MPSP_OWNER))
 diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
-index 32bc30ec50ec..6adfcb9c06dc 100644
+index 7bd42827540a..6adfcb9c06dc 100644
 --- a/net/mac80211/mlme.c
 +++ b/net/mac80211/mlme.c
 @@ -1094,6 +1094,11 @@ void ieee80211_send_nullfunc(struct ieee80211_local *local,
@@ -1087,7 +1221,29 @@ index 32bc30ec50ec..6adfcb9c06dc 100644
  
  	ret = drv_post_channel_switch(sdata);
  	if (ret) {
-@@ -4010,14 +4014,10 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
+@@ -2493,18 +2497,11 @@ static void ieee80211_sta_tx_wmm_ac_notify(struct ieee80211_sub_if_data *sdata,
+ 					   u16 tx_time)
+ {
+ 	struct ieee80211_if_managed *ifmgd = &sdata->u.mgd;
+-	u16 tid;
+-	int ac;
+-	struct ieee80211_sta_tx_tspec *tx_tspec;
++	u16 tid = ieee80211_get_tid(hdr);
++	int ac = ieee80211_ac_from_tid(tid);
++	struct ieee80211_sta_tx_tspec *tx_tspec = &ifmgd->tx_tspec[ac];
+ 	unsigned long now = jiffies;
+ 
+-	if (!ieee80211_is_data_qos(hdr->frame_control))
+-		return;
+-
+-	tid = ieee80211_get_tid(hdr);
+-	ac = ieee80211_ac_from_tid(tid);
+-	tx_tspec = &ifmgd->tx_tspec[ac];
+-
+ 	if (likely(!tx_tspec->admitted_time))
+ 		return;
+ 
+@@ -4017,14 +4014,10 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
  		if (elems.mbssid_config_ie)
  			bss_conf->profile_periodicity =
  				elems.mbssid_config_ie->profile_periodicity;
@@ -1102,7 +1258,7 @@ index 32bc30ec50ec..6adfcb9c06dc 100644
  
  		/* continue assoc process */
  		ifmgd->assoc_data->timeout = jiffies;
-@@ -4660,10 +4660,7 @@ static void ieee80211_sta_conn_mon_timer(struct timer_list *t)
+@@ -4667,10 +4660,7 @@ static void ieee80211_sta_conn_mon_timer(struct timer_list *t)
  		timeout = sta->rx_stats.last_rx;
  	timeout += IEEE80211_CONNECTION_IDLE_TIME;
  
@@ -1114,7 +1270,7 @@ index 32bc30ec50ec..6adfcb9c06dc 100644
  		mod_timer(&ifmgd->conn_mon_timer, round_jiffies_up(timeout));
  		return;
  	}
-@@ -5026,7 +5023,7 @@ static int ieee80211_prep_channel(struct ieee80211_sub_if_data *sdata,
+@@ -5033,7 +5023,7 @@ static int ieee80211_prep_channel(struct ieee80211_sub_if_data *sdata,
  		he_oper_ie = cfg80211_find_ext_ie(WLAN_EID_EXT_HE_OPERATION,
  						  ies->data, ies->len);
  		if (he_oper_ie &&
@@ -1123,7 +1279,7 @@ index 32bc30ec50ec..6adfcb9c06dc 100644
  			he_oper = (void *)(he_oper_ie + 3);
  		else
  			he_oper = NULL;
-@@ -5744,16 +5741,12 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
+@@ -5751,16 +5741,12 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
  					      beacon_ies->data, beacon_ies->len);
  		if (elem && elem->datalen >= 3)
  			sdata->vif.bss_conf.profile_periodicity = elem->data[2];
@@ -1650,7 +1806,7 @@ index e18c3855f616..ec6973ee88ef 100644
  		if (sta->pcpu_rx_stats) {
  			for_each_possible_cpu(cpu) {
 diff --git a/net/mac80211/sta_info.h b/net/mac80211/sta_info.h
-index 355e006432cc..7afd07636b81 100644
+index b9e5f8e8f29c..7afd07636b81 100644
 --- a/net/mac80211/sta_info.h
 +++ b/net/mac80211/sta_info.h
 @@ -3,7 +3,7 @@
@@ -1662,7 +1818,15 @@ index 355e006432cc..7afd07636b81 100644
   */
  
  #ifndef STA_INFO_H
-@@ -436,34 +436,6 @@ struct ieee80211_sta_rx_stats {
+@@ -190,7 +190,6 @@ struct tid_ampdu_tx {
+ 	u8 stop_initiator;
+ 	bool tx_stop;
+ 	u16 buf_size;
+-	u16 ssn;
+ 
+ 	u16 failed_bar_ssn;
+ 	bool bar_pending;
+@@ -437,34 +436,6 @@ struct ieee80211_sta_rx_stats {
  	u64 msdu[IEEE80211_NUM_TIDS + 1];
  };
  
@@ -1697,7 +1861,7 @@ index 355e006432cc..7afd07636b81 100644
  /*
   * The bandwidth threshold below which the per-station CoDel parameters will be
   * scaled to be more lenient (to prevent starvation of slow stations). This
-@@ -557,7 +529,6 @@ struct ieee80211_fragment_cache {
+@@ -558,7 +529,6 @@ struct ieee80211_fragment_cache {
   * @status_stats.last_ack_signal: last ACK signal
   * @status_stats.ack_signal_filled: last ACK signal validity
   * @status_stats.avg_ack_signal: average ACK signal
@@ -1705,7 +1869,7 @@ index 355e006432cc..7afd07636b81 100644
   */
  struct sta_info {
  	/* General information, mostly static */
-@@ -666,8 +637,6 @@ struct sta_info {
+@@ -667,8 +637,6 @@ struct sta_info {
  
  	struct cfg80211_chan_def tdls_chandef;
  
@@ -1927,10 +2091,20 @@ index bbbcc678c655..56a4d0d20a26 100644
  	rcu_read_unlock();
  
 diff --git a/net/mac80211/util.c b/net/mac80211/util.c
-index fbf56a203c0e..94e624e9439b 100644
+index a1f129292ad8..94e624e9439b 100644
 --- a/net/mac80211/util.c
 +++ b/net/mac80211/util.c
-@@ -954,7 +954,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
+@@ -950,16 +950,11 @@ static void ieee80211_parse_extension_element(u32 *crc,
+ 					      struct ieee802_11_elems *elems)
+ {
+ 	const void *data = elem->data + 1;
+-	u8 len;
+-
+-	if (!elem->datalen)
+-		return;
+-
+-	len = elem->datalen - 1;
++	u8 len = elem->datalen - 1;
  
  	switch (elem->data[0]) {
  	case WLAN_EID_EXT_HE_MU_EDCA:
@@ -1939,7 +2113,7 @@ index fbf56a203c0e..94e624e9439b 100644
  			elems->mu_edca_param_set = data;
  			if (crc)
  				*crc = crc32_be(*crc, (void *)elem,
-@@ -967,7 +967,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
+@@ -972,7 +967,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
  		break;
  	case WLAN_EID_EXT_HE_OPERATION:
  		if (len >= sizeof(*elems->he_operation) &&
@@ -1948,7 +2122,7 @@ index fbf56a203c0e..94e624e9439b 100644
  			if (crc)
  				*crc = crc32_be(*crc, (void *)elem,
  						elem->datalen + 2);
-@@ -975,7 +975,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
+@@ -980,7 +975,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
  		}
  		break;
  	case WLAN_EID_EXT_UORA:
@@ -1957,7 +2131,7 @@ index fbf56a203c0e..94e624e9439b 100644
  			elems->uora_element = data;
  		break;
  	case WLAN_EID_EXT_MAX_CHANNEL_SWITCH_TIME:
-@@ -983,7 +983,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
+@@ -988,7 +983,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
  			elems->max_channel_switch_time = data;
  		break;
  	case WLAN_EID_EXT_MULTIPLE_BSSID_CONFIGURATION:
@@ -1966,7 +2140,7 @@ index fbf56a203c0e..94e624e9439b 100644
  			elems->mbssid_config_ie = data;
  		break;
  	case WLAN_EID_EXT_HE_SPR:
-@@ -992,7 +992,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
+@@ -997,7 +992,7 @@ static void ieee80211_parse_extension_element(u32 *crc,
  			elems->he_spr = data;
  		break;
  	case WLAN_EID_EXT_HE_6GHZ_CAPA:
@@ -1975,7 +2149,7 @@ index fbf56a203c0e..94e624e9439b 100644
  			elems->he_6ghz_capa = data;
  		break;
  	}
-@@ -1081,14 +1081,14 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+@@ -1086,14 +1081,14 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
  
  		switch (id) {
  		case WLAN_EID_LINK_ID:
@@ -1992,7 +2166,7 @@ index fbf56a203c0e..94e624e9439b 100644
  				elem_parse_failed = true;
  				break;
  			}
-@@ -1251,7 +1251,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+@@ -1256,7 +1251,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
  			elems->sec_chan_offs = (void *)pos;
  			break;
  		case WLAN_EID_CHAN_SWITCH_PARAM:
@@ -2001,7 +2175,7 @@ index fbf56a203c0e..94e624e9439b 100644
  			    sizeof(*elems->mesh_chansw_params_ie)) {
  				elem_parse_failed = true;
  				break;
-@@ -1260,7 +1260,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+@@ -1265,7 +1260,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
  			break;
  		case WLAN_EID_WIDE_BW_CHANNEL_SWITCH:
  			if (!action ||
@@ -2010,7 +2184,7 @@ index fbf56a203c0e..94e624e9439b 100644
  				elem_parse_failed = true;
  				break;
  			}
-@@ -1279,7 +1279,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+@@ -1284,7 +1279,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
  			ie = cfg80211_find_ie(WLAN_EID_WIDE_BW_CHANNEL_SWITCH,
  					      pos, elen);
  			if (ie) {
@@ -2019,7 +2193,7 @@ index fbf56a203c0e..94e624e9439b 100644
  					elems->wide_bw_chansw_ie =
  						(void *)(ie + 2);
  				else
-@@ -1323,7 +1323,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+@@ -1328,7 +1323,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
  			elems->cisco_dtpc_elem = pos;
  			break;
  		case WLAN_EID_ADDBA_EXT:
@@ -2028,7 +2202,7 @@ index fbf56a203c0e..94e624e9439b 100644
  				elem_parse_failed = true;
  				break;
  			}
-@@ -1349,7 +1349,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+@@ -1354,7 +1349,7 @@ _ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
  							  elem, elems);
  			break;
  		case WLAN_EID_S1G_CAPABILITIES:
