@@ -525,15 +525,15 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.15.17"
+	backport_tag="v4.x-y"
 
-	subsystem="smsc95xx"
+	subsystem="xyz"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
 		mkdir -p ./x/
-		cp -v ~/linux-src/drivers/net/usb/smsc95xx.c ./drivers/net/usb/smsc95xx.c
+		cp -v ~/linux-src/x/* ./x/
 
 		post_backports
 		exit 2
@@ -587,7 +587,7 @@ fixes () {
 }
 
 ###
-backports
+#backports
 #reverts
 drivers
 soc
@@ -596,7 +596,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.16.3"
+		backport_tag="v5.16.9"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
