@@ -419,6 +419,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="focal"
 			;;
+		una)
+			#20.3
+			#http://packages.linuxmint.com/index.php
+			deb_distro="focal"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix
