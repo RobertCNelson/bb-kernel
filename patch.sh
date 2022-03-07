@@ -539,7 +539,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.222"
+	backport_tag="v4.19.232"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -557,7 +557,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.4.168"
+	backport_tag="v5.4.182"
 
 	subsystem="wiznet"
 	#regenerate="enable"
