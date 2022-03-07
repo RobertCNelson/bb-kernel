@@ -1,14 +1,14 @@
-From 9eaa444fb70691302a16fccdd3c26c6123d07d3e Mon Sep 17 00:00:00 2001
+From 93130989b1dfd6b7317b242501022af775004fd1 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 23 Dec 2021 11:57:32 -0600
+Date: Mon, 7 Mar 2022 16:39:44 -0600
 Subject: [PATCH] merge: can-isotp: https://github.com/hartkopp/can-isotp
 
-https://github.com/hartkopp/can-isotp/commit/6e2fd18f49ca4c335668a0a776eea0bcbef2ebf9
+https://github.com/hartkopp/can-isotp/commit/847a3acffea95e6aa97fff473fecd7b55d24e940
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  include/uapi/linux/can/isotp.h |  136 +++
- net/can/isotp.c                | 1639 ++++++++++++++++++++++++++++++++
- 2 files changed, 1775 insertions(+)
+ net/can/isotp.c                | 1654 ++++++++++++++++++++++++++++++++
+ 2 files changed, 1790 insertions(+)
  create mode 100644 include/uapi/linux/can/isotp.h
  create mode 100644 net/can/isotp.c
 
@@ -156,10 +156,10 @@ index 000000000000..88831772f9ee
 +#endif
 diff --git a/net/can/isotp.c b/net/can/isotp.c
 new file mode 100644
-index 000000000000..502daae4c85d
+index 000000000000..02f516ab8d0b
 --- /dev/null
 +++ b/net/can/isotp.c
-@@ -0,0 +1,1639 @@
+@@ -0,0 +1,1654 @@
 +// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
 +/* isotp.c - ISO 15765-2 CAN transport protocol for protocol family CAN
 + *
@@ -214,6 +214,7 @@ index 000000000000..502daae4c85d
 +#include <linux/version.h>
 +#include <linux/init.h>
 +#include <linux/interrupt.h>
++#include <linux/spinlock.h>
 +#include <linux/hrtimer.h>
 +#include <linux/wait.h>
 +#include <linux/uio.h>
@@ -239,7 +240,7 @@ index 000000000000..502daae4c85d
 +#include "compat.h"
 +#endif
 +
-+#define CAN_ISOTP_VERSION "20211201 - out-of-tree"
++#define CAN_ISOTP_VERSION "20220209 - out-of-tree"
 +
 +MODULE_DESCRIPTION("PF_CAN isotp 15765-2:2016 protocol");
 +MODULE_LICENSE("Dual BSD/GPL");
@@ -305,8 +306,8 @@ index 000000000000..502daae4c85d
 +};
 +
 +struct tpcon {
-+	int idx;
-+	int len;
++	unsigned int idx;
++	unsigned int len;
 +	u32 state;
 +	u8 bs;
 +	u8 sn;
@@ -332,6 +333,7 @@ index 000000000000..502daae4c85d
 +	struct tpcon rx, tx;
 +	struct list_head notifier;
 +	wait_queue_head_t wait;
++	spinlock_t rx_lock; /* protect single thread state machine */
 +};
 +
 +static LIST_HEAD(isotp_notifier_list);
@@ -798,11 +800,17 @@ index 000000000000..502daae4c85d
 +
 +	n_pci_type = cf->data[ae] & 0xF0;
 +
++	/* Make sure the state changes and data structures stay consistent at
++	 * CAN frame reception time. This locking is not needed in real world
++	 * use cases but the inconsistency can be triggered with syzkaller.
++	 */
++	spin_lock(&so->rx_lock);
++
 +	if (so->opt.flags & CAN_ISOTP_HALF_DUPLEX) {
 +		/* check rx/tx path half duplex expectations */
 +		if ((so->tx.state != ISOTP_IDLE && n_pci_type != N_PCI_FC) ||
 +		    (so->rx.state != ISOTP_IDLE && n_pci_type == N_PCI_FC))
-+			return;
++			goto out_unlock;
 +	}
 +
 +	switch (n_pci_type) {
@@ -851,6 +859,9 @@ index 000000000000..502daae4c85d
 +		isotp_rcv_cf(sk, cf, ae, skb);
 +		break;
 +	}
++
++out_unlock:
++	spin_unlock(&so->rx_lock);
 +}
 +
 +static void isotp_fill_dataframe(struct canfd_frame *cf, struct isotp_sock *so,
@@ -1065,7 +1076,7 @@ index 000000000000..502daae4c85d
 +
 +	if (!size || size > MAX_MSG_LENGTH) {
 +		err = -EINVAL;
-+		goto err_out;
++		goto err_out_drop;
 +	}
 +
 +	/* take care of a potential SF_DL ESC offset for TX_DL > 8 */
@@ -1075,7 +1086,7 @@ index 000000000000..502daae4c85d
 +	if ((so->opt.flags & CAN_ISOTP_SF_BROADCAST) &&
 +	    (size > so->tx.ll_dl - SF_PCI_SZ4 - ae - off)) {
 +		err = -EINVAL;
-+		goto err_out;
++		goto err_out_drop;
 +	}
 +
 +#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
@@ -1084,19 +1095,19 @@ index 000000000000..502daae4c85d
 +	err = memcpy_fromiovec(so->tx.buf, msg->msg_iov, size);
 +#endif
 +	if (err < 0)
-+		goto err_out;
++		goto err_out_drop;
 +
 +	dev = dev_get_by_index(sock_net(sk), so->ifindex);
 +	if (!dev) {
 +		err = -ENXIO;
-+		goto err_out;
++		goto err_out_drop;
 +	}
 +
 +	skb = sock_alloc_send_skb(sk, so->ll.mtu + CAN_SKBRES,
 +				  msg->msg_flags & MSG_DONTWAIT, &err);
 +	if (!skb) {
 +		dev_put(dev);
-+		goto err_out;
++		goto err_out_drop;
 +	}
 +
 +	isotp_skb_reserve(skb, dev);
@@ -1158,7 +1169,7 @@ index 000000000000..502daae4c85d
 +	if (err) {
 +		printk_once(KERN_NOTICE "can-isotp: %s: can_send_ret %d\n",
 +			    __func__, err);
-+		goto err_out;
++		goto err_out_drop;
 +	}
 +
 +	if (wait_tx_done) {
@@ -1171,6 +1182,9 @@ index 000000000000..502daae4c85d
 +
 +	return size;
 +
++err_out_drop:
++	/* drop this PDU and unlock a potential wait queue */
++	old_state = ISOTP_IDLE;
 +err_out:
 +	so->tx.state = old_state;
 +	if (so->tx.state == ISOTP_IDLE)
@@ -1713,6 +1727,7 @@ index 000000000000..502daae4c85d
 +	tasklet_init(&so->txtsklet, isotp_tx_timer_tsklet, (unsigned long)so);
 +
 +	init_waitqueue_head(&so->wait);
++	spin_lock_init(&so->rx_lock);
 +
 +	spin_lock(&isotp_notifier_lock);
 +	list_add_tail(&so->notifier, &isotp_notifier_list);
