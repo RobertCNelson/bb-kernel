@@ -1,6 +1,6 @@
-From 46eb726337f8255a032e0b65187fc46f9e1bf81b Mon Sep 17 00:00:00 2001
+From 95b399b3cd5c15f730020e0f81e14d54a5c1fc98 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 7 Mar 2022 14:51:39 -0600
+Date: Fri, 18 Mar 2022 16:38:04 -0500
 Subject: [PATCH] backports: brcm80211: from: linux.git
 
 Reference: v5.10.9
@@ -22,22 +22,22 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/mac80211/aes_gmac.c                       |   5 +-
  net/mac80211/agg-rx.c                         |   5 +-
  net/mac80211/agg-tx.c                         |  16 +-
- net/mac80211/cfg.c                            |  30 +---
- net/mac80211/debugfs.c                        |  44 ++---
+ net/mac80211/cfg.c                            |  30 +--
+ net/mac80211/debugfs.c                        |  44 +++--
  net/mac80211/driver-ops.c                     |   5 +-
  net/mac80211/driver-ops.h                     |   5 +-
  net/mac80211/ibss.c                           |   2 -
- net/mac80211/ieee80211_i.h                    |  41 +++--
- net/mac80211/iface.c                          |  28 ++-
+ net/mac80211/ieee80211_i.h                    |  43 +++--
+ net/mac80211/iface.c                          |  28 +--
  net/mac80211/key.c                            |   7 -
  net/mac80211/key.h                            |   2 -
- net/mac80211/main.c                           |  20 +--
+ net/mac80211/main.c                           |  20 +-
  net/mac80211/mesh_hwmp.c                      |   2 +-
  net/mac80211/mesh_pathtbl.c                   |   5 +-
  net/mac80211/mesh_ps.c                        |   3 +-
- net/mac80211/mlme.c                           |  48 ++---
+ net/mac80211/mlme.c                           |  64 +++----
  net/mac80211/rate.c                           |   3 +-
- net/mac80211/rx.c                             | 167 +++++-------------
+ net/mac80211/rx.c                             | 171 +++++-------------
  net/mac80211/scan.c                           |  21 +--
  net/mac80211/spectmgmt.c                      |  10 +-
  net/mac80211/sta_info.c                       |  22 ++-
@@ -49,14 +49,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireless/core.c                           |   2 +-
  net/wireless/core.h                           |   2 -
  net/wireless/mlme.c                           |  26 ++-
- net/wireless/nl80211.c                        |  19 +-
+ net/wireless/nl80211.c                        |  31 +---
  net/wireless/pmsr.c                           |  16 +-
- net/wireless/scan.c                           |  25 ++-
+ net/wireless/scan.c                           |  25 +--
  net/wireless/sme.c                            |   2 +-
  net/wireless/util.c                           |  25 +--
  net/wireless/wext-core.c                      |   5 +-
  net/wireless/wext-spy.c                       |  14 +-
- 50 files changed, 341 insertions(+), 674 deletions(-)
+ 50 files changed, 348 insertions(+), 701 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
 index b6d0bc73923f..f9ebb98b0e3c 100644
@@ -866,7 +866,7 @@ index a7ac53a2f00d..1f552f374e97 100644
  	/* on the next join, re-program HT parameters */
  	memset(&ifibss->ht_capa, 0, sizeof(ifibss->ht_capa));
 diff --git a/net/mac80211/ieee80211_i.h b/net/mac80211/ieee80211_i.h
-index 7f2be08b72a5..2a21226fb518 100644
+index fe8f586886b4..2a21226fb518 100644
 --- a/net/mac80211/ieee80211_i.h
 +++ b/net/mac80211/ieee80211_i.h
 @@ -50,6 +50,12 @@ struct ieee80211_local;
@@ -919,6 +919,15 @@ index 7f2be08b72a5..2a21226fb518 100644
  };
  
  struct ieee80211_csa_settings {
+@@ -374,7 +385,7 @@ struct ieee80211_mgd_auth_data {
+ 
+ 	u8 key[WLAN_KEY_LEN_WEP104];
+ 	u8 key_len, key_idx;
+-	bool done, waiting;
++	bool done;
+ 	bool peer_confirmed;
+ 	bool timeout_started;
+ 
 @@ -895,7 +906,9 @@ struct ieee80211_sub_if_data {
  
  	char name[IFNAMSIZ];
@@ -1172,10 +1181,18 @@ index 3fbd0b9ff913..204830a55240 100644
  
  	if (!test_sta_flag(sta, WLAN_STA_MPSP_OWNER))
 diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
-index 778bf262418b..6adfcb9c06dc 100644
+index 0dba353d3f8f..6adfcb9c06dc 100644
 --- a/net/mac80211/mlme.c
 +++ b/net/mac80211/mlme.c
-@@ -1094,6 +1094,11 @@ void ieee80211_send_nullfunc(struct ieee80211_local *local,
+@@ -37,7 +37,6 @@
+ #define IEEE80211_AUTH_TIMEOUT_SAE	(HZ * 2)
+ #define IEEE80211_AUTH_MAX_TRIES	3
+ #define IEEE80211_AUTH_WAIT_ASSOC	(HZ * 5)
+-#define IEEE80211_AUTH_WAIT_SAE_RETRY	(HZ * 2)
+ #define IEEE80211_ASSOC_TIMEOUT		(HZ / 5)
+ #define IEEE80211_ASSOC_TIMEOUT_LONG	(HZ / 2)
+ #define IEEE80211_ASSOC_TIMEOUT_SHORT	(HZ / 10)
+@@ -1095,6 +1094,11 @@ void ieee80211_send_nullfunc(struct ieee80211_local *local,
  	struct ieee80211_hdr_3addr *nullfunc;
  	struct ieee80211_if_managed *ifmgd = &sdata->u.mgd;
  
@@ -1187,7 +1204,7 @@ index 778bf262418b..6adfcb9c06dc 100644
  	skb = ieee80211_nullfunc_get(&local->hw, &sdata->vif,
  		!ieee80211_hw_check(&local->hw, DOESNT_SUPPORT_QOS_NDP));
  	if (!skb)
-@@ -1115,8 +1120,8 @@ void ieee80211_send_nullfunc(struct ieee80211_local *local,
+@@ -1116,8 +1120,8 @@ void ieee80211_send_nullfunc(struct ieee80211_local *local,
  	ieee80211_tx_skb(sdata, skb);
  }
  
@@ -1198,7 +1215,7 @@ index 778bf262418b..6adfcb9c06dc 100644
  {
  	struct sk_buff *skb;
  	struct ieee80211_hdr *nullfunc;
-@@ -1125,6 +1130,10 @@ void ieee80211_send_4addr_nullfunc(struct ieee80211_local *local,
+@@ -1126,6 +1130,10 @@ void ieee80211_send_4addr_nullfunc(struct ieee80211_local *local,
  	if (WARN_ON(sdata->vif.type != NL80211_IFTYPE_STATION))
  		return;
  
@@ -1209,7 +1226,7 @@ index 778bf262418b..6adfcb9c06dc 100644
  	skb = dev_alloc_skb(local->hw.extra_tx_headroom + 30);
  	if (!skb)
  		return;
-@@ -1286,11 +1295,6 @@ static void ieee80211_chswitch_post_beacon(struct ieee80211_sub_if_data *sdata)
+@@ -1287,11 +1295,6 @@ static void ieee80211_chswitch_post_beacon(struct ieee80211_sub_if_data *sdata)
  
  	sdata->vif.csa_active = false;
  	ifmgd->csa_waiting_bcn = false;
@@ -1221,7 +1238,7 @@ index 778bf262418b..6adfcb9c06dc 100644
  
  	ret = drv_post_channel_switch(sdata);
  	if (ret) {
-@@ -2493,18 +2497,11 @@ static void ieee80211_sta_tx_wmm_ac_notify(struct ieee80211_sub_if_data *sdata,
+@@ -2494,18 +2497,11 @@ static void ieee80211_sta_tx_wmm_ac_notify(struct ieee80211_sub_if_data *sdata,
  					   u16 tx_time)
  {
  	struct ieee80211_if_managed *ifmgd = &sdata->u.mgd;
@@ -1243,7 +1260,24 @@ index 778bf262418b..6adfcb9c06dc 100644
  	if (likely(!tx_tspec->admitted_time))
  		return;
  
-@@ -4017,14 +4014,10 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
+@@ -3000,15 +2996,8 @@ static void ieee80211_rx_mgmt_auth(struct ieee80211_sub_if_data *sdata,
+ 		    (status_code == WLAN_STATUS_ANTI_CLOG_REQUIRED ||
+ 		     (auth_transaction == 1 &&
+ 		      (status_code == WLAN_STATUS_SAE_HASH_TO_ELEMENT ||
+-		       status_code == WLAN_STATUS_SAE_PK)))) {
+-			/* waiting for userspace now */
+-			ifmgd->auth_data->waiting = true;
+-			ifmgd->auth_data->timeout =
+-				jiffies + IEEE80211_AUTH_WAIT_SAE_RETRY;
+-			ifmgd->auth_data->timeout_started = true;
+-			run_again(sdata, ifmgd->auth_data->timeout);
++		       status_code == WLAN_STATUS_SAE_PK))))
+ 			return;
+-		}
+ 
+ 		sdata_info(sdata, "%pM denied authentication (status %d)\n",
+ 			   mgmt->sa, status_code);
+@@ -4025,14 +4014,10 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
  		if (elems.mbssid_config_ie)
  			bss_conf->profile_periodicity =
  				elems.mbssid_config_ie->profile_periodicity;
@@ -1258,7 +1292,21 @@ index 778bf262418b..6adfcb9c06dc 100644
  
  		/* continue assoc process */
  		ifmgd->assoc_data->timeout = jiffies;
-@@ -4667,10 +4660,7 @@ static void ieee80211_sta_conn_mon_timer(struct timer_list *t)
+@@ -4534,10 +4519,10 @@ void ieee80211_sta_work(struct ieee80211_sub_if_data *sdata)
+ 
+ 	if (ifmgd->auth_data && ifmgd->auth_data->timeout_started &&
+ 	    time_after(jiffies, ifmgd->auth_data->timeout)) {
+-		if (ifmgd->auth_data->done || ifmgd->auth_data->waiting) {
++		if (ifmgd->auth_data->done) {
+ 			/*
+-			 * ok ... we waited for assoc or continuation but
+-			 * userspace didn't do it, so kill the auth data
++			 * ok ... we waited for assoc but userspace didn't,
++			 * so let's just kill the auth data
+ 			 */
+ 			ieee80211_destroy_auth_data(sdata, false);
+ 		} else if (ieee80211_auth(sdata)) {
+@@ -4675,10 +4660,7 @@ static void ieee80211_sta_conn_mon_timer(struct timer_list *t)
  		timeout = sta->rx_stats.last_rx;
  	timeout += IEEE80211_CONNECTION_IDLE_TIME;
  
@@ -1270,7 +1318,7 @@ index 778bf262418b..6adfcb9c06dc 100644
  		mod_timer(&ifmgd->conn_mon_timer, round_jiffies_up(timeout));
  		return;
  	}
-@@ -5033,7 +5023,7 @@ static int ieee80211_prep_channel(struct ieee80211_sub_if_data *sdata,
+@@ -5041,7 +5023,7 @@ static int ieee80211_prep_channel(struct ieee80211_sub_if_data *sdata,
  		he_oper_ie = cfg80211_find_ext_ie(WLAN_EID_EXT_HE_OPERATION,
  						  ies->data, ies->len);
  		if (he_oper_ie &&
@@ -1279,7 +1327,7 @@ index 778bf262418b..6adfcb9c06dc 100644
  			he_oper = (void *)(he_oper_ie + 3);
  		else
  			he_oper = NULL;
-@@ -5194,7 +5184,7 @@ static int ieee80211_prep_connection(struct ieee80211_sub_if_data *sdata,
+@@ -5202,7 +5184,7 @@ static int ieee80211_prep_connection(struct ieee80211_sub_if_data *sdata,
  	 */
  	if (new_sta) {
  		u32 rates = 0, basic_rates = 0;
@@ -1288,7 +1336,7 @@ index 778bf262418b..6adfcb9c06dc 100644
  		int min_rate = INT_MAX, min_rate_index = -1;
  		const struct cfg80211_bss_ies *ies;
  		int shift = ieee80211_vif_get_shift(&sdata->vif);
-@@ -5751,16 +5741,12 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
+@@ -5759,16 +5741,12 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
  					      beacon_ies->data, beacon_ies->len);
  		if (elem && elem->datalen >= 3)
  			sdata->vif.bss_conf.profile_periodicity = elem->data[2];
@@ -1320,7 +1368,7 @@ index 63652c39c8e0..45927202c71c 100644
  	ieee80211_sta_set_expected_throughput(pubsta, sta_get_expected_throughput(sta));
  
 diff --git a/net/mac80211/rx.c b/net/mac80211/rx.c
-index d27c444a19ed..2a5a11f92b03 100644
+index 1e7614abd947..2a5a11f92b03 100644
 --- a/net/mac80211/rx.c
 +++ b/net/mac80211/rx.c
 @@ -6,7 +6,7 @@
@@ -1649,6 +1697,22 @@ index d27c444a19ed..2a5a11f92b03 100644
  	return __ieee80211_rx_h_amsdu(rx, 0);
  }
  
+@@ -2910,13 +2828,13 @@ ieee80211_rx_h_mesh_fwding(struct ieee80211_rx_data *rx)
+ 	    ether_addr_equal(sdata->vif.addr, hdr->addr3))
+ 		return RX_CONTINUE;
+ 
+-	ac = ieee802_1d_to_ac[skb->priority];
++	ac = ieee80211_select_queue_80211(sdata, skb, hdr);
+ 	q = sdata->vif.hw_queue[ac];
+ 	if (ieee80211_queue_stopped(&local->hw, q)) {
+ 		IEEE80211_IFSTA_MESH_CTR_INC(ifmsh, dropped_frames_congestion);
+ 		return RX_DROP_MONITOR;
+ 	}
+-	skb_set_queue_mapping(skb, ac);
++	skb_set_queue_mapping(skb, q);
+ 
+ 	if (!--mesh_hdr->ttl) {
+ 		if (!is_multicast_ether_addr(hdr->addr1))
 @@ -4065,8 +3983,7 @@ static bool ieee80211_accept_frame(struct ieee80211_rx_data *rx)
  		if (!bssid)
  			return false;
@@ -2463,7 +2527,7 @@ index 6dcfc5a34874..0ac820780437 100644
  	trace_cfg80211_return_bool(result);
  	return result;
 diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index 8fb0478888fb..535e34a84d65 100644
+index 07bd7b00b56d..535e34a84d65 100644
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
 @@ -5,7 +5,7 @@
@@ -2515,6 +2579,32 @@ index 8fb0478888fb..535e34a84d65 100644
  	}
  
  	nl80211_calculate_ap_params(&params);
+@@ -12930,9 +12927,6 @@ static int handle_nan_filter(struct nlattr *attr_filter,
+ 	i = 0;
+ 	nla_for_each_nested(attr, attr_filter, rem) {
+ 		filter[i].filter = nla_memdup(attr, GFP_KERNEL);
+-		if (!filter[i].filter)
+-			goto err;
+-
+ 		filter[i].len = nla_len(attr);
+ 		i++;
+ 	}
+@@ -12945,15 +12939,6 @@ static int handle_nan_filter(struct nlattr *attr_filter,
+ 	}
+ 
+ 	return 0;
+-
+-err:
+-	i = 0;
+-	nla_for_each_nested(attr, attr_filter, rem) {
+-		kfree(filter[i].filter);
+-		i++;
+-	}
+-	kfree(filter);
+-	return -ENOMEM;
+ }
+ 
+ static int nl80211_nan_add_func(struct sk_buff *skb,
 diff --git a/net/wireless/pmsr.c b/net/wireless/pmsr.c
 index a817d8e3e4b3..a95c79d18349 100644
 --- a/net/wireless/pmsr.c
