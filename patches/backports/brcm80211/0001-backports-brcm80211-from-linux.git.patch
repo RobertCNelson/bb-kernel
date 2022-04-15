@@ -1,6 +1,6 @@
-From 95b399b3cd5c15f730020e0f81e14d54a5c1fc98 Mon Sep 17 00:00:00 2001
+From 686fe9a3b7210367955c5e0ded09b828297b6a5a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 18 Mar 2022 16:38:04 -0500
+Date: Fri, 15 Apr 2022 17:11:18 -0500
 Subject: [PATCH] backports: brcm80211: from: linux.git
 
 Reference: v5.10.9
@@ -21,8 +21,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/mac80211/aead_api.c                       |   5 +-
  net/mac80211/aes_gmac.c                       |   5 +-
  net/mac80211/agg-rx.c                         |   5 +-
- net/mac80211/agg-tx.c                         |  16 +-
- net/mac80211/cfg.c                            |  30 +--
+ net/mac80211/agg-tx.c                         |  24 +--
+ net/mac80211/cfg.c                            |  33 +---
  net/mac80211/debugfs.c                        |  44 +++--
  net/mac80211/driver-ops.c                     |   5 +-
  net/mac80211/driver-ops.h                     |   5 +-
@@ -49,14 +49,14 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireless/core.c                           |   2 +-
  net/wireless/core.h                           |   2 -
  net/wireless/mlme.c                           |  26 ++-
- net/wireless/nl80211.c                        |  31 +---
+ net/wireless/nl80211.c                        |  34 +---
  net/wireless/pmsr.c                           |  16 +-
  net/wireless/scan.c                           |  25 +--
  net/wireless/sme.c                            |   2 +-
  net/wireless/util.c                           |  25 +--
  net/wireless/wext-core.c                      |   5 +-
  net/wireless/wext-spy.c                       |  14 +-
- 50 files changed, 348 insertions(+), 701 deletions(-)
+ 50 files changed, 352 insertions(+), 711 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
 index b6d0bc73923f..f9ebb98b0e3c 100644
@@ -559,14 +559,14 @@ index 6ef8ded4ec76..cd4cf84a7f99 100644
  		return;
  
 diff --git a/net/mac80211/agg-tx.c b/net/mac80211/agg-tx.c
-index 190f300d8923..b37c8a983d88 100644
+index 4b4ab1961068..b37c8a983d88 100644
 --- a/net/mac80211/agg-tx.c
 +++ b/net/mac80211/agg-tx.c
 @@ -9,7 +9,7 @@
   * Copyright 2007, Michael Wu <flamingice@sourmilk.net>
   * Copyright 2007-2010, Intel Corporation
   * Copyright(c) 2015-2017 Intel Deutschland GmbH
-- * Copyright (C) 2018 - 2021 Intel Corporation
+- * Copyright (C) 2018 - 2022 Intel Corporation
 + * Copyright (C) 2018 - 2020 Intel Corporation
   */
  
@@ -615,7 +615,22 @@ index 190f300d8923..b37c8a983d88 100644
  	if (ret == IEEE80211_AMPDU_TX_START_DELAY_ADDBA) {
  		return;
  	} else if (ret == IEEE80211_AMPDU_TX_START_IMMEDIATE) {
-@@ -890,7 +889,6 @@ void ieee80211_stop_tx_ba_cb(struct sta_info *sta, int tid,
+@@ -626,14 +625,6 @@ int ieee80211_start_tx_ba_session(struct ieee80211_sta *pubsta, u16 tid,
+ 		return -EINVAL;
+ 	}
+ 
+-	if (test_sta_flag(sta, WLAN_STA_MFP) &&
+-	    !test_sta_flag(sta, WLAN_STA_AUTHORIZED)) {
+-		ht_dbg(sdata,
+-		       "MFP STA not authorized - deny BA session request %pM tid %d\n",
+-		       sta->sta.addr, tid);
+-		return -EINVAL;
+-	}
+-
+ 	/*
+ 	 * 802.11n-2009 11.5.1.1: If the initiating STA is an HT STA, is a
+ 	 * member of an IBSS, and has no other existing Block Ack agreement
+@@ -898,7 +889,6 @@ void ieee80211_stop_tx_ba_cb(struct sta_info *sta, int tid,
  {
  	struct ieee80211_sub_if_data *sdata = sta->sdata;
  	bool send_delba = false;
@@ -623,7 +638,7 @@ index 190f300d8923..b37c8a983d88 100644
  
  	ht_dbg(sdata, "Stopping Tx BA session for %pM tid %d\n",
  	       sta->sta.addr, tid);
-@@ -908,14 +906,10 @@ void ieee80211_stop_tx_ba_cb(struct sta_info *sta, int tid,
+@@ -916,14 +906,10 @@ void ieee80211_stop_tx_ba_cb(struct sta_info *sta, int tid,
  		send_delba = true;
  
  	ieee80211_remove_tid_tx(sta, tid);
@@ -639,7 +654,7 @@ index 190f300d8923..b37c8a983d88 100644
  		ieee80211_send_delba(sdata, sta->sta.addr, tid,
  			WLAN_BACK_INITIATOR, WLAN_REASON_QSTA_NOT_USE);
 diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
-index d46ed4cbe771..7276e66ae435 100644
+index 8010967a6874..7276e66ae435 100644
 --- a/net/mac80211/cfg.c
 +++ b/net/mac80211/cfg.c
 @@ -152,8 +152,6 @@ static int ieee80211_change_iface(struct wiphy *wiphy,
@@ -699,7 +714,30 @@ index d46ed4cbe771..7276e66ae435 100644
  
  		if (test_sta_flag(sta, WLAN_STA_AUTHORIZED))
  			ieee80211_vif_dec_num_mcast(sta->sdata);
-@@ -2985,14 +2961,14 @@ static int ieee80211_set_bitrate_mask(struct wiphy *wiphy,
+@@ -2076,12 +2052,14 @@ static int copy_mesh_setup(struct ieee80211_if_mesh *ifmsh,
+ 		const struct mesh_setup *setup)
+ {
+ 	u8 *new_ie;
++	const u8 *old_ie;
+ 	struct ieee80211_sub_if_data *sdata = container_of(ifmsh,
+ 					struct ieee80211_sub_if_data, u.mesh);
+ 	int i;
+ 
+ 	/* allocate information elements */
+ 	new_ie = NULL;
++	old_ie = ifmsh->ie;
+ 
+ 	if (setup->ie_len) {
+ 		new_ie = kmemdup(setup->ie, setup->ie_len,
+@@ -2091,6 +2069,7 @@ static int copy_mesh_setup(struct ieee80211_if_mesh *ifmsh,
+ 	}
+ 	ifmsh->ie_len = setup->ie_len;
+ 	ifmsh->ie = new_ie;
++	kfree(old_ie);
+ 
+ 	/* now copy the rest of the setup parameters */
+ 	ifmsh->mesh_id_len = setup->mesh_id_len;
+@@ -2982,14 +2961,14 @@ static int ieee80211_set_bitrate_mask(struct wiphy *wiphy,
  			continue;
  
  		for (j = 0; j < IEEE80211_HT_MCS_MASK_LEN; j++) {
@@ -2527,7 +2565,7 @@ index 6dcfc5a34874..0ac820780437 100644
  	trace_cfg80211_return_bool(result);
  	return result;
 diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index 07bd7b00b56d..535e34a84d65 100644
+index 0df8b9a19952..535e34a84d65 100644
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
 @@ -5,7 +5,7 @@
@@ -2605,6 +2643,16 @@ index 07bd7b00b56d..535e34a84d65 100644
  }
  
  static int nl80211_nan_add_func(struct sk_buff *skb,
+@@ -17127,8 +17112,7 @@ void cfg80211_ch_switch_notify(struct net_device *dev,
+ 	wdev->chandef = *chandef;
+ 	wdev->preset_chandef = *chandef;
+ 
+-	if ((wdev->iftype == NL80211_IFTYPE_STATION ||
+-	     wdev->iftype == NL80211_IFTYPE_P2P_CLIENT) &&
++	if (wdev->iftype == NL80211_IFTYPE_STATION &&
+ 	    !WARN_ON(!wdev->current_bss))
+ 		cfg80211_update_assoc_bss_entry(wdev, chandef->chan);
+ 
 diff --git a/net/wireless/pmsr.c b/net/wireless/pmsr.c
 index a817d8e3e4b3..a95c79d18349 100644
 --- a/net/wireless/pmsr.c
