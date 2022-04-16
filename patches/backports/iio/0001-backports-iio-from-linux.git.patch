@@ -1,0 +1,251 @@
+From 66c57cf293b23885dada71397b0032df4b711982 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Fri, 15 Apr 2022 20:03:07 -0500
+Subject: [PATCH] backports: iio: from: linux.git
+
+Reference: v5.15.34
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/iio/accel/mma8452.c       | 29 +++++++++++++---------
+ drivers/iio/adc/twl6030-gpadc.c   |  2 ++
+ drivers/iio/afe/iio-rescale.c     |  8 +++----
+ drivers/iio/inkern.c              | 40 ++++++++++++++++++++++++-------
+ drivers/staging/iio/adc/ad7280a.c |  4 ++--
+ 5 files changed, 57 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/iio/accel/mma8452.c b/drivers/iio/accel/mma8452.c
+index 09c7f10fefb6..21a99467f364 100644
+--- a/drivers/iio/accel/mma8452.c
++++ b/drivers/iio/accel/mma8452.c
+@@ -176,6 +176,7 @@ static const struct mma8452_event_regs trans_ev_regs = {
+  * @enabled_events:		event flags enabled and handled by this driver
+  */
+ struct mma_chip_info {
++	const char *name;
+ 	u8 chip_id;
+ 	const struct iio_chan_spec *channels;
+ 	int num_channels;
+@@ -1301,6 +1302,7 @@ enum {
+ 
+ static const struct mma_chip_info mma_chip_info_table[] = {
+ 	[mma8451] = {
++		.name = "mma8451",
+ 		.chip_id = MMA8451_DEVICE_ID,
+ 		.channels = mma8451_channels,
+ 		.num_channels = ARRAY_SIZE(mma8451_channels),
+@@ -1325,6 +1327,7 @@ static const struct mma_chip_info mma_chip_info_table[] = {
+ 					MMA8452_INT_FF_MT,
+ 	},
+ 	[mma8452] = {
++		.name = "mma8452",
+ 		.chip_id = MMA8452_DEVICE_ID,
+ 		.channels = mma8452_channels,
+ 		.num_channels = ARRAY_SIZE(mma8452_channels),
+@@ -1341,6 +1344,7 @@ static const struct mma_chip_info mma_chip_info_table[] = {
+ 					MMA8452_INT_FF_MT,
+ 	},
+ 	[mma8453] = {
++		.name = "mma8453",
+ 		.chip_id = MMA8453_DEVICE_ID,
+ 		.channels = mma8453_channels,
+ 		.num_channels = ARRAY_SIZE(mma8453_channels),
+@@ -1357,6 +1361,7 @@ static const struct mma_chip_info mma_chip_info_table[] = {
+ 					MMA8452_INT_FF_MT,
+ 	},
+ 	[mma8652] = {
++		.name = "mma8652",
+ 		.chip_id = MMA8652_DEVICE_ID,
+ 		.channels = mma8652_channels,
+ 		.num_channels = ARRAY_SIZE(mma8652_channels),
+@@ -1366,6 +1371,7 @@ static const struct mma_chip_info mma_chip_info_table[] = {
+ 		.enabled_events = MMA8452_INT_FF_MT,
+ 	},
+ 	[mma8653] = {
++		.name = "mma8653",
+ 		.chip_id = MMA8653_DEVICE_ID,
+ 		.channels = mma8653_channels,
+ 		.num_channels = ARRAY_SIZE(mma8653_channels),
+@@ -1380,6 +1386,7 @@ static const struct mma_chip_info mma_chip_info_table[] = {
+ 		.enabled_events = MMA8452_INT_FF_MT,
+ 	},
+ 	[fxls8471] = {
++		.name = "fxls8471",
+ 		.chip_id = FXLS8471_DEVICE_ID,
+ 		.channels = mma8451_channels,
+ 		.num_channels = ARRAY_SIZE(mma8451_channels),
+@@ -1522,13 +1529,6 @@ static int mma8452_probe(struct i2c_client *client,
+ 	struct mma8452_data *data;
+ 	struct iio_dev *indio_dev;
+ 	int ret;
+-	const struct of_device_id *match;
+-
+-	match = of_match_device(mma8452_dt_ids, &client->dev);
+-	if (!match) {
+-		dev_err(&client->dev, "unknown device model\n");
+-		return -ENODEV;
+-	}
+ 
+ 	indio_dev = devm_iio_device_alloc(&client->dev, sizeof(*data));
+ 	if (!indio_dev)
+@@ -1537,7 +1537,14 @@ static int mma8452_probe(struct i2c_client *client,
+ 	data = iio_priv(indio_dev);
+ 	data->client = client;
+ 	mutex_init(&data->lock);
+-	data->chip_info = match->data;
++
++	data->chip_info = device_get_match_data(&client->dev);
++	if (!data->chip_info && id) {
++		data->chip_info = &mma_chip_info_table[id->driver_data];
++	} else {
++		dev_err(&client->dev, "unknown device model\n");
++		return -ENODEV;
++	}
+ 
+ 	data->vdd_reg = devm_regulator_get(&client->dev, "vdd");
+ 	if (IS_ERR(data->vdd_reg))
+@@ -1581,11 +1588,11 @@ static int mma8452_probe(struct i2c_client *client,
+ 	}
+ 
+ 	dev_info(&client->dev, "registering %s accelerometer; ID 0x%x\n",
+-		 match->compatible, data->chip_info->chip_id);
++		 data->chip_info->name, data->chip_info->chip_id);
+ 
+ 	i2c_set_clientdata(client, indio_dev);
+ 	indio_dev->info = &mma8452_info;
+-	indio_dev->name = id->name;
++	indio_dev->name = data->chip_info->name;
+ 	indio_dev->modes = INDIO_DIRECT_MODE;
+ 	indio_dev->channels = data->chip_info->channels;
+ 	indio_dev->num_channels = data->chip_info->num_channels;
+@@ -1810,7 +1817,7 @@ MODULE_DEVICE_TABLE(i2c, mma8452_id);
+ static struct i2c_driver mma8452_driver = {
+ 	.driver = {
+ 		.name	= "mma8452",
+-		.of_match_table = of_match_ptr(mma8452_dt_ids),
++		.of_match_table = mma8452_dt_ids,
+ 		.pm	= &mma8452_pm_ops,
+ 	},
+ 	.probe = mma8452_probe,
+diff --git a/drivers/iio/adc/twl6030-gpadc.c b/drivers/iio/adc/twl6030-gpadc.c
+index c6416ad795ca..256177b15c51 100644
+--- a/drivers/iio/adc/twl6030-gpadc.c
++++ b/drivers/iio/adc/twl6030-gpadc.c
+@@ -911,6 +911,8 @@ static int twl6030_gpadc_probe(struct platform_device *pdev)
+ 	ret = devm_request_threaded_irq(dev, irq, NULL,
+ 				twl6030_gpadc_irq_handler,
+ 				IRQF_ONESHOT, "twl6030_gpadc", indio_dev);
++	if (ret)
++		return ret;
+ 
+ 	ret = twl6030_gpadc_enable_irq(TWL6030_GPADC_RT_SW1_EOC_MASK);
+ 	if (ret < 0) {
+diff --git a/drivers/iio/afe/iio-rescale.c b/drivers/iio/afe/iio-rescale.c
+index 774eb3044edd..271d73e420c4 100644
+--- a/drivers/iio/afe/iio-rescale.c
++++ b/drivers/iio/afe/iio-rescale.c
+@@ -39,7 +39,7 @@ static int rescale_read_raw(struct iio_dev *indio_dev,
+ 			    int *val, int *val2, long mask)
+ {
+ 	struct rescale *rescale = iio_priv(indio_dev);
+-	unsigned long long tmp;
++	s64 tmp;
+ 	int ret;
+ 
+ 	switch (mask) {
+@@ -77,10 +77,10 @@ static int rescale_read_raw(struct iio_dev *indio_dev,
+ 			*val2 = rescale->denominator;
+ 			return IIO_VAL_FRACTIONAL;
+ 		case IIO_VAL_FRACTIONAL_LOG2:
+-			tmp = *val * 1000000000LL;
+-			do_div(tmp, rescale->denominator);
++			tmp = (s64)*val * 1000000000LL;
++			tmp = div_s64(tmp, rescale->denominator);
+ 			tmp *= rescale->numerator;
+-			do_div(tmp, 1000000000LL);
++			tmp = div_s64(tmp, 1000000000LL);
+ 			*val = tmp;
+ 			return ret;
+ 		default:
+diff --git a/drivers/iio/inkern.c b/drivers/iio/inkern.c
+index 391a3380a1d1..b5966365d769 100644
+--- a/drivers/iio/inkern.c
++++ b/drivers/iio/inkern.c
+@@ -578,28 +578,50 @@ EXPORT_SYMBOL_GPL(iio_read_channel_average_raw);
+ static int iio_convert_raw_to_processed_unlocked(struct iio_channel *chan,
+ 	int raw, int *processed, unsigned int scale)
+ {
+-	int scale_type, scale_val, scale_val2, offset;
++	int scale_type, scale_val, scale_val2;
++	int offset_type, offset_val, offset_val2;
+ 	s64 raw64 = raw;
+-	int ret;
+ 
+-	ret = iio_channel_read(chan, &offset, NULL, IIO_CHAN_INFO_OFFSET);
+-	if (ret >= 0)
+-		raw64 += offset;
++	offset_type = iio_channel_read(chan, &offset_val, &offset_val2,
++				       IIO_CHAN_INFO_OFFSET);
++	if (offset_type >= 0) {
++		switch (offset_type) {
++		case IIO_VAL_INT:
++			break;
++		case IIO_VAL_INT_PLUS_MICRO:
++		case IIO_VAL_INT_PLUS_NANO:
++			/*
++			 * Both IIO_VAL_INT_PLUS_MICRO and IIO_VAL_INT_PLUS_NANO
++			 * implicitely truncate the offset to it's integer form.
++			 */
++			break;
++		case IIO_VAL_FRACTIONAL:
++			offset_val /= offset_val2;
++			break;
++		case IIO_VAL_FRACTIONAL_LOG2:
++			offset_val >>= offset_val2;
++			break;
++		default:
++			return -EINVAL;
++		}
++
++		raw64 += offset_val;
++	}
+ 
+ 	scale_type = iio_channel_read(chan, &scale_val, &scale_val2,
+ 					IIO_CHAN_INFO_SCALE);
+ 	if (scale_type < 0) {
+ 		/*
+-		 * Just pass raw values as processed if no scaling is
+-		 * available.
++		 * If no channel scaling is available apply consumer scale to
++		 * raw value and return.
+ 		 */
+-		*processed = raw;
++		*processed = raw * scale;
+ 		return 0;
+ 	}
+ 
+ 	switch (scale_type) {
+ 	case IIO_VAL_INT:
+-		*processed = raw64 * scale_val;
++		*processed = raw64 * scale_val * scale;
+ 		break;
+ 	case IIO_VAL_INT_PLUS_MICRO:
+ 		if (scale_val2 < 0)
+diff --git a/drivers/staging/iio/adc/ad7280a.c b/drivers/staging/iio/adc/ad7280a.c
+index fef0055b8990..20183b2ea127 100644
+--- a/drivers/staging/iio/adc/ad7280a.c
++++ b/drivers/staging/iio/adc/ad7280a.c
+@@ -107,9 +107,9 @@
+ static unsigned int ad7280a_devaddr(unsigned int addr)
+ {
+ 	return ((addr & 0x1) << 4) |
+-	       ((addr & 0x2) << 3) |
++	       ((addr & 0x2) << 2) |
+ 	       (addr & 0x4) |
+-	       ((addr & 0x8) >> 3) |
++	       ((addr & 0x8) >> 2) |
+ 	       ((addr & 0x10) >> 4);
+ }
+ 
+-- 
+2.30.2
+

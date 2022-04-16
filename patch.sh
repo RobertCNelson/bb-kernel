@@ -166,11 +166,13 @@ aufs () {
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt.patch
-		patch -p1 < rt.patch || aufs_fail
-		rm -rf rt.patch
+		KERNEL_REL=5.15.5
+		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt-5.15.7.patch
+		patch -p1 < rt-5.15.7.patch || aufs_fail
+		rm -rf rt-5.15.7.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-rt' -s
+		KERNEL_REL=5.15
 
 		${git_bin} format-patch -6 -o ../patches/aufs/
 		echo "AUFS: https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" > ../patches/git/AUFS
@@ -474,7 +476,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 wpanusb
 bcfserial
 rt
@@ -518,15 +520,33 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.x-y"
+	backport_tag="v5.10.111"
 
-	subsystem="xyz"
+	subsystem="uio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		mkdir -p ./x/
-		cp -v ~/linux-src/x/* ./x/
+		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+		dir 'drivers/ti/uio'
+	fi
+
+	backport_tag="v5.15.34"
+
+	subsystem="iio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
+		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
+		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
+		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
 		post_backports
 		exit 2
@@ -564,7 +584,6 @@ drivers () {
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
-	#dir 'drivers/ti/uio'
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
@@ -580,7 +599,7 @@ fixes () {
 }
 
 ###
-#backports
+backports
 #reverts
 drivers
 soc
@@ -589,7 +608,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.16.15"
+		backport_tag="v5.17.3"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
