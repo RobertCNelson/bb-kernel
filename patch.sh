@@ -517,20 +517,20 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.x-y"
+	backport_tag="v5.10.111"
 
-	subsystem="xyz"
+	subsystem="uio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		mkdir -p ./x/
-		cp -v ~/linux-src/x/* ./x/
+		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
 		exit 2
 	else
 		patch_backports
+		dir 'drivers/ti/uio'
 	fi
 }
 
@@ -564,7 +564,6 @@ drivers () {
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
-	#dir 'drivers/ti/uio'
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
@@ -580,7 +579,7 @@ fixes () {
 }
 
 ###
-#backports
+backports
 #reverts
 drivers
 soc
@@ -589,7 +588,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.16.15"
+		backport_tag="v5.17.3"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
