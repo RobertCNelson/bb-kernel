@@ -109,11 +109,11 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.17
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.17.3
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.17
+		KERNEL_REL=5.17.3
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -154,7 +154,7 @@ aufs () {
 			cd -
 		fi
 		cd ./KERNEL/
-		KERNEL_REL=5.16
+		KERNEL_REL=5.17
 
 		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -474,7 +474,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 wpanusb
 bcfserial
 #rt
@@ -518,20 +518,20 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.x-y"
+	backport_tag="v5.10.111"
 
-	subsystem="xyz"
+	subsystem="uio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		mkdir -p ./x/
-		cp -v ~/linux-src/x/* ./x/
+		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
 		exit 2
 	else
 		patch_backports
+		dir 'drivers/ti/uio'
 	fi
 }
 
@@ -564,11 +564,9 @@ drivers () {
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
-	#dir 'drivers/ti/uio'
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-	#dir 'drivers/powervr'
 	#dir 'drivers/mikrobus'
 }
 
@@ -581,7 +579,7 @@ fixes () {
 }
 
 ###
-#backports
+backports
 #reverts
 drivers
 soc
@@ -590,7 +588,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.17"
+		backport_tag="v5.17.3"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
