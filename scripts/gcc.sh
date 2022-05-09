@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2022 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -84,7 +84,8 @@ gcc_toolchain () {
 	gcc8="8.5.0"
 	gcc9="9.4.0"
 	gcc10="10.3.0"
-	gcc11="11.1.0"
+	gcc11="11.3.0"
+	gcc12="12.1.0"
 
 	case "${toolchain}" in
 	gcc_linaro_gnueabihf_6|gcc_6_arm)
@@ -117,6 +118,11 @@ gcc_toolchain () {
 		gcc_prefix="arm-linux-gnueabi"
 		datestamp="2021.${gcc_selected}-${gcc_prefix}"
 		;;
+	gcc_12_arm)
+		gcc_selected=${gcc12}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2022.${gcc_selected}-${gcc_prefix}"
+		;;
 	gcc_linaro_aarch64_gnu_6|gcc_6_aarch64)
 		gcc_selected=${gcc6}
 		gcc_prefix="aarch64-linux"
@@ -147,6 +153,11 @@ gcc_toolchain () {
 		gcc_prefix="aarch64-linux"
 		datestamp="2021.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
+	gcc_12_aarch64)
+		gcc_selected=${gcc12}
+		gcc_prefix="aarch64-linux"
+		datestamp="2022.${gcc_selected}-${gcc_prefix}-gcc"
+		;;
 	gcc_7_riscv64)
 		gcc_selected=${gcc7}
 		gcc_prefix="riscv64-linux"
@@ -171,6 +182,11 @@ gcc_toolchain () {
 		gcc_selected=${gcc11}
 		gcc_prefix="riscv64-linux"
 		datestamp="2021.${gcc_selected}-${gcc_prefix}-gcc"
+		;;
+	gcc_12_riscv64)
+		gcc_selected=${gcc12}
+		gcc_prefix="riscv64-linux"
+		datestamp="2022.${gcc_selected}-${gcc_prefix}-gcc"
 		;;
 	*)
 		echo "bug: maintainer forgot to set:"
