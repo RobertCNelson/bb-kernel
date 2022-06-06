@@ -411,7 +411,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.18.x"
+	branch="v5.19.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -474,13 +474,13 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 wpanusb
 bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -556,9 +556,9 @@ reverts () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	dir 'RPi'
+	#dir 'RPi'
 	dir 'drivers/ar1021_i2c'
-	dir 'drivers/spi'
+	#dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
 	dir 'drivers/ti/serial'
@@ -582,7 +582,7 @@ fixes () {
 backports
 #reverts
 drivers
-soc
+#soc
 fixes
 
 packaging () {
