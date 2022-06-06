@@ -589,7 +589,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.17.3"
+		backport_tag="v5.17.13"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
