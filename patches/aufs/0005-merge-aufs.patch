@@ -1,14 +1,14 @@
-From b18e0ef282fa49a8968c6564945f8ea180f757d0 Mon Sep 17 00:00:00 2001
+From 7c7238aaf548175bef8f822b2dde290fd1eb5cb1 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 15 Apr 2022 20:00:42 -0500
-Subject: [PATCH 5/6] merge: aufs
+Date: Mon, 6 Jun 2022 10:21:21 -0500
+Subject: [PATCH 5/5] merge: aufs
 
-https://github.com/sfjro/aufs5-standalone/commit/6d37486f25a523e225712de1ff5d9f9641a167cd
+https://github.com/sfjro/aufs5-standalone/commit/93984e056fec537fddc0275aa54d20a470ef4b44
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  Documentation/ABI/testing/debugfs-aufs        |   55 +
  Documentation/ABI/testing/sysfs-aufs          |   31 +
- Documentation/filesystems/aufs/README         |  396 ++++
+ Documentation/filesystems/aufs/README         |  397 ++++
  .../filesystems/aufs/design/01intro.txt       |  171 ++
  .../filesystems/aufs/design/02struct.txt      |  258 +++
  .../filesystems/aufs/design/03atomic_open.txt |   85 +
@@ -99,7 +99,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  fs/aufs/xattr.c                               |  368 ++++
  fs/aufs/xino.c                                | 1926 +++++++++++++++++
  include/uapi/linux/aufs_type.h                |  452 ++++
- 93 files changed, 38103 insertions(+)
+ 93 files changed, 38104 insertions(+)
  create mode 100644 Documentation/ABI/testing/debugfs-aufs
  create mode 100644 Documentation/ABI/testing/sysfs-aufs
  create mode 100644 Documentation/filesystems/aufs/README
@@ -294,10 +294,10 @@ index 000000000000..48500c0569e6
 +		will be empty. About XINO files, see the aufs manual.
 diff --git a/Documentation/filesystems/aufs/README b/Documentation/filesystems/aufs/README
 new file mode 100644
-index 000000000000..9c05340b9dda
+index 000000000000..a157bdde4d3b
 --- /dev/null
 +++ b/Documentation/filesystems/aufs/README
-@@ -0,0 +1,396 @@
+@@ -0,0 +1,397 @@
 +
 +Aufs5 -- advanced multi layered unification filesystem version 5.x
 +http://aufs.sf.net
@@ -677,6 +677,7 @@ index 000000000000..9c05340b9dda
 +James Burry made a donation (2016/12).
 +Carsten Rose made a donation (2018/9).
 +Porteus Kiosk made a donation (2018/10).
++Enya Quetzalli Gomez Rodriguez made a donation (2022/5).
 +
 +Thank you very much.
 +Donations are always, including future donations, very important and
@@ -15788,7 +15789,7 @@ index 000000000000..73e1be63e03a
 +}
 diff --git a/fs/aufs/fsctx.c b/fs/aufs/fsctx.c
 new file mode 100644
-index 000000000000..e5622fc17d60
+index 000000000000..96bc885dd338
 --- /dev/null
 +++ b/fs/aufs/fsctx.c
 @@ -0,0 +1,1242 @@
@@ -16235,7 +16236,7 @@ index 000000000000..e5622fc17d60
 +#ifdef CONFIG_FS_POSIX_ACL
 +	fsparam_flag_no("acl", Opt_acl),
 +#else
-+	au_ignore_flag("acl"),
++	au_ignore_flag("acl", Opt_ignore),
 +#endif
 +
 +	/* internal use for the scripts */
@@ -29206,7 +29207,7 @@ index 000000000000..0169428a4298
 +}
 diff --git a/fs/aufs/super.c b/fs/aufs/super.c
 new file mode 100644
-index 000000000000..24a5c99eea3b
+index 000000000000..3b9dc277fa2b
 --- /dev/null
 +++ b/fs/aufs/super.c
 @@ -0,0 +1,871 @@
@@ -29665,7 +29666,7 @@ index 000000000000..24a5c99eea3b
 +			continue;
 +
 +		h_sb = au_sbr_sb(sb, bindex);
-+		e = vfsub_sync_filesystem(h_sb, wait);
++		e = vfsub_sync_filesystem(h_sb);
 +		if (unlikely(e && !err))
 +			err = e;
 +		/* go on even if an error happens */
@@ -32325,7 +32326,7 @@ index 000000000000..a3f709ee7475
 +}
 diff --git a/fs/aufs/vfsub.c b/fs/aufs/vfsub.c
 new file mode 100644
-index 000000000000..9c551a27cc98
+index 000000000000..ee452fbe4564
 --- /dev/null
 +++ b/fs/aufs/vfsub.c
 @@ -0,0 +1,918 @@
@@ -32367,13 +32368,13 @@ index 000000000000..9c551a27cc98
 +}
 +#endif
 +
-+int vfsub_sync_filesystem(struct super_block *h_sb, int wait)
++int vfsub_sync_filesystem(struct super_block *h_sb)
 +{
 +	int err;
 +
 +	lockdep_off();
 +	down_read(&h_sb->s_umount);
-+	err = __sync_filesystem(h_sb, wait);
++	err = sync_filesystem(h_sb);
 +	up_read(&h_sb->s_umount);
 +	lockdep_on();
 +
@@ -33249,7 +33250,7 @@ index 000000000000..9c551a27cc98
 +}
 diff --git a/fs/aufs/vfsub.h b/fs/aufs/vfsub.h
 new file mode 100644
-index 000000000000..0c76f421b95f
+index 000000000000..dca38d84b626
 --- /dev/null
 +++ b/fs/aufs/vfsub.h
 @@ -0,0 +1,358 @@
@@ -33339,7 +33340,7 @@ index 000000000000..0c76f421b95f
 +AuStubInt0(vfsub_test_mntns, struct vfsmount *mnt, struct super_block *h_sb);
 +#endif
 +
-+int vfsub_sync_filesystem(struct super_block *h_sb, int wait);
++int vfsub_sync_filesystem(struct super_block *h_sb);
 +
 +/* ---------------------------------------------------------------------- */
 +
@@ -38399,7 +38400,7 @@ index 000000000000..4e7e39c98edf
 +}
 diff --git a/include/uapi/linux/aufs_type.h b/include/uapi/linux/aufs_type.h
 new file mode 100644
-index 000000000000..421c5ff952ac
+index 000000000000..d1d4935b366b
 --- /dev/null
 +++ b/include/uapi/linux/aufs_type.h
 @@ -0,0 +1,452 @@
@@ -38445,7 +38446,7 @@ index 000000000000..421c5ff952ac
 +#include <limits.h>
 +#endif /* __KERNEL__ */
 +
-+#define AUFS_VERSION	"5.15.5-20220404"
++#define AUFS_VERSION	"5.15.41-20220606"
 +
 +/* todo? move this to linux-2.6.19/include/magic.h */
 +#define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
