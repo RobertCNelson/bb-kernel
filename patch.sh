@@ -109,11 +109,11 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.15.5
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.15.41
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.15.5
+		KERNEL_REL=5.15.41
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -166,20 +166,20 @@ aufs () {
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" -s
 
-		KERNEL_REL=5.15.5
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt-5.15.7.patch
-		patch -p1 < rt-5.15.7.patch || aufs_fail
-		rm -rf rt-5.15.7.patch
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs-rt' -s
-		KERNEL_REL=5.15
+	#	KERNEL_REL=5.15.41
+	#	wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt-5.15.7.patch
+	#	patch -p1 < rt-5.15.7.patch || aufs_fail
+	#	rm -rf rt-5.15.7.patch
+	#	${git_bin} add .
+	#	${git_bin} commit -a -m 'merge: aufs-rt' -s
+	#	KERNEL_REL=5.15
 
-		${git_bin} format-patch -6 -o ../patches/aufs/
+		${git_bin} format-patch -5 -o ../patches/aufs/
 		echo "AUFS: https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" > ../patches/git/AUFS
 
 		rm -rf ../${aufs_prefix}standalone/ || true
 
-		${git_bin} reset --hard HEAD~6
+		${git_bin} reset --hard HEAD~5
 
 		start_cleanup
 
@@ -188,10 +188,10 @@ aufs () {
 		${git} "${DIR}/patches/aufs/0003-merge-aufs-mmap.patch"
 		${git} "${DIR}/patches/aufs/0004-merge-aufs-standalone.patch"
 		${git} "${DIR}/patches/aufs/0005-merge-aufs.patch"
-		${git} "${DIR}/patches/aufs/0006-merge-aufs-rt.patch"
+		#${git} "${DIR}/patches/aufs/0006-merge-aufs-rt.patch"
 
 		wdir="aufs"
-		number=6
+		number=5
 		cleanup
 	fi
 
@@ -520,7 +520,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.111"
+	backport_tag="v5.10.120"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -536,7 +536,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v5.15.34"
+	backport_tag="v5.15.45"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -549,8 +549,8 @@ backports () {
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
 		post_backports
-		exit 2
-	else
+	#	exit 2
+	#else
 		patch_backports
 	fi
 }
@@ -608,7 +608,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.17.3"
+		backport_tag="v5.17.13"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
