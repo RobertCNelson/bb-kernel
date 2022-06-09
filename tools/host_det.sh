@@ -313,6 +313,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="buster"
 			;;
+		elsie)
+			#LMDE 5
+			#http://packages.linuxmint.com/index.php
+			deb_distro="bullseye"
+			;;
 		debian)
 			deb_distro="jessie"
 			;;
@@ -416,6 +421,11 @@ debian_regs () {
 			;;
 		uma)
 			#20.2
+			#http://packages.linuxmint.com/index.php
+			deb_distro="focal"
+			;;
+		una)
+			#20.3
 			#http://packages.linuxmint.com/index.php
 			deb_distro="focal"
 			;;
