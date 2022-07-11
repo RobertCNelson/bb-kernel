@@ -438,13 +438,13 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
-		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
