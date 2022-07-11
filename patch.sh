@@ -558,7 +558,6 @@ drivers () {
 	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
-	#dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
 	dir 'drivers/ti/serial'
