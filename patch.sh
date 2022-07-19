@@ -109,11 +109,11 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.10.82
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.10.117
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.10.82
+		KERNEL_REL=5.10.117
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -553,7 +553,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.10.111"
+	backport_tag="v5.10.131"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -566,8 +566,8 @@ backports () {
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
 		post_backports
-		exit 2
-	else
+	#	exit 2
+	#else
 		patch_backports
 	fi
 }
@@ -771,7 +771,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.17.3"
+		backport_tag="v5.18.12"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
