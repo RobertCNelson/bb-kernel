@@ -518,7 +518,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.127"
+	backport_tag="v5.10.131"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -558,7 +558,6 @@ drivers () {
 	#exit 2
 	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
-	dir 'drivers/spi'
 	dir 'drivers/tps65217'
 
 	dir 'drivers/ti/serial'
@@ -588,7 +587,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.18.8"
+		backport_tag="v5.18.12"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
