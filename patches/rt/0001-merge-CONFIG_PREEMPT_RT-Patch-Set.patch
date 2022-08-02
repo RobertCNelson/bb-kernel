@@ -1,9 +1,9 @@
-From 5e7517289500d44c7bb45848cce33dafef40ebd2 Mon Sep 17 00:00:00 2001
+From 754dfe2d98fe6b6b56ea2f4e6144b4990d1c35bd Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 26 Jul 2022 09:32:23 -0500
+Date: Tue, 2 Aug 2022 15:37:09 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-5.19-rc8-rt8.patch.xz
+patch-5.19-rt10.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -66,10 +66,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/amba-pl011.c               |  17 +-
  drivers/tty/serial/omap-serial.c              |  12 +-
  drivers/tty/sysrq.c                           |   2 +
- fs/dcache.c                                   |  52 +-
+ fs/dcache.c                                   |  54 +-
  include/asm-generic/softirq_stack.h           |   2 +-
  include/linux/console.h                       |  33 +-
- include/linux/dcache.h                        |   7 +-
+ include/linux/dcache.h                        |   9 +-
  include/linux/entry-common.h                  |   8 +-
  include/linux/interrupt.h                     |  29 +
  include/linux/irqdesc.h                       |   1 +
@@ -93,7 +93,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/rcu/rcutorture.c                       |   6 +
  kernel/rcu/tree_stall.h                       |   2 +
  kernel/reboot.c                               |  16 +-
- kernel/sched/core.c                           | 125 ++-
+ kernel/sched/core.c                           | 155 ++-
  kernel/sched/fair.c                           |  16 +-
  kernel/sched/features.h                       |   3 +
  kernel/sched/sched.h                          |   9 +
@@ -107,7 +107,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/trace_output.c                   |  18 +-
  kernel/watchdog.c                             |   4 +
  kernel/watchdog_hld.c                         |   4 +
- 100 files changed, 2005 insertions(+), 304 deletions(-)
+ lib/vsprintf.c                                |  45 +-
+ 101 files changed, 2060 insertions(+), 328 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index 7630ba9cb6cc..fecbf739aed8 100644
@@ -442,7 +443,7 @@ index 0fe2d79fb123..eba193bcdab1 100644
  
  /* ONLY called from entry.S:intr_extint() */
 diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
-index c235648fae23..0f899880d001 100644
+index 4d8f26c1399b..1dfadd85829e 100644
 --- a/arch/powerpc/Kconfig
 +++ b/arch/powerpc/Kconfig
 @@ -150,6 +150,7 @@ config PPC
@@ -1154,7 +1155,7 @@ index 9dc9dccf7b09..298ffddb1c93 100644
  }
  
 diff --git a/drivers/gpu/drm/i915/gt/intel_execlists_submission.c b/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
-index 2b0266cab66b..07d810a3a955 100644
+index 0627fa10d2dc..57619d04b348 100644
 --- a/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
 +++ b/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
 @@ -1299,7 +1299,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
@@ -2346,10 +2347,18 @@ index d2b2720db6ca..18e623325887 100644
  	rcu_sysrq_end();
  
 diff --git a/fs/dcache.c b/fs/dcache.c
-index 93f4f5ee07bf..0b5fd3a17ff7 100644
+index 93f4f5ee07bf..a95064f972c8 100644
 --- a/fs/dcache.c
 +++ b/fs/dcache.c
-@@ -2563,7 +2563,15 @@ EXPORT_SYMBOL(d_rehash);
+@@ -2239,6 +2239,7 @@ struct dentry *d_add_ci(struct dentry *dentry, struct inode *inode,
+ 		} 
+ 	}
+ 	res = d_splice_alias(inode, found);
++	d_lookup_done(found);
+ 	if (res) {
+ 		dput(found);
+ 		return res;
+@@ -2563,7 +2564,15 @@ EXPORT_SYMBOL(d_rehash);
  
  static inline unsigned start_dir_add(struct inode *dir)
  {
@@ -2366,16 +2375,22 @@ index 93f4f5ee07bf..0b5fd3a17ff7 100644
  	for (;;) {
  		unsigned n = dir->i_dir_seq;
  		if (!(n & 1) && cmpxchg(&dir->i_dir_seq, n, n + 1) == n)
-@@ -2575,6 +2583,8 @@ static inline unsigned start_dir_add(struct inode *dir)
- static inline void end_dir_add(struct inode *dir, unsigned n)
+@@ -2572,9 +2581,13 @@ static inline unsigned start_dir_add(struct inode *dir)
+ 	}
+ }
+ 
+-static inline void end_dir_add(struct inode *dir, unsigned n)
++static inline void end_dir_add(struct inode *dir, unsigned int n,
++			       wait_queue_head_t *d_wait)
  {
  	smp_store_release(&dir->i_dir_seq, n + 2);
 +	if (IS_ENABLED(CONFIG_PREEMPT_RT))
 +		preempt_enable();
++	wake_up_all(d_wait);
  }
  
  static void d_wait_lookup(struct dentry *dentry)
-@@ -2701,18 +2711,35 @@ struct dentry *d_alloc_parallel(struct dentry *parent,
+@@ -2701,32 +2714,50 @@ struct dentry *d_alloc_parallel(struct dentry *parent,
  }
  EXPORT_SYMBOL(d_alloc_parallel);
  
@@ -2407,22 +2422,22 @@ index 93f4f5ee07bf..0b5fd3a17ff7 100644
 +	return d_wait;
 +}
 +
-+void __d_lookup_done(struct dentry *dentry)
++void __d_lookup_unhash_wake(struct dentry *dentry)
 +{
 +	spin_lock(&dentry->d_lock);
 +	wake_up_all(__d_lookup_unhash(dentry));
 +	spin_unlock(&dentry->d_lock);
  }
- EXPORT_SYMBOL(__d_lookup_done);
+-EXPORT_SYMBOL(__d_lookup_done);
++EXPORT_SYMBOL(__d_lookup_unhash_wake);
  
-@@ -2720,13 +2747,15 @@ EXPORT_SYMBOL(__d_lookup_done);
+ /* inode->i_lock held if inode is non-NULL */
  
  static inline void __d_add(struct dentry *dentry, struct inode *inode)
  {
 +	wait_queue_head_t *d_wait;
  	struct inode *dir = NULL;
  	unsigned n;
-+
  	spin_lock(&dentry->d_lock);
  	if (unlikely(d_in_lookup(dentry))) {
  		dir = dentry->d_parent->d_inode;
@@ -2432,15 +2447,12 @@ index 93f4f5ee07bf..0b5fd3a17ff7 100644
  	}
  	if (inode) {
  		unsigned add_flags = d_flags_for_inode(inode);
-@@ -2737,8 +2766,10 @@ static inline void __d_add(struct dentry *dentry, struct inode *inode)
- 		fsnotify_update_flags(dentry);
+@@ -2738,7 +2769,7 @@ static inline void __d_add(struct dentry *dentry, struct inode *inode)
  	}
  	__d_rehash(dentry);
--	if (dir)
-+	if (dir) {
- 		end_dir_add(dir, n);
-+		wake_up_all(d_wait);
-+	}
+ 	if (dir)
+-		end_dir_add(dir, n);
++		end_dir_add(dir, n, d_wait);
  	spin_unlock(&dentry->d_lock);
  	if (inode)
  		spin_unlock(&inode->i_lock);
@@ -2461,15 +2473,12 @@ index 93f4f5ee07bf..0b5fd3a17ff7 100644
  	}
  
  	write_seqcount_begin(&dentry->d_seq);
-@@ -2950,8 +2982,10 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
- 	write_seqcount_end(&target->d_seq);
+@@ -2951,7 +2983,7 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
  	write_seqcount_end(&dentry->d_seq);
  
--	if (dir)
-+	if (dir) {
- 		end_dir_add(dir, n);
-+		wake_up_all(d_wait);
-+	}
+ 	if (dir)
+-		end_dir_add(dir, n);
++		end_dir_add(dir, n, d_wait);
  
  	if (dentry->d_parent != old_parent)
  		spin_unlock(&dentry->d_parent->d_lock);
@@ -2555,7 +2564,7 @@ index 8c1686e2c233..8a813cbaf928 100644
  	CONSOLE_REPLAY_ALL,
  };
 diff --git a/include/linux/dcache.h b/include/linux/dcache.h
-index f5bba51480b2..a07a51c858fb 100644
+index f5bba51480b2..c73e5e327e76 100644
 --- a/include/linux/dcache.h
 +++ b/include/linux/dcache.h
 @@ -349,7 +349,7 @@ static inline void dont_mount(struct dentry *dentry)
@@ -2563,7 +2572,7 @@ index f5bba51480b2..a07a51c858fb 100644
  }
  
 -extern void __d_lookup_done(struct dentry *);
-+extern void __d_lookup_done(struct dentry *dentry);
++extern void __d_lookup_unhash_wake(struct dentry *dentry);
  
  static inline int d_in_lookup(const struct dentry *dentry)
  {
@@ -2573,10 +2582,11 @@ index f5bba51480b2..a07a51c858fb 100644
  {
 -	if (unlikely(d_in_lookup(dentry))) {
 -		spin_lock(&dentry->d_lock);
-+	if (unlikely(d_in_lookup(dentry)))
- 		__d_lookup_done(dentry);
+-		__d_lookup_done(dentry);
 -		spin_unlock(&dentry->d_lock);
 -	}
++	if (unlikely(d_in_lookup(dentry)))
++		__d_lookup_unhash_wake(dentry);
  }
  
  extern void dput(struct dentry *);
@@ -4590,7 +4600,7 @@ index 3c35445bf5ad..80564ffafabf 100644
  EXPORT_SYMBOL_GPL(hw_protection_shutdown);
  
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index da0bf6fe9ecd..377e7d4139d8 100644
+index da0bf6fe9ecd..fd7b06dcab48 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -1052,6 +1052,46 @@ void resched_curr(struct rq *rq)
@@ -4656,11 +4666,41 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  	preempt_enable();
  }
  EXPORT_SYMBOL_GPL(migrate_enable);
-@@ -3257,6 +3299,40 @@ int migrate_swap(struct task_struct *cur, struct task_struct *p,
+@@ -3257,6 +3299,70 @@ int migrate_swap(struct task_struct *cur, struct task_struct *p,
  }
  #endif /* CONFIG_NUMA_BALANCING */
  
 +#ifdef CONFIG_PREEMPT_RT
++
++/*
++ * Consider:
++ *
++ *  set_special_state(X);
++ *
++ *  do_things()
++ *    // Somewhere in there is an rtlock that can be contended:
++ *    current_save_and_set_rtlock_wait_state();
++ *    [...]
++ *    schedule_rtlock(); (A)
++ *    [...]
++ *    current_restore_rtlock_saved_state();
++ *
++ *  schedule(); (B)
++ *
++ * If p->saved_state is anything else than TASK_RUNNING, then p blocked on an
++ * rtlock (A) *before* voluntarily calling into schedule() (B) after setting its
++ * state to X. For things like ptrace (X=TASK_TRACED), the task could have more
++ * work to do upon acquiring the lock in do_things() before whoever called
++ * wait_task_inactive() should return. IOW, we have to wait for:
++ *
++ *   p.saved_state = TASK_RUNNING
++ *   p.__state     = X
++ *
++ * which implies the task isn't blocked on an RT lock and got to schedule() (B).
++ *
++ * Also see comments in ttwu_state_match().
++ */
++
 +static __always_inline bool state_mismatch(struct task_struct *p, unsigned int match_state)
 +{
 +	unsigned long flags;
@@ -4697,7 +4737,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  /*
   * wait_task_inactive - wait for a thread to unschedule.
   *
-@@ -3275,7 +3351,7 @@ int migrate_swap(struct task_struct *cur, struct task_struct *p,
+@@ -3275,7 +3381,7 @@ int migrate_swap(struct task_struct *cur, struct task_struct *p,
   */
  unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state)
  {
@@ -4706,7 +4746,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  	struct rq_flags rf;
  	unsigned long ncsw;
  	struct rq *rq;
-@@ -3301,7 +3377,7 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
+@@ -3301,7 +3407,7 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
  		 * is actually now running somewhere else!
  		 */
  		while (task_running(rq, p)) {
@@ -4715,7 +4755,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  				return 0;
  			cpu_relax();
  		}
-@@ -3314,10 +3390,12 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
+@@ -3314,10 +3420,12 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
  		rq = task_rq_lock(p, &rf);
  		trace_sched_wait_task(p);
  		running = task_running(rq, p);
@@ -4730,7 +4770,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  		task_rq_unlock(rq, p, &rf);
  
  		/*
-@@ -3346,7 +3424,7 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
+@@ -3346,7 +3454,7 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
  		 * running right now), it's preempted, and we should
  		 * yield - it could be a while.
  		 */
@@ -4739,7 +4779,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  			ktime_t to = NSEC_PER_SEC / HZ;
  
  			set_current_state(TASK_UNINTERRUPTIBLE);
-@@ -4554,6 +4632,9 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
+@@ -4554,6 +4662,9 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
  	p->on_cpu = 0;
  #endif
  	init_task_preempt_count(p);
@@ -4749,7 +4789,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  #ifdef CONFIG_SMP
  	plist_node_init(&p->pushable_tasks, MAX_PRIO);
  	RB_CLEAR_NODE(&p->pushable_dl_tasks);
-@@ -6421,6 +6502,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
+@@ -6421,6 +6532,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
  
  	next = pick_next_task(rq, prev, &rf);
  	clear_tsk_need_resched(prev);
@@ -4757,7 +4797,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  	clear_preempt_need_resched();
  #ifdef CONFIG_SCHED_DEBUG
  	rq->last_seen_need_resched_ns = 0;
-@@ -6631,6 +6713,30 @@ static void __sched notrace preempt_schedule_common(void)
+@@ -6631,6 +6743,30 @@ static void __sched notrace preempt_schedule_common(void)
  	} while (need_resched());
  }
  
@@ -4788,7 +4828,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  #ifdef CONFIG_PREEMPTION
  /*
   * This is the entry point to schedule() from in-kernel preemption
-@@ -6644,6 +6750,8 @@ asmlinkage __visible void __sched notrace preempt_schedule(void)
+@@ -6644,6 +6780,8 @@ asmlinkage __visible void __sched notrace preempt_schedule(void)
  	 */
  	if (likely(!preemptible()))
  		return;
@@ -4797,7 +4837,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  	preempt_schedule_common();
  }
  NOKPROBE_SYMBOL(preempt_schedule);
-@@ -6691,6 +6799,9 @@ asmlinkage __visible void __sched notrace preempt_schedule_notrace(void)
+@@ -6691,6 +6829,9 @@ asmlinkage __visible void __sched notrace preempt_schedule_notrace(void)
  	if (likely(!preemptible()))
  		return;
  
@@ -4807,7 +4847,7 @@ index da0bf6fe9ecd..377e7d4139d8 100644
  	do {
  		/*
  		 * Because the function tracer can trace preempt_count_sub()
-@@ -8919,7 +9030,9 @@ void __init init_idle(struct task_struct *idle, int cpu)
+@@ -8919,7 +9060,9 @@ void __init init_idle(struct task_struct *idle, int cpu)
  
  	/* Set the preempt count _outside_ the spinlocks! */
  	init_idle_preempt_count(idle, cpu);
@@ -5296,6 +5336,72 @@ index 247bf0b1582c..701f35f0e2d4 100644
  		__this_cpu_write(hard_watchdog_warn, true);
  		return;
  	}
+diff --git a/lib/vsprintf.c b/lib/vsprintf.c
+index 3c1853a9d1c0..371d6f5abaad 100644
+--- a/lib/vsprintf.c
++++ b/lib/vsprintf.c
+@@ -750,37 +750,40 @@ static int __init debug_boot_weak_hash_enable(char *str)
+ }
+ early_param("debug_boot_weak_hash", debug_boot_weak_hash_enable);
+ 
+-static DEFINE_STATIC_KEY_FALSE(filled_random_ptr_key);
++static bool filled_random_ptr_key;
++static siphash_key_t ptr_key __read_mostly;
+ 
+-static void enable_ptr_key_workfn(struct work_struct *work)
++static void fill_ptr_key_workfn(struct work_struct *work)
+ {
+-	static_branch_enable(&filled_random_ptr_key);
++	int ret;
++
++	ret = get_random_bytes_wait(&ptr_key, sizeof(ptr_key));
++	if (WARN_ON(ret < 0))
++		return;
++	/* Pairs with smp_rmb() before reading ptr_key. */
++	smp_wmb();
++	WRITE_ONCE(filled_random_ptr_key, true);
++}
++
++static int vsprintf_init_hashval(void)
++{
++	static DECLARE_WORK(fill_ptr_key_work, fill_ptr_key_workfn);
++
++	queue_work(system_unbound_wq, &fill_ptr_key_work);
++	return 0;
+ }
++subsys_initcall(vsprintf_init_hashval)
+ 
+ /* Maps a pointer to a 32 bit unique identifier. */
+ static inline int __ptr_to_hashval(const void *ptr, unsigned long *hashval_out)
+ {
+-	static siphash_key_t ptr_key __read_mostly;
+ 	unsigned long hashval;
+ 
+-	if (!static_branch_likely(&filled_random_ptr_key)) {
+-		static bool filled = false;
+-		static DEFINE_SPINLOCK(filling);
+-		static DECLARE_WORK(enable_ptr_key_work, enable_ptr_key_workfn);
+-		unsigned long flags;
+-
+-		if (!system_unbound_wq || !rng_is_initialized() ||
+-		    !spin_trylock_irqsave(&filling, flags))
+-			return -EAGAIN;
+-
+-		if (!filled) {
+-			get_random_bytes(&ptr_key, sizeof(ptr_key));
+-			queue_work(system_unbound_wq, &enable_ptr_key_work);
+-			filled = true;
+-		}
+-		spin_unlock_irqrestore(&filling, flags);
+-	}
++	if (!READ_ONCE(filled_random_ptr_key))
++		return -EBUSY;
+ 
++	/* Pairs with smp_wmb() after writing ptr_key. */
++	smp_rmb();
+ 
+ #ifdef CONFIG_64BIT
+ 	hashval = (unsigned long)siphash_1u64((u64)ptr, &ptr_key);
 -- 
 2.30.2
 
