@@ -480,7 +480,7 @@ bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -556,7 +556,7 @@ reverts () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	dir 'RPi'
+	#dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/tps65217'
 
