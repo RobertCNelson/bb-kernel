@@ -575,6 +575,7 @@ soc () {
 
 fixes () {
 	dir 'fixes/gcc'
+	dir 'fixes/clk'
 }
 
 ###
