@@ -82,10 +82,10 @@ gcc_toolchain () {
 	gcc6="6.5.0"
 	gcc7="7.5.0"
 	gcc8="8.5.0"
-	gcc9="9.4.0"
-	gcc10="10.3.0"
+	gcc9="9.5.0"
+	gcc10="10.4.0"
 	gcc11="11.3.0"
-	gcc12="12.1.0"
+	gcc12="12.2.0"
 
 	case "${toolchain}" in
 	gcc_linaro_gnueabihf_6|gcc_6_arm)
