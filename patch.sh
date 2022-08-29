@@ -520,7 +520,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.131"
+	backport_tag="v5.10.139"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -536,7 +536,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v5.15.55"
+	backport_tag="v5.15.63"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -547,6 +547,21 @@ backports () {
 		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
 		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+	fi
+
+	backport_tag="v5.19.5"
+
+	subsystem="it66121"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
 
 		post_backports
 		exit 2
