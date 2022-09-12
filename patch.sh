@@ -581,6 +581,7 @@ beaglebone
 dir 'build/gcc'
 dir 'drivers/ti/spi_symlink'
 dir 'drivers/ti/sgx'
+dir 'fixes'
 
 sync_mainline_dtc () {
 	echo "dir: dtc"
