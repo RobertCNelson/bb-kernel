@@ -109,11 +109,11 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.10.117
+	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.10.140
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.10.117
+		KERNEL_REL=5.10.140
 		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
@@ -553,7 +553,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.10.139"
+	backport_tag="v5.10.142"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -787,7 +787,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.18.12"
+		backport_tag="v5.18.19"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"

@@ -1,6 +1,6 @@
-From 93d0c56c912a086149790d7f43a70af77adfd1e5 Mon Sep 17 00:00:00 2001
+From 6f629c3604035838e2434b692de4c7fa0875690c Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 29 Aug 2022 15:48:33 -0500
+Date: Mon, 12 Sep 2022 17:18:46 -0500
 Subject: [PATCH] backports: brcm80211: from: linux.git
 
 Reference: v5.10.9
@@ -42,10 +42,11 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/mac80211/rx.c                             | 174 +++++-------------
  net/mac80211/scan.c                           |  41 +----
  net/mac80211/spectmgmt.c                      |  10 +-
- net/mac80211/sta_info.c                       |  22 ++-
+ net/mac80211/sta_info.c                       |  28 +--
  net/mac80211/sta_info.h                       |  34 +---
  net/mac80211/tx.c                             | 101 ++++------
  net/mac80211/util.c                           |  31 ++--
+ net/mac80211/wme.c                            |   4 +-
  net/mac80211/wpa.c                            |  19 +-
  net/wireless/Makefile                         |   2 +-
  net/wireless/core.c                           |  10 +-
@@ -59,7 +60,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireless/util.c                           |  25 +--
  net/wireless/wext-core.c                      |   5 +-
  net/wireless/wext-spy.c                       |  14 +-
- 53 files changed, 415 insertions(+), 805 deletions(-)
+ 54 files changed, 420 insertions(+), 810 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
 index b6d0bc73923f..f9ebb98b0e3c 100644
@@ -2105,7 +2106,7 @@ index 76747bfdaddd..ae1cb2c68722 100644
  		/* default, for the case of IEEE80211_VHT_CHANWIDTH_USE_HT,
  		 * to the previously parsed chandef
 diff --git a/net/mac80211/sta_info.c b/net/mac80211/sta_info.c
-index e18c3855f616..ec6973ee88ef 100644
+index 461c03737da8..ec6973ee88ef 100644
 --- a/net/mac80211/sta_info.c
 +++ b/net/mac80211/sta_info.c
 @@ -4,7 +4,7 @@
@@ -2126,6 +2127,32 @@ index e18c3855f616..ec6973ee88ef 100644
  	sta->sta_state = IEEE80211_STA_NONE;
  
  	/* Mark TID as unreserved */
+@@ -645,13 +643,13 @@ static int sta_info_insert_finish(struct sta_info *sta) __acquires(RCU)
+ 	/* check if STA exists already */
+ 	if (sta_info_get_bss(sdata, sta->sta.addr)) {
+ 		err = -EEXIST;
+-		goto out_cleanup;
++		goto out_err;
+ 	}
+ 
+ 	sinfo = kzalloc(sizeof(struct station_info), GFP_KERNEL);
+ 	if (!sinfo) {
+ 		err = -ENOMEM;
+-		goto out_cleanup;
++		goto out_err;
+ 	}
+ 
+ 	local->num_sta++;
+@@ -707,8 +705,8 @@ static int sta_info_insert_finish(struct sta_info *sta) __acquires(RCU)
+  out_drop_sta:
+ 	local->num_sta--;
+ 	synchronize_net();
+- out_cleanup:
+ 	cleanup_single_sta(sta);
++ out_err:
+ 	mutex_unlock(&local->sta_mtx);
+ 	kfree(sinfo);
+ 	rcu_read_lock();
 @@ -1104,8 +1102,6 @@ static void __sta_info_destroy_part2(struct sta_info *sta)
  
  	ieee80211_sta_debugfs_remove(sta);
@@ -2594,6 +2621,21 @@ index a1f129292ad8..94e624e9439b 100644
  				elems->s1g_capab = (void *)pos;
  			else
  				elem_parse_failed = true;
+diff --git a/net/mac80211/wme.c b/net/mac80211/wme.c
+index b9404b056087..2fb99325135a 100644
+--- a/net/mac80211/wme.c
++++ b/net/mac80211/wme.c
+@@ -145,8 +145,8 @@ u16 __ieee80211_select_queue(struct ieee80211_sub_if_data *sdata,
+ 	bool qos;
+ 
+ 	/* all mesh/ocb stations are required to support WME */
+-	if (sta && (sdata->vif.type == NL80211_IFTYPE_MESH_POINT ||
+-		    sdata->vif.type == NL80211_IFTYPE_OCB))
++	if (sdata->vif.type == NL80211_IFTYPE_MESH_POINT ||
++	    sdata->vif.type == NL80211_IFTYPE_OCB)
+ 		qos = true;
+ 	else if (sta)
+ 		qos = sta->sta.wme;
 diff --git a/net/mac80211/wpa.c b/net/mac80211/wpa.c
 index 4eed23e27610..91bf32af55e9 100644
 --- a/net/mac80211/wpa.c
