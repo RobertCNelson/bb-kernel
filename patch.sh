@@ -109,6 +109,7 @@ aufs_fail () {
 }
 
 aufs () {
+	${git_bin} revert --no-edit 2f8f6c393b11b5da059b1fc10a69fc2f2b6c446a
 	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.4.3
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
@@ -587,7 +588,7 @@ can_isotp
 wpanusb
 bcfserial
 rt
-wireguard
+#wireguard
 wireless_regdb
 ti_pm_firmware
 beagleboard_dtbs
@@ -660,7 +661,7 @@ backports () {
 	fi
 
 
-	backport_tag="v5.4.182"
+	backport_tag="v5.4.212"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -674,7 +675,7 @@ backports () {
 
 		post_backports
 		exit 2
-	#else
+	else
 		patch_backports
 	fi
 }
@@ -924,7 +925,7 @@ fixes
 packaging () {
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.103"
+		backport_tag="v5.10.142"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"

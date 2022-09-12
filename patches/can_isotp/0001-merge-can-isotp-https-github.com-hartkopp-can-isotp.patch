@@ -1,23 +1,23 @@
-From ec96278ecd8bb60bfd5cb06c967c053f8e4423a7 Mon Sep 17 00:00:00 2001
+From 4e5dd89ae8a3a05729e1a054a908f153d56607e8 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 7 Mar 2022 15:55:43 -0600
+Date: Mon, 12 Sep 2022 18:00:43 -0500
 Subject: [PATCH] merge: can-isotp: https://github.com/hartkopp/can-isotp
 
-https://github.com/hartkopp/can-isotp/commit/847a3acffea95e6aa97fff473fecd7b55d24e940
+https://github.com/hartkopp/can-isotp/commit/7626d0a0707391970080d493ce69638719938da7
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- include/uapi/linux/can/isotp.h |  136 +++
- net/can/isotp.c                | 1654 ++++++++++++++++++++++++++++++++
- 2 files changed, 1790 insertions(+)
+ include/uapi/linux/can/isotp.h |  151 +++
+ net/can/isotp.c                | 1676 ++++++++++++++++++++++++++++++++
+ 2 files changed, 1827 insertions(+)
  create mode 100644 include/uapi/linux/can/isotp.h
  create mode 100644 net/can/isotp.c
 
 diff --git a/include/uapi/linux/can/isotp.h b/include/uapi/linux/can/isotp.h
 new file mode 100644
-index 000000000000..88831772f9ee
+index 000000000000..209d707d2773
 --- /dev/null
 +++ b/include/uapi/linux/can/isotp.h
-@@ -0,0 +1,136 @@
+@@ -0,0 +1,151 @@
 +/* SPDX-License-Identifier: ((GPL-2.0 WITH Linux-syscall-note) OR BSD-3-Clause) */
 +/*
 + * socketcan/can/isotp.h
@@ -127,19 +127,15 @@ index 000000000000..88831772f9ee
 +#define CAN_ISOTP_WAIT_TX_DONE	0x400	/* wait for tx completion */
 +#define CAN_ISOTP_SF_BROADCAST	0x800	/* 1-to-N functional addressing */
 +
-+/* default values */
++/* protocol machine default values */
 +
 +#define CAN_ISOTP_DEFAULT_FLAGS		0
 +#define CAN_ISOTP_DEFAULT_EXT_ADDRESS	0x00
 +#define CAN_ISOTP_DEFAULT_PAD_CONTENT	0xCC /* prevent bit-stuffing */
-+#define CAN_ISOTP_DEFAULT_FRAME_TXTIME	0
++#define CAN_ISOTP_DEFAULT_FRAME_TXTIME	50000 /* 50 micro seconds */
 +#define CAN_ISOTP_DEFAULT_RECV_BS	0
 +#define CAN_ISOTP_DEFAULT_RECV_STMIN	0x00
 +#define CAN_ISOTP_DEFAULT_RECV_WFTMAX	0
-+
-+#define CAN_ISOTP_DEFAULT_LL_MTU	CAN_MTU
-+#define CAN_ISOTP_DEFAULT_LL_TX_DL	CAN_MAX_DLEN
-+#define CAN_ISOTP_DEFAULT_LL_TX_FLAGS	0
 +
 +/*
 + * Remark on CAN_ISOTP_DEFAULT_RECV_* values:
@@ -150,16 +146,35 @@ index 000000000000..88831772f9ee
 + * these default settings can be changed via sockopts.
 + * For that reason the STmin value is intentionally _not_ checked for
 + * consistency and copied directly into the flow control (FC) frame.
-+ *
 + */
++
++/* link layer default values => make use of Classical CAN frames */
++
++#define CAN_ISOTP_DEFAULT_LL_MTU	CAN_MTU
++#define CAN_ISOTP_DEFAULT_LL_TX_DL	CAN_MAX_DLEN
++#define CAN_ISOTP_DEFAULT_LL_TX_FLAGS	0
++
++/*
++ * The CAN_ISOTP_DEFAULT_FRAME_TXTIME has become a non-zero value as
++ * it only makes sense for isotp implementation tests to run without
++ * a N_As value. As user space applications usually do not set the
++ * frame_txtime element of struct can_isotp_options the new in-kernel
++ * default is very likely overwritten with zero when the sockopt()
++ * CAN_ISOTP_OPTS is invoked.
++ * To make sure that a N_As value of zero is only set intentional the
++ * value '0' is now interpreted as 'do not change the current value'.
++ * When a frame_txtime of zero is required for testing purposes this
++ * CAN_ISOTP_FRAME_TXTIME_ZERO u32 value has to be set in frame_txtime.
++ */
++#define CAN_ISOTP_FRAME_TXTIME_ZERO	0xFFFFFFFF
 +
 +#endif
 diff --git a/net/can/isotp.c b/net/can/isotp.c
 new file mode 100644
-index 000000000000..02f516ab8d0b
+index 000000000000..09ab810d7bc5
 --- /dev/null
 +++ b/net/can/isotp.c
-@@ -0,0 +1,1654 @@
+@@ -0,0 +1,1676 @@
 +// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
 +/* isotp.c - ISO 15765-2 CAN transport protocol for protocol family CAN
 + *
@@ -240,7 +255,7 @@ index 000000000000..02f516ab8d0b
 +#include "compat.h"
 +#endif
 +
-+#define CAN_ISOTP_VERSION "20220209 - out-of-tree"
++#define CAN_ISOTP_VERSION "20220520 - out-of-tree"
 +
 +MODULE_DESCRIPTION("PF_CAN isotp 15765-2:2016 protocol");
 +MODULE_LICENSE("Dual BSD/GPL");
@@ -273,9 +288,9 @@ index 000000000000..02f516ab8d0b
 +/* ISO 15765-2:2016 supports more than 4095 byte per ISO PDU as the FF_DL can
 + * take full 32 bit values (4 Gbyte). We would need some good concept to handle
 + * this between user space and kernel space. For now increase the static buffer
-+ * to something about 8 kbyte to be able to test this new functionality.
++ * to something about 64 kbyte to be able to test this new functionality.
 + */
-+#define MAX_MSG_LENGTH 8200
++#define MAX_MSG_LENGTH 66000
 +
 +/* N_PCI type values in bits 7-4 of N_PCI bytes */
 +#define N_PCI_SF 0x00	/* single frame */
@@ -328,6 +343,7 @@ index 000000000000..02f516ab8d0b
 +	struct can_isotp_options opt;
 +	struct can_isotp_fc_options rxfc, txfc;
 +	struct can_isotp_ll_options ll;
++	u32 frame_txtime;
 +	u32 force_tx_stmin;
 +	u32 force_rx_stmin;
 +	struct tpcon rx, tx;
@@ -548,7 +564,7 @@ index 000000000000..02f516ab8d0b
 +
 +		so->tx_gap = ktime_set(0, 0);
 +		/* add transmission time for CAN frame N_As */
-+		so->tx_gap = ktime_add_ns(so->tx_gap, so->opt.frame_txtime);
++		so->tx_gap = ktime_add_ns(so->tx_gap, so->frame_txtime);
 +		/* add waiting time for consecutive frames N_Cs */
 +		if (so->opt.flags & CAN_ISOTP_FORCE_TXSTMIN)
 +			so->tx_gap = ktime_add_ns(so->tx_gap,
@@ -1054,6 +1070,7 @@ index 000000000000..02f516ab8d0b
 +	struct canfd_frame *cf;
 +	int ae = (so->opt.flags & CAN_ISOTP_EXTEND_ADDR) ? 1 : 0;
 +	int wait_tx_done = (so->opt.flags & CAN_ISOTP_WAIT_TX_DONE) ? 1 : 0;
++	s64 hrtimer_sec = 0;
 +	int off;
 +	int err;
 +
@@ -1156,7 +1173,9 @@ index 000000000000..02f516ab8d0b
 +
 +		DBG("starting txtimer for fc\n");
 +		/* start timeout for FC */
-+		hrtimer_start(&so->txtimer, ktime_set(1,0), HRTIMER_MODE_REL);
++		hrtimer_sec = 1;
++		hrtimer_start(&so->txtimer, ktime_set(hrtimer_sec,0),
++			      HRTIMER_MODE_REL);
 +	}
 +
 +	/* send the first or only CAN frame */
@@ -1169,6 +1188,11 @@ index 000000000000..02f516ab8d0b
 +	if (err) {
 +		printk_once(KERN_NOTICE "can-isotp: %s: can_send_ret %d\n",
 +			    __func__, err);
++
++		/* no transmission -> no timeout monitoring */
++		if (hrtimer_sec)
++			hrtimer_cancel(&so->txtimer);
++
 +		goto err_out_drop;
 +	}
 +
@@ -1203,15 +1227,20 @@ index 000000000000..02f516ab8d0b
 +{
 +	struct sock *sk = sock->sk;
 +	struct sk_buff *skb;
-+	int err = 0;
-+	int noblock;
++	struct isotp_sock *so = isotp_sk(sk);
++	int noblock = flags & MSG_DONTWAIT;
++	int ret = 0;
 +
-+	noblock = flags & MSG_DONTWAIT;
++	if (flags & ~(MSG_DONTWAIT | MSG_TRUNC | MSG_PEEK))
++		return -EINVAL;
++
++	if (!so->bound)
++		return -EADDRNOTAVAIL;
++
 +	flags &= ~MSG_DONTWAIT;
-+
-+	skb = skb_recv_datagram(sk, flags, noblock, &err);
++	skb = skb_recv_datagram(sk, flags, noblock, &ret);
 +	if (!skb)
-+		return err;
++		return ret;
 +
 +	if (size < skb->len)
 +		msg->msg_flags |= MSG_TRUNC;
@@ -1219,14 +1248,12 @@ index 000000000000..02f516ab8d0b
 +		size = skb->len;
 +
 +#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
-+	err = memcpy_to_msg(msg, skb->data, size);
++	ret = memcpy_to_msg(msg, skb->data, size);
 +#else
-+	err = memcpy_toiovec(msg->msg_iov, skb->data, size);
++	ret = memcpy_toiovec(msg->msg_iov, skb->data, size);
 +#endif
-+	if (err < 0) {
-+		skb_free_datagram(sk, skb);
-+		return err;
-+	}
++	if (ret < 0)
++		goto out_err;
 +
 +	sock_recv_timestamp(msg, sk, skb);
 +
@@ -1235,9 +1262,13 @@ index 000000000000..02f516ab8d0b
 +		memcpy(msg->msg_name, skb->cb, msg->msg_namelen);
 +	}
 +
++	/* set length of return value */
++	ret = (flags & MSG_TRUNC) ? skb->len : size;
++
++out_err:
 +	skb_free_datagram(sk, skb);
 +
-+	return size;
++	return ret;
 +}
 +
 +static int isotp_release(struct socket *sock)
@@ -1310,6 +1341,8 @@ index 000000000000..02f516ab8d0b
 +	struct net *net = sock_net(sk);
 +	int ifindex;
 +	struct net_device *dev;
++	canid_t tx_id = addr->can_addr.tp.tx_id;
++	canid_t rx_id = addr->can_addr.tp.rx_id;
 +	int err = 0;
 +	int notify_enetdown = 0;
 +	int do_rx_reg = 1;
@@ -1317,35 +1350,47 @@ index 000000000000..02f516ab8d0b
 +	if (len < ISOTP_MIN_NAMELEN)
 +		return -EINVAL;
 +
-+	if (addr->can_addr.tp.tx_id & (CAN_ERR_FLAG | CAN_RTR_FLAG))
-+		return -EADDRNOTAVAIL;
++	/* do not register frame reception for functional addressing */
++	if (so->opt.flags & CAN_ISOTP_SF_BROADCAST)
++		do_rx_reg = 0;
++
++	/* sanitize tx CAN identifiers */
++	if (tx_id & CAN_EFF_FLAG)
++		tx_id &= (CAN_EFF_FLAG | CAN_EFF_MASK);
++	else
++		tx_id &= CAN_SFF_MASK;
++
++	/* give feedback on wrong CAN-ID value */
++	if (tx_id != addr->can_addr.tp.tx_id)
++		return -EINVAL;
++
++	/* sanitize rx CAN identifier (if needed) */
++	if (do_rx_reg) {
++		if (rx_id & CAN_EFF_FLAG)
++			rx_id &= (CAN_EFF_FLAG | CAN_EFF_MASK);
++		else
++			rx_id &= CAN_SFF_MASK;
++
++		/* give feedback on wrong CAN-ID value */
++		if (rx_id != addr->can_addr.tp.rx_id)
++			return -EINVAL;
++	}
 +
 +	if (!addr->can_ifindex)
 +		return -ENODEV;
 +
 +	lock_sock(sk);
 +
-+	/* do not register frame reception for functional addressing */
-+	if (so->opt.flags & CAN_ISOTP_SF_BROADCAST)
-+		do_rx_reg = 0;
-+
-+	/* do not validate rx address for functional addressing */
-+	if (do_rx_reg) {
-+		if (addr->can_addr.tp.rx_id == addr->can_addr.tp.tx_id) {
-+			err = -EADDRNOTAVAIL;
-+			goto out;
-+		}
-+
-+		if (addr->can_addr.tp.rx_id & (CAN_ERR_FLAG | CAN_RTR_FLAG)) {
-+			err = -EADDRNOTAVAIL;
-+			goto out;
-+		}
++	if (so->bound) {
++		err = -EINVAL;
++		goto out;
 +	}
 +
-+	if (so->bound && addr->can_ifindex == so->ifindex &&
-+	    addr->can_addr.tp.rx_id == so->rxid &&
-+	    addr->can_addr.tp.tx_id == so->txid)
++	/* do not validate rx address for functional addressing */
++	if (do_rx_reg && rx_id == tx_id) {
++		err = -EADDRNOTAVAIL;
 +		goto out;
++	}
 +
 +	dev = dev_get_by_index(net, addr->can_ifindex);
 +	if (!dev) {
@@ -1369,11 +1414,11 @@ index 000000000000..02f516ab8d0b
 +
 +	if (do_rx_reg)
 +#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,12,0)
-+		can_rx_register(net, dev, addr->can_addr.tp.rx_id,
++		can_rx_register(net, dev, rx_id,
 +#else
-+		can_rx_register(dev, addr->can_addr.tp.rx_id,
++		can_rx_register(dev, rx_id,
 +#endif
-+				SINGLE_MASK(addr->can_addr.tp.rx_id), isotp_rcv, sk,
++				SINGLE_MASK(rx_id), isotp_rcv, sk,
 +#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,11)) || \
 +	((LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,50)) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))) || \
 +	((LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,49)) && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0))) || \
@@ -1384,27 +1429,10 @@ index 000000000000..02f516ab8d0b
 +#endif
 +	dev_put(dev);
 +
-+	if (so->bound && do_rx_reg) {
-+		/* unregister old filter */
-+		if (so->ifindex) {
-+			dev = dev_get_by_index(net, so->ifindex);
-+			if (dev) {
-+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,12,0)
-+				can_rx_unregister(net, dev, so->rxid,
-+#else
-+				can_rx_unregister(dev, so->rxid,
-+#endif
-+						  SINGLE_MASK(so->rxid),
-+						  isotp_rcv, sk);
-+				dev_put(dev);
-+			}
-+		}
-+	}
-+
 +	/* switch to new settings */
 +	so->ifindex = ifindex;
-+	so->rxid = addr->can_addr.tp.rx_id;
-+	so->txid = addr->can_addr.tp.tx_id;
++	so->rxid = rx_id;
++	so->txid = tx_id;
 +	so->bound = 1;
 +
 +out:
@@ -1478,6 +1506,14 @@ index 000000000000..02f516ab8d0b
 +		/* no separate rx_ext_address is given => use ext_address */
 +		if (!(so->opt.flags & CAN_ISOTP_RX_EXT_ADDR))
 +			so->opt.rx_ext_address = so->opt.ext_address;
++
++		/* check for frame_txtime changes (0 => no changes) */
++		if (so->opt.frame_txtime) {
++			if (so->opt.frame_txtime == CAN_ISOTP_FRAME_TXTIME_ZERO)
++				so->frame_txtime = 0;
++			else
++				so->frame_txtime = so->opt.frame_txtime;
++		}
 +		break;
 +
 +	case CAN_ISOTP_RECV_FC:
@@ -1706,6 +1742,7 @@ index 000000000000..02f516ab8d0b
 +	so->opt.rxpad_content = CAN_ISOTP_DEFAULT_PAD_CONTENT;
 +	so->opt.txpad_content = CAN_ISOTP_DEFAULT_PAD_CONTENT;
 +	so->opt.frame_txtime = CAN_ISOTP_DEFAULT_FRAME_TXTIME;
++	so->frame_txtime = CAN_ISOTP_DEFAULT_FRAME_TXTIME;
 +	so->rxfc.bs = CAN_ISOTP_DEFAULT_RECV_BS;
 +	so->rxfc.stmin = CAN_ISOTP_DEFAULT_RECV_STMIN;
 +	so->rxfc.wftmax = CAN_ISOTP_DEFAULT_RECV_WFTMAX;
