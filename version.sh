@@ -10,25 +10,33 @@ branch_postfix=""
 
 #arm
 KERNEL_ARCH=arm
-#toolchain="gcc_linaro_eabi_4_8"
-#toolchain="gcc_linaro_eabi_4_9"
-#toolchain="gcc_linaro_eabi_5"
-#toolchain="gcc_linaro_eabi_6"
-#toolchain="gcc_linaro_eabi_7"
-#toolchain="gcc_linaro_gnueabi_4_6"
-#toolchain="gcc_linaro_gnueabihf_4_7"
-#toolchain="gcc_linaro_gnueabihf_4_8"
-#toolchain="gcc_linaro_gnueabihf_4_9"
-#toolchain="gcc_linaro_gnueabihf_5"
-toolchain="gcc_linaro_gnueabihf_6"
-#toolchain="gcc_linaro_gnueabihf_7"
-#toolchain="gcc_arm_gnueabihf_8"
+DEBARCH=armhf
+toolchain="gcc_6_arm"
+#toolchain="gcc_7_arm"
+#toolchain="gcc_8_arm"
+#toolchain="gcc_9_arm"
+#toolchain="gcc_10_arm"
+#toolchain="gcc_11_arm"
+#toolchain="gcc_12_arm"
 #arm64
 #KERNEL_ARCH=arm64
-#toolchain="gcc_linaro_aarch64_gnu_5"
-#toolchain="gcc_linaro_aarch64_gnu_6"
-#toolchain="gcc_linaro_aarch64_gnu_7"
-#toolchain="gcc_arm_aarch64_gnu_8"
+#DEBARCH=arm64
+#toolchain="gcc_6_aarch64"
+#toolchain="gcc_7_aarch64"
+#toolchain="gcc_8_aarch64"
+#toolchain="gcc_9_aarch64"
+#toolchain="gcc_10_aarch64"
+#toolchain="gcc_11_aarch64"
+#toolchain="gcc_12_aarch64"
+#riscv64
+#KERNEL_ARCH=riscv
+#DEBARCH=riscv64
+#toolchain="gcc_7_riscv64"
+#toolchain="gcc_8_riscv64"
+#toolchain="gcc_9_riscv64"
+#toolchain="gcc_10_riscv64"
+#toolchain="gcc_11_riscv64"
+#toolchain="gcc_12_riscv64"
 
 #Kernel
 KERNEL_REL=4.9
@@ -37,7 +45,7 @@ kernel_rt=".178-rt131"
 #Kernel Build
 BUILD=${build_prefix}15
 
-#v5.X-rcX + upto SHA
+#v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
@@ -45,5 +53,4 @@ BUILD=${build_prefix}15
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=xross
-DEBARCH=armhf
 #
