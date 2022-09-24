@@ -44,7 +44,7 @@ KERNEL_REL=5.12
 KERNEL_TAG=${KERNEL_REL}.19
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}36.1
+BUILD=${build_prefix}37
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
