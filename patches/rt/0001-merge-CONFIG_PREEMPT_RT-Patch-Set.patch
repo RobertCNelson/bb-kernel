@@ -1,18 +1,16 @@
-From c048b2a1369f01eb8f8ba62f01621f53d2ca975b Mon Sep 17 00:00:00 2001
+From 06b3d7173440aa12651ed7a327c292cf9eba417c Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 12 Sep 2022 10:53:19 -0500
+Date: Wed, 5 Oct 2022 11:23:02 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.0-rc4-rt6.patch.xz
+patch-6.0-rt11.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- arch/Kconfig                                  |   3 +
  arch/arm/Kconfig                              |   5 +-
  arch/arm/include/asm/thread_info.h            |   6 +-
  arch/arm/kernel/asm-offsets.c                 |   1 +
  arch/arm/kernel/entry-armv.S                  |  19 +-
- arch/arm/kernel/irq.c                         |   2 +-
  arch/arm/kernel/signal.c                      |   3 +-
  arch/arm/mm/fault.c                           |   6 +
  arch/arm64/Kconfig                            |   2 +
@@ -20,23 +18,16 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm64/include/asm/thread_info.h          |   8 +-
  arch/arm64/kernel/asm-offsets.c               |   1 +
  arch/arm64/kernel/signal.c                    |   2 +-
- arch/parisc/kernel/irq.c                      |   2 +-
  arch/powerpc/Kconfig                          |   3 +
  arch/powerpc/include/asm/stackprotector.h     |   4 +
  arch/powerpc/include/asm/thread_info.h        |   8 +
  arch/powerpc/kernel/interrupt.c               |   8 +-
- arch/powerpc/kernel/irq.c                     |   4 +-
  arch/powerpc/kernel/traps.c                   |   7 +-
  arch/powerpc/kvm/Kconfig                      |   1 +
  arch/powerpc/platforms/pseries/iommu.c        |  31 +-
- arch/s390/include/asm/softirq_stack.h         |   2 +-
- arch/sh/kernel/irq.c                          |   2 +-
- arch/sparc/kernel/irq_64.c                    |   2 +-
  arch/x86/Kconfig                              |   2 +
- arch/x86/include/asm/irq_stack.h              |   2 +-
  arch/x86/include/asm/preempt.h                |  33 +-
  arch/x86/include/asm/thread_info.h            |   5 +
- arch/x86/kernel/irq_32.c                      |   2 +-
  drivers/bcma/driver_gpio.c                    |   2 +-
  drivers/block/zram/zram_drv.c                 |  36 +
  drivers/block/zram/zram_drv.h                 |   3 +
@@ -132,7 +123,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/sysrq.c                           |   2 +
  drivers/vdpa/vdpa_user/iova_domain.h          |   1 -
  fs/dcache.c                                   |  13 +-
- include/asm-generic/softirq_stack.h           |   2 +-
  include/linux/console.h                       |  33 +-
  include/linux/entry-common.h                  |   8 +-
  include/linux/interrupt.h                     |  29 +
@@ -206,23 +196,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/netfilter/nf_tables_api.c                 |   4 +-
  net/openvswitch/datapath.c                    |   4 +-
  net/openvswitch/flow_table.c                  |   9 +-
- scripts/checkpatch.pl                         |   6 +
- 200 files changed, 2805 insertions(+), 986 deletions(-)
+ 189 files changed, 2786 insertions(+), 976 deletions(-)
 
-diff --git a/arch/Kconfig b/arch/Kconfig
-index 5dbf11a5ba4e..8b311e400ec1 100644
---- a/arch/Kconfig
-+++ b/arch/Kconfig
-@@ -923,6 +923,9 @@ config HAVE_SOFTIRQ_ON_OWN_STACK
- 	  Architecture provides a function to run __do_softirq() on a
- 	  separate stack.
- 
-+config SOFTIRQ_ON_OWN_STACK
-+	def_bool HAVE_SOFTIRQ_ON_OWN_STACK && !PREEMPT_RT
-+
- config ALTERNATE_USER_ADDRESS_SPACE
- 	bool
- 	help
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index 87badeae3181..3da8f531e63d 100644
 --- a/arch/arm/Kconfig
@@ -351,19 +326,6 @@ index c39303e5c234..cfb4660e9fea 100644
  #endif
  
  __und_fault:
-diff --git a/arch/arm/kernel/irq.c b/arch/arm/kernel/irq.c
-index 034cb48c9eeb..fe28fc1f759d 100644
---- a/arch/arm/kernel/irq.c
-+++ b/arch/arm/kernel/irq.c
-@@ -70,7 +70,7 @@ static void __init init_irq_stacks(void)
- 	}
- }
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- static void ____do_softirq(void *arg)
- {
- 	__do_softirq();
 diff --git a/arch/arm/kernel/signal.c b/arch/arm/kernel/signal.c
 index ea128e32e8ca..3671a4214d6f 100644
 --- a/arch/arm/kernel/signal.c
@@ -403,7 +365,7 @@ index 46cccd6bf705..480a1976a9dc 100644
  	return 0;
  }
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index 9fb9fff08c94..4d90dccb3039 100644
+index 1ce7685ad5de..e14390eed610 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
 @@ -93,6 +93,7 @@ config ARM64
@@ -530,19 +492,6 @@ index 9ad911f1647c..545c41a84411 100644
  			/* Unmask Debug and SError for the next task */
  			local_daif_restore(DAIF_PROCCTX_NOIRQ);
  
-diff --git a/arch/parisc/kernel/irq.c b/arch/parisc/kernel/irq.c
-index fbb882cb8dbb..b05055f3ba4b 100644
---- a/arch/parisc/kernel/irq.c
-+++ b/arch/parisc/kernel/irq.c
-@@ -480,7 +480,7 @@ static void execute_on_irq_stack(void *func, unsigned long param1)
- 	*irq_stack_in_use = 1;
- }
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- void do_softirq_own_stack(void)
- {
- 	execute_on_irq_stack(__do_softirq, 0);
 diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
 index 4c466acdc70d..110043ba85df 100644
 --- a/arch/powerpc/Kconfig
@@ -670,28 +619,6 @@ index 0e75cb03244a..2c93563b26f3 100644
  			}
  		}
  
-diff --git a/arch/powerpc/kernel/irq.c b/arch/powerpc/kernel/irq.c
-index 0f17268c1f0b..9ede61a5a469 100644
---- a/arch/powerpc/kernel/irq.c
-+++ b/arch/powerpc/kernel/irq.c
-@@ -199,7 +199,7 @@ static inline void check_stack_overflow(unsigned long sp)
- 	}
- }
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- static __always_inline void call_do_softirq(const void *sp)
- {
- 	/* Temporarily switch r1 to sp, call __do_softirq() then restore r1. */
-@@ -335,7 +335,7 @@ void *mcheckirq_ctx[NR_CPUS] __read_mostly;
- void *softirq_ctx[NR_CPUS] __read_mostly;
- void *hardirq_ctx[NR_CPUS] __read_mostly;
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- void do_softirq_own_stack(void)
- {
- 	call_do_softirq(softirq_ctx[smp_processor_id()]);
 diff --git a/arch/powerpc/kernel/traps.c b/arch/powerpc/kernel/traps.c
 index dadfcef5d6db..3bfe55d82b04 100644
 --- a/arch/powerpc/kernel/traps.c
@@ -822,45 +749,6 @@ index 561adac69022..61c4c0610aa6 100644
  	return rc;
  }
  
-diff --git a/arch/s390/include/asm/softirq_stack.h b/arch/s390/include/asm/softirq_stack.h
-index af68d6c1d584..1ac5115d3115 100644
---- a/arch/s390/include/asm/softirq_stack.h
-+++ b/arch/s390/include/asm/softirq_stack.h
-@@ -5,7 +5,7 @@
- #include <asm/lowcore.h>
- #include <asm/stacktrace.h>
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- static inline void do_softirq_own_stack(void)
- {
- 	call_on_stack(0, S390_lowcore.async_stack, void, __do_softirq);
-diff --git a/arch/sh/kernel/irq.c b/arch/sh/kernel/irq.c
-index 909276738078..4e6835de54cf 100644
---- a/arch/sh/kernel/irq.c
-+++ b/arch/sh/kernel/irq.c
-@@ -149,7 +149,7 @@ void irq_ctx_exit(int cpu)
- 	hardirq_ctx[cpu] = NULL;
- }
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- void do_softirq_own_stack(void)
- {
- 	struct thread_info *curctx;
-diff --git a/arch/sparc/kernel/irq_64.c b/arch/sparc/kernel/irq_64.c
-index 41fa1be980a3..72da2e10e255 100644
---- a/arch/sparc/kernel/irq_64.c
-+++ b/arch/sparc/kernel/irq_64.c
-@@ -855,7 +855,7 @@ void __irq_entry handler_irq(int pil, struct pt_regs *regs)
- 	set_irq_regs(old_regs);
- }
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- void do_softirq_own_stack(void)
- {
- 	void *orig_sp, *sp = softirq_stack[smp_processor_id()];
 diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
 index f9920f1341c8..e9d1e8cbb1c0 100644
 --- a/arch/x86/Kconfig
@@ -881,19 +769,6 @@ index f9920f1341c8..e9d1e8cbb1c0 100644
  	select MMU_GATHER_RCU_TABLE_FREE	if PARAVIRT
  	select MMU_GATHER_MERGE_VMAS
  	select HAVE_POSIX_CPU_TIMERS_TASK_WORK
-diff --git a/arch/x86/include/asm/irq_stack.h b/arch/x86/include/asm/irq_stack.h
-index 63f818aedf77..147cb8fdda92 100644
---- a/arch/x86/include/asm/irq_stack.h
-+++ b/arch/x86/include/asm/irq_stack.h
-@@ -203,7 +203,7 @@
- 			      IRQ_CONSTRAINTS, regs, vector);		\
- }
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- /*
-  * Macro to invoke __do_softirq on the irq stack. This is only called from
-  * task context when bottom halves are about to be reenabled and soft
 diff --git a/arch/x86/include/asm/preempt.h b/arch/x86/include/asm/preempt.h
 index 5f6daea1ee24..cd20b4a5719a 100644
 --- a/arch/x86/include/asm/preempt.h
@@ -985,19 +860,6 @@ index f0cb881c1d69..fd8fb76f324f 100644
  #define _TIF_POLLING_NRFLAG	(1 << TIF_POLLING_NRFLAG)
  #define _TIF_IO_BITMAP		(1 << TIF_IO_BITMAP)
  #define _TIF_SPEC_FORCE_UPDATE	(1 << TIF_SPEC_FORCE_UPDATE)
-diff --git a/arch/x86/kernel/irq_32.c b/arch/x86/kernel/irq_32.c
-index e5dd6da78713..01833ebf5e8e 100644
---- a/arch/x86/kernel/irq_32.c
-+++ b/arch/x86/kernel/irq_32.c
-@@ -132,7 +132,7 @@ int irq_init_percpu_irqstack(unsigned int cpu)
- 	return 0;
- }
- 
--#ifndef CONFIG_PREEMPT_RT
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- void do_softirq_own_stack(void)
- {
- 	struct irq_stack *irqstk;
 diff --git a/drivers/bcma/driver_gpio.c b/drivers/bcma/driver_gpio.c
 index fac8ff983aec..65fb9bad1577 100644
 --- a/drivers/bcma/driver_gpio.c
@@ -1234,10 +1096,10 @@ index ecc990ec1b95..8d04b10681f0 100644
  }
  
 diff --git a/drivers/gpu/drm/i915/gt/intel_execlists_submission.c b/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
-index 4b909cb88cdf..2d684948da2b 100644
+index c718e6dc40b5..0e592999b7d6 100644
 --- a/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
 +++ b/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
-@@ -1299,7 +1299,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
+@@ -1302,7 +1302,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
  	 * and context switches) submission.
  	 */
  
@@ -1246,7 +1108,7 @@ index 4b909cb88cdf..2d684948da2b 100644
  
  	/*
  	 * If the queue is higher priority than the last
-@@ -1399,7 +1399,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
+@@ -1402,7 +1402,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
  				 * Even if ELSP[1] is occupied and not worthy
  				 * of timeslices, our queue might be.
  				 */
@@ -1255,7 +1117,7 @@ index 4b909cb88cdf..2d684948da2b 100644
  				return;
  			}
  		}
-@@ -1425,7 +1425,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
+@@ -1428,7 +1428,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
  
  		if (last && !can_merge_rq(last, rq)) {
  			spin_unlock(&ve->base.sched_engine->lock);
@@ -1264,7 +1126,7 @@ index 4b909cb88cdf..2d684948da2b 100644
  			return; /* leave this for another sibling */
  		}
  
-@@ -1587,7 +1587,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
+@@ -1590,7 +1590,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
  	 */
  	sched_engine->queue_priority_hint = queue_prio(sched_engine);
  	i915_sched_engine_reset_on_empty(sched_engine);
@@ -1273,7 +1135,7 @@ index 4b909cb88cdf..2d684948da2b 100644
  
  	/*
  	 * We can skip poking the HW if we ended up with exactly the same set
-@@ -1613,13 +1613,6 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
+@@ -1616,13 +1616,6 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
  	}
  }
  
@@ -1287,7 +1149,7 @@ index 4b909cb88cdf..2d684948da2b 100644
  static void clear_ports(struct i915_request **ports, int count)
  {
  	memset_p((void **)ports, NULL, count);
-@@ -2449,7 +2442,7 @@ static void execlists_submission_tasklet(struct tasklet_struct *t)
+@@ -2468,7 +2461,7 @@ static void execlists_submission_tasklet(struct tasklet_struct *t)
  	}
  
  	if (!engine->execlists.pending[0]) {
@@ -2022,7 +1884,7 @@ index e9cd0fa6a0d2..90f2eee78a3e 100644
  	/* Once we successfully copy the stats in, update the data pointer */
  	*data += size;
 diff --git a/drivers/net/ethernet/intel/i40e/i40e_main.c b/drivers/net/ethernet/intel/i40e/i40e_main.c
-index 9f1d5de7bf16..4e3f18fd63aa 100644
+index e3d9804aeb25..09a9f67d9ebc 100644
 --- a/drivers/net/ethernet/intel/i40e/i40e_main.c
 +++ b/drivers/net/ethernet/intel/i40e/i40e_main.c
 @@ -418,10 +418,10 @@ static void i40e_get_netdev_stats_struct_tx(struct i40e_ring *ring,
@@ -2122,10 +1984,10 @@ index e535d4c3da49..fafa3406e0bc 100644
  	/* Once we successfully copy the stats in, update the data pointer */
  	*data += size;
 diff --git a/drivers/net/ethernet/intel/ice/ice_main.c b/drivers/net/ethernet/intel/ice/ice_main.c
-index 173fe6c31341..754f984d7bbd 100644
+index e109cb93886b..b7394c7e5eed 100644
 --- a/drivers/net/ethernet/intel/ice/ice_main.c
 +++ b/drivers/net/ethernet/intel/ice/ice_main.c
-@@ -6289,10 +6289,10 @@ ice_fetch_u64_stats_per_ring(struct u64_stats_sync *syncp,
+@@ -6295,10 +6295,10 @@ ice_fetch_u64_stats_per_ring(struct u64_stats_sync *syncp,
  	unsigned int start;
  
  	do {
@@ -2516,7 +2378,7 @@ index bbea5458000b..c9bb92187719 100644
  	stats->tx_packets = _packets;
  	stats->tx_bytes = _bytes;
 diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-index 5ace4609de47..3ee0fe5c8c86 100644
+index b344632beadd..988927f8c5d7 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 @@ -853,7 +853,7 @@ static void mtk_get_stats64(struct net_device *dev,
@@ -3188,10 +3050,10 @@ index 9a1a5b203624..e470e3398abc 100644
  
  static int
 diff --git a/drivers/net/team/team.c b/drivers/net/team/team.c
-index aac133a1e27a..d42bd3970177 100644
+index 154a3c0a6dfd..3de937141c16 100644
 --- a/drivers/net/team/team.c
 +++ b/drivers/net/team/team.c
-@@ -1853,13 +1853,13 @@ team_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
+@@ -1865,13 +1865,13 @@ team_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
  	for_each_possible_cpu(i) {
  		p = per_cpu_ptr(team->pcpu_stats, i);
  		do {
@@ -3447,7 +3309,7 @@ index 617dbf98980e..97cfbc520a02 100644
  	pm_wakeup_hard_event(chip->parent);
  
 diff --git a/drivers/spi/spi.c b/drivers/spi/spi.c
-index 83da8862b8f2..7ad25663a1d4 100644
+index 32c01e684af3..fd714ac7b20e 100644
 --- a/drivers/spi/spi.c
 +++ b/drivers/spi/spi.c
 @@ -127,10 +127,10 @@ do {									\
@@ -3847,7 +3709,7 @@ index 54051ec7b499..6092c75808fb 100644
  
  static void mtk8250_set_flow_ctrl(struct uart_8250_port *up, int mode)
 diff --git a/drivers/tty/serial/8250/8250_omap.c b/drivers/tty/serial/8250/8250_omap.c
-index 0dcecbbc3967..8b9cd0d10c70 100644
+index f7fbef83583c..7580d9871b60 100644
 --- a/drivers/tty/serial/8250/8250_omap.c
 +++ b/drivers/tty/serial/8250/8250_omap.c
 @@ -325,7 +325,7 @@ static void omap8250_restore_regs(struct uart_8250_port *up)
@@ -4514,19 +4376,6 @@ index bb0c4d0038db..2ee8636016ee 100644
  	wake_up_all(d_wait);
  }
  
-diff --git a/include/asm-generic/softirq_stack.h b/include/asm-generic/softirq_stack.h
-index d3e2d81656e0..2a67aed9ac52 100644
---- a/include/asm-generic/softirq_stack.h
-+++ b/include/asm-generic/softirq_stack.h
-@@ -2,7 +2,7 @@
- #ifndef __ASM_GENERIC_SOFTIRQ_STACK_H
- #define __ASM_GENERIC_SOFTIRQ_STACK_H
- 
--#if defined(CONFIG_HAVE_SOFTIRQ_ON_OWN_STACK) && !defined(CONFIG_PREEMPT_RT)
-+#ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
- void do_softirq_own_stack(void);
- #else
- static inline void do_softirq_own_stack(void)
 diff --git a/include/linux/console.h b/include/linux/console.h
 index 8c1686e2c233..8a813cbaf928 100644
 --- a/include/linux/console.h
@@ -7762,10 +7611,10 @@ index 247bf0b1582c..701f35f0e2d4 100644
  		return;
  	}
 diff --git a/lib/Kconfig.debug b/lib/Kconfig.debug
-index bcbe60d6c80c..cdb4b27ef1a0 100644
+index d3e5f36bb01e..9f8baa4e0f9e 100644
 --- a/lib/Kconfig.debug
 +++ b/lib/Kconfig.debug
-@@ -803,6 +803,9 @@ config ARCH_HAS_DEBUG_VM_PGTABLE
+@@ -805,6 +805,9 @@ config ARCH_HAS_DEBUG_VM_PGTABLE
  	  An architecture should select this when it can successfully
  	  build and run DEBUG_VM_PGTABLE.
  
@@ -7950,7 +7799,7 @@ index b69979c9ced5..d35b6fa560f0 100644
  	}
  
 diff --git a/mm/slub.c b/mm/slub.c
-index 862dbd9af4f5..a738020a60fa 100644
+index 4b98dff9be8e..59173fa5901a 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
 @@ -50,7 +50,7 @@
@@ -8018,7 +7867,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  #endif
  
  #ifdef CONFIG_SLUB_DEBUG
-@@ -442,7 +450,7 @@ slub_set_cpu_partial(struct kmem_cache *s, unsigned int nr_objects)
+@@ -447,7 +455,7 @@ slub_set_cpu_partial(struct kmem_cache *s, unsigned int nr_objects)
  /*
   * Per slab locking using the pagelock
   */
@@ -8027,7 +7876,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  {
  	struct page *page = slab_page(slab);
  
-@@ -450,7 +458,7 @@ static __always_inline void __slab_lock(struct slab *slab)
+@@ -455,7 +463,7 @@ static __always_inline void __slab_lock(struct slab *slab)
  	bit_spin_lock(PG_locked, &page->flags);
  }
  
@@ -8036,7 +7885,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  {
  	struct page *page = slab_page(slab);
  
-@@ -458,31 +466,19 @@ static __always_inline void __slab_unlock(struct slab *slab)
+@@ -463,31 +471,19 @@ static __always_inline void __slab_unlock(struct slab *slab)
  	__bit_spin_unlock(PG_locked, &page->flags);
  }
  
@@ -8073,7 +7922,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  		lockdep_assert_irqs_disabled();
  #if defined(CONFIG_HAVE_CMPXCHG_DOUBLE) && \
      defined(CONFIG_HAVE_ALIGNED_STRUCT_PAGE)
-@@ -494,18 +490,15 @@ static inline bool __cmpxchg_double_slab(struct kmem_cache *s, struct slab *slab
+@@ -499,18 +495,15 @@ static inline bool __cmpxchg_double_slab(struct kmem_cache *s, struct slab *slab
  	} else
  #endif
  	{
@@ -8095,7 +7944,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  	}
  
  	cpu_relax();
-@@ -536,16 +529,16 @@ static inline bool cmpxchg_double_slab(struct kmem_cache *s, struct slab *slab,
+@@ -541,16 +534,16 @@ static inline bool cmpxchg_double_slab(struct kmem_cache *s, struct slab *slab,
  		unsigned long flags;
  
  		local_irq_save(flags);
@@ -8115,7 +7964,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  		local_irq_restore(flags);
  	}
  
-@@ -561,7 +554,7 @@ static inline bool cmpxchg_double_slab(struct kmem_cache *s, struct slab *slab,
+@@ -566,7 +559,7 @@ static inline bool cmpxchg_double_slab(struct kmem_cache *s, struct slab *slab,
  
  #ifdef CONFIG_SLUB_DEBUG
  static unsigned long object_map[BITS_TO_LONGS(MAX_OBJS_PER_PAGE)];
@@ -8124,7 +7973,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  
  static void __fill_map(unsigned long *obj_map, struct kmem_cache *s,
  		       struct slab *slab)
-@@ -595,30 +588,6 @@ static bool slab_add_kunit_errors(void)
+@@ -600,30 +593,6 @@ static bool slab_add_kunit_errors(void)
  static inline bool slab_add_kunit_errors(void) { return false; }
  #endif
  
@@ -8155,7 +8004,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  static inline unsigned int size_from_object(struct kmem_cache *s)
  {
  	if (s->flags & SLAB_RED_ZONE)
-@@ -1324,17 +1293,14 @@ static inline int alloc_consistency_checks(struct kmem_cache *s,
+@@ -1329,17 +1298,14 @@ static inline int alloc_consistency_checks(struct kmem_cache *s,
  }
  
  static noinline int alloc_debug_processing(struct kmem_cache *s,
@@ -8175,7 +8024,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  	trace(s, slab, object, 1);
  	init_object(s, object, SLUB_RED_ACTIVE);
  	return 1;
-@@ -1385,63 +1351,6 @@ static inline int free_consistency_checks(struct kmem_cache *s,
+@@ -1390,63 +1356,6 @@ static inline int free_consistency_checks(struct kmem_cache *s,
  	return 1;
  }
  
@@ -8239,7 +8088,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  /*
   * Parse a block of slub_debug options. Blocks are delimited by ';'
   *
-@@ -1661,16 +1570,18 @@ static inline
+@@ -1666,16 +1575,18 @@ static inline
  void setup_slab_debug(struct kmem_cache *s, struct slab *slab, void *addr) {}
  
  static inline int alloc_debug_processing(struct kmem_cache *s,
@@ -8261,7 +8110,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  static inline void add_full(struct kmem_cache *s, struct kmem_cache_node *n,
  					struct slab *slab) {}
  static inline void remove_full(struct kmem_cache *s, struct kmem_cache_node *n,
-@@ -1976,11 +1887,13 @@ static struct slab *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
+@@ -1981,11 +1892,13 @@ static struct slab *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
  		 */
  		slab = alloc_slab_page(alloc_gfp, node, oo);
  		if (unlikely(!slab))
@@ -8276,7 +8125,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  
  	account_slab(slab, oo_order(oo), s, flags);
  
-@@ -2007,15 +1920,6 @@ static struct slab *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
+@@ -2012,15 +1925,6 @@ static struct slab *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
  		set_freepointer(s, p, NULL);
  	}
  
@@ -8292,7 +8141,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  	return slab;
  }
  
-@@ -2102,6 +2006,75 @@ static inline void remove_partial(struct kmem_cache_node *n,
+@@ -2107,6 +2011,75 @@ static inline void remove_partial(struct kmem_cache_node *n,
  	n->nr_partial--;
  }
  
@@ -8368,7 +8217,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  /*
   * Remove slab from the partial list, freeze it and
   * return the pointer to the freelist.
-@@ -2182,6 +2155,13 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
+@@ -2187,6 +2160,13 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
  		if (!pfmemalloc_match(slab, gfpflags))
  			continue;
  
@@ -8382,7 +8231,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  		t = acquire_slab(s, n, slab, object == NULL);
  		if (!t)
  			break;
-@@ -2788,6 +2768,109 @@ static inline unsigned long node_nr_objs(struct kmem_cache_node *n)
+@@ -2793,6 +2773,109 @@ static inline unsigned long node_nr_objs(struct kmem_cache_node *n)
  {
  	return atomic_long_read(&n->total_objects);
  }
@@ -8492,7 +8341,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  #endif /* CONFIG_SLUB_DEBUG */
  
  #if defined(CONFIG_SLUB_DEBUG) || defined(CONFIG_SYSFS)
-@@ -3036,36 +3119,52 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
+@@ -3041,36 +3124,52 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
  		return NULL;
  	}
  
@@ -8558,7 +8407,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  
  retry_load_slab:
  
-@@ -3089,11 +3188,6 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
+@@ -3094,11 +3193,6 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
  	c->slab = slab;
  
  	goto load_freelist;
@@ -8570,7 +8419,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  }
  
  /*
-@@ -3197,14 +3291,8 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s, struct list_l
+@@ -3202,14 +3296,8 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s, struct list_l
  
  	object = c->freelist;
  	slab = c->slab;
@@ -8587,7 +8436,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  	    unlikely(!object || !slab || !node_match(slab, node))) {
  		object = __slab_alloc(s, gfpflags, node, addr, c);
  	} else {
-@@ -3341,9 +3429,10 @@ static void __slab_free(struct kmem_cache *s, struct slab *slab,
+@@ -3346,9 +3434,10 @@ static void __slab_free(struct kmem_cache *s, struct slab *slab,
  	if (kfence_free(head))
  		return;
  
@@ -8600,7 +8449,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  
  	do {
  		if (unlikely(n)) {
-@@ -3463,6 +3552,7 @@ static __always_inline void do_slab_free(struct kmem_cache *s,
+@@ -3468,6 +3557,7 @@ static __always_inline void do_slab_free(struct kmem_cache *s,
  	void *tail_obj = tail ? : head;
  	struct kmem_cache_cpu *c;
  	unsigned long tid;
@@ -8608,7 +8457,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  
  redo:
  	/*
-@@ -3477,9 +3567,13 @@ static __always_inline void do_slab_free(struct kmem_cache *s,
+@@ -3482,9 +3572,13 @@ static __always_inline void do_slab_free(struct kmem_cache *s,
  	/* Same with comment on barrier() in slab_alloc_node() */
  	barrier();
  
@@ -8625,7 +8474,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  
  		set_freepointer(s, tail_obj, freelist);
  
-@@ -3491,16 +3585,8 @@ static __always_inline void do_slab_free(struct kmem_cache *s,
+@@ -3496,16 +3590,8 @@ static __always_inline void do_slab_free(struct kmem_cache *s,
  			note_cmpxchg_failure("slab_free", s, tid);
  			goto redo;
  		}
@@ -8644,7 +8493,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  		local_lock(&s->cpu_slab->lock);
  		c = this_cpu_ptr(s->cpu_slab);
  		if (unlikely(slab != c->slab)) {
-@@ -3515,11 +3601,8 @@ static __always_inline void do_slab_free(struct kmem_cache *s,
+@@ -3520,11 +3606,8 @@ static __always_inline void do_slab_free(struct kmem_cache *s,
  		c->tid = next_tid(tid);
  
  		local_unlock(&s->cpu_slab->lock);
@@ -8658,7 +8507,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  }
  
  static __always_inline void slab_free(struct kmem_cache *s, struct slab *slab,
-@@ -3936,6 +4019,7 @@ static void early_kmem_cache_node_alloc(int node)
+@@ -3941,6 +4024,7 @@ static void early_kmem_cache_node_alloc(int node)
  	slab = new_slab(kmem_cache_node, GFP_NOWAIT, node);
  
  	BUG_ON(!slab);
@@ -8666,7 +8515,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  	if (slab_nid(slab) != node) {
  		pr_err("SLUB: Unable to allocate memory from node %d\n", node);
  		pr_err("SLUB: Allocating a useless per node structure in order to be able to continue\n");
-@@ -3950,7 +4034,6 @@ static void early_kmem_cache_node_alloc(int node)
+@@ -3955,7 +4039,6 @@ static void early_kmem_cache_node_alloc(int node)
  	n = kasan_slab_alloc(kmem_cache_node, n, GFP_KERNEL, false);
  	slab->freelist = get_freepointer(kmem_cache_node, n);
  	slab->inuse = 1;
@@ -8674,7 +8523,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  	kmem_cache_node->node[node] = n;
  	init_kmem_cache_node(n);
  	inc_slabs_node(kmem_cache_node, node, slab->objects);
-@@ -4237,23 +4320,21 @@ static void list_slab_objects(struct kmem_cache *s, struct slab *slab,
+@@ -4242,23 +4325,21 @@ static void list_slab_objects(struct kmem_cache *s, struct slab *slab,
  {
  #ifdef CONFIG_SLUB_DEBUG
  	void *addr = slab_address(slab);
@@ -8703,7 +8552,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  #endif
  }
  
-@@ -4611,6 +4692,7 @@ static int __kmem_cache_do_shrink(struct kmem_cache *s)
+@@ -4616,6 +4697,7 @@ static int __kmem_cache_do_shrink(struct kmem_cache *s)
  			if (free == slab->objects) {
  				list_move(&slab->slab_list, &discard);
  				n->nr_partial--;
@@ -8711,7 +8560,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  			} else if (free <= SHRINK_PROMOTE_MAX)
  				list_move(&slab->slab_list, promote + free - 1);
  		}
-@@ -4626,7 +4708,7 @@ static int __kmem_cache_do_shrink(struct kmem_cache *s)
+@@ -4631,7 +4713,7 @@ static int __kmem_cache_do_shrink(struct kmem_cache *s)
  
  		/* Release empty slabs */
  		list_for_each_entry_safe(slab, t, &discard, slab_list)
@@ -8720,7 +8569,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  
  		if (slabs_node(s, node))
  			ret = 1;
-@@ -4980,12 +5062,9 @@ static void validate_slab(struct kmem_cache *s, struct slab *slab,
+@@ -4991,12 +5073,9 @@ static void validate_slab(struct kmem_cache *s, struct slab *slab,
  {
  	void *p;
  	void *addr = slab_address(slab);
@@ -8734,7 +8583,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  
  	/* Now we know that a valid freelist exists */
  	__fill_map(obj_map, s, slab);
-@@ -4996,8 +5075,6 @@ static void validate_slab(struct kmem_cache *s, struct slab *slab,
+@@ -5007,8 +5086,6 @@ static void validate_slab(struct kmem_cache *s, struct slab *slab,
  		if (!check_object(s, slab, p, val))
  			break;
  	}
@@ -8743,7 +8592,7 @@ index 862dbd9af4f5..a738020a60fa 100644
  }
  
  static int validate_slab_node(struct kmem_cache *s,
-@@ -5601,7 +5678,7 @@ static ssize_t validate_store(struct kmem_cache *s,
+@@ -5612,7 +5689,7 @@ static ssize_t validate_store(struct kmem_cache *s,
  {
  	int ret = -EINVAL;
  
@@ -9111,10 +8960,10 @@ index c8d137ef5980..b71ccaec0991 100644
  
  static int
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 84bb5e188d0d..2d6d361e870d 100644
+index 417463da4fac..505c72a9b153 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -6551,6 +6551,11 @@ nodefer:	__kfree_skb(skb);
+@@ -6555,6 +6555,11 @@ nodefer:	__kfree_skb(skb);
  	/* Make sure to trigger NET_RX_SOFTIRQ on the remote CPU
  	 * if we are unlucky enough (this seems very unlikely).
  	 */
@@ -9247,7 +9096,7 @@ index efab2b06d373..5a7349002508 100644
  		seq_printf(seq, "%3X %8LX %8LX %8LX %16LX %16LX\n",
  			   i, (u64)conns, (u64)inpkts,
 diff --git a/net/netfilter/nf_tables_api.c b/net/netfilter/nf_tables_api.c
-index 2ee50e23c9b7..7b0b7020b622 100644
+index 63c70141b3e5..cde0d9f0d838 100644
 --- a/net/netfilter/nf_tables_api.c
 +++ b/net/netfilter/nf_tables_api.c
 @@ -1534,10 +1534,10 @@ static int nft_dump_stats(struct sk_buff *skb, struct nft_stats __percpu *stats)
@@ -9308,23 +9157,6 @@ index d4a2db0b2299..0a0e4c283f02 100644
  
  			masks_and_count[i].counter += counter;
  		}
-diff --git a/scripts/checkpatch.pl b/scripts/checkpatch.pl
-index 79e759aac543..d130db672641 100755
---- a/scripts/checkpatch.pl
-+++ b/scripts/checkpatch.pl
-@@ -5749,6 +5749,12 @@ sub process {
- 			}
- 		}
- 
-+# rwlock.h must not be included directly. It will be included via spinlock.h if needed.
-+		if ($rawline =~ /\#\s*include.*\<linux\/rwlock\.h/) {
-+			ERROR("INCLUDES_BAD_HEADER",
-+				"Please don't include rwlock.h directly, use spinlock.h if needed.\n" . $herecurr);
-+		}
-+
- # warn if <asm/foo.h> is #included and <linux/foo.h> is available and includes
- # itself <asm/foo.h> (uses RAW line)
- 		if ($tree && $rawline =~ m{^.\s*\#\s*include\s*\<asm\/(.*)\.h\>}) {
 -- 
 2.30.2
 
