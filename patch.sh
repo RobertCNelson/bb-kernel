@@ -109,30 +109,30 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.18
-	aufs_prefix="aufs5-"
+	#https://github.com/sfjro/aufs-standalone/tree/aufs6.0
+	aufs_prefix="aufs6-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.18
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
+		KERNEL_REL=6.0
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-kbuild' -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}base.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}base.patch
 		patch -p1 < ${aufs_prefix}base.patch || aufs_fail
 		rm -rf ${aufs_prefix}base.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-base' -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}mmap.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}mmap.patch
 		patch -p1 < ${aufs_prefix}mmap.patch || aufs_fail
 		rm -rf ${aufs_prefix}mmap.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-mmap' -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}standalone.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}standalone.patch
 		patch -p1 < ${aufs_prefix}standalone.patch || aufs_fail
 		rm -rf ${aufs_prefix}standalone.patch
 		${git_bin} add .
@@ -141,41 +141,35 @@ aufs () {
 		${git_bin} format-patch -4 -o ../patches/aufs/
 
 		cd ../
-		if [ ! -d ./${aufs_prefix}standalone ] ; then
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
-			cd ./${aufs_prefix}standalone/
+		if [ ! -d ./aufs-standalone ] ; then
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs-standalone --depth=1
+			cd ./aufs-standalone/
 				aufs_hash=$(git rev-parse HEAD)
 			cd -
 		else
-			rm -rf ./${aufs_prefix}standalone || true
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
-			cd ./${aufs_prefix}standalone/
+			rm -rf ./aufs-standalone || true
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs-standalone --depth=1
+			cd ./aufs-standalone/
 				aufs_hash=$(git rev-parse HEAD)
 			cd -
 		fi
 		cd ./KERNEL/
-		KERNEL_REL=5.18
+		KERNEL_REL=6.0
 
-		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
+		cp -v ../aufs-standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
-		cp -rv ../${aufs_prefix}standalone/Documentation/filesystems/aufs/* ./Documentation/filesystems/aufs/
+		cp -rv ../aufs-standalone/Documentation/filesystems/aufs/* ./Documentation/filesystems/aufs/
 		mkdir -p ./fs/aufs/
-		cp -v ../${aufs_prefix}standalone/fs/aufs/* ./fs/aufs/
-		cp -v ../${aufs_prefix}standalone/include/uapi/linux/aufs_type.h ./include/uapi/linux/
+		cp -v ../aufs-standalone/fs/aufs/* ./fs/aufs/
+		cp -v ../aufs-standalone/include/uapi/linux/aufs_type.h ./include/uapi/linux/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" -s
-
-		#wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt.patch
-		#patch -p1 < rt.patch || aufs_fail
-		#rm -rf rt.patch
-		#${git_bin} add .
-		#${git_bin} commit -a -m 'merge: aufs-rt' -s
+		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" -s
 
 		${git_bin} format-patch -5 -o ../patches/aufs/
-		echo "AUFS: https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" > ../patches/git/AUFS
+		echo "AUFS: https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" > ../patches/git/AUFS
 
-		rm -rf ../${aufs_prefix}standalone/ || true
+		rm -rf ../aufs-standalone/ || true
 
 		${git_bin} reset --hard HEAD~5
 
@@ -186,7 +180,6 @@ aufs () {
 		${git} "${DIR}/patches/aufs/0003-merge-aufs-mmap.patch"
 		${git} "${DIR}/patches/aufs/0004-merge-aufs-standalone.patch"
 		${git} "${DIR}/patches/aufs/0005-merge-aufs.patch"
-		#${git} "${DIR}/patches/aufs/0006-merge-aufs-rt.patch"
 
 		wdir="aufs"
 		number=5
@@ -474,7 +467,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 wpanusb
 bcfserial
 #rt
