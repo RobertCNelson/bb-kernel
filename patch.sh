@@ -470,7 +470,7 @@ local_patch () {
 aufs
 wpanusb
 bcfserial
-rt
+#rt
 wireless_regdb
 ti_pm_firmware
 beagleboard_dtbs
