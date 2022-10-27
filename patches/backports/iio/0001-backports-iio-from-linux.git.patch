@@ -1,77 +1,627 @@
-From 26991fc6c4dadc1ac6ba80a2085f7d975a14ecfa Mon Sep 17 00:00:00 2001
+From dae6f58e888c2b21a348473fd461046984ee1fc2 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 23 Sep 2022 19:40:35 -0500
+Date: Wed, 26 Oct 2022 16:15:14 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
-Reference: v5.15.70
+Reference: v5.15.75
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/iio/adc/ad7292.c  |  4 +---
- drivers/iio/adc/mcp3911.c | 19 ++++++++++++++-----
- 2 files changed, 15 insertions(+), 8 deletions(-)
+ drivers/iio/adc/ad7923.c                 |   4 +-
+ drivers/iio/adc/at91-sama5d2_adc.c       |  28 ++-
+ drivers/iio/adc/ltc2497.c                |  13 ++
+ drivers/iio/dac/ad5593r.c                |  46 ++--
+ drivers/iio/inkern.c                     |   8 +-
+ drivers/iio/magnetometer/yamaha-yas530.c |   2 +-
+ drivers/iio/pressure/dps310.c            | 262 ++++++++++++++---------
+ 7 files changed, 231 insertions(+), 132 deletions(-)
 
-diff --git a/drivers/iio/adc/ad7292.c b/drivers/iio/adc/ad7292.c
-index 3271a31afde1..e3e14a1253e8 100644
---- a/drivers/iio/adc/ad7292.c
-+++ b/drivers/iio/adc/ad7292.c
-@@ -287,10 +287,8 @@ static int ad7292_probe(struct spi_device *spi)
- 
- 		ret = devm_add_action_or_reset(&spi->dev,
- 					       ad7292_regulator_disable, st);
--		if (ret) {
--			regulator_disable(st->reg);
-+		if (ret)
+diff --git a/drivers/iio/adc/ad7923.c b/drivers/iio/adc/ad7923.c
+index 069b561ee768..b8cc94b7dd80 100644
+--- a/drivers/iio/adc/ad7923.c
++++ b/drivers/iio/adc/ad7923.c
+@@ -93,6 +93,7 @@ enum ad7923_id {
+ 			.sign = 'u',					\
+ 			.realbits = (bits),				\
+ 			.storagebits = 16,				\
++			.shift = 12 - (bits),				\
+ 			.endianness = IIO_BE,				\
+ 		},							\
+ 	}
+@@ -268,7 +269,8 @@ static int ad7923_read_raw(struct iio_dev *indio_dev,
  			return ret;
--		}
  
- 		ret = regulator_get_voltage(st->reg);
- 		if (ret < 0)
-diff --git a/drivers/iio/adc/mcp3911.c b/drivers/iio/adc/mcp3911.c
-index e573da5397bb..65278270a75c 100644
---- a/drivers/iio/adc/mcp3911.c
-+++ b/drivers/iio/adc/mcp3911.c
-@@ -38,8 +38,8 @@
- #define MCP3911_CHANNEL(x)		(MCP3911_REG_CHANNEL0 + x * 3)
- #define MCP3911_OFFCAL(x)		(MCP3911_REG_OFFCAL_CH0 + x * 6)
+ 		if (chan->address == EXTRACT(ret, 12, 4))
+-			*val = EXTRACT(ret, 0, 12);
++			*val = EXTRACT(ret, chan->scan_type.shift,
++				       chan->scan_type.realbits);
+ 		else
+ 			return -EIO;
  
--/* Internal voltage reference in uV */
--#define MCP3911_INT_VREF_UV		1200000
-+/* Internal voltage reference in mV */
-+#define MCP3911_INT_VREF_MV		1200
+diff --git a/drivers/iio/adc/at91-sama5d2_adc.c b/drivers/iio/adc/at91-sama5d2_adc.c
+index c4de706012e5..403a29e4dc3e 100644
+--- a/drivers/iio/adc/at91-sama5d2_adc.c
++++ b/drivers/iio/adc/at91-sama5d2_adc.c
+@@ -74,7 +74,7 @@
+ #define	AT91_SAMA5D2_MR_ANACH		BIT(23)
+ /* Tracking Time */
+ #define	AT91_SAMA5D2_MR_TRACKTIM(v)	((v) << 24)
+-#define	AT91_SAMA5D2_MR_TRACKTIM_MAX	0xff
++#define	AT91_SAMA5D2_MR_TRACKTIM_MAX	0xf
+ /* Transfer Time */
+ #define	AT91_SAMA5D2_MR_TRANSFER(v)	((v) << 28)
+ #define	AT91_SAMA5D2_MR_TRANSFER_MAX	0x3
+@@ -1329,10 +1329,12 @@ static int at91_adc_read_info_raw(struct iio_dev *indio_dev,
+ 		ret = at91_adc_read_position(st, chan->channel,
+ 					     &tmp_val);
+ 		*val = tmp_val;
++		if (ret > 0)
++			ret = at91_adc_adjust_val_osr(st, val);
+ 		mutex_unlock(&st->lock);
+ 		iio_device_release_direct_mode(indio_dev);
  
- #define MCP3911_REG_READ(reg, id)	((((reg) << 1) | ((id) << 5) | (1 << 0)) & 0xff)
- #define MCP3911_REG_WRITE(reg, id)	((((reg) << 1) | ((id) << 5) | (0 << 0)) & 0xff)
-@@ -111,6 +111,8 @@ static int mcp3911_read_raw(struct iio_dev *indio_dev,
- 		if (ret)
- 			goto out;
+-		return at91_adc_adjust_val_osr(st, val);
++		return ret;
+ 	}
+ 	if (chan->type == IIO_PRESSURE) {
+ 		ret = iio_device_claim_direct_mode(indio_dev);
+@@ -1343,10 +1345,12 @@ static int at91_adc_read_info_raw(struct iio_dev *indio_dev,
+ 		ret = at91_adc_read_pressure(st, chan->channel,
+ 					     &tmp_val);
+ 		*val = tmp_val;
++		if (ret > 0)
++			ret = at91_adc_adjust_val_osr(st, val);
+ 		mutex_unlock(&st->lock);
+ 		iio_device_release_direct_mode(indio_dev);
  
-+		*val = sign_extend32(*val, 23);
-+
- 		ret = IIO_VAL_INT;
- 		break;
- 
-@@ -135,11 +137,18 @@ static int mcp3911_read_raw(struct iio_dev *indio_dev,
- 
- 			*val = ret / 1000;
- 		} else {
--			*val = MCP3911_INT_VREF_UV;
-+			*val = MCP3911_INT_VREF_MV;
- 		}
- 
--		*val2 = 24;
--		ret = IIO_VAL_FRACTIONAL_LOG2;
-+		/*
-+		 * For 24bit Conversion
-+		 * Raw = ((Voltage)/(Vref) * 2^23 * Gain * 1.5
-+		 * Voltage = Raw * (Vref)/(2^23 * Gain * 1.5)
-+		 */
-+
-+		/* val2 = (2^23 * 1.5) */
-+		*val2 = 12582912;
-+		ret = IIO_VAL_FRACTIONAL;
- 		break;
+-		return at91_adc_adjust_val_osr(st, val);
++		return ret;
  	}
  
+ 	/* in this case we have a voltage channel */
+@@ -1437,16 +1441,20 @@ static int at91_adc_write_raw(struct iio_dev *indio_dev,
+ 		/* if no change, optimize out */
+ 		if (val == st->oversampling_ratio)
+ 			return 0;
++		mutex_lock(&st->lock);
+ 		st->oversampling_ratio = val;
+ 		/* update ratio */
+ 		at91_adc_config_emr(st);
++		mutex_unlock(&st->lock);
+ 		return 0;
+ 	case IIO_CHAN_INFO_SAMP_FREQ:
+ 		if (val < st->soc_info.min_sample_rate ||
+ 		    val > st->soc_info.max_sample_rate)
+ 			return -EINVAL;
+ 
++		mutex_lock(&st->lock);
+ 		at91_adc_setup_samp_freq(indio_dev, val);
++		mutex_unlock(&st->lock);
+ 		return 0;
+ 	default:
+ 		return -EINVAL;
+@@ -1895,6 +1903,9 @@ static __maybe_unused int at91_adc_suspend(struct device *dev)
+ 	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+ 	struct at91_adc_state *st = iio_priv(indio_dev);
+ 
++	if (iio_buffer_enabled(indio_dev))
++		at91_adc_buffer_postdisable(indio_dev);
++
+ 	/*
+ 	 * Do a sofware reset of the ADC before we go to suspend.
+ 	 * this will ensure that all pins are free from being muxed by the ADC
+@@ -1938,14 +1949,11 @@ static __maybe_unused int at91_adc_resume(struct device *dev)
+ 	if (!iio_buffer_enabled(indio_dev))
+ 		return 0;
+ 
+-	/* check if we are enabling triggered buffer or the touchscreen */
+-	if (at91_adc_current_chan_is_touch(indio_dev))
+-		return at91_adc_configure_touch(st, true);
+-	else
+-		return at91_adc_configure_trigger(st->trig, true);
++	ret = at91_adc_buffer_prepare(indio_dev);
++	if (ret)
++		goto vref_disable_resume;
+ 
+-	/* not needed but more explicit */
+-	return 0;
++	return at91_adc_configure_trigger(st->trig, true);
+ 
+ vref_disable_resume:
+ 	regulator_disable(st->vref);
+diff --git a/drivers/iio/adc/ltc2497.c b/drivers/iio/adc/ltc2497.c
+index 1adddf5a88a9..61f373fab9a1 100644
+--- a/drivers/iio/adc/ltc2497.c
++++ b/drivers/iio/adc/ltc2497.c
+@@ -41,6 +41,19 @@ static int ltc2497_result_and_measure(struct ltc2497core_driverdata *ddata,
+ 		}
+ 
+ 		*val = (be32_to_cpu(st->buf) >> 14) - (1 << 17);
++
++		/*
++		 * The part started a new conversion at the end of the above i2c
++		 * transfer, so if the address didn't change since the last call
++		 * everything is fine and we can return early.
++		 * If not (which should only happen when some sort of bulk
++		 * conversion is implemented) we have to program the new
++		 * address. Note that this probably fails as the conversion that
++		 * was triggered above is like not complete yet and the two
++		 * operations have to be done in a single transfer.
++		 */
++		if (ddata->addr_prev == address)
++			return 0;
+ 	}
+ 
+ 	ret = i2c_smbus_write_byte(st->client,
+diff --git a/drivers/iio/dac/ad5593r.c b/drivers/iio/dac/ad5593r.c
+index 5b4df36fdc2a..4cc855c78121 100644
+--- a/drivers/iio/dac/ad5593r.c
++++ b/drivers/iio/dac/ad5593r.c
+@@ -13,6 +13,8 @@
+ #include <linux/module.h>
+ #include <linux/mod_devicetable.h>
+ 
++#include <asm/unaligned.h>
++
+ #define AD5593R_MODE_CONF		(0 << 4)
+ #define AD5593R_MODE_DAC_WRITE		(1 << 4)
+ #define AD5593R_MODE_ADC_READBACK	(4 << 4)
+@@ -20,6 +22,24 @@
+ #define AD5593R_MODE_GPIO_READBACK	(6 << 4)
+ #define AD5593R_MODE_REG_READBACK	(7 << 4)
+ 
++static int ad5593r_read_word(struct i2c_client *i2c, u8 reg, u16 *value)
++{
++	int ret;
++	u8 buf[2];
++
++	ret = i2c_smbus_write_byte(i2c, reg);
++	if (ret < 0)
++		return ret;
++
++	ret = i2c_master_recv(i2c, buf, sizeof(buf));
++	if (ret < 0)
++		return ret;
++
++	*value = get_unaligned_be16(buf);
++
++	return 0;
++}
++
+ static int ad5593r_write_dac(struct ad5592r_state *st, unsigned chan, u16 value)
+ {
+ 	struct i2c_client *i2c = to_i2c_client(st->dev);
+@@ -38,13 +58,7 @@ static int ad5593r_read_adc(struct ad5592r_state *st, unsigned chan, u16 *value)
+ 	if (val < 0)
+ 		return (int) val;
+ 
+-	val = i2c_smbus_read_word_swapped(i2c, AD5593R_MODE_ADC_READBACK);
+-	if (val < 0)
+-		return (int) val;
+-
+-	*value = (u16) val;
+-
+-	return 0;
++	return ad5593r_read_word(i2c, AD5593R_MODE_ADC_READBACK, value);
+ }
+ 
+ static int ad5593r_reg_write(struct ad5592r_state *st, u8 reg, u16 value)
+@@ -58,25 +72,19 @@ static int ad5593r_reg_write(struct ad5592r_state *st, u8 reg, u16 value)
+ static int ad5593r_reg_read(struct ad5592r_state *st, u8 reg, u16 *value)
+ {
+ 	struct i2c_client *i2c = to_i2c_client(st->dev);
+-	s32 val;
+-
+-	val = i2c_smbus_read_word_swapped(i2c, AD5593R_MODE_REG_READBACK | reg);
+-	if (val < 0)
+-		return (int) val;
+ 
+-	*value = (u16) val;
+-
+-	return 0;
++	return ad5593r_read_word(i2c, AD5593R_MODE_REG_READBACK | reg, value);
+ }
+ 
+ static int ad5593r_gpio_read(struct ad5592r_state *st, u8 *value)
+ {
+ 	struct i2c_client *i2c = to_i2c_client(st->dev);
+-	s32 val;
++	u16 val;
++	int ret;
+ 
+-	val = i2c_smbus_read_word_swapped(i2c, AD5593R_MODE_GPIO_READBACK);
+-	if (val < 0)
+-		return (int) val;
++	ret = ad5593r_read_word(i2c, AD5593R_MODE_GPIO_READBACK, &val);
++	if (ret)
++		return ret;
+ 
+ 	*value = (u8) val;
+ 
+diff --git a/drivers/iio/inkern.c b/drivers/iio/inkern.c
+index b5966365d769..bf9ce01c854b 100644
+--- a/drivers/iio/inkern.c
++++ b/drivers/iio/inkern.c
+@@ -148,9 +148,10 @@ static int __of_iio_channel_get(struct iio_channel *channel,
+ 
+ 	idev = bus_find_device(&iio_bus_type, NULL, iiospec.np,
+ 			       iio_dev_node_match);
+-	of_node_put(iiospec.np);
+-	if (idev == NULL)
++	if (idev == NULL) {
++		of_node_put(iiospec.np);
+ 		return -EPROBE_DEFER;
++	}
+ 
+ 	indio_dev = dev_to_iio_dev(idev);
+ 	channel->indio_dev = indio_dev;
+@@ -158,6 +159,7 @@ static int __of_iio_channel_get(struct iio_channel *channel,
+ 		index = indio_dev->info->of_xlate(indio_dev, &iiospec);
+ 	else
+ 		index = __of_iio_simple_xlate(indio_dev, &iiospec);
++	of_node_put(iiospec.np);
+ 	if (index < 0)
+ 		goto err_put;
+ 	channel->channel = &indio_dev->channels[index];
+@@ -393,6 +395,8 @@ struct iio_channel *devm_of_iio_channel_get_by_name(struct device *dev,
+ 	channel = of_iio_channel_get_by_name(np, channel_name);
+ 	if (IS_ERR(channel))
+ 		return channel;
++	if (!channel)
++		return ERR_PTR(-ENODEV);
+ 
+ 	ret = devm_add_action_or_reset(dev, devm_iio_channel_free, channel);
+ 	if (ret)
+diff --git a/drivers/iio/magnetometer/yamaha-yas530.c b/drivers/iio/magnetometer/yamaha-yas530.c
+index b2bc637150bf..40192aa46b04 100644
+--- a/drivers/iio/magnetometer/yamaha-yas530.c
++++ b/drivers/iio/magnetometer/yamaha-yas530.c
+@@ -132,7 +132,7 @@ struct yas5xx {
+ 	unsigned int version;
+ 	char name[16];
+ 	struct yas5xx_calibration calibration;
+-	u8 hard_offsets[3];
++	s8 hard_offsets[3];
+ 	struct iio_mount_matrix orientation;
+ 	struct regmap *map;
+ 	struct regulator_bulk_data regs[2];
+diff --git a/drivers/iio/pressure/dps310.c b/drivers/iio/pressure/dps310.c
+index 0730380ceb69..cf8b92fae1b3 100644
+--- a/drivers/iio/pressure/dps310.c
++++ b/drivers/iio/pressure/dps310.c
+@@ -89,6 +89,7 @@ struct dps310_data {
+ 	s32 c00, c10, c20, c30, c01, c11, c21;
+ 	s32 pressure_raw;
+ 	s32 temp_raw;
++	bool timeout_recovery_failed;
+ };
+ 
+ static const struct iio_chan_spec dps310_channels[] = {
+@@ -159,6 +160,102 @@ static int dps310_get_coefs(struct dps310_data *data)
+ 	return 0;
+ }
+ 
++/*
++ * Some versions of the chip will read temperatures in the ~60C range when
++ * it's actually ~20C. This is the manufacturer recommended workaround
++ * to correct the issue. The registers used below are undocumented.
++ */
++static int dps310_temp_workaround(struct dps310_data *data)
++{
++	int rc;
++	int reg;
++
++	rc = regmap_read(data->regmap, 0x32, &reg);
++	if (rc)
++		return rc;
++
++	/*
++	 * If bit 1 is set then the device is okay, and the workaround does not
++	 * need to be applied
++	 */
++	if (reg & BIT(1))
++		return 0;
++
++	rc = regmap_write(data->regmap, 0x0e, 0xA5);
++	if (rc)
++		return rc;
++
++	rc = regmap_write(data->regmap, 0x0f, 0x96);
++	if (rc)
++		return rc;
++
++	rc = regmap_write(data->regmap, 0x62, 0x02);
++	if (rc)
++		return rc;
++
++	rc = regmap_write(data->regmap, 0x0e, 0x00);
++	if (rc)
++		return rc;
++
++	return regmap_write(data->regmap, 0x0f, 0x00);
++}
++
++static int dps310_startup(struct dps310_data *data)
++{
++	int rc;
++	int ready;
++
++	/*
++	 * Set up pressure sensor in single sample, one measurement per second
++	 * mode
++	 */
++	rc = regmap_write(data->regmap, DPS310_PRS_CFG, 0);
++	if (rc)
++		return rc;
++
++	/*
++	 * Set up external (MEMS) temperature sensor in single sample, one
++	 * measurement per second mode
++	 */
++	rc = regmap_write(data->regmap, DPS310_TMP_CFG, DPS310_TMP_EXT);
++	if (rc)
++		return rc;
++
++	/* Temp and pressure shifts are disabled when PRC <= 8 */
++	rc = regmap_write_bits(data->regmap, DPS310_CFG_REG,
++			       DPS310_PRS_SHIFT_EN | DPS310_TMP_SHIFT_EN, 0);
++	if (rc)
++		return rc;
++
++	/* MEAS_CFG doesn't update correctly unless first written with 0 */
++	rc = regmap_write_bits(data->regmap, DPS310_MEAS_CFG,
++			       DPS310_MEAS_CTRL_BITS, 0);
++	if (rc)
++		return rc;
++
++	/* Turn on temperature and pressure measurement in the background */
++	rc = regmap_write_bits(data->regmap, DPS310_MEAS_CFG,
++			       DPS310_MEAS_CTRL_BITS, DPS310_PRS_EN |
++			       DPS310_TEMP_EN | DPS310_BACKGROUND);
++	if (rc)
++		return rc;
++
++	/*
++	 * Calibration coefficients required for reporting temperature.
++	 * They are available 40ms after the device has started
++	 */
++	rc = regmap_read_poll_timeout(data->regmap, DPS310_MEAS_CFG, ready,
++				      ready & DPS310_COEF_RDY, 10000, 40000);
++	if (rc)
++		return rc;
++
++	rc = dps310_get_coefs(data);
++	if (rc)
++		return rc;
++
++	return dps310_temp_workaround(data);
++}
++
+ static int dps310_get_pres_precision(struct dps310_data *data)
+ {
+ 	int rc;
+@@ -297,11 +394,69 @@ static int dps310_get_temp_k(struct dps310_data *data)
+ 	return scale_factors[ilog2(rc)];
+ }
+ 
++static int dps310_reset_wait(struct dps310_data *data)
++{
++	int rc;
++
++	rc = regmap_write(data->regmap, DPS310_RESET, DPS310_RESET_MAGIC);
++	if (rc)
++		return rc;
++
++	/* Wait for device chip access: 2.5ms in specification */
++	usleep_range(2500, 12000);
++	return 0;
++}
++
++static int dps310_reset_reinit(struct dps310_data *data)
++{
++	int rc;
++
++	rc = dps310_reset_wait(data);
++	if (rc)
++		return rc;
++
++	return dps310_startup(data);
++}
++
++static int dps310_ready_status(struct dps310_data *data, int ready_bit, int timeout)
++{
++	int sleep = DPS310_POLL_SLEEP_US(timeout);
++	int ready;
++
++	return regmap_read_poll_timeout(data->regmap, DPS310_MEAS_CFG, ready, ready & ready_bit,
++					sleep, timeout);
++}
++
++static int dps310_ready(struct dps310_data *data, int ready_bit, int timeout)
++{
++	int rc;
++
++	rc = dps310_ready_status(data, ready_bit, timeout);
++	if (rc) {
++		if (rc == -ETIMEDOUT && !data->timeout_recovery_failed) {
++			/* Reset and reinitialize the chip. */
++			if (dps310_reset_reinit(data)) {
++				data->timeout_recovery_failed = true;
++			} else {
++				/* Try again to get sensor ready status. */
++				if (dps310_ready_status(data, ready_bit, timeout))
++					data->timeout_recovery_failed = true;
++				else
++					return 0;
++			}
++		}
++
++		return rc;
++	}
++
++	data->timeout_recovery_failed = false;
++	return 0;
++}
++
+ static int dps310_read_pres_raw(struct dps310_data *data)
+ {
+ 	int rc;
+ 	int rate;
+-	int ready;
+ 	int timeout;
+ 	s32 raw;
+ 	u8 val[3];
+@@ -313,9 +468,7 @@ static int dps310_read_pres_raw(struct dps310_data *data)
+ 	timeout = DPS310_POLL_TIMEOUT_US(rate);
+ 
+ 	/* Poll for sensor readiness; base the timeout upon the sample rate. */
+-	rc = regmap_read_poll_timeout(data->regmap, DPS310_MEAS_CFG, ready,
+-				      ready & DPS310_PRS_RDY,
+-				      DPS310_POLL_SLEEP_US(timeout), timeout);
++	rc = dps310_ready(data, DPS310_PRS_RDY, timeout);
+ 	if (rc)
+ 		goto done;
+ 
+@@ -352,7 +505,6 @@ static int dps310_read_temp_raw(struct dps310_data *data)
+ {
+ 	int rc;
+ 	int rate;
+-	int ready;
+ 	int timeout;
+ 
+ 	if (mutex_lock_interruptible(&data->lock))
+@@ -362,10 +514,8 @@ static int dps310_read_temp_raw(struct dps310_data *data)
+ 	timeout = DPS310_POLL_TIMEOUT_US(rate);
+ 
+ 	/* Poll for sensor readiness; base the timeout upon the sample rate. */
+-	rc = regmap_read_poll_timeout(data->regmap, DPS310_MEAS_CFG, ready,
+-				      ready & DPS310_TMP_RDY,
+-				      DPS310_POLL_SLEEP_US(timeout), timeout);
+-	if (rc < 0)
++	rc = dps310_ready(data, DPS310_TMP_RDY, timeout);
++	if (rc)
+ 		goto done;
+ 
+ 	rc = dps310_read_temp_ready(data);
+@@ -660,7 +810,7 @@ static void dps310_reset(void *action_data)
+ {
+ 	struct dps310_data *data = action_data;
+ 
+-	regmap_write(data->regmap, DPS310_RESET, DPS310_RESET_MAGIC);
++	dps310_reset_wait(data);
+ }
+ 
+ static const struct regmap_config dps310_regmap_config = {
+@@ -677,52 +827,12 @@ static const struct iio_info dps310_info = {
+ 	.write_raw = dps310_write_raw,
+ };
+ 
+-/*
+- * Some verions of chip will read temperatures in the ~60C range when
+- * its actually ~20C. This is the manufacturer recommended workaround
+- * to correct the issue. The registers used below are undocumented.
+- */
+-static int dps310_temp_workaround(struct dps310_data *data)
+-{
+-	int rc;
+-	int reg;
+-
+-	rc = regmap_read(data->regmap, 0x32, &reg);
+-	if (rc < 0)
+-		return rc;
+-
+-	/*
+-	 * If bit 1 is set then the device is okay, and the workaround does not
+-	 * need to be applied
+-	 */
+-	if (reg & BIT(1))
+-		return 0;
+-
+-	rc = regmap_write(data->regmap, 0x0e, 0xA5);
+-	if (rc < 0)
+-		return rc;
+-
+-	rc = regmap_write(data->regmap, 0x0f, 0x96);
+-	if (rc < 0)
+-		return rc;
+-
+-	rc = regmap_write(data->regmap, 0x62, 0x02);
+-	if (rc < 0)
+-		return rc;
+-
+-	rc = regmap_write(data->regmap, 0x0e, 0x00);
+-	if (rc < 0)
+-		return rc;
+-
+-	return regmap_write(data->regmap, 0x0f, 0x00);
+-}
+-
+ static int dps310_probe(struct i2c_client *client,
+ 			const struct i2c_device_id *id)
+ {
+ 	struct dps310_data *data;
+ 	struct iio_dev *iio;
+-	int rc, ready;
++	int rc;
+ 
+ 	iio = devm_iio_device_alloc(&client->dev,  sizeof(*data));
+ 	if (!iio)
+@@ -747,54 +857,8 @@ static int dps310_probe(struct i2c_client *client,
+ 	if (rc)
+ 		return rc;
+ 
+-	/*
+-	 * Set up pressure sensor in single sample, one measurement per second
+-	 * mode
+-	 */
+-	rc = regmap_write(data->regmap, DPS310_PRS_CFG, 0);
+-
+-	/*
+-	 * Set up external (MEMS) temperature sensor in single sample, one
+-	 * measurement per second mode
+-	 */
+-	rc = regmap_write(data->regmap, DPS310_TMP_CFG, DPS310_TMP_EXT);
+-	if (rc < 0)
+-		return rc;
+-
+-	/* Temp and pressure shifts are disabled when PRC <= 8 */
+-	rc = regmap_write_bits(data->regmap, DPS310_CFG_REG,
+-			       DPS310_PRS_SHIFT_EN | DPS310_TMP_SHIFT_EN, 0);
+-	if (rc < 0)
+-		return rc;
+-
+-	/* MEAS_CFG doesn't update correctly unless first written with 0 */
+-	rc = regmap_write_bits(data->regmap, DPS310_MEAS_CFG,
+-			       DPS310_MEAS_CTRL_BITS, 0);
+-	if (rc < 0)
+-		return rc;
+-
+-	/* Turn on temperature and pressure measurement in the background */
+-	rc = regmap_write_bits(data->regmap, DPS310_MEAS_CFG,
+-			       DPS310_MEAS_CTRL_BITS, DPS310_PRS_EN |
+-			       DPS310_TEMP_EN | DPS310_BACKGROUND);
+-	if (rc < 0)
+-		return rc;
+-
+-	/*
+-	 * Calibration coefficients required for reporting temperature.
+-	 * They are available 40ms after the device has started
+-	 */
+-	rc = regmap_read_poll_timeout(data->regmap, DPS310_MEAS_CFG, ready,
+-				      ready & DPS310_COEF_RDY, 10000, 40000);
+-	if (rc < 0)
+-		return rc;
+-
+-	rc = dps310_get_coefs(data);
+-	if (rc < 0)
+-		return rc;
+-
+-	rc = dps310_temp_workaround(data);
+-	if (rc < 0)
++	rc = dps310_startup(data);
++	if (rc)
+ 		return rc;
+ 
+ 	rc = devm_iio_device_register(&client->dev, iio);
 -- 
 2.30.2
 
