@@ -467,13 +467,13 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 wpanusb
 bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -511,7 +511,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.150"
+	backport_tag="v5.10.153"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -549,7 +549,7 @@ reverts () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	dir 'RPi'
+	#dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/tps65217'
 
@@ -557,7 +557,7 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
-	dir 'drivers/serdev'
+	#dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	#dir 'drivers/mikrobus'
 }
@@ -580,7 +580,7 @@ fixes
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.0.5"
+		backport_tag="v6.0.7"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
