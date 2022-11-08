@@ -404,7 +404,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v6.0.x"
+	branch="v6.1.x"
 	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
