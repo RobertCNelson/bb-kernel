@@ -461,6 +461,10 @@ debian_regs () {
 			#13 trixie: https://wiki.debian.org/DebianTrixie
 			deb_distro="sid"
 			;;
+		forky)
+			#14 forky: https://wiki.debian.org/DebianForky
+			deb_distro="sid"
+			;;
 		esac
 
 		#https://wiki.ubuntu.com/Releases
@@ -482,10 +486,11 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|focal|jammy)
+		bionic|focal|jammy|kinetic)
 			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
 			#20.04 focal:  (EOL: April 2025) lts: focal -> jammy
 			#22.04 jammy:  (EOL: April 2027) lts: jammy -> xyz
+			#22.10 kinetic: (EOL: )
 			unset warn_eol_distro
 			;;
 		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|cosmic|disco|eoan|groovy|hirsute|impish)
