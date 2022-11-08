@@ -109,30 +109,30 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs5-standalone/tree/aufs5.10.140
+	#https://github.com/sfjro/aufs-standalone/tree/aufs5.10.140
 	aufs_prefix="aufs5-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		KERNEL_REL=5.10.140
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
 		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
 		rm -rf ${aufs_prefix}kbuild.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-kbuild' -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}base.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}base.patch
 		patch -p1 < ${aufs_prefix}base.patch || aufs_fail
 		rm -rf ${aufs_prefix}base.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-base' -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}mmap.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}mmap.patch
 		patch -p1 < ${aufs_prefix}mmap.patch || aufs_fail
 		rm -rf ${aufs_prefix}mmap.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-mmap' -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/${aufs_prefix}standalone.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}standalone.patch
 		patch -p1 < ${aufs_prefix}standalone.patch || aufs_fail
 		rm -rf ${aufs_prefix}standalone.patch
 		${git_bin} add .
@@ -141,41 +141,41 @@ aufs () {
 		${git_bin} format-patch -4 -o ../patches/aufs/
 
 		cd ../
-		if [ ! -d ./${aufs_prefix}standalone ] ; then
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
-			cd ./${aufs_prefix}standalone/
+		if [ ! -d ./aufs-standalone ] ; then
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs-standalone --depth=1
+			cd ./aufs-standalone/
 				aufs_hash=$(git rev-parse HEAD)
 			cd -
 		else
-			rm -rf ./${aufs_prefix}standalone || true
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/${aufs_prefix}standalone --depth=1
-			cd ./${aufs_prefix}standalone/
+			rm -rf ./aufs-standalone || true
+			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs-standalone --depth=1
+			cd ./aufs-standalone/
 				aufs_hash=$(git rev-parse HEAD)
 			cd -
 		fi
 		cd ./KERNEL/
 		KERNEL_REL=5.10
 
-		cp -v ../${aufs_prefix}standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
+		cp -v ../aufs-standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
-		cp -rv ../${aufs_prefix}standalone/Documentation/filesystems/aufs/* ./Documentation/filesystems/aufs/
+		cp -rv ../aufs-standalone/Documentation/filesystems/aufs/* ./Documentation/filesystems/aufs/
 		mkdir -p ./fs/aufs/
-		cp -v ../${aufs_prefix}standalone/fs/aufs/* ./fs/aufs/
-		cp -v ../${aufs_prefix}standalone/include/uapi/linux/aufs_type.h ./include/uapi/linux/
+		cp -v ../aufs-standalone/fs/aufs/* ./fs/aufs/
+		cp -v ../aufs-standalone/include/uapi/linux/aufs_type.h ./include/uapi/linux/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" -s
+		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" -s
 
-		wget https://raw.githubusercontent.com/sfjro/${aufs_prefix}standalone/aufs${KERNEL_REL}/rt.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/rt.patch
 		patch -p1 < rt.patch || aufs_fail
 		rm -rf rt.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-rt' -s
 
 		${git_bin} format-patch -6 -o ../patches/aufs/
-		echo "AUFS: https://github.com/sfjro/${aufs_prefix}standalone/commit/${aufs_hash}" > ../patches/git/AUFS
+		echo "AUFS: https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" > ../patches/git/AUFS
 
-		rm -rf ../${aufs_prefix}standalone/ || true
+		rm -rf ../aufs-standalone/ || true
 
 		${git_bin} reset --hard HEAD~6
 
@@ -412,7 +412,7 @@ dtb_makefile_append () {
 
 beagleboard_dtbs () {
 	branch="v5.10.x"
-	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
+	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -449,9 +449,9 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
-		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
+		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -553,7 +553,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.10.145"
+	backport_tag="v5.10.153"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -566,9 +566,9 @@ backports () {
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
 		post_backports
-		exit 2
-	else
-		patch_backports
+	#	exit 2
+	#else
+	#	patch_backports
 	fi
 
 	backport_tag="v5.18.19"
@@ -708,10 +708,53 @@ brcmfmac () {
 		patch -p1 < ../patches/cypress/brcmfmac/0099-brcmfmac-enable-pmk-catching-for-ext-sae-wpa3-ap.patch
 		patch -p1 < ../patches/cypress/brcmfmac/0100-brcmfmac-fixes-CYW4373-SDIO-CMD53-error.patch
 
+		#v5.10.9-2022_0331
+		patch -p1 < ../patches/cypress/brcmfmac/0101-brcmfmac-add-PCIe-mailbox-support-for-core-revision-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0102-brcmfmac-add-support-for-TRX-firmware-download.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0103-brcmfmac-add-Cypress-PCIe-vendor-ID.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0104-brcmfmac-add-support-for-CYW55560-PCIe-chipset.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0105-brcmfmac-add-bootloader-console-buffer-support-for-P.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0106-brcmfmac-support-4373-pcie.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0107-brcmfmac-extsae-supports-FT-over-SAE.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0108-brcmfmac-extsae-supports-SAE-OKC-roam.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0109-nl80211-add-roaming-offload-support.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0110-brcm80211-add-FT-11r-OKC-roaming-offload-support.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0111-brcmfmac-support-extsae-with-psk-1x-offloading.patch
+
+		#v5.10.9-2022_0511
+		patch -p1 < ../patches/cypress/brcmfmac/0112-brcmfmac-disable-out-of-band-device-wake-based-DeepS.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0113-brcmfmac-Improve-the-delay-during-scan.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0114-non-upstream-skip-6G-oob-scan-report.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0115-brcmfmac-add-FW-AP-selection-mod-param.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0116-brcmfmac-changing-info-messages-under-debug-BRCMF_IN.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0117-brcmfmac-remove-default-2s-power-save-max-timeout.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0118-brcmfmac-fixes-scan-invalid-channel-when-enable-host.patch
+
+		#v5.10.9-2022_0909
+		patch -p1 < ../patches/cypress/brcmfmac/0119-brcmfmac-do-not-disable-controller-in-apmode-stop.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0120-brcmfmac-support-11ax-and-6G-band.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0121-brcmfmac-fixes-invalid-channel-still-in-the-channel-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0122-non-upstream-Fix-lspci-not-enumerating-wifi-device-a.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0123-brcmfmac-support-signal-monitor-feature-for-wpa_supp.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0124-brcmfmac-add-support-for-CYW55560-SDIO-chipset.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0125-brcmfmac-Modified-Kconfig-help-format.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0126-brcmfmac-Fix-incorrect-WARN_ON-causing-set_pmk-failu.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0127-brcmfmac-report-cqm-rssi-event-based-on-rssi-change-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0128-brcmfmac-add-WPA3_AUTH_1X_SUITE_B_SHA384-related-sup.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0129-non-upstream-Handle-the-6G-case-in-the-bw_cap-chansp.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0130-non-upstream-Fix-kernel-crash-caused-by-race-on-time.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0131-brcmfmac-update-the-statically-defined-HE-MAC-PHY-Ca.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0132-brcmfmac-fix-set_pmk-warning-message.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0133-brcmfmac-update-BIP-setting-and-wsec_info-for-GMAC-a.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0134-brcmfmac-send-roam-request-when-supplicant-triggers-.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0135-brcmfmac-send-BCNLOST_MSG-event-on-beacon-loss-for-s.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0136-brcmfmac-trying-to-get-GCMP-cap-before-doing-set-it.patch
+		patch -p1 < ../patches/cypress/brcmfmac/0137-brcmfmac-update-firmware-loading-name-for-CY5557x.patch
+
 		#exit 2
 
 		${git_bin} add .
-		${git_bin} commit -a -m "cypress fmac patchset" -m "v5.10.9-2021_1020" -s
+		${git_bin} commit -a -m "cypress fmac patchset" -m "v5.10.9-2022_0909" -s
 		${git_bin} format-patch -1 -o ../patches/cypress/
 
 		exit 2
@@ -720,7 +763,6 @@ brcmfmac () {
 	fi
 
 	dir 'cypress'
-	dir 'cypress/fixes'
 }
 
 reverts () {
