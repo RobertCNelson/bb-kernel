@@ -313,6 +313,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="buster"
 			;;
+		elsie)
+			#LMDE 5
+			#http://packages.linuxmint.com/index.php
+			deb_distro="bullseye"
+			;;
 		debian)
 			deb_distro="jessie"
 			;;
@@ -424,6 +429,16 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="focal"
 			;;
+		vanessa)
+			#21
+			#http://packages.linuxmint.com/index.php
+			deb_distro="jammy"
+			;;
+		vera)
+			#21.1
+			#http://packages.linuxmint.com/index.php
+			deb_distro="jammy"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix
@@ -444,6 +459,10 @@ debian_regs () {
 		case "${deb_distro}" in
 		trixie)
 			#13 trixie: https://wiki.debian.org/DebianTrixie
+			deb_distro="sid"
+			;;
+		forky)
+			#14 forky: https://wiki.debian.org/DebianForky
 			deb_distro="sid"
 			;;
 		esac
@@ -467,15 +486,14 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|focal|groovy|hirsute|impish)
+		bionic|focal|jammy|kinetic)
 			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
-			#20.04 focal: (EOL: April 2025) lts: focal -> xyz
-			#20.10 groovy: (EOL: July 2021)
-			#21.04 hirsute: (EOL: January 2022)
-			#21.10 impish: (EOL: July 2022)
+			#20.04 focal:  (EOL: April 2025) lts: focal -> jammy
+			#22.04 jammy:  (EOL: April 2027) lts: jammy -> xyz
+			#22.10 kinetic: (EOL: )
 			unset warn_eol_distro
 			;;
-		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|cosmic|disco|eoan)
+		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|cosmic|disco|eoan|groovy|hirsute|impish)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
@@ -496,6 +514,9 @@ debian_regs () {
 			#18.10 cosmic: (EOL: July 18, 2019)
 			#19.04 disco: (EOL: January 23, 2020)
 			#19.10 eoan: (EOL: July 2020)
+			#20.10 groovy: (EOL: July 2021)
+			#21.04 hirsute: (EOL: January 2022)
+			#21.10 impish: (EOL: July 2022)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
