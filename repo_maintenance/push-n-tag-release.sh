@@ -53,6 +53,10 @@ cat_files () {
 	if [ -f ./patches/git/WIRELESS_REGDB ] ; then
 		cat ./patches/git/WIRELESS_REGDB >> ${wfile}
 	fi
+
+	if [ -f ./patches/git/KSMBD ] ; then
+		cat ./patches/git/KSMBD >> ${wfile}
+	fi
 }
 
 DIR=$PWD
