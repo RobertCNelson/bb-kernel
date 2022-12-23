@@ -109,32 +109,31 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs-standalone/tree/aufs6.0
-	aufs_prefix="aufs6-"
+	#https://github.com/sfjro/aufs-standalone/tree/aufs6.1
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=6.0
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
-		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
-		rm -rf ${aufs_prefix}kbuild.patch
+		KERNEL_REL=6.1
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-kbuild.patch
+		patch -p1 < aufs6-kbuild.patch || aufs_fail
+		rm -rf aufs6-kbuild.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-kbuild' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}base.patch
-		patch -p1 < ${aufs_prefix}base.patch || aufs_fail
-		rm -rf ${aufs_prefix}base.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-base.patch
+		patch -p1 < aufs6-base.patch || aufs_fail
+		rm -rf aufs6-base.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-base' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}mmap.patch
-		patch -p1 < ${aufs_prefix}mmap.patch || aufs_fail
-		rm -rf ${aufs_prefix}mmap.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-mmap.patch
+		patch -p1 < aufs6-mmap.patch || aufs_fail
+		rm -rf aufs6-mmap.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-mmap' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}standalone.patch
-		patch -p1 < ${aufs_prefix}standalone.patch || aufs_fail
-		rm -rf ${aufs_prefix}standalone.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-standalone.patch
+		patch -p1 < aufs6-standalone.patch || aufs_fail
+		rm -rf aufs6-standalone.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-standalone' -s
 
@@ -154,7 +153,7 @@ aufs () {
 			cd -
 		fi
 		cd ./KERNEL/
-		KERNEL_REL=6.0
+		KERNEL_REL=6.1
 
 		cp -v ../aufs-standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -467,7 +466,7 @@ local_patch () {
 }
 
 #external_git
-#aufs
+aufs
 wpanusb
 bcfserial
 #rt
@@ -511,7 +510,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.154"
+	backport_tag="v5.10.161"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -528,35 +527,14 @@ backports () {
 	fi
 }
 
-reverts () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	## notes
-	##git revert --no-edit xyz -s
-
-	dir 'reverts'
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="reverts"
-		number=1
-		cleanup
-	fi
-}
-
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	#dir 'RPi'
 	dir 'drivers/ar1021_i2c'
-	dir 'drivers/tps65217'
-
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
-	dir 'drivers/greybus'
 	dir 'drivers/fb_ssd1306'
 }
 
@@ -566,7 +544,6 @@ soc () {
 
 ###
 backports
-#reverts
 drivers
 soc
 
