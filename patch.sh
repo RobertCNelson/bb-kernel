@@ -557,17 +557,11 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
 	dir 'drivers/greybus'
-	#dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-	#dir 'drivers/mikrobus'
 }
 
 soc () {
 	dir 'bootup_hacks'
-}
-
-fixes () {
-	dir 'fixes/gcc'
 }
 
 ###
@@ -575,12 +569,11 @@ backports
 #reverts
 drivers
 soc
-fixes
 
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.0.8"
+		backport_tag="v6.1.1"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
