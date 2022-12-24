@@ -531,6 +531,7 @@ drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	#dir 'RPi'
+	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
