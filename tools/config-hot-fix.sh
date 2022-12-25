@@ -155,4 +155,11 @@ config="CONFIG_W1_SLAVE_DS2433_CRC" ; config_enable
 config="CONFIG_UIO_PDRV_GENIRQ" ; config_module
 config="CONFIG_UIO_PRUSS" ; config_module
 
+#2022.12.25: still totally broken..
+#[   26.460634] tps65217-charger tps65217-charger: DMA mask not set
+#[   26.581296] genirq: Flags mismatch irq 53. 00002000 (tps65217-charger) vs. 00002000 (vbus)
+#[   26.739119] tps65217-charger tps65217-charger: Unable to register irq 53 err -16
+#[   26.842097] tps65217-charger: probe of tps65217-charger failed with error -16
+config="CONFIG_CHARGER_TPS65217" ; config_disable
+
 cd ${DIR}/
