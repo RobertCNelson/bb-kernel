@@ -403,7 +403,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v6.1.x"
+	branch="v6.2.x"
 	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -469,13 +469,13 @@ local_patch () {
 }
 
 #external_git
-aufs
-wpanusb
-bcfserial
+#aufs
+#wpanusb
+#bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -533,12 +533,12 @@ backports () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	dir 'RPi'
+	#dir 'RPi'
 	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
-	dir 'drivers/ti/gpio'
+	#dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
 }
 
