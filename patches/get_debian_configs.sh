@@ -1,7 +1,7 @@
 #!/bin/bash
 
 abi="6.1.0-0"
-kernel="6.1.1-1~exp1"
+kernel="6.1.1-1~exp2"
 
 debian_site="http://ftp.de.debian.org/debian/pool/main/l/linux"
 incoming_site="http://incoming.debian.org/debian-buildd/pool/main/l/linux"
