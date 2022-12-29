@@ -4,6 +4,12 @@ ARCH=$(uname -m)
 
 config="omap2plus_defconfig"
 
+build_prefix="-bone"
+branch_prefix="am33x-v"
+branch_postfix=""
+
+#arm
+KERNEL_ARCH=arm
 #toolchain="gcc_linaro_eabi_4_8"
 #toolchain="gcc_linaro_eabi_4_9"
 #toolchain="gcc_linaro_eabi_5"
@@ -13,11 +19,12 @@ config="omap2plus_defconfig"
 toolchain="gcc_linaro_gnueabihf_4_9"
 #toolchain="gcc_linaro_gnueabihf_5"
 
-#Kernel/Build
+#Kernel
 KERNEL_REL=4.0
 KERNEL_TAG=${KERNEL_REL}.9
-BUILD=bone-rt-r8.2
 kernel_rt=".8-rt6"
+#Kernel Build
+BUILD=${build_prefix}8.2
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""

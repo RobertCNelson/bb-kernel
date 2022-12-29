@@ -104,7 +104,7 @@ local_patch () {
 }
 
 #external_git
-rt
+#rt
 #local_patch
 
 dt () {
