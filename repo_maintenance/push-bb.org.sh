@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2017 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2019 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,10 +22,44 @@
 
 #yeah, i'm getting lazy..
 
+wfile=$(mktemp /tmp/builder.XXXXXXXXX)
+echo "Working on temp $wfile ..."
+
+cat_files () {
+	if [ -f ../patches/git/AUFS ] ; then
+		cat ../patches/git/AUFS >> ${wfile}
+	fi
+
+	if [ -f ../patches/git/BBDTBS ] ; then
+		cat ../patches/git/BBDTBS >> ${wfile}
+	fi
+
+	if [ -f ../patches/git/CAN-ISOTP ] ; then
+		cat ../patches/git/CAN-ISOTP >> ${wfile}
+	fi
+
+	if [ -f ../patches/git/RT ] ; then
+		cat ../patches/git/RT >> ${wfile}
+	fi
+
+	if [ -f ../patches/git/TI_AMX3_CM3 ] ; then
+		cat ../patches/git/TI_AMX3_CM3 >> ${wfile}
+	fi
+
+	if [ -f ../patches/git/WIREGUARD ] ; then
+		cat ../patches/git/WIREGUARD >> ${wfile}
+	fi
+
+	if [ -f ../patches/git/WIRELESS_REGDB ] ; then
+		cat ../patches/git/WIRELESS_REGDB >> ${wfile}
+	fi
+}
+
 DIR=$PWD
 git_bin=$(which git)
 
-repo="git@github.com:beagleboard/linux.git"
+repo_github="git@github.com:beagleboard/linux.git"
+repo_gitlab="git@git.beagleboard.org:beagleboard/linux.git"
 example="bb.org"
 compare="https://github.com/RobertCNelson/ti-linux-kernel/compare"
 
@@ -40,17 +74,32 @@ if [ -e ${DIR}/version.sh ]; then
 	make ARCH=${KERNEL_ARCH} savedefconfig
 	cp ${DIR}/KERNEL/defconfig ${DIR}/KERNEL/arch/${KERNEL_ARCH}/configs/${example}_defconfig
 	${git_bin} add arch/${KERNEL_ARCH}/configs/${example}_defconfig
+	#${git_bin} add arch/${KERNEL_ARCH}/configs/ti_sdk_am3x_release_defconfig
+	#${git_bin} add arch/${KERNEL_ARCH}/configs/ti_sdk_dra7x_release_defconfig
+	#${git_bin} add arch/${KERNEL_ARCH}/configs/ti_sdk_arm64_release_defconfig
 
-	if [ "x${ti_git_old_release}" = "x${ti_git_post}" ] ; then
-		${git_bin} commit -a -m "${KERNEL_TAG}${BUILD} ${example}_defconfig" -s
+	if [ "x${ti_git_old_release}" = "x${ti_git_new_release}" ] ; then
+		echo "${KERNEL_TAG}${BUILD}" > ${wfile}
+		echo "${KERNEL_TAG}${BUILD} ${example}_defconfig" >> ${wfile}
+		cat_files
 	else
-		${git_bin} commit -a -m "${KERNEL_TAG}${BUILD} ${example}_defconfig" -m "${KERNEL_REL} TI Delta: ${compare}/${ti_git_old_release}...${ti_git_post}" -s
+		echo "${KERNEL_TAG}${BUILD}" > ${wfile}
+		echo "${KERNEL_TAG}${BUILD} ${example}_defconfig" >> ${wfile}
+		echo "${KERNEL_REL} TI Delta: ${compare}/${ti_git_old_release}...${ti_git_new_release}" >> ${wfile}
+		cat_files
 	fi
+	${git_bin} commit -a -F ${wfile} -s
 
-	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}" -f
+	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -F ${wfile} -f
 
 	#push tag
-	${git_bin} push -f ${repo} "${KERNEL_TAG}${BUILD}"
+	echo "log: git: pushing tags..."
+
+	echo "log: git push -f ${repo_github} ${KERNEL_TAG}${BUILD}"
+	${git_bin} push -f ${repo_github} "${KERNEL_TAG}${BUILD}"
+
+	echo "log: git push -f ${repo_gitlab} ${KERNEL_TAG}${BUILD}"
+	${git_bin} push -f ${repo_gitlab} "${KERNEL_TAG}${BUILD}"
 
 	echo "debug: pushing ${bborg_branch}"
 
@@ -59,9 +108,16 @@ if [ -e ${DIR}/version.sh ]; then
 	${git_bin} branch -m v${KERNEL_TAG}${BUILD} ${bborg_branch}
 
 	#push branch
-	echo "log: git push -f ${repo} ${bborg_branch}"
-	${git_bin} push -f ${repo} ${bborg_branch}
+	echo "log: git: pushing branch..."
+
+	echo "log: git push -f ${repo_github} ${bborg_branch}"
+	${git_bin} push -f ${repo_github} ${bborg_branch}
+
+	echo "log: git push -f ${repo_gitlab} ${bborg_branch}"
+	${git_bin} push -f ${repo_gitlab} ${bborg_branch}
 
 	cd ${DIR}/
 fi
 
+echo "Deleting $wfile ..."
+rm -f "$wfile"
