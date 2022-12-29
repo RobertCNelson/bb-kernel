@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2019 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,20 +22,69 @@
 
 #yeah, i'm getting lazy..
 
-DIR=$PWD
+wfile=$(mktemp /tmp/builder.XXXXXXXXX)
+echo "Working on temp $wfile ..."
 
-repo="git@github.com:RobertCNelson/linux-stable-rcn-ee.git"
+cat_files () {
+	if [ -f ./patches/git/AUFS ] ; then
+		cat ./patches/git/AUFS >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/BBDTBS ] ; then
+		cat ./patches/git/BBDTBS >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/CAN-ISOTP ] ; then
+		cat ./patches/git/CAN-ISOTP >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/RT ] ; then
+		cat ./patches/git/RT >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/TI_AMX3_CM3 ] ; then
+		cat ./patches/git/TI_AMX3_CM3 >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/WIREGUARD ] ; then
+		cat ./patches/git/WIREGUARD >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/WPANUSB ] ; then
+		cat ./patches/git/WPANUSB >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/BCFSERIAL ] ; then
+		cat ./patches/git/BCFSERIAL >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/WIRELESS_REGDB ] ; then
+		cat ./patches/git/WIRELESS_REGDB >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/KSMBD ] ; then
+		cat ./patches/git/KSMBD >> ${wfile}
+	fi
+}
+
+DIR=$PWD
+git_bin=$(which git)
+
+repo="git@gitlab.gfnd.rcn-ee.org:production/linux-stable-rcn-ee.git"
 example="rcn-ee"
 
 if [ -e ${DIR}/version.sh ]; then
 	unset BRANCH
 	. ${DIR}/version.sh
 
-	git commit -a -m "${KERNEL_TAG}-${BUILD} release" -s
-	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}"
+	echo "${KERNEL_TAG}${BUILD} release" > ${wfile}
+	cat_files
 
-	git push origin ${BRANCH}
-	git push origin ${BRANCH} --tags
+	${git_bin} commit -a -F ${wfile} -s
+	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}" -f
+
+	${git_bin} push -f origin ${BRANCH}
+	${git_bin} push -f origin ${BRANCH} --tags
 
 	cd ${DIR}/KERNEL/
 	make ARCH=${KERNEL_ARCH} distclean
@@ -43,15 +92,20 @@ if [ -e ${DIR}/version.sh ]; then
 	cp ${DIR}/patches/defconfig ${DIR}/KERNEL/.config
 	make ARCH=${KERNEL_ARCH} savedefconfig
 	cp ${DIR}/KERNEL/defconfig ${DIR}/KERNEL/arch/${KERNEL_ARCH}/configs/${example}_defconfig
-	git add arch/${KERNEL_ARCH}/configs/${example}_defconfig
+	${git_bin} add arch/${KERNEL_ARCH}/configs/${example}_defconfig
 
-	git commit -a -m "${KERNEL_TAG}-${BUILD} ${example}_defconfig" -s
-	git tag -a "${KERNEL_TAG}-${BUILD}" -m "${KERNEL_TAG}-${BUILD}"
+	echo "${KERNEL_TAG}${BUILD} ${example}_defconfig" > ${wfile}
+	cat_files
+
+	${git_bin} commit -a -F ${wfile} -s
+	${git_bin} tag -a "${KERNEL_TAG}${BUILD}" -m "${KERNEL_TAG}${BUILD}" -f
 
 	#push tag
-	echo "log: git push -f ${repo} \"${KERNEL_TAG}-${BUILD}\""
-	git push -f ${repo} "${KERNEL_TAG}-${BUILD}"
+	echo "log: git push -f ${repo} \"${KERNEL_TAG}${BUILD}\""
+	${git_bin} push -f ${repo} "${KERNEL_TAG}${BUILD}"
 
 	cd ${DIR}/
 fi
 
+echo "Deleting $wfile ..."
+rm -f "$wfile"
