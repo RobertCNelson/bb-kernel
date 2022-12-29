@@ -17,6 +17,12 @@ fi
 
 config="omap2plus_defconfig"
 
+build_prefix="-bone"
+branch_prefix="am33x-v"
+branch_postfix=""
+
+#arm
+KERNEL_ARCH=arm
 #toolchain="gcc_linaro_eabi_4_8"
 #toolchain="gcc_linaro_eabi_4_9"
 #toolchain="gcc_linaro_gnueabi_4_6"
@@ -24,16 +30,16 @@ config="omap2plus_defconfig"
 #toolchain="gcc_linaro_gnueabihf_4_8"
 toolchain="gcc_linaro_gnueabihf_4_9"
 
-#Kernel/Build
+#Kernel
 KERNEL_REL=3.16
 KERNEL_TAG=${KERNEL_REL}.3
-BUILD=bone6
+BUILD=${build_prefix}6
 
 #v3.X-rcX + upto SHA
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="am33x-v3.16"
+BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=cross
 DEBARCH=armhf
