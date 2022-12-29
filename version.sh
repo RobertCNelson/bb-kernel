@@ -33,14 +33,14 @@ KERNEL_REL=3.13
 KERNEL_TAG=${KERNEL_REL}.11
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}12
+BUILD=${build_prefix}12.1
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="${branch_prefix}${KERNEL_REL}"
+BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=cross
 DEBARCH=armhf
