@@ -420,7 +420,6 @@ drivers () {
 	dir 'drivers/ti/rpmsg'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/uio'
-
 	dir 'drivers/ti/gpio'
 }
 
@@ -524,13 +523,14 @@ sgx () {
 
 ###
 #backports
-dir 'fixes'
 reverts
 drivers
 soc
 beaglebone
 dir 'build/gcc'
 sgx
+
+dir 'fixes/2022'
 
 packaging () {
 	echo "dir: packaging"
