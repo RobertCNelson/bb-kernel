@@ -555,6 +555,8 @@ dir 'quieter'
 dir 'more_fixes'
 sync_mainline_dtc
 
+dir 'fixes/2022'
+
 packaging () {
 	echo "dir: packaging"
 	#regenerate="enable"
