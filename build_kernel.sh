@@ -191,27 +191,6 @@ if [ ! -f "${DIR}/system.sh" ] ; then
 	cp -v "${DIR}/system.sh.sample" "${DIR}/system.sh"
 fi
 
-if [ -f "${DIR}/branches.list" ] ; then
-	echo "-----------------------------"
-	echo "Please checkout one of the active branches:"
-	echo "-----------------------------"
-	cat "${DIR}/branches.list" | grep -v INACTIVE
-	echo "-----------------------------"
-	exit
-fi
-
-if [ -f "${DIR}/branch.expired" ] ; then
-	echo "-----------------------------"
-	echo "Support for this branch has expired."
-	unset response
-	echo -n "Do you wish to bypass this warning and support your self: (y/n)? "
-	read response
-	if [ "x${response}" != "xy" ] ; then
-		exit
-	fi
-	echo "-----------------------------"
-fi
-
 unset CC
 unset LINUX_GIT
 . "${DIR}/system.sh"
