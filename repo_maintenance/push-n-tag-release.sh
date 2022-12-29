@@ -49,12 +49,28 @@ cat_files () {
 	if [ -f ./patches/git/WIREGUARD ] ; then
 		cat ./patches/git/WIREGUARD >> ${wfile}
 	fi
+
+	if [ -f ./patches/git/WPANUSB ] ; then
+		cat ./patches/git/WPANUSB >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/BCFSERIAL ] ; then
+		cat ./patches/git/BCFSERIAL >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/WIRELESS_REGDB ] ; then
+		cat ./patches/git/WIRELESS_REGDB >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/KSMBD ] ; then
+		cat ./patches/git/KSMBD >> ${wfile}
+	fi
 }
 
 DIR=$PWD
 git_bin=$(which git)
 
-repo="git@github.com:RobertCNelson/linux-stable-rcn-ee.git"
+repo="git@gitlab.gfnd.rcn-ee.org:production/linux-stable-rcn-ee.git"
 example="rcn-ee"
 
 if [ -e ${DIR}/version.sh ]; then
