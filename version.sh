@@ -8,6 +8,7 @@ build_prefix="-bone"
 branch_prefix="am33x-v"
 branch_postfix=""
 
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v4.9-rc1
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf

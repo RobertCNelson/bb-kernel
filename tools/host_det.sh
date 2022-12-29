@@ -429,6 +429,16 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="focal"
 			;;
+		vanessa)
+			#21
+			#http://packages.linuxmint.com/index.php
+			deb_distro="jammy"
+			;;
+		vera)
+			#21.1
+			#http://packages.linuxmint.com/index.php
+			deb_distro="jammy"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix
@@ -443,12 +453,19 @@ debian_regs () {
 		daedalus)
 			deb_distro="bookworm"
 			;;
+		excalibur)
+			deb_distro="trixie"
+			;;
 		esac
 
 		#Future Debian Code names:
 		case "${deb_distro}" in
 		trixie)
 			#13 trixie: https://wiki.debian.org/DebianTrixie
+			deb_distro="sid"
+			;;
+		forky)
+			#14 forky: https://wiki.debian.org/DebianForky
 			deb_distro="sid"
 			;;
 		esac
@@ -472,10 +489,11 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|focal|jammy)
+		bionic|focal|jammy|kinetic)
 			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
 			#20.04 focal:  (EOL: April 2025) lts: focal -> jammy
 			#22.04 jammy:  (EOL: April 2027) lts: jammy -> xyz
+			#22.10 kinetic: (EOL: July 2023)
 			unset warn_eol_distro
 			;;
 		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|cosmic|disco|eoan|groovy|hirsute|impish)
