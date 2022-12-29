@@ -42,7 +42,7 @@ toolchain="gcc_6_arm"
 #Kernel/Build
 KERNEL_REL=4.11
 KERNEL_TAG=${KERNEL_REL}.12
-BUILD=${build_prefix}3
+BUILD=${build_prefix}3.1
 kernel_rt=".9-rt7"
 
 #v4.X-rcX + upto SHA
