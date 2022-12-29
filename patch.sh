@@ -1128,6 +1128,9 @@ quieter
 sync_mainline_dtc
 #sgx
 
+
+dir 'fixes/2022'
+
 packaging () {
 	echo "dir: packaging"
 	#regenerate="enable"
