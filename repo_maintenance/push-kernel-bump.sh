@@ -1,6 +1,7 @@
 #!/bin/sh -e
 
 DIR=$PWD
+git_bin=$(which git)
 
 if [ -e ${DIR}/version.sh ]; then
 	unset BRANCH
@@ -16,7 +17,8 @@ if [ -e ${DIR}/version.sh ]; then
 		exit
 	fi
 
-	git commit -a -m "kernel bump: v${KERNEL_TAG}" -s
-	git push origin ${BRANCH}
+	${git_bin} commit -a -m "kernel bump: v${KERNEL_TAG}" -s
+	echo "log: git push origin ${BRANCH}"
+	${git_bin} push origin ${BRANCH}
 fi
 
