@@ -22,6 +22,8 @@
 
 # Split out, so build_kernel.sh and build_deb.sh can share..
 
+shopt -s nullglob
+
 . ${DIR}/version.sh
 if [ -f ${DIR}/system.sh ] ; then
 	. ${DIR}/system.sh
@@ -50,7 +52,29 @@ cleanup () {
 	if [ "${number}" ] ; then
 		git format-patch -${number} -o ${DIR}/patches/
 	fi
-	exit
+	exit 2
+}
+
+dir () {
+	wdir="$1"
+	if [ -d "${DIR}/patches/$wdir" ]; then
+		echo "dir: $wdir"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		number=
+		for p in "${DIR}/patches/$wdir/"*.patch; do
+			${git} "$p"
+			number=$(( $number + 1 ))
+		done
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			cleanup
+		fi
+	fi
+	unset wdir
 }
 
 external_git () {
@@ -511,8 +535,7 @@ musb
 fixes
 sgx
 
-#disabled by default
-#rt
+dir 'fixes/2022'
 
 packaging_setup () {
 	cp -v "${DIR}/3rdparty/packaging/builddeb" "${DIR}/KERNEL/scripts/package"
