@@ -856,6 +856,8 @@ beaglebone
 quieter
 more_fixes
 
+dir 'fixes/2022'
+
 packaging () {
 	echo "dir: packaging"
 	#regenerate="enable"
