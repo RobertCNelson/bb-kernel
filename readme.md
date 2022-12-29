@@ -6,8 +6,7 @@ Note, for older git tag's please use: https://github.com/RobertCNelson/yakbuild
 
 Dependencies: GCC ARM Cross ToolChain
 
-Linaro:
-http://www.linaro.org/downloads/
+https://mirrors.edge.kernel.org/pub/tools/crosstool/
 
 Dependencies: Linux Kernel Source
 
