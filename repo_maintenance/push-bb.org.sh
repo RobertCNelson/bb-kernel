@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2017 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -52,12 +52,15 @@ if [ -e ${DIR}/version.sh ]; then
 	#push tag
 	${git_bin} push -f ${repo} "${KERNEL_TAG}${BUILD}"
 
-	${git_bin} branch -D ${KERNEL_REL} || true
-	${git_bin} branch -m v${KERNEL_TAG}${BUILD} ${KERNEL_REL}
+	echo "debug: pushing ${bborg_branch}"
+
+	${git_bin} branch -D ${bborg_branch} || true
+
+	${git_bin} branch -m v${KERNEL_TAG}${BUILD} ${bborg_branch}
 
 	#push branch
-	echo "log: git push -f ${repo} ${KERNEL_REL}"
-	${git_bin} push -f ${repo} ${KERNEL_REL}
+	echo "log: git push -f ${repo} ${bborg_branch}"
+	${git_bin} push -f ${repo} ${bborg_branch}
 
 	cd ${DIR}/
 fi

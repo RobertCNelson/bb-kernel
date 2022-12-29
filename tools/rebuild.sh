@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,6 @@
 # THE SOFTWARE.
 
 DIR=$PWD
-CORES=$(getconf _NPROCESSORS_ONLN)
 git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
@@ -57,6 +56,7 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
 		cp -v .config "${DIR}/patches/defconfig"
@@ -208,6 +208,10 @@ fi
 
 . "${DIR}/version.sh"
 export LINUX_GIT
+
+if [ ! "${CORES}" ] ; then
+	CORES=$(getconf _NPROCESSORS_ONLN)
+fi
 
 unset FULL_REBUILD
 #FULL_REBUILD=1
