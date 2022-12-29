@@ -1,11 +1,12 @@
 This is just a set of scripts to rebuild a known working kernel for ARM devices.
 
-Script Bugs: "bugs@rcn-ee.com"
+Script Bugs: "robertcnelson+bugs@gmail.com"
+
+Note, for older git tag's please use: https://github.com/RobertCNelson/yakbuild
 
 Dependencies: GCC ARM Cross ToolChain
 
-Linaro:
-http://www.linaro.org/downloads/
+https://mirrors.edge.kernel.org/pub/tools/crosstool/
 
 Dependencies: Linux Kernel Source
 
@@ -23,19 +24,15 @@ git clone directory.
 
 Build Kernel Image:
 
+```
 ./build_kernel.sh
+```
 
 Optional: Build Debian Package:
 
+```
 ./build_deb.sh
-
-Install Kernel Image to SD card: (requires MMC set in system.sh):
-
-./tools/install_kernel.sh
-
-Install Kernel Image to local system (kernel was built on ARM board):
-
-./tools/local_install.sh
+```
 
 Development/Hacking:
 
