@@ -14,6 +14,10 @@ cat_files () {
 		cat ./patches/git/BBDTBS >> ${wfile}
 	fi
 
+	if [ -f ./patches/git/CAN-ISOTP ] ; then
+		cat ./patches/git/CAN-ISOTP >> ${wfile}
+	fi
+
 	if [ -f ./patches/git/RT ] ; then
 		cat ./patches/git/RT >> ${wfile}
 	fi
@@ -22,37 +26,37 @@ cat_files () {
 		cat ./patches/git/TI_AMX3_CM3 >> ${wfile}
 	fi
 
-	if [ -f ./patches/git/WPANUSB ] ; then
-		cat ./patches/git/WPANUSB >> ${wfile}
-	fi
-
-	if [ -f ./patches/git/BCFSERIAL ] ; then
-		cat ./patches/git/BCFSERIAL >> ${wfile}
+	if [ -f ./patches/git/WIREGUARD ] ; then
+		cat ./patches/git/WIREGUARD >> ${wfile}
 	fi
 
 	if [ -f ./patches/git/WIRELESS_REGDB ] ; then
 		cat ./patches/git/WIRELESS_REGDB >> ${wfile}
 	fi
-
-	if [ -f ./patches/git/KSMBD ] ; then
-		cat ./patches/git/KSMBD >> ${wfile}
-	fi
 }
 
 DIR=$PWD
 git_bin=$(which git)
-repo="https://github.com/RobertCNelson/ti-linux-kernel/compare"
 
 if [ -e ${DIR}/version.sh ]; then
 	unset BRANCH
-	unset KERNEL_SHA
+	unset KERNEL_TAG
 	. ${DIR}/version.sh
 
 	if [ ! "${BRANCH}" ] ; then
 		BRANCH="master"
 	fi
 
-	echo "merge ti: ${repo}/${ti_git_pre}...${ti_git_post}" > ${wfile}
+	if [ ! "${KERNEL_TAG}" ] ; then
+		echo 'KERNEL_TAG undefined'
+		exit
+	fi
+
+	if [ -f ./patches/git/RT ] ; then
+		echo "kernel v${KERNEL_TAG} rebase with rt: v${KERNEL_REL}${kernel_rt} device-tree/etc" > ${wfile}
+	else
+		echo "kernel v${KERNEL_TAG} rebase with: device-tree/etc" > ${wfile}
+	fi
 	cat_files
 
 	${git_bin} commit -a -F ${wfile} -s
