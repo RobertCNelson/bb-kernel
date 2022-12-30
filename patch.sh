@@ -479,6 +479,8 @@ drivers
 soc
 beaglebone
 
+dir 'fixes/2022'
+
 packaging () {
 	echo "dir: packaging"
 	#regenerate="enable"
