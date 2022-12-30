@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,6 @@
 # THE SOFTWARE.
 
 DIR=$PWD
-CORES=$(getconf _NPROCESSORS_ONLN)
 git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
@@ -57,6 +56,7 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
 		cp -v .config "${DIR}/patches/defconfig"
@@ -84,13 +84,10 @@ make_kernel () {
 	echo "-----------------------------"
 	make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" ${address} ${image} modules
 	echo "-----------------------------"
-
-	if grep -q dtbs "${DIR}/KERNEL/arch/${KERNEL_ARCH}/Makefile"; then
-		echo "make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE=\"${CC}\" dtbs"
-		echo "-----------------------------"
-		make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" dtbs
-		echo "-----------------------------"
-	fi
+	echo "make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE=\"${CC}\" dtbs"
+	echo "-----------------------------"
+	make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" dtbs
+	echo "-----------------------------"
 
 	KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
 
@@ -140,11 +137,7 @@ make_pkg () {
 		make -s ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" firmware_install INSTALL_FW_PATH="${DIR}/deploy/tmp"
 		;;
 	dtbs)
-		if grep -q dtbs_install "${DIR}/KERNEL/arch/${KERNEL_ARCH}/Makefile"; then
-			make -s ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" dtbs_install INSTALL_DTBS_PATH="${DIR}/deploy/tmp"
-		else
-			find ./arch/${KERNEL_ARCH}/boot/ -iname "*.dtb" -exec cp -v '{}' "${DIR}/deploy/tmp/" \;
-		fi
+		make -s ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" dtbs_install INSTALL_DTBS_PATH="${DIR}/deploy/tmp"
 		;;
 	esac
 
@@ -209,6 +202,10 @@ fi
 . "${DIR}/version.sh"
 export LINUX_GIT
 
+if [ ! "${CORES}" ] ; then
+	CORES=$(getconf _NPROCESSORS_ONLN)
+fi
+
 unset FULL_REBUILD
 #FULL_REBUILD=1
 if [ "${FULL_REBUILD}" ] ; then
@@ -230,9 +227,7 @@ fi
 make_kernel
 make_modules_pkg
 make_firmware_pkg
-if grep -q dtbs "${DIR}/KERNEL/arch/${KERNEL_ARCH}/Makefile"; then
-	make_dtbs_pkg
-fi
+make_dtbs_pkg
 echo "-----------------------------"
 echo "Script Complete"
 echo "${KERNEL_UTS}" > kernel_version
