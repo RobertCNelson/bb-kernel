@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 DIR=$PWD
-CORES=$(getconf _NPROCESSORS_ONLN)
+git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
 
@@ -29,11 +29,13 @@ patch_kernel () {
 	cd "${DIR}/KERNEL" || exit
 
 	export DIR
-	/bin/sh -e "${DIR}/patch.sh" || { git add . ; exit 1 ; }
+	/bin/bash -e "${DIR}/patch.sh" || { ${git_bin} add . ; exit 1 ; }
 
-	if [ ! "${RUN_BISECT}" ] ; then
-		git add --all
-		git commit --allow-empty -a -m "${KERNEL_TAG}-${BUILD} patchset"
+	if [ ! -f "${DIR}/.yakbuild" ] ; then
+		if [ ! "${RUN_BISECT}" ] ; then
+			${git_bin} add --all
+			${git_bin} commit --allow-empty -a -m "${KERNEL_TAG}${BUILD} patchset"
+		fi
 	fi
 
 	cd "${DIR}/" || exit
@@ -42,16 +44,23 @@ patch_kernel () {
 copy_defconfig () {
 	cd "${DIR}/KERNEL" || exit
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" distclean
-	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" "${config}"
-	cp -v .config "${DIR}/patches/ref_${config}"
-	cp -v "${DIR}/patches/defconfig" .config
+	if [ ! -f "${DIR}/.yakbuild" ] ; then
+		make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" "${config}"
+		cp -v .config "${DIR}/patches/ref_${config}"
+		cp -v "${DIR}/patches/defconfig" .config
+	else
+		make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" rcn-ee_defconfig
+	fi
 	cd "${DIR}/" || exit
 }
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
-	cp -v .config "${DIR}/patches/defconfig"
+	if [ ! -f "${DIR}/.yakbuild" ] ; then
+		cp -v .config "${DIR}/patches/defconfig"
+	fi
 	cd "${DIR}/" || exit
 }
 
@@ -66,7 +75,7 @@ make_deb () {
 	build_opts="-j${CORES}"
 	build_opts="${build_opts} ARCH=${KERNEL_ARCH}"
 	build_opts="${build_opts} KBUILD_DEBARCH=${DEBARCH}"
-	build_opts="${build_opts} LOCALVERSION=-${BUILD}"
+	build_opts="${build_opts} LOCALVERSION=${BUILD}"
 	build_opts="${build_opts} KDEB_CHANGELOG_DIST=${deb_distro}"
 	build_opts="${build_opts} KDEB_PKGVERSION=1${DISTRO}"
 	#Just use "linux-upstream"...
@@ -88,6 +97,14 @@ make_deb () {
 	cd "${DIR}/" || exit
 }
 
+if [  -f "${DIR}/.yakbuild" ] ; then
+	if [ -f "${DIR}/recipe.sh.sample" ] ; then
+		if [ ! -f "${DIR}/recipe.sh" ] ; then
+			cp -v "${DIR}/recipe.sh.sample" "${DIR}/recipe.sh"
+		fi
+	fi
+fi
+
 /bin/sh -e "${DIR}/tools/host_det.sh" || { exit 1 ; }
 
 if [ ! -f "${DIR}/system.sh" ] ; then
@@ -97,6 +114,9 @@ fi
 unset CC
 unset LINUX_GIT
 . "${DIR}/system.sh"
+if [  -f "${DIR}/.yakbuild" ] ; then
+	. "${DIR}/recipe.sh"
+fi
 /bin/sh -e "${DIR}/scripts/gcc.sh" || { exit 1 ; }
 . "${DIR}/.CC"
 echo "CROSS_COMPILE=${CC}"
@@ -107,6 +127,10 @@ fi
 
 . "${DIR}/version.sh"
 export LINUX_GIT
+
+if [ ! "${CORES}" ] ; then
+	CORES=$(getconf _NPROCESSORS_ONLN)
+fi
 
 unset FULL_REBUILD
 #FULL_REBUILD=1
@@ -122,6 +146,9 @@ if [ "${FULL_REBUILD}" ] ; then
 fi
 if [ ! "${AUTO_BUILD}" ] ; then
 	make_menuconfig
+fi
+if [  -f "${DIR}/.yakbuild" ] ; then
+	BUILD=$(echo ${kernel_tag} | sed 's/[^-]*//'|| true)
 fi
 make_deb
 echo "-----------------------------"
