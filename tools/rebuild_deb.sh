@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 DIR=$PWD
-CORES=$(getconf _NPROCESSORS_ONLN)
+git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
 
@@ -29,11 +29,13 @@ patch_kernel () {
 	cd "${DIR}/KERNEL" || exit
 
 	export DIR
-	/bin/sh -e "${DIR}/patch.sh" || { git add . ; exit 1 ; }
+	/bin/bash -e "${DIR}/patch.sh" || { ${git_bin} add . ; exit 1 ; }
 
-	if [ ! "${RUN_BISECT}" ] ; then
-		git add --all
-		git commit --allow-empty -a -m "${KERNEL_TAG}${BUILD} patchset"
+	if [ ! -f "${DIR}/.yakbuild" ] ; then
+		if [ ! "${RUN_BISECT}" ] ; then
+			${git_bin} add --all
+			${git_bin} commit --allow-empty -a -m "${KERNEL_TAG}${BUILD} patchset"
+		fi
 	fi
 
 	cd "${DIR}/" || exit
@@ -54,6 +56,7 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
 		cp -v .config "${DIR}/patches/defconfig"
@@ -125,6 +128,10 @@ fi
 . "${DIR}/version.sh"
 export LINUX_GIT
 
+if [ ! "${CORES}" ] ; then
+	CORES=$(getconf _NPROCESSORS_ONLN)
+fi
+
 unset FULL_REBUILD
 #FULL_REBUILD=1
 if [ "${FULL_REBUILD}" ] ; then
@@ -134,9 +141,7 @@ if [ "${FULL_REBUILD}" ] ; then
 		/bin/sh -e "${DIR}/scripts/bisect.sh" || { exit 1 ; }
 	fi
 
-	if [ ! -f "${DIR}/.yakbuild" ] ; then
-		patch_kernel
-	fi
+	patch_kernel
 	copy_defconfig
 fi
 if [ ! "${AUTO_BUILD}" ] ; then

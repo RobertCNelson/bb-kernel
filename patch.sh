@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2016 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2020 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,20 +28,16 @@ shopt -s nullglob
 if [ -f ${DIR}/system.sh ] ; then
 	. ${DIR}/system.sh
 fi
+git_bin=$(which git)
+#git hard requirements:
+#git: --no-edit
 
-#Debian 7 (Wheezy): git version 1.7.10.4 and later needs "--no-edit"
-unset git_opts
-git_no_edit=$(LC_ALL=C git help pull | grep -m 1 -e "--no-edit" || true)
-if [ ! "x${git_no_edit}" = "x" ] ; then
-	git_opts="--no-edit"
-fi
-
-git="git am"
+git="${git_bin} am"
 #git_patchset=""
 #git_opts
 
 if [ "${RUN_BISECT}" ] ; then
-	git="git apply"
+	git="${git_bin} apply"
 fi
 
 echo "Starting patch.sh"
@@ -52,20 +48,23 @@ unset merged_in_4_5
 unset merged_in_4_6
 
 git_add () {
-	git add .
-	git commit -a -m 'testing patchset'
+	${git_bin} add .
+	${git_bin} commit -a -m 'testing patchset'
 }
 
 start_cleanup () {
-	git="git am --whitespace=fix"
+	git="${git_bin} am --whitespace=fix"
 }
 
 cleanup () {
 	if [ "${number}" ] ; then
 		if [ "x${wdir}" = "x" ] ; then
-			git format-patch -${number} -o ${DIR}/patches/
+			${git_bin} format-patch -${number} -o ${DIR}/patches/
 		else
-			git format-patch -${number} -o ${DIR}/patches/${wdir}/
+			if [ ! -d ${DIR}/patches/${wdir}/ ] ; then
+				mkdir -p ${DIR}/patches/${wdir}/
+			fi
+			${git_bin} format-patch -${number} -o ${DIR}/patches/${wdir}/
 			unset wdir
 		fi
 	fi
@@ -98,14 +97,15 @@ cherrypick () {
 	if [ ! -d ../patches/${cherrypick_dir} ] ; then
 		mkdir -p ../patches/${cherrypick_dir}
 	fi
-	git format-patch -1 ${SHA} --start-number ${num} -o ../patches/${cherrypick_dir}
+	${git_bin} format-patch -1 ${SHA} --start-number ${num} -o ../patches/${cherrypick_dir}
 	num=$(($num+1))
 }
 
 external_git () {
 	git_tag=""
 	echo "pulling: ${git_tag}"
-	git pull ${git_opts} ${git_patchset} ${git_tag}
+	${git_bin} pull --no-edit ${git_patchset} ${git_tag}
+	${git_bin} describe
 }
 
 aufs_fail () {
@@ -120,20 +120,20 @@ aufs4 () {
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-kbuild.patch
 		patch -p1 < aufs4-kbuild.patch || aufs_fail
 		rm -rf aufs4-kbuild.patch
-		git add .
-		git commit -a -m 'merge: aufs4-kbuild' -s
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs4-kbuild' -s
 
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-base.patch
 		patch -p1 < aufs4-base.patch || aufs_fail
 		rm -rf aufs4-base.patch
-		git add .
-		git commit -a -m 'merge: aufs4-base' -s
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs4-base' -s
 
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-mmap.patch
 		patch -p1 < aufs4-mmap.patch || aufs_fail
 		rm -rf aufs4-mmap.patch
-		git add .
-		git commit -a -m 'merge: aufs4-mmap' -s
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: aufs4-mmap' -s
 
 		wget https://raw.githubusercontent.com/sfjro/aufs4-standalone/aufs${KERNEL_REL}/aufs4-standalone.patch
 		patch -p1 < aufs4-standalone.patch || aufs_fail
@@ -217,9 +217,9 @@ rt () {
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz
 		rm -f localversion-rt
-		git add .
-		git commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
-		git format-patch -1 -o ../patches/rt/
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -s
+		${git_bin} format-patch -1 -o ../patches/rt/
 
 		exit 2
 	fi
@@ -241,11 +241,11 @@ pre_backports () {
 	echo "dir: backports/${subsystem}"
 
 	cd ~/linux-src/
-	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
-	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
-	git pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
+	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
-		git checkout ${backport_tag} -b tmp
+		${git_bin} checkout ${backport_tag} -b tmp
 	fi
 	cd -
 }
@@ -253,16 +253,16 @@ pre_backports () {
 post_backports () {
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		cd ~/linux-src/
-		git checkout master -f ; git branch -D tmp
+		${git_bin} checkout master -f ; ${git_bin} branch -D tmp
 		cd -
 	fi
 
-	git add .
-	git commit -a -m "backports: ${subsystem}: from: linux.git" -s
+	${git_bin} add .
+	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
-	git format-patch -1 -o ../patches/backports/${subsystem}/
+	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 
 	exit 2
 }
