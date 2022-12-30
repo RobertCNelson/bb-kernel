@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2018 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -56,6 +56,7 @@ copy_defconfig () {
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" oldconfig
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
 	if [ ! -f "${DIR}/.yakbuild" ] ; then
 		cp -v .config "${DIR}/patches/defconfig"
@@ -216,8 +217,10 @@ if [  -f "${DIR}/.yakbuild" ] ; then
 	BUILD=$(echo ${kernel_tag} | sed 's/[^-]*//'|| true)
 fi
 make_kernel
-make_modules_pkg
-make_dtbs_pkg
+if [ ! "${AUTO_BUILD_DONT_PKG}" ] ; then
+	make_modules_pkg
+	make_dtbs_pkg
+fi
 echo "-----------------------------"
 echo "Script Complete"
 echo "${KERNEL_UTS}" > kernel_version
