@@ -34,12 +34,20 @@ cat_files () {
 		cat ./patches/git/BBDTBS >> ${wfile}
 	fi
 
+	if [ -f ./patches/git/CAN-ISOTP ] ; then
+		cat ./patches/git/CAN-ISOTP >> ${wfile}
+	fi
+
 	if [ -f ./patches/git/RT ] ; then
 		cat ./patches/git/RT >> ${wfile}
 	fi
 
 	if [ -f ./patches/git/TI_AMX3_CM3 ] ; then
 		cat ./patches/git/TI_AMX3_CM3 >> ${wfile}
+	fi
+
+	if [ -f ./patches/git/WIREGUARD ] ; then
+		cat ./patches/git/WIREGUARD >> ${wfile}
 	fi
 
 	if [ -f ./patches/git/WPANUSB ] ; then
