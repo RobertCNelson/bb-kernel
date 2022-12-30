@@ -504,6 +504,8 @@ beaglebone
 dir 'build/gcc'
 #sgx
 
+dir 'fixes/2022'
+
 packaging () {
 	echo "dir: packaging"
 	#regenerate="enable"
