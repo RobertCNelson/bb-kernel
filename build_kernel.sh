@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2017 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 DIR=$PWD
-CORES=$(getconf _NPROCESSORS_ONLN)
+git_bin=$(which git)
 
 mkdir -p "${DIR}/deploy/"
 
@@ -29,11 +29,13 @@ patch_kernel () {
 	cd "${DIR}/KERNEL" || exit
 
 	export DIR
-	/bin/sh -e "${DIR}/patch.sh" || { git add . ; exit 1 ; }
+	/bin/bash -e "${DIR}/patch.sh" || { ${git_bin} add . ; exit 1 ; }
 
-	if [ ! "${RUN_BISECT}" ] ; then
-		git add --all
-		git commit --allow-empty -a -m "${KERNEL_TAG}-${BUILD} patchset"
+	if [ ! -f "${DIR}/.yakbuild" ] ; then
+		if [ ! "${RUN_BISECT}" ] ; then
+			${git_bin} add --all
+			${git_bin} commit --allow-empty -a -m "${KERNEL_TAG}${BUILD} patchset"
+		fi
 	fi
 
 	cd "${DIR}/" || exit
@@ -41,22 +43,33 @@ patch_kernel () {
 
 copy_defconfig () {
 	cd "${DIR}/KERNEL" || exit
-	make ARCH=arm CROSS_COMPILE="${CC}" distclean
-	make ARCH=arm CROSS_COMPILE="${CC}" "${config}"
-	cp -v .config "${DIR}/patches/ref_${config}"
-	cp -v "${DIR}/patches/defconfig" .config
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" distclean
+	if [ ! -f "${DIR}/.yakbuild" ] ; then
+		make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" "${config}"
+		cp -v .config "${DIR}/patches/ref_${config}"
+		cp -v "${DIR}/patches/defconfig" .config
+	else
+		make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" rcn-ee_defconfig
+	fi
 	cd "${DIR}/" || exit
 }
 
 make_menuconfig () {
 	cd "${DIR}/KERNEL" || exit
-	make ARCH=arm CROSS_COMPILE="${CC}" menuconfig
-	cp -v .config "${DIR}/patches/defconfig"
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" menuconfig
+	if [ ! -f "${DIR}/.yakbuild" ] ; then
+		cp -v .config "${DIR}/patches/defconfig"
+	fi
 	cd "${DIR}/" || exit
 }
 
 make_kernel () {
-	image="zImage"
+	if [ "x${KERNEL_ARCH}" = "xarm" ] ; then
+		image="zImage"
+	else
+		image="Image"
+	fi
+
 	unset address
 
 	##uImage, if you really really want a uImage, zreladdr needs to be defined on the build line going forward...
@@ -66,15 +79,15 @@ make_kernel () {
 
 	cd "${DIR}/KERNEL" || exit
 	echo "-----------------------------"
-	echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CC}\" ${address} ${image} modules"
+	echo "make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE=\"${CC}\" ${address} ${image} modules"
 	echo "-----------------------------"
-	make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" ${address} ${image} modules
+	make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" ${address} ${image} modules
 	echo "-----------------------------"
 
-	if grep -q dtbs "${DIR}/KERNEL/arch/arm/Makefile"; then
-		echo "make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE=\"${CC}\" dtbs"
+	if grep -q dtbs "${DIR}/KERNEL/arch/${KERNEL_ARCH}/Makefile"; then
+		echo "make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE=\"${CC}\" dtbs"
 		echo "-----------------------------"
-		make -j${CORES} ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs
+		make -j${CORES} ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" dtbs
 		echo "-----------------------------"
 	fi
 
@@ -85,8 +98,8 @@ make_kernel () {
 		rm -rf "${DIR}/deploy/config-${KERNEL_UTS}" || true
 	fi
 
-	if [ -f ./arch/arm/boot/${image} ] ; then
-		cp -v arch/arm/boot/${image} "${DIR}/deploy/${KERNEL_UTS}.${image}"
+	if [ -f ./arch/${KERNEL_ARCH}/boot/${image} ] ; then
+		cp -v arch/${KERNEL_ARCH}/boot/${image} "${DIR}/deploy/${KERNEL_UTS}.${image}"
 		cp -v .config "${DIR}/deploy/config-${KERNEL_UTS}"
 	fi
 
@@ -120,16 +133,16 @@ make_pkg () {
 
 	case "${pkg}" in
 	modules)
-		make -s ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" modules_install INSTALL_MOD_PATH="${DIR}/deploy/tmp"
+		make -s ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" modules_install INSTALL_MOD_PATH="${DIR}/deploy/tmp"
 		;;
 	firmware)
-		make -s ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" firmware_install INSTALL_FW_PATH="${DIR}/deploy/tmp"
+		make -s ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" firmware_install INSTALL_FW_PATH="${DIR}/deploy/tmp"
 		;;
 	dtbs)
-		if grep -q dtbs_install "${DIR}/KERNEL/arch/arm/Makefile"; then
-			make -s ARCH=arm LOCALVERSION=-${BUILD} CROSS_COMPILE="${CC}" dtbs_install INSTALL_DTBS_PATH="${DIR}/deploy/tmp"
+		if grep -q dtbs_install "${DIR}/KERNEL/arch/${KERNEL_ARCH}/Makefile"; then
+			make -s ARCH=${KERNEL_ARCH} LOCALVERSION=${BUILD} CROSS_COMPILE="${CC}" dtbs_install INSTALL_DTBS_PATH="${DIR}/deploy/tmp"
 		else
-			find ./arch/arm/boot/ -iname "*.dtb" -exec cp -v '{}' "${DIR}/deploy/tmp/" \;
+			find ./arch/${KERNEL_ARCH}/boot/ -iname "*.dtb" -exec cp -v '{}' "${DIR}/deploy/tmp/" \;
 		fi
 		;;
 	esac
@@ -164,6 +177,14 @@ make_dtbs_pkg () {
 	make_pkg
 }
 
+if [  -f "${DIR}/.yakbuild" ] ; then
+	if [ -f "${DIR}/recipe.sh.sample" ] ; then
+		if [ ! -f "${DIR}/recipe.sh" ] ; then
+			cp -v "${DIR}/recipe.sh.sample" "${DIR}/recipe.sh"
+		fi
+	fi
+fi
+
 /bin/sh -e "${DIR}/tools/host_det.sh" || { exit 1 ; }
 
 if [ ! -f "${DIR}/system.sh" ] ; then
@@ -194,6 +215,9 @@ fi
 unset CC
 unset LINUX_GIT
 . "${DIR}/system.sh"
+if [  -f "${DIR}/.yakbuild" ] ; then
+	. "${DIR}/recipe.sh"
+fi
 /bin/sh -e "${DIR}/scripts/gcc.sh" || { exit 1 ; }
 . "${DIR}/.CC"
 echo "CROSS_COMPILE=${CC}"
@@ -204,6 +228,10 @@ fi
 
 . "${DIR}/version.sh"
 export LINUX_GIT
+
+if [ ! "${CORES}" ] ; then
+	CORES=$(getconf _NPROCESSORS_ONLN)
+fi
 
 #unset FULL_REBUILD
 FULL_REBUILD=1
@@ -220,10 +248,16 @@ fi
 if [ ! "${AUTO_BUILD}" ] ; then
 	make_menuconfig
 fi
+if [  -f "${DIR}/.yakbuild" ] ; then
+	BUILD=$(echo ${kernel_tag} | sed 's/[^-]*//'|| true)
+fi
 make_kernel
 make_modules_pkg
-make_firmware_pkg
-if grep -q dtbs "${DIR}/KERNEL/arch/arm/Makefile"; then
+if [ -f "${DIR}/KERNEL/scripts/Makefile.fwinst" ] ; then
+	#Finally nuked in v4.14.0-rc0 merge...
+	make_firmware_pkg
+fi
+if grep -q dtbs "${DIR}/KERNEL/arch/${KERNEL_ARCH}/Makefile"; then
 	make_dtbs_pkg
 fi
 echo "-----------------------------"
