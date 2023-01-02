@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2014 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@ unset KERNEL_UTS
 
 DIR=$PWD
 
-. ${DIR}/version.sh
+. "${DIR}/version.sh"
 
 mmc_write_rootfs () {
 	echo "Installing ${KERNEL_UTS}-modules.tar.gz"
@@ -43,7 +43,7 @@ mmc_write_rootfs () {
 		sudo cp -v "${DIR}/deploy/config-${KERNEL_UTS}" "${location}/boot/config-${KERNEL_UTS}"
 		sync
 	fi
-	sudo update-initramfs -ck ${KERNEL_UTS}
+	sudo update-initramfs -ck "${KERNEL_UTS}"
 	echo "info: [${KERNEL_UTS}] now installed..."
 }
 
@@ -87,11 +87,15 @@ mmc_write_boot_uname () {
 		if [ ! "x${older_kernel}" = "x${KERNEL_UTS}" ] ; then
 			sudo sed -i -e 's:uname_r='${older_kernel}':uname_r='${KERNEL_UTS}':g' "${location}/uEnv.txt"
 		fi
-		echo "info: /boot/uEnv.txt: `grep uname_r ${location}/uEnv.txt`"
+		echo "info: /boot/uEnv.txt: $(grep uname_r ${location}/uEnv.txt)"
 	fi
 }
 
 mmc_write_boot () {
+	if [ ! -f "${location}/zImage" ] ; then
+		echo "Error: no current ${location}/zImage, this might not boot..."
+	fi
+
 	echo "Installing ${KERNEL_UTS}"
 
 	if [ -f "${location}/zImage_bak" ] ; then
@@ -120,7 +124,7 @@ mmc_write_boot () {
 }
 
 if [ -f "${DIR}/system.sh" ] ; then
-	. ${DIR}/system.sh
+	. "${DIR}/system.sh"
 
 	if [ -f "${DIR}/KERNEL/arch/arm/boot/zImage" ] ; then
 		KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
