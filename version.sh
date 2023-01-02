@@ -10,28 +10,11 @@ branch_postfix=""
 
 #arm
 KERNEL_ARCH=arm
-#toolchain="gcc_linaro_eabi_4_8"
-#toolchain="gcc_linaro_eabi_4_9"
-#toolchain="gcc_linaro_eabi_5"
-#toolchain="gcc_linaro_eabi_6"
-#toolchain="gcc_linaro_eabi_7"
-#toolchain="gcc_arm_eabi_8"
-#toolchain="gcc_arm_eabi_9"
+DEBARCH=armhf
 #toolchain="gcc_linaro_gnueabihf_4_7"
 #toolchain="gcc_linaro_gnueabihf_4_8"
 #toolchain="gcc_linaro_gnueabihf_4_9"
 toolchain="gcc_linaro_gnueabihf_5"
-#toolchain="gcc_linaro_gnueabihf_6"
-#toolchain="gcc_linaro_gnueabihf_7"
-#toolchain="gcc_arm_gnueabihf_8"
-#toolchain="gcc_arm_gnueabihf_9"
-#arm64
-#KERNEL_ARCH=arm64
-#toolchain="gcc_linaro_aarch64_gnu_5"
-#toolchain="gcc_linaro_aarch64_gnu_6"
-#toolchain="gcc_linaro_aarch64_gnu_7"
-#toolchain="gcc_arm_aarch64_gnu_8"
-#toolchain="gcc_arm_aarch64_gnu_9"
 
 #Kernel
 KERNEL_REL=4.3
