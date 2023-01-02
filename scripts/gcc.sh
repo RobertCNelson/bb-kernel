@@ -40,46 +40,6 @@ else
 fi
 
 dl_generic () {
-	if [ "x${ARCH}" = "xarmv7l" ] ; then
-		#using native gcc
-		CC=
-	else
-		CC="${gcc_dir}/${filename_prefix}/${binary}"
-	fi
-}
-
-dl_gcc_generic_old () {
-	binary="bin/${gcc_prefix}-"
-
-	WGET="wget -c --directory-prefix=${gcc_dir}/"
-	if [ "x${extracted_dir}" = "x" ] ; then
-		filename_prefix=${gcc_filename_prefix}
-	else
-		filename_prefix=${extracted_dir}
-	fi
-
-	if [ ! -f "${gcc_dir}/${gcc_filename_prefix}/${datestamp}" ] ; then
-		echo "Installing Toolchain: ${toolchain}"
-		echo "-----------------------------"
-		${WGET} "${gcc_html_path}${gcc_filename_prefix}.tar.xz"
-		if [ -d "${gcc_dir}/${gcc_filename_prefix}" ] ; then
-			rm -rf "${gcc_dir}/${gcc_filename_prefix}" || true
-		fi
-		tar -xf "${gcc_dir}/${gcc_filename_prefix}.tar.xz" -C "${gcc_dir}/"
-		if [ -f "${gcc_dir}/${gcc_filename_prefix}/${binary}gcc" ] ; then
-			touch "${gcc_dir}/${gcc_filename_prefix}/${datestamp}"
-		fi
-	else
-		echo "Using Existing Toolchain: ${toolchain}"
-	fi
-
-	dl_generic
-}
-
-dl_gcc_generic () {
-	gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
-	gcc_filename_prefix="x86_64-gcc-${gcc_selected}-nolibc-${gcc_prefix}"
-	extracted_dir="gcc-${gcc_selected}-nolibc/${gcc_prefix}"
 	binary="bin/${gcc_prefix}-"
 
 	WGET="wget -c --directory-prefix=${gcc_dir}/"
@@ -103,6 +63,23 @@ dl_gcc_generic () {
 	else
 		echo "Using Existing Toolchain: ${toolchain}"
 	fi
+
+	if [ "x${ARCH}" = "xarmv7l" ] ; then
+		#using native gcc
+		CC=
+	else
+		CC="${gcc_dir}/${filename_prefix}/${binary}"
+	fi
+}
+
+dl_gcc_generic_old () {
+	dl_generic
+}
+
+dl_gcc_generic () {
+	gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
+	gcc_filename_prefix="x86_64-gcc-${gcc_selected}-nolibc-${gcc_prefix}"
+	extracted_dir="gcc-${gcc_selected}-nolibc/${gcc_prefix}"
 
 	dl_generic
 }
