@@ -40,6 +40,8 @@ else
 fi
 
 dl_gcc_generic_old () {
+	binary="bin/${gcc_prefix}-"
+
 	WGET="wget -c --directory-prefix=${gcc_dir}/"
 	if [ ! -f "${gcc_dir}/${gcc_filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
@@ -124,7 +126,9 @@ gcc_toolchain () {
 		gcc_copyright="2012"
 		datestamp="2013.04-gcc-arm-linux-gnueabihf"
 
-		binary="bin/arm-linux-gnueabihf-"
+		gcc_prefix="arm-linux-gnueabihf"
+		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux"
+
 		dl_gcc_generic_old
 		;;
 	gcc_linaro_gnueabihf_4_8)
@@ -138,7 +142,9 @@ gcc_toolchain () {
 		gcc_copyright="2013"
 		datestamp="2014.04-gcc-arm-linux-gnueabihf"
 
-		binary="bin/arm-linux-gnueabihf-"
+		gcc_prefix="arm-linux-gnueabihf"
+		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux"
+
 		dl_gcc_generic_old
 		;;
 	gcc_linaro_gnueabihf_4_9)
@@ -152,7 +158,9 @@ gcc_toolchain () {
 		gcc_copyright="2015"
 		datestamp="2017.01-gcc-arm-linux-gnueabihf"
 
-		binary="bin/arm-linux-gnueabihf-"
+		gcc_prefix="arm-linux-gnueabihf"
+		gcc_filename_prefix="gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf"
+
 		dl_gcc_generic_old
 		;;
 	gcc_linaro_gnueabihf_5)
@@ -167,7 +175,9 @@ gcc_toolchain () {
 		gcc_copyright="2015"
 		datestamp="2017.10-gcc-arm-linux-gnueabihf"
 
-		binary="bin/arm-linux-gnueabihf-"
+		gcc_prefix="arm-linux-gnueabihf"
+		gcc_filename_prefix="gcc-linaro-5.5.0-2017.10-x86_64_arm-linux-gnueabihf"
+
 		dl_gcc_generic_old
 		;;
 	gcc_linaro_gnueabihf_6|gcc_6_arm)
