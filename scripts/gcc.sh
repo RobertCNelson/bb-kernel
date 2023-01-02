@@ -43,6 +43,7 @@ dl_gcc_generic_old () {
 	binary="bin/${gcc_prefix}-"
 
 	WGET="wget -c --directory-prefix=${gcc_dir}/"
+
 	if [ ! -f "${gcc_dir}/${gcc_filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
 		echo "-----------------------------"
@@ -123,10 +124,9 @@ gcc_toolchain () {
 		gcc_html_path="https://releases.linaro.org/archive/13.04/components/toolchain/binaries/"
 		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux"
 		gcc_banner="arm-linux-gnueabihf-gcc (crosstool-NG linaro-1.13.1-4.7-2013.04-20130415 - Linaro GCC 2013.04) 4.7.3 20130328 (prerelease)"
-		gcc_copyright="2012"
-		datestamp="2013.04-gcc-arm-linux-gnueabihf"
 
 		gcc_prefix="arm-linux-gnueabihf"
+		datestamp="2012.4.7-${gcc_prefix}"
 		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux"
 
 		dl_gcc_generic_old
@@ -139,10 +139,9 @@ gcc_toolchain () {
 		gcc_html_path="https://releases.linaro.org/archive/14.04/components/toolchain/binaries/"
 		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux"
 		gcc_banner="arm-linux-gnueabihf-gcc (crosstool-NG linaro-1.13.1-4.8-2014.04 - Linaro GCC 4.8-2014.04) 4.8.3 20140401 (prerelease)"
-		gcc_copyright="2013"
-		datestamp="2014.04-gcc-arm-linux-gnueabihf"
 
 		gcc_prefix="arm-linux-gnueabihf"
+		datestamp="2013.4.8-${gcc_prefix}"
 		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux"
 
 		dl_gcc_generic_old
@@ -155,10 +154,9 @@ gcc_toolchain () {
 		gcc_html_path="https://releases.linaro.org/components/toolchain/binaries/4.9-2017.01/arm-linux-gnueabihf/"
 		gcc_filename_prefix="gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf"
 		gcc_banner="arm-linux-gnueabihf-gcc (Linaro GCC 4.9-2017.01) 4.9.4"
-		gcc_copyright="2015"
-		datestamp="2017.01-gcc-arm-linux-gnueabihf"
 
 		gcc_prefix="arm-linux-gnueabihf"
+		datestamp="2015.4.9.4-${gcc_prefix}"
 		gcc_filename_prefix="gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf"
 
 		dl_gcc_generic_old
@@ -172,10 +170,9 @@ gcc_toolchain () {
 		gcc_html_path="https://releases.linaro.org/components/toolchain/binaries/5.5-2017.10/arm-linux-gnueabihf/"
 		gcc_filename_prefix="gcc-linaro-5.5.0-2017.10-x86_64_arm-linux-gnueabihf"
 		gcc_banner="arm-linux-gnueabihf-gcc (Linaro GCC 5.5-2017.10) 5.5.0"
-		gcc_copyright="2015"
-		datestamp="2017.10-gcc-arm-linux-gnueabihf"
 
 		gcc_prefix="arm-linux-gnueabihf"
+		datestamp="2015.5.5.0-${gcc_prefix}"
 		gcc_filename_prefix="gcc-linaro-5.5.0-2017.10-x86_64_arm-linux-gnueabihf"
 
 		dl_gcc_generic_old
