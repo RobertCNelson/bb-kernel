@@ -66,86 +66,6 @@ gcc_toolchain () {
 	site="https://releases.linaro.org"
 	archive_site="https://releases.linaro.org/archive"
 	case "${toolchain}" in
-	gcc_linaro_eabi_4_8)
-		#
-		#https://releases.linaro.org/14.04/components/toolchain/binaries/gcc-linaro-arm-none-eabi-4.8-2014.04_linux.tar.xz
-		#
-		gcc_version="4.8"
-		release="2014.04"
-		toolchain_name="gcc-linaro-arm-none-eabi"
-		version="14.04/components/toolchain/binaries"
-		directory="${toolchain_name}-${gcc_version}-${release}_linux"
-		filename="${directory}.tar.xz"
-		datestamp="${release}-${toolchain_name}"
-
-		binary="bin/arm-none-eabi-"
-		;;
-	gcc_linaro_eabi_4_9_i686)
-		#
-		#https://releases.linaro.org/14.09/components/toolchain/binaries/gcc-linaro-arm-none-eabi-4.9-2014.09_linux.tar.xz
-		#
-		gcc_version="4.9"
-		release="2014.09"
-		toolchain_name="gcc-linaro-arm-none-eabi"
-		version="14.09/components/toolchain/binaries"
-		directory="${toolchain_name}-${gcc_version}-${release}_linux"
-		filename="${directory}.tar.xz"
-		datestamp="${release}-${toolchain_name}"
-
-		binary="bin/arm-none-eabi-"
-		;;
-	gcc_linaro_eabi_4_9)
-		#
-		#https://releases.linaro.org/components/toolchain/binaries/4.9-2016.02/arm-eabi/gcc-linaro-5.3-2016.02-x86_64_arm-eabi.tar.xz
-		#
-
-		gcc_version="4.9"
-		release="16.02"
-		target="arm-eabi"
-
-		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
-		filename="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi.tar.xz"
-		directory="gcc-linaro-${gcc_version}-20${release}-x86_64_arm-eabi"
-
-		datestamp="${gcc_version}-20${release}-${target}"
-
-		binary="bin/arm-eabi-"
-		;;
-	gcc_linaro_eabi_5)
-		#
-		#https://releases.linaro.org/components/toolchain/binaries/5.3-2016.05/arm-eabi/gcc-linaro-5.3.1-2016.05-x86_64_arm-eabi.tar.xz
-		#
-
-		gcc_version="5.3"
-		release="16.05"
-		target="arm-eabi"
-
-		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
-		filename="gcc-linaro-${gcc_version}.1-20${release}-x86_64_arm-eabi.tar.xz"
-		directory="gcc-linaro-${gcc_version}.1-20${release}-x86_64_arm-eabi"
-
-		datestamp="${gcc_version}-20${release}-${target}"
-
-		binary="bin/arm-eabi-"
-		;;
-	gcc_linaro_eabi_6)
-		#
-		#https://releases.linaro.org/components/toolchain/binaries/6.2-2016.11/arm-eabi/gcc-linaro-6.2.1-2016.11-x86_64_arm-eabi.tar.xz
-		#
-		#site="https://snapshots.linaro.org"
-
-		gcc_version="6.2"
-		release="16.11"
-		target="arm-eabi"
-
-		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
-		filename="gcc-linaro-${gcc_version}.1-20${release}-x86_64_arm-eabi.tar.xz"
-		directory="gcc-linaro-${gcc_version}.1-20${release}-x86_64_arm-eabi"
-
-		datestamp="${gcc_version}-20${release}-${target}"
-
-		binary="bin/arm-eabi-"
-		;;
 	gcc_linaro_gnueabi_4_6)
 		#
 		#https://releases.linaro.org/12.03/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabi-2012.03-20120326_linux.tar.bz2
@@ -185,20 +105,6 @@ gcc_toolchain () {
 		release="2014.04"
 		toolchain_name="gcc-linaro-arm-linux-gnueabihf"
 		version="14.04/components/toolchain/binaries"
-		directory="${toolchain_name}-${gcc_version}-${release}_linux"
-		filename="${directory}.tar.xz"
-		datestamp="${release}-${toolchain_name}"
-
-		binary="bin/arm-linux-gnueabihf-"
-		;;
-	gcc_linaro_gnueabihf_4_9_i686)
-		#
-		#https://releases.linaro.org/14.09/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.9-2014.09_linux.tar.xz
-		#
-		gcc_version="4.9"
-		release="2014.09"
-		toolchain_name="gcc-linaro-arm-linux-gnueabihf"
-		version="14.09/components/toolchain/binaries"
 		directory="${toolchain_name}-${gcc_version}-${release}_linux"
 		filename="${directory}.tar.xz"
 		datestamp="${release}-${toolchain_name}"
@@ -257,42 +163,6 @@ gcc_toolchain () {
 
 		binary="bin/${target}-"
 		;;
-	gcc_linaro_aarch64_gnu_5)
-		#
-		#https://releases.linaro.org/components/toolchain/binaries/5.3-2016.05/aarch64-linux-gnu/gcc-linaro-5.3.1-2016.05-x86_64_aarch64-linux-gnu.tar.xz
-		#
-
-		gcc_version="5.3"
-		release="16.05"
-		target="aarch64-linux-gnu"
-
-		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
-		filename="gcc-linaro-${gcc_version}.1-20${release}-x86_64_${target}.tar.xz"
-		directory="gcc-linaro-${gcc_version}.1-20${release}-x86_64_${target}"
-
-		datestamp="${gcc_version}-20${release}-${target}"
-
-		binary="bin/${target}-"
-		;;
-	gcc_linaro_aarch64_gnu_6)
-		#
-		#https://releases.linaro.org/components/toolchain/binaries/6.2-2016.11/aarch64-linux-gnu/gcc-linaro-6.2.1-2016.11-x86_64_aarch64-linux-gnu.tar.xz
-		#
-		#site="https://snapshots.linaro.org"
-
-		gcc_version="6.2"
-		release="16.11"
-		target="aarch64-linux-gnu"
-
-		version="components/toolchain/binaries/${gcc_version}-20${release}/${target}"
-		filename="gcc-linaro-${gcc_version}.1-20${release}-x86_64_${target}.tar.xz"
-		directory="gcc-linaro-${gcc_version}.1-20${release}-x86_64_${target}"
-
-		datestamp="${gcc_version}-20${release}-${target}"
-
-		binary="bin/${target}-"
-		;;
-
 	*)
 		echo "bug: maintainer forgot to set:"
 		echo "toolchain=\"xzy\" in version.sh"
@@ -304,24 +174,6 @@ gcc_toolchain () {
 }
 
 if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] ; then
-	if [ "x${ARCH}" = "xi686" ] ; then
-		echo ""
-		echo "Warning: 32bit is no longer supported by linaro..."
-		if [ "x${toolchain}" = "xgcc_linaro_eabi_4_9" ] ; then
-			echo ""
-			echo "Warning: 32bit is no longer supported by linaro, using old 14.09 gcc-4.9 release..."
-			echo ""
-			toolchain="gcc_linaro_eabi_4_9_i686"
-		fi
-
-		if [ "x${toolchain}" = "xgcc_linaro_gnueabihf_4_9" ] ; then
-			echo ""
-			echo "Warning: 32bit is no longer supported by linaro, using old 14.09 gcc-4.9 release..."
-			echo ""
-			toolchain="gcc_linaro_gnueabihf_4_9_i686"
-		fi
-
-	fi
 	gcc_toolchain
 fi
 
@@ -332,8 +184,16 @@ fi
 if [ "x${KERNEL_ARCH}" = "xarm64" ] ; then
 	check="aarch64"
 fi
+if [ "x${KERNEL_ARCH}" = "xriscv" ] ; then
+	check="riscv"
+fi
 
-GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep ${check} || true)
+if [ "x${check}" = "x" ] ; then
+	echo "ERROR: fix: scripts/gcc.sh..."
+	exit 2
+else
+	GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep ${check} || true)
+fi
 
 if [ "x${GCC_TEST}" = "x" ] ; then
 	echo "-----------------------------"
