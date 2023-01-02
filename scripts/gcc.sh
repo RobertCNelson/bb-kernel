@@ -39,10 +39,24 @@ else
 	gcc_dir="${DIR}/dl"
 fi
 
+dl_generic () {
+	if [ "x${ARCH}" = "xarmv7l" ] ; then
+		#using native gcc
+		CC=
+	else
+		CC="${gcc_dir}/${filename_prefix}/${binary}"
+	fi
+}
+
 dl_gcc_generic_old () {
 	binary="bin/${gcc_prefix}-"
 
 	WGET="wget -c --directory-prefix=${gcc_dir}/"
+	if [ "x${extracted_dir}" = "x" ] ; then
+		filename_prefix=${gcc_filename_prefix}
+	else
+		filename_prefix=${extracted_dir}
+	fi
 
 	if [ ! -f "${gcc_dir}/${gcc_filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
@@ -59,12 +73,7 @@ dl_gcc_generic_old () {
 		echo "Using Existing Toolchain: ${toolchain}"
 	fi
 
-	if [ "x${ARCH}" = "xarmv7l" ] ; then
-		#using native gcc
-		CC=
-	else
-		CC="${gcc_dir}/${gcc_filename_prefix}/${binary}"
-	fi
+	dl_generic
 }
 
 dl_gcc_generic () {
@@ -95,12 +104,7 @@ dl_gcc_generic () {
 		echo "Using Existing Toolchain: ${toolchain}"
 	fi
 
-	if [ "x${ARCH}" = "xarmv7l" ] ; then
-		#using native gcc
-		CC=
-	else
-		CC="${gcc_dir}/${filename_prefix}/${binary}"
-	fi
+	dl_generic
 }
 
 gcc_toolchain () {
