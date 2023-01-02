@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/bash -e
 #
-# Copyright (c) 2009-2015 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2018 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,48 +22,85 @@
 
 # Split out, so build_kernel.sh and build_deb.sh can share..
 
+shopt -s nullglob
+
 . ${DIR}/version.sh
 if [ -f ${DIR}/system.sh ] ; then
 	. ${DIR}/system.sh
 fi
+git_bin=$(which git)
+#git hard requirements:
+#git: --no-edit
 
-#Debian 7 (Wheezy): git version 1.7.10.4 and later needs "--no-edit"
-unset git_opts
-git_no_edit=$(LC_ALL=C git help pull | grep -m 1 -e "--no-edit" || true)
-if [ ! "x${git_no_edit}" = "x" ] ; then
-	git_opts="--no-edit"
-fi
-
-git="git am"
+git="${git_bin} am"
 #git_patchset=""
 #git_opts
 
 if [ "${RUN_BISECT}" ] ; then
-	git="git apply"
+	git="${git_bin} apply"
 fi
 
 echo "Starting patch.sh"
 
 git_add () {
-	git add .
-	git commit -a -m 'testing patchset'
+	${git_bin} add .
+	${git_bin} commit -a -m 'testing patchset'
 }
 
 start_cleanup () {
-	git="git am --whitespace=fix"
+	git="${git_bin} am --whitespace=fix"
 }
 
 cleanup () {
 	if [ "${number}" ] ; then
-		git format-patch -${number} -o ${DIR}/patches/
+		if [ "x${wdir}" = "x" ] ; then
+			${git_bin} format-patch -${number} -o ${DIR}/patches/
+		else
+			if [ ! -d ${DIR}/patches/${wdir}/ ] ; then
+				mkdir -p ${DIR}/patches/${wdir}/
+			fi
+			${git_bin} format-patch -${number} -o ${DIR}/patches/${wdir}/
+			unset wdir
+		fi
 	fi
 	exit 2
+}
+
+dir () {
+	wdir="$1"
+	if [ -d "${DIR}/patches/$wdir" ]; then
+		echo "dir: $wdir"
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			start_cleanup
+		fi
+
+		number=
+		for p in "${DIR}/patches/$wdir/"*.patch; do
+			${git} "$p"
+			number=$(( $number + 1 ))
+		done
+
+		if [ "x${regenerate}" = "xenable" ] ; then
+			cleanup
+		fi
+	fi
+	unset wdir
+}
+
+cherrypick () {
+	if [ ! -d ../patches/${cherrypick_dir} ] ; then
+		mkdir -p ../patches/${cherrypick_dir}
+	fi
+	git format-patch -1 ${SHA} --start-number ${num} -o ../patches/${cherrypick_dir}
+	num=$(($num+1))
 }
 
 external_git () {
 	git_tag=""
 	echo "pulling: ${git_tag}"
-	git pull ${git_opts} ${git_patchset} ${git_tag}
+	${git_bin} pull --no-edit ${git_patchset} ${git_tag}
+	${git_bin} describe
 }
 
 local_patch () {

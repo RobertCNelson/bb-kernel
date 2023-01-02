@@ -4,25 +4,31 @@ ARCH=$(uname -m)
 
 config="omap2plus_defconfig"
 
-#toolchain="gcc_linaro_eabi_4_8"
-#toolchain="gcc_linaro_eabi_4_9"
+build_prefix="-bone"
+branch_prefix="am33x-v"
+branch_postfix=""
+
+#arm
+KERNEL_ARCH=arm
+DEBARCH=armhf
 #toolchain="gcc_linaro_gnueabi_4_6"
 #toolchain="gcc_linaro_gnueabihf_4_7"
 toolchain="gcc_linaro_gnueabihf_4_8"
 #toolchain="gcc_linaro_gnueabihf_4_9"
+#toolchain="gcc_linaro_gnueabihf_5"
 
-#Kernel/Build
+#Kernel
 KERNEL_REL=3.12
 KERNEL_TAG=${KERNEL_REL}.13
-BUILD=bone12
+#Kernel Build
+BUILD=${build_prefix}12
 
-#v3.X-rcX + upto SHA
+#v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
 #KERNEL_SHA=""
 
 #git branch
-BRANCH="am33x-v3.12"
+BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
-DISTRO=cross
-DEBARCH=armhf
+DISTRO=xross
 #
