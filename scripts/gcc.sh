@@ -99,32 +99,6 @@ gcc_toolchain () {
 	gcc12="12.2.0"
 
 	case "${toolchain}" in
-	gcc_linaro_gnueabihf_4_7)
-		#
-		#https://releases.linaro.org/archive/13.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux.tar.xz
-		#
-
-		gcc_prefix="arm-linux-gnueabihf"
-		datestamp="2012.4.7-${gcc_prefix}"
-
-		gcc_selected="archive/13.04/components/toolchain/binaries"
-		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.7-2013.04-20130415_linux"
-
-		dl_gcc_generic_old
-		;;
-	gcc_linaro_gnueabihf_4_8)
-		#
-		#https://releases.linaro.org/archive/14.04/components/toolchain/binaries/gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux.tar.xz
-		#
-
-		gcc_prefix="arm-linux-gnueabihf"
-		datestamp="2013.4.8-${gcc_prefix}"
-
-		gcc_selected="archive/14.04/components/toolchain/binaries"
-		gcc_filename_prefix="gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux"
-
-		dl_gcc_generic_old
-		;;
 	gcc_linaro_gnueabihf_4_9)
 		#
 		#https://releases.linaro.org/components/toolchain/binaries/4.9-2017.01/arm-linux-gnueabihf/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf.tar.xz
