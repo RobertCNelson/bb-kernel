@@ -1,0 +1,118 @@
+From d75c45845c2a0526b045996c6dc32d8df15f6e9d Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Mon, 22 Aug 2022 11:25:32 -0500
+Subject: [PATCH] Revert "gpiolib: devres: Get rid of unused devm_gpio_free()"
+
+This reverts commit 2b038e786f8338a3bc22d791000753e0ec113e00.
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ .../driver-api/driver-model/devres.rst        |  1 +
+ drivers/gpio/gpiolib-devres.c                 | 32 +++++++++++++++++++
+ include/linux/gpio.h                          |  6 ++++
+ 3 files changed, 39 insertions(+)
+
+diff --git a/Documentation/driver-api/driver-model/devres.rst b/Documentation/driver-api/driver-model/devres.rst
+index 56082265e8e5..162901e0efaa 100644
+--- a/Documentation/driver-api/driver-model/devres.rst
++++ b/Documentation/driver-api/driver-model/devres.rst
+@@ -277,6 +277,7 @@ GPIO
+   devm_gpiochip_add_data()
+   devm_gpio_request()
+   devm_gpio_request_one()
++  devm_gpio_free()
+ 
+ I2C
+   devm_i2c_add_adapter()
+diff --git a/drivers/gpio/gpiolib-devres.c b/drivers/gpio/gpiolib-devres.c
+index 16a696249229..79da85d17b71 100644
+--- a/drivers/gpio/gpiolib-devres.c
++++ b/drivers/gpio/gpiolib-devres.c
+@@ -375,6 +375,9 @@ void devm_gpiod_put_array(struct device *dev, struct gpio_descs *descs)
+ }
+ EXPORT_SYMBOL_GPL(devm_gpiod_put_array);
+ 
++
++
++
+ static void devm_gpio_release(struct device *dev, void *res)
+ {
+ 	unsigned *gpio = res;
+@@ -382,6 +385,13 @@ static void devm_gpio_release(struct device *dev, void *res)
+ 	gpio_free(*gpio);
+ }
+ 
++static int devm_gpio_match(struct device *dev, void *res, void *data)
++{
++	unsigned *this = res, *gpio = data;
++
++	return *this == *gpio;
++}
++
+ /**
+  *      devm_gpio_request - request a GPIO for a managed device
+  *      @dev: device to request the GPIO for
+@@ -392,7 +402,11 @@ static void devm_gpio_release(struct device *dev, void *res)
+  *      same arguments and performs the same function as
+  *      gpio_request().  GPIOs requested with this function will be
+  *      automatically freed on driver detach.
++ *
++ *      If an GPIO allocated with this function needs to be freed
++ *      separately, devm_gpio_free() must be used.
+  */
++
+ int devm_gpio_request(struct device *dev, unsigned gpio, const char *label)
+ {
+ 	unsigned *dr;
+@@ -445,6 +459,24 @@ int devm_gpio_request_one(struct device *dev, unsigned gpio,
+ }
+ EXPORT_SYMBOL_GPL(devm_gpio_request_one);
+ 
++/**
++ *      devm_gpio_free - free a GPIO
++ *      @dev: device to free GPIO for
++ *      @gpio: GPIO to free
++ *
++ *      Except for the extra @dev argument, this function takes the
++ *      same arguments and performs the same function as gpio_free().
++ *      This function instead of gpio_free() should be used to manually
++ *      free GPIOs allocated with devm_gpio_request().
++ */
++void devm_gpio_free(struct device *dev, unsigned int gpio)
++{
++
++	WARN_ON(devres_release(dev, devm_gpio_release, devm_gpio_match,
++		&gpio));
++}
++EXPORT_SYMBOL_GPL(devm_gpio_free);
++
+ static void devm_gpio_chip_release(void *data)
+ {
+ 	struct gpio_chip *gc = data;
+diff --git a/include/linux/gpio.h b/include/linux/gpio.h
+index a370387fa406..008ad3ee56b7 100644
+--- a/include/linux/gpio.h
++++ b/include/linux/gpio.h
+@@ -95,6 +95,7 @@ struct device;
+ int devm_gpio_request(struct device *dev, unsigned gpio, const char *label);
+ int devm_gpio_request_one(struct device *dev, unsigned gpio,
+ 			  unsigned long flags, const char *label);
++void devm_gpio_free(struct device *dev, unsigned int gpio);
+ 
+ #else /* ! CONFIG_GPIOLIB */
+ 
+@@ -239,6 +240,11 @@ static inline int devm_gpio_request_one(struct device *dev, unsigned gpio,
+ 	return -EINVAL;
+ }
+ 
++static inline void devm_gpio_free(struct device *dev, unsigned int gpio)
++{
++	WARN_ON(1);
++}
++
+ #endif /* ! CONFIG_GPIOLIB */
+ 
+ #endif /* __LINUX_GPIO_H */
+-- 
+2.30.2
+

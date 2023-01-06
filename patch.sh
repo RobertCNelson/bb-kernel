@@ -109,32 +109,31 @@ aufs_fail () {
 }
 
 aufs () {
-	#https://github.com/sfjro/aufs-standalone/tree/aufs5.15.41
-	aufs_prefix="aufs5-"
+	#https://github.com/sfjro/aufs-standalone/tree/aufs6.1
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.15.41
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
-		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
-		rm -rf ${aufs_prefix}kbuild.patch
+		KERNEL_REL=6.1
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-kbuild.patch
+		patch -p1 < aufs6-kbuild.patch || aufs_fail
+		rm -rf aufs6-kbuild.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-kbuild' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}base.patch
-		patch -p1 < ${aufs_prefix}base.patch || aufs_fail
-		rm -rf ${aufs_prefix}base.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-base.patch
+		patch -p1 < aufs6-base.patch || aufs_fail
+		rm -rf aufs6-base.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-base' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}mmap.patch
-		patch -p1 < ${aufs_prefix}mmap.patch || aufs_fail
-		rm -rf ${aufs_prefix}mmap.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-mmap.patch
+		patch -p1 < aufs6-mmap.patch || aufs_fail
+		rm -rf aufs6-mmap.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-mmap' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}standalone.patch
-		patch -p1 < ${aufs_prefix}standalone.patch || aufs_fail
-		rm -rf ${aufs_prefix}standalone.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-standalone.patch
+		patch -p1 < aufs6-standalone.patch || aufs_fail
+		rm -rf aufs6-standalone.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-standalone' -s
 
@@ -151,7 +150,7 @@ aufs () {
 		cd -
 
 		cd ./KERNEL/
-		KERNEL_REL=5.15
+		KERNEL_REL=6.1
 
 		cp -v ../aufs-standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
 		mkdir -p ./Documentation/filesystems/aufs/
@@ -194,7 +193,7 @@ wpanusb () {
 			rm -rf ./wpanusb || true
 		fi
 
-		${git_bin} clone https://github.com/statropy/wpanusb --depth=1
+		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/wpanusb --depth=1
 		cd ./wpanusb
 			wpanusb_hash=$(git rev-parse HEAD)
 		cd -
@@ -205,9 +204,9 @@ wpanusb () {
 		cp -v ../wpanusb/wpanusb.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: wpanusb: https://github.com/statropy/wpanusb' -m "https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" -s
+		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/wpanusb/
-		echo "WPANUSB: https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" > ../patches/git/WPANUSB
+		echo "WPANUSB: https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/git/WPANUSB
 
 		rm -rf ../wpanusb/ || true
 
@@ -215,7 +214,7 @@ wpanusb () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/wpanusb/0001-merge-wpanusb-https-github.com-statropy-wpanusb.patch"
+		${git} "${DIR}/patches/wpanusb/0001-merge-wpanusb-https-git.beagleboard.org-beagleconnec.patch"
 
 		wdir="wpanusb"
 		number=1
@@ -234,7 +233,7 @@ bcfserial () {
 			rm -rf ./bcfserial || true
 		fi
 
-		${git_bin} clone https://github.com/statropy/bcfserial --depth=1
+		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/bcfserial.git --depth=1
 		cd ./bcfserial
 			bcfserial_hash=$(git rev-parse HEAD)
 		cd -
@@ -244,9 +243,9 @@ bcfserial () {
 		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: bcfserial: https://github.com/statropy/bcfserial' -m "https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" -s
+		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/bcfserial/
-		echo "BCFSERIAL: https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
+		echo "BCFSERIAL: https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
 
 		rm -rf ../bcfserial/ || true
 
@@ -254,7 +253,7 @@ bcfserial () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-github.com-statropy-bcfserial.patch"
+		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-git.beagleboard.org-beagleconn.patch"
 
 		wdir="bcfserial"
 		number=1
@@ -385,7 +384,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v5.15.x"
+	branch="v6.1.x"
 	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -409,13 +408,16 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		#Added in v6.2.x
+		device="am335x-sancloud-bbe-extended-wifi.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+
+		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -489,7 +491,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.150"
+	backport_tag="v5.10.162"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -504,95 +506,33 @@ backports () {
 		patch_backports
 		dir 'drivers/ti/uio'
 	fi
-
-	backport_tag="v5.15.75"
-
-	subsystem="iio"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
-		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
-		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
-		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.19.17"
-
-	subsystem="it66121"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-}
-
-reverts () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		start_cleanup
-	fi
-
-	## notes
-	##git revert --no-edit xyz -s
-
-	dir 'reverts'
-
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wdir="reverts"
-		number=1
-		cleanup
-	fi
 }
 
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
+	dir 'boris'
 	dir 'drivers/ar1021_i2c'
-	dir 'drivers/spi'
-	dir 'drivers/tps65217'
-
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
-	dir 'drivers/greybus'
-	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-	dir 'drivers/mikrobus'
 }
 
 soc () {
 	dir 'bootup_hacks'
 }
 
-fixes () {
-	dir 'fixes/gcc'
-}
-
 ###
 backports
-#reverts
 drivers
 soc
-fixes
 
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.18.19"
+		backport_tag="v6.1.3"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
