@@ -336,7 +336,6 @@ ti_pm_firmware () {
 	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-
 		cd ../
 		if [ -d ./ti-amx3-cm3-pm-firmware ] ; then
 			rm -rf ./ti-amx3-cm3-pm-firmware || true
