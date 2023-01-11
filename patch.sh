@@ -530,7 +530,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.0.8"
+		backport_tag="v6.0.18"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
