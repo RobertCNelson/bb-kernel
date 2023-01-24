@@ -181,7 +181,8 @@ git_kernel () {
 	${git_bin} reset --hard HEAD
 	${git_bin} checkout master -f
 
-	${git_bin} pull --no-edit || true
+	echo "log: [${git_bin} pull --no-rebase --no-edit]"
+	${git_bin} pull --no-rebase --no-edit || true
 
 	${git_bin} tag | grep "v${KERNEL_TAG}" | grep -v rc >/dev/null 2>&1 || git_kernel_torvalds
 
