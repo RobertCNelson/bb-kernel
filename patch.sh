@@ -531,7 +531,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.10.153"
+	backport_tag="v5.10.165"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -544,9 +544,9 @@ backports () {
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
 		post_backports
-	#	exit 2
-	#else
-	#	patch_backports
+		exit 2
+	else
+		patch_backports
 	fi
 
 	backport_tag="v5.18.19"

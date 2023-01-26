@@ -1,6 +1,6 @@
-From 414640aa4fd35ad778b4e7413fe71f753130d21d Mon Sep 17 00:00:00 2001
+From bb1dd012d0a5f6e57478fa082bbeb2f094db8de8 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 8 Nov 2022 14:13:00 -0600
+Date: Thu, 26 Jan 2023 15:55:08 -0600
 Subject: [PATCH] backports: brcm80211: from: linux.git
 
 Reference: v5.10.9
@@ -12,6 +12,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  .../broadcom/brcm80211/brcmfmac/core.c        |  45 +++--
  .../broadcom/brcm80211/brcmfmac/dmi.c         |  42 ----
  .../broadcom/brcm80211/brcmfmac/firmware.c    |   2 -
+ .../broadcom/brcm80211/brcmfmac/fweh.c        |   4 -
  .../broadcom/brcm80211/brcmfmac/pcie.c        |  77 +++++---
  .../broadcom/brcm80211/brcmfmac/pcie.h        |   5 +
  .../broadcom/brcm80211/brcmfmac/pno.c         |  12 +-
@@ -24,6 +25,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/mac80211/aes_gmac.c                       |   5 +-
  net/mac80211/agg-rx.c                         |   5 +-
  net/mac80211/agg-tx.c                         |  24 +--
+ net/mac80211/airtime.c                        |   3 -
  net/mac80211/cfg.c                            |  36 +---
  net/mac80211/chan.c                           |   7 +-
  net/mac80211/debugfs.c                        |  44 +++--
@@ -34,9 +36,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/mac80211/iface.c                          |  28 +--
  net/mac80211/key.c                            |   7 -
  net/mac80211/key.h                            |   2 -
- net/mac80211/main.c                           |  20 +-
+ net/mac80211/main.c                           |  28 +--
  net/mac80211/mesh_hwmp.c                      |   2 +-
- net/mac80211/mesh_pathtbl.c                   |   5 +-
+ net/mac80211/mesh_pathtbl.c                   |   7 +-
  net/mac80211/mesh_ps.c                        |   3 +-
  net/mac80211/mlme.c                           |  91 +++------
  net/mac80211/rate.c                           |   3 +-
@@ -56,13 +58,13 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/wireless/mlme.c                           |  26 ++-
  net/wireless/nl80211.c                        |  56 ++----
  net/wireless/pmsr.c                           |  16 +-
- net/wireless/reg.c                            |   5 -
- net/wireless/scan.c                           | 113 ++++-------
+ net/wireless/reg.c                            |  17 +-
+ net/wireless/scan.c                           | 125 ++++--------
  net/wireless/sme.c                            |   2 +-
  net/wireless/util.c                           |  25 +--
  net/wireless/wext-core.c                      |   5 +-
  net/wireless/wext-spy.c                       |  14 +-
- 56 files changed, 486 insertions(+), 917 deletions(-)
+ 58 files changed, 494 insertions(+), 950 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
 index b6d0bc73923f..f9ebb98b0e3c 100644
@@ -364,6 +366,21 @@ index a2b8d9171af2..d821a4758f8c 100644
  	/* Alloc for extra 0 byte + roundup by 4 + length field */
  	size += 1 + 3 + sizeof(u32);
  	nvp->nvram = kzalloc(size, GFP_KERNEL);
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.c
+index 1285d3685c4f..430d2cca98b3 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.c
+@@ -228,10 +228,6 @@ static void brcmf_fweh_event_worker(struct work_struct *work)
+ 			  brcmf_fweh_event_name(event->code), event->code,
+ 			  event->emsg.ifidx, event->emsg.bsscfgidx,
+ 			  event->emsg.addr);
+-		if (event->emsg.bsscfgidx >= BRCMF_MAX_IFS) {
+-			bphy_err(drvr, "invalid bsscfg index: %u\n", event->emsg.bsscfgidx);
+-			goto event_free;
+-		}
+ 
+ 		/* convert event message */
+ 		emsg_be = &event->emsg;
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 index 61febc9bfa14..d8db0dbcfe09 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
@@ -851,6 +868,20 @@ index 4b4ab1961068..b37c8a983d88 100644
  	if (send_delba)
  		ieee80211_send_delba(sdata, sta->sta.addr, tid,
  			WLAN_BACK_INITIATOR, WLAN_REASON_QSTA_NOT_USE);
+diff --git a/net/mac80211/airtime.c b/net/mac80211/airtime.c
+index 758ef63669e7..26d2f8ba7029 100644
+--- a/net/mac80211/airtime.c
++++ b/net/mac80211/airtime.c
+@@ -457,9 +457,6 @@ static u32 ieee80211_get_rate_duration(struct ieee80211_hw *hw,
+ 			 (status->encoding == RX_ENC_HE && streams > 8)))
+ 		return 0;
+ 
+-	if (idx >= MCS_GROUP_RATES)
+-		return 0;
+-
+ 	duration = airtime_mcs_groups[group].duration[idx];
+ 	duration <<= airtime_mcs_groups[group].shift;
+ 	*overhead = 36 + (streams << 2);
 diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
 index c6a7f1c99abc..7276e66ae435 100644
 --- a/net/mac80211/cfg.c
@@ -1412,7 +1443,7 @@ index 1e326c89d721..7ad72e9b4991 100644
  	 * key config, must be last because it contains key
  	 * material as variable length member
 diff --git a/net/mac80211/main.c b/net/mac80211/main.c
-index 73893025922f..523380aed92e 100644
+index ae90ac3be59a..523380aed92e 100644
 --- a/net/mac80211/main.c
 +++ b/net/mac80211/main.c
 @@ -982,19 +982,8 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
@@ -1450,6 +1481,30 @@ index 73893025922f..523380aed92e 100644
  
  	result = ieee80211_init_cipher_suites(local);
  	if (result < 0)
+@@ -1349,10 +1335,8 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
+ 	ieee80211_led_exit(local);
+ 	destroy_workqueue(local->workqueue);
+  fail_workqueue:
+-	if (local->wiphy_ciphers_allocated) {
++	if (local->wiphy_ciphers_allocated)
+ 		kfree(local->hw.wiphy->cipher_suites);
+-		local->wiphy_ciphers_allocated = false;
+-	}
+ 	kfree(local->int_scan_req);
+ 	return result;
+ }
+@@ -1422,10 +1406,8 @@ void ieee80211_free_hw(struct ieee80211_hw *hw)
+ 	mutex_destroy(&local->iflist_mtx);
+ 	mutex_destroy(&local->mtx);
+ 
+-	if (local->wiphy_ciphers_allocated) {
++	if (local->wiphy_ciphers_allocated)
+ 		kfree(local->hw.wiphy->cipher_suites);
+-		local->wiphy_ciphers_allocated = false;
+-	}
+ 
+ 	idr_for_each(&local->ack_status_frames,
+ 		     ieee80211_free_ack_frame, NULL);
 diff --git a/net/mac80211/mesh_hwmp.c b/net/mac80211/mesh_hwmp.c
 index 3db514c4c63a..313eee12410e 100644
 --- a/net/mac80211/mesh_hwmp.c
@@ -1464,7 +1519,7 @@ index 3db514c4c63a..313eee12410e 100644
  }
  
 diff --git a/net/mac80211/mesh_pathtbl.c b/net/mac80211/mesh_pathtbl.c
-index 870c8eafef92..620ecf922408 100644
+index c2b051e0610a..620ecf922408 100644
 --- a/net/mac80211/mesh_pathtbl.c
 +++ b/net/mac80211/mesh_pathtbl.c
 @@ -60,10 +60,7 @@ static struct mesh_table *mesh_table_alloc(void)
@@ -1479,6 +1534,15 @@ index 870c8eafef92..620ecf922408 100644
  
  	return newtbl;
  }
+@@ -718,7 +715,7 @@ int mesh_path_send_to_gates(struct mesh_path *mpath)
+ void mesh_path_discard_frame(struct ieee80211_sub_if_data *sdata,
+ 			     struct sk_buff *skb)
+ {
+-	ieee80211_free_txskb(&sdata->local->hw, skb);
++	kfree_skb(skb);
+ 	sdata->u.mesh.mshstats.dropped_frames_no_route++;
+ }
+ 
 diff --git a/net/mac80211/mesh_ps.c b/net/mac80211/mesh_ps.c
 index 3fbd0b9ff913..204830a55240 100644
 --- a/net/mac80211/mesh_ps.c
@@ -3397,7 +3461,7 @@ index a817d8e3e4b3..a95c79d18349 100644
  EXPORT_SYMBOL_GPL(cfg80211_pmsr_complete);
  
 diff --git a/net/wireless/reg.c b/net/wireless/reg.c
-index fd848609e656..a04fdfb35f07 100644
+index a1e64d967bd3..a04fdfb35f07 100644
 --- a/net/wireless/reg.c
 +++ b/net/wireless/reg.c
 @@ -787,8 +787,6 @@ static int __init load_builtin_regdb_keys(void)
@@ -3409,7 +3473,7 @@ index fd848609e656..a04fdfb35f07 100644
  static bool regdb_has_valid_signature(const u8 *data, unsigned int size)
  {
  	const struct firmware *sig;
-@@ -1060,8 +1058,6 @@ static void regdb_fw_cb(const struct firmware *fw, void *context)
+@@ -1060,12 +1058,8 @@ static void regdb_fw_cb(const struct firmware *fw, void *context)
  	release_firmware(fw);
  }
  
@@ -3417,8 +3481,29 @@ index fd848609e656..a04fdfb35f07 100644
 -
  static int query_regdb_file(const char *alpha2)
  {
+-	int err;
+-
  	ASSERT_RTNL();
-@@ -4005,7 +4001,6 @@ void wiphy_regulatory_register(struct wiphy *wiphy)
+ 
+ 	if (regdb)
+@@ -1075,13 +1069,9 @@ static int query_regdb_file(const char *alpha2)
+ 	if (!alpha2)
+ 		return -ENOMEM;
+ 
+-	err = request_firmware_nowait(THIS_MODULE, true, "regulatory.db",
+-				      &reg_pdev->dev, GFP_KERNEL,
+-				      (void *)alpha2, regdb_fw_cb);
+-	if (err)
+-		kfree(alpha2);
+-
+-	return err;
++	return request_firmware_nowait(THIS_MODULE, true, "regulatory.db",
++				       &reg_pdev->dev, GFP_KERNEL,
++				       (void *)alpha2, regdb_fw_cb);
+ }
+ 
+ int reg_reload_regdb(void)
+@@ -4011,7 +4001,6 @@ void wiphy_regulatory_register(struct wiphy *wiphy)
  
  	wiphy_update_regulatory(wiphy, lr->initiator);
  	wiphy_all_share_dfs_chan_state(wiphy);
@@ -3427,7 +3512,7 @@ index fd848609e656..a04fdfb35f07 100644
  
  void wiphy_regulatory_deregister(struct wiphy *wiphy)
 diff --git a/net/wireless/scan.c b/net/wireless/scan.c
-index 22d169923261..3409f37d838b 100644
+index d09dabae5627..3409f37d838b 100644
 --- a/net/wireless/scan.c
 +++ b/net/wireless/scan.c
 @@ -143,12 +143,18 @@ static inline void bss_ref_get(struct cfg80211_registered_device *rdev,
@@ -3465,7 +3550,17 @@ index 22d169923261..3409f37d838b 100644
  		if (tmp_old[0] == 0) {
  			tmp_old++;
  			continue;
-@@ -359,8 +364,7 @@ static size_t cfg80211_gen_new_ie(const u8 *ie, size_t ielen,
+@@ -330,8 +335,7 @@ static size_t cfg80211_gen_new_ie(const u8 *ie, size_t ielen,
+ 			 * determine if they are the same ie.
+ 			 */
+ 			if (tmp_old[0] == WLAN_EID_VENDOR_SPECIFIC) {
+-				if (tmp_old[1] >= 5 && tmp[1] >= 5 &&
+-				    !memcmp(tmp_old + 2, tmp + 2, 5)) {
++				if (!memcmp(tmp_old + 2, tmp + 2, 5)) {
+ 					/* same vendor ie, copy from
+ 					 * subelement
+ 					 */
+@@ -360,8 +364,7 @@ static size_t cfg80211_gen_new_ie(const u8 *ie, size_t ielen,
  	 * copied to new ie, skip ssid, capability, bssid-index ie
  	 */
  	tmp_new = sub_copy;
@@ -3475,7 +3570,7 @@ index 22d169923261..3409f37d838b 100644
  		if (!(tmp_new[0] == WLAN_EID_NON_TX_BSSID_CAP ||
  		      tmp_new[0] == WLAN_EID_SSID)) {
  			memcpy(pos, tmp_new, tmp_new[1] + 2);
-@@ -414,26 +418,14 @@ cfg80211_add_nontrans_list(struct cfg80211_bss *trans_bss,
+@@ -415,26 +418,14 @@ cfg80211_add_nontrans_list(struct cfg80211_bss *trans_bss,
  	}
  	ssid_len = ssid[1];
  	ssid = ssid + 2;
@@ -3504,7 +3599,7 @@ index 22d169923261..3409f37d838b 100644
  	/* add to the list */
  	list_add_tail(&nontrans_bss->nontrans_list, &trans_bss->nontrans_list);
  	return 0;
-@@ -707,12 +699,8 @@ static bool cfg80211_find_ssid_match(struct cfg80211_colocated_ap *ap,
+@@ -708,12 +699,8 @@ static bool cfg80211_find_ssid_match(struct cfg80211_colocated_ap *ap,
  
  	for (i = 0; i < request->n_ssids; i++) {
  		/* wildcard ssid in the scan request */
@@ -3518,7 +3613,7 @@ index 22d169923261..3409f37d838b 100644
  
  		if (ap->ssid_len &&
  		    ap->ssid_len == request->ssids[i].ssid_len) {
-@@ -839,9 +827,6 @@ static int cfg80211_scan_6ghz(struct cfg80211_registered_device *rdev)
+@@ -840,9 +827,6 @@ static int cfg80211_scan_6ghz(struct cfg80211_registered_device *rdev)
  		    !cfg80211_find_ssid_match(ap, request))
  			continue;
  
@@ -3528,7 +3623,7 @@ index 22d169923261..3409f37d838b 100644
  		cfg80211_scan_req_add_chan(request, chan, true);
  		memcpy(scan_6ghz_params->bssid, ap->bssid, ETH_ALEN);
  		scan_6ghz_params->short_ssid = ap->short_ssid;
-@@ -1602,23 +1587,6 @@ struct cfg80211_non_tx_bss {
+@@ -1603,23 +1587,6 @@ struct cfg80211_non_tx_bss {
  	u8 bssid_index;
  };
  
@@ -3552,7 +3647,7 @@ index 22d169923261..3409f37d838b 100644
  static bool
  cfg80211_update_known_bss(struct cfg80211_registered_device *rdev,
  			  struct cfg80211_internal_bss *known,
-@@ -1642,6 +1610,7 @@ cfg80211_update_known_bss(struct cfg80211_registered_device *rdev,
+@@ -1643,6 +1610,7 @@ cfg80211_update_known_bss(struct cfg80211_registered_device *rdev,
  			kfree_rcu((struct cfg80211_bss_ies *)old, rcu_head);
  	} else if (rcu_access_pointer(new->pub.beacon_ies)) {
  		const struct cfg80211_bss_ies *old;
@@ -3560,11 +3655,13 @@ index 22d169923261..3409f37d838b 100644
  
  		if (known->pub.hidden_beacon_bss &&
  		    !list_empty(&known->hidden_list)) {
-@@ -1669,7 +1638,16 @@ cfg80211_update_known_bss(struct cfg80211_registered_device *rdev,
+@@ -1670,9 +1638,16 @@ cfg80211_update_known_bss(struct cfg80211_registered_device *rdev,
  		if (old == rcu_access_pointer(known->pub.ies))
  			rcu_assign_pointer(known->pub.ies, new->pub.beacon_ies);
  
--		cfg80211_update_hidden_bsses(known, new->pub.beacon_ies, old);
+-		cfg80211_update_hidden_bsses(known,
+-					     rcu_access_pointer(new->pub.beacon_ies),
+-					     old);
 +		/* Assign beacon IEs to all sub entries */
 +		list_for_each_entry(bss, &known->hidden_list, hidden_list) {
 +			const struct cfg80211_bss_ies *ies;
@@ -3578,7 +3675,7 @@ index 22d169923261..3409f37d838b 100644
  
  		if (old)
  			kfree_rcu((struct cfg80211_bss_ies *)old, rcu_head);
-@@ -1746,8 +1724,6 @@ cfg80211_bss_update(struct cfg80211_registered_device *rdev,
+@@ -1749,8 +1724,6 @@ cfg80211_bss_update(struct cfg80211_registered_device *rdev,
  		new->refcount = 1;
  		INIT_LIST_HEAD(&new->hidden_list);
  		INIT_LIST_HEAD(&new->pub.nontrans_list);
@@ -3587,7 +3684,7 @@ index 22d169923261..3409f37d838b 100644
  
  		if (rcu_access_pointer(tmp->pub.proberesp_ies)) {
  			hidden = rb_find_bss(rdev, tmp, BSS_CMP_HIDE_ZLEN);
-@@ -1770,14 +1746,14 @@ cfg80211_bss_update(struct cfg80211_registered_device *rdev,
+@@ -1773,14 +1746,14 @@ cfg80211_bss_update(struct cfg80211_registered_device *rdev,
  			 * be grouped with this beacon for updates ...
  			 */
  			if (!cfg80211_combine_bsses(rdev, new)) {
@@ -3604,7 +3701,7 @@ index 22d169923261..3409f37d838b 100644
  			goto drop;
  		}
  
-@@ -1982,18 +1958,11 @@ cfg80211_inform_single_bss_data(struct wiphy *wiphy,
+@@ -1985,18 +1958,11 @@ cfg80211_inform_single_bss_data(struct wiphy *wiphy,
  		/* this is a nontransmitting bss, we need to add it to
  		 * transmitting bss' list if it is not there
  		 */
@@ -3624,7 +3721,7 @@ index 22d169923261..3409f37d838b 100644
  	}
  
  	trace_cfg80211_return_bss(&res->pub);
-@@ -2112,8 +2081,6 @@ static void cfg80211_parse_mbssid_data(struct wiphy *wiphy,
+@@ -2115,8 +2081,6 @@ static void cfg80211_parse_mbssid_data(struct wiphy *wiphy,
  	for_each_element_id(elem, WLAN_EID_MULTIPLE_BSSID, ie, ielen) {
  		if (elem->datalen < 4)
  			continue;
@@ -3633,7 +3730,7 @@ index 22d169923261..3409f37d838b 100644
  		for_each_element(sub, elem->data + 1, elem->datalen - 1) {
  			u8 profile_len;
  
-@@ -2249,7 +2216,7 @@ cfg80211_update_notlisted_nontrans(struct wiphy *wiphy,
+@@ -2252,7 +2216,7 @@ cfg80211_update_notlisted_nontrans(struct wiphy *wiphy,
  	size_t new_ie_len;
  	struct cfg80211_bss_ies *new_ies;
  	const struct cfg80211_bss_ies *old;
@@ -3642,7 +3739,7 @@ index 22d169923261..3409f37d838b 100644
  
  	lockdep_assert_held(&wiphy_to_rdev(wiphy)->bss_lock);
  
-@@ -2316,8 +2283,6 @@ cfg80211_update_notlisted_nontrans(struct wiphy *wiphy,
+@@ -2319,8 +2283,6 @@ cfg80211_update_notlisted_nontrans(struct wiphy *wiphy,
  	} else {
  		old = rcu_access_pointer(nontrans_bss->beacon_ies);
  		rcu_assign_pointer(nontrans_bss->beacon_ies, new_ies);
@@ -3651,7 +3748,7 @@ index 22d169923261..3409f37d838b 100644
  		rcu_assign_pointer(nontrans_bss->ies, new_ies);
  		if (old)
  			kfree_rcu((struct cfg80211_bss_ies *)old, rcu_head);
-@@ -2386,16 +2351,14 @@ cfg80211_inform_single_bss_frame_data(struct wiphy *wiphy,
+@@ -2389,16 +2351,14 @@ cfg80211_inform_single_bss_frame_data(struct wiphy *wiphy,
  		return NULL;
  
  	if (ext) {
@@ -3674,6 +3771,23 @@ index 22d169923261..3409f37d838b 100644
  		bssid = ext->u.s1g_beacon.sa;
  		capability = le16_to_cpu(compat->compat_info);
  		beacon_int = le16_to_cpu(compat->beacon_int);
+@@ -2467,15 +2427,10 @@ cfg80211_inform_bss_frame_data(struct wiphy *wiphy,
+ 	const struct cfg80211_bss_ies *ies1, *ies2;
+ 	size_t ielen = len - offsetof(struct ieee80211_mgmt,
+ 				      u.probe_resp.variable);
+-	struct cfg80211_non_tx_bss non_tx_data = {};
++	struct cfg80211_non_tx_bss non_tx_data;
+ 
+ 	res = cfg80211_inform_single_bss_frame_data(wiphy, data, mgmt,
+ 						    len, gfp);
+-
+-	/* don't do any further MBSSID handling for S1G */
+-	if (ieee80211_is_s1g_beacon(mgmt->frame_control))
+-		return res;
+-
+ 	if (!res || !wiphy->support_mbssid ||
+ 	    !cfg80211_find_ie(WLAN_EID_MULTIPLE_BSSID, ie, ielen))
+ 		return res;
 diff --git a/net/wireless/sme.c b/net/wireless/sme.c
 index 060e365c8259..38df713f2e2e 100644
 --- a/net/wireless/sme.c
@@ -3816,5 +3930,5 @@ index b379a0371653..33bef22e44e9 100644
  	/* Send event to user space */
  	wireless_send_event(dev, SIOCGIWTHRSPY, &wrqu, (char *) &threshold);
 -- 
-2.30.2
+2.39.0
 
