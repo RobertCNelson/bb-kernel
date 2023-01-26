@@ -201,7 +201,7 @@ wpanusb () {
 			rm -rf ./wpanusb || true
 		fi
 
-		${git_bin} clone https://github.com/statropy/wpanusb --depth=1
+		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/wpanusb --depth=1
 		cd ./wpanusb
 			wpanusb_hash=$(git rev-parse HEAD)
 		cd -
@@ -212,9 +212,9 @@ wpanusb () {
 		cp -v ../wpanusb/wpanusb.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: wpanusb: https://github.com/statropy/wpanusb' -m "https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" -s
+		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/wpanusb/
-		echo "WPANUSB: https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" > ../patches/git/WPANUSB
+		echo "WPANUSB: https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/git/WPANUSB
 
 		rm -rf ../wpanusb/ || true
 
@@ -222,7 +222,7 @@ wpanusb () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/wpanusb/0001-merge-wpanusb-https-github.com-statropy-wpanusb.patch"
+		${git} "${DIR}/patches/wpanusb/0001-merge-wpanusb-https-git.beagleboard.org-beagleconnec.patch"
 
 		wdir="wpanusb"
 		number=1
@@ -241,8 +241,8 @@ bcfserial () {
 			rm -rf ./bcfserial || true
 		fi
 
-		${git_bin} clone https://github.com/statropy/bcfserial --depth=1
-		cd ./wpanusb
+		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/bcfserial.git --depth=1
+		cd ./bcfserial
 			bcfserial_hash=$(git rev-parse HEAD)
 		cd -
 
@@ -251,9 +251,9 @@ bcfserial () {
 		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: bcfserial: https://github.com/statropy/bcfserial' -m "https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" -s
+		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/bcfserial/
-		echo "BCFSERIAL: https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
+		echo "BCFSERIAL: https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
 
 		rm -rf ../bcfserial/ || true
 
@@ -261,7 +261,7 @@ bcfserial () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-github.com-statropy-bcfserial.patch"
+		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-git.beagleboard.org-beagleconn.patch"
 
 		wdir="bcfserial"
 		number=1
@@ -531,7 +531,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.10.153"
+	backport_tag="v5.10.165"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -542,11 +542,12 @@ backports () {
 		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
 		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
+		cp -v ~/linux-src/include/linux/interrupt.h ./include/linux/
 
 		post_backports
-	#	exit 2
-	#else
-	#	patch_backports
+		exit 2
+	else
+		patch_backports
 	fi
 
 	backport_tag="v5.18.19"
@@ -747,6 +748,7 @@ drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
+	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
 	dir 'drivers/spi'
@@ -770,17 +772,12 @@ soc () {
 	dir 'bootup_hacks'
 }
 
-fixes () {
-	dir 'fixes/gcc'
-}
-
 ###
 backports
 brcmfmac
 omap
 drivers
 soc
-fixes
 
 packaging () {
 	#do_backport="enable"
