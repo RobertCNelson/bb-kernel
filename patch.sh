@@ -417,18 +417,15 @@ beagleboard_dtbs () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ ! -d ./${work_dir} ] ; then
-			${git_bin} clone -b ${branch} ${https_repo} --depth=1
-			cd ./${work_dir}
-				git_hash=$(git rev-parse HEAD)
-			cd -
-		else
+		if [ -d ./${work_dir} ] ; then
 			rm -rf ./${work_dir} || true
-			${git_bin} clone -b ${branch} ${https_repo} --depth=1
-			cd ./${work_dir}
-				git_hash=$(git rev-parse HEAD)
-			cd -
 		fi
+
+		${git_bin} clone -b ${branch} ${https_repo} --depth=1
+		cd ./${work_dir}
+			git_hash=$(git rev-parse HEAD)
+		cd -
+
 		cd ./KERNEL/
 
 		cleanup_dts_builds
