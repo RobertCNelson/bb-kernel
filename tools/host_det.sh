@@ -473,19 +473,19 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		jessie|stretch|buster|bullseye|bookworm|sid)
+		stretch|buster|bullseye|bookworm|sid)
 			#https://wiki.debian.org/LTS
-			#8 jessie: https://wiki.debian.org/DebianJessie
 			#9 stretch: https://wiki.debian.org/DebianStretch
 			#10 buster: https://wiki.debian.org/DebianBuster
 			#11 bullseye: https://wiki.debian.org/DebianBullseye
 			#12 bookworm: https://wiki.debian.org/DebianBookworm
 			unset warn_eol_distro
 			;;
-		squeeze|wheezy)
+		squeeze|wheezy|jessie)
 			#https://wiki.debian.org/LTS
 			#6 squeeze: 2016-02-29 https://wiki.debian.org/DebianSqueeze
 			#7 wheezy: 2018-05-31 https://wiki.debian.org/DebianWheezy
+			#8 jessie: 2020-06-30 https://wiki.debian.org/DebianJessie
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -612,11 +612,16 @@ git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
 git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
 
 #debian Stable:
-#https://packages.debian.org/stable/git -> 2.1.4
+#https://packages.debian.org/stretch/git -> 2.11.0
+#https://packages.debian.org/buster/git -> 2.20.1
+#https://packages.debian.org/bullseye/git -> 2.30.2
+#https://packages.ubuntu.com/bionic/git (18.04) -> 2.17.1
+#https://packages.ubuntu.com/focal/git (20.04) -> 2.25.1
+#https://packages.ubuntu.com/jammy/git (22.04) -> 2.34.1
 
 compare_major="2"
-compare_minor="1"
-compare_sub="4"
+compare_minor="20"
+compare_sub="1"
 
 unset build_git
 
