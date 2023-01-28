@@ -141,18 +141,15 @@ aufs () {
 		${git_bin} format-patch -4 -o ../patches/aufs/
 
 		cd ../
-		if [ ! -d ./aufs-standalone ] ; then
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs-standalone --depth=1
-			cd ./aufs-standalone/
-				aufs_hash=$(git rev-parse HEAD)
-			cd -
-		else
+		if [ -d ./aufs-standalone ] ; then
 			rm -rf ./aufs-standalone || true
-			${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs-standalone --depth=1
-			cd ./aufs-standalone/
-				aufs_hash=$(git rev-parse HEAD)
-			cd -
 		fi
+
+		${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs-standalone --depth=1
+		cd ./aufs-standalone/
+			aufs_hash=$(git rev-parse HEAD)
+		cd -
+
 		cd ./KERNEL/
 		KERNEL_REL=5.11
 
@@ -530,30 +527,14 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.13.19"
-
-	subsystem="pinctrl"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/pinctrl/* ./drivers/pinctrl/
-		cp -rv ~/linux-src/include/linux/pinctrl/* ./include/linux/pinctrl/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v5.10.150"
+	backport_tag="v5.10.165"
 
 	subsystem="uio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_backports
 
-		cp -rv ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
+		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
 		exit 2
@@ -561,16 +542,31 @@ backports () {
 		patch_backports
 		dir 'drivers/ti/uio'
 	fi
+
+	backport_tag="v5.18.19"
+
+	subsystem="it66121"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
+
+		post_backports
+		exit 2
+	else
+		patch_backports
+		${git} "${DIR}/patches/backports/${subsystem}/0002-wire-up-it66121.patch"
+	fi
 }
 
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
+	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/spi'
-	dir 'drivers/tps65217'
-
 	dir 'drivers/ti/cpsw'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
