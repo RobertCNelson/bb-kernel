@@ -504,21 +504,6 @@ backports () {
 		patch_backports
 		dir 'drivers/ti/uio'
 	fi
-
-	backport_tag="v6.2-rc6"
-
-	subsystem="it66121"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
 }
 
 drivers () {
