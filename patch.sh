@@ -410,14 +410,12 @@ beagleboard_dtbs () {
 
 		#Added in v6.2.x
 		device="am335x-sancloud-bbe-extended-wifi.dtb" ; dtb_makefile_append
-
-		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
-		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -491,7 +489,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.165"
+	backport_tag="v5.10.166"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -532,7 +530,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.1.7"
+		backport_tag="v6.1.9"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"

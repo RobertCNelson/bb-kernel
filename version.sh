@@ -41,10 +41,10 @@ toolchain="gcc_12_arm"
 
 #Kernel
 KERNEL_REL=6.1
-KERNEL_TAG=${KERNEL_REL}.8
+KERNEL_TAG=${KERNEL_REL}.9
 kernel_rt="-rc7-rt5"
 #Kernel Build
-BUILD=${build_prefix}13
+BUILD=${build_prefix}13.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
