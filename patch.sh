@@ -408,14 +408,10 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#Added in v6.2.x
-		device="am335x-sancloud-bbe-extended-wifi.dtb" ; dtb_makefile_append
-
 		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
 		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
-		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
@@ -453,7 +449,7 @@ local_patch () {
 #rt
 wireless_regdb
 ti_pm_firmware
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -491,7 +487,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.163"
+	backport_tag="v5.10.166"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -511,7 +507,7 @@ backports () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	#dir 'RPi'
+	dir 'RPi'
 	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
@@ -532,7 +528,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.1.6"
+		backport_tag="v6.1.9"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
