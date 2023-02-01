@@ -413,7 +413,7 @@ beagleboard_dtbs () {
 
 		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
 		#device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
@@ -491,7 +491,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.164"
+	backport_tag="v5.10.165"
 
 	subsystem="uio"
 	#regenerate="enable"
