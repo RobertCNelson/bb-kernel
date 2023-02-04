@@ -114,13 +114,13 @@ fi
 
 /bin/sh -e "${DIR}/tools/host_det.sh" || { exit 1 ; }
 
-if [ ! -f "${DIR}/system.sh" ] ; then
-	cp -v "${DIR}/system.sh.sample" "${DIR}/system.sh"
+if [ ! -f "${DIR}/../system.sh" ] ; then
+	cp -v "${DIR}/../system.sh.sample" "${DIR}/../system.sh"
 fi
 
 unset CC
 unset LINUX_GIT
-. "${DIR}/system.sh"
+. "${DIR}/../system.sh"
 if [  -f "${DIR}/.yakbuild" ] ; then
 	. "${DIR}/recipe.sh"
 fi
@@ -132,7 +132,7 @@ if [ -f /usr/bin/ccache ] ; then
 	CC="ccache ${CC}"
 fi
 
-. "${DIR}/version.sh"
+. "${DIR}/../version.sh"
 export LINUX_GIT
 
 if [ ! "${CORES}" ] ; then

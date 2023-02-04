@@ -25,7 +25,7 @@ unset MMC
 
 DIR=$PWD
 
-. "${DIR}/version.sh"
+. "${DIR}/../version.sh"
 
 mmc_write_rootfs () {
 	echo "Installing ${KERNEL_UTS}-modules.tar.gz to ${partition}"
@@ -299,11 +299,11 @@ check_mmc () {
 	fi
 }
 
-if [ -f "${DIR}/system.sh" ] ; then
-	. "${DIR}/system.sh"
+if [ -f "${DIR}/../system.sh" ] ; then
+	. "${DIR}/../system.sh"
 
-	if [ -f "${DIR}/KERNEL/arch/arm/boot/zImage" ] ; then
-		KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
+	if [ -f "${DIR}/../KERNEL/arch/arm/boot/zImage" ] ; then
+		KERNEL_UTS=$(cat "${DIR}/../KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
 		if [ "x${MMC}" = "x" ] ; then
 			echo "-----------------------------"
 			echo "lsblk:"

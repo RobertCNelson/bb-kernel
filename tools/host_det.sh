@@ -597,7 +597,7 @@ else
 fi
 
 DIR=$PWD
-. "${DIR}/version.sh"
+. "${DIR}/../version.sh"
 
 if [  -f "${DIR}/.yakbuild" ] ; then
 	. "${DIR}/recipe.sh"
