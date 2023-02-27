@@ -65,9 +65,12 @@ if [ -e ${DIR}/version.sh ]; then
 	fi
 
 	if [ -f ./patches/git/RT ] ; then
-		echo "kernel v${KERNEL_TAG} rebase with rt: v${KERNEL_REL}${kernel_rt} device-tree/etc" > ${wfile}
+		echo "kernel v${KERNEL_TAG} rebase with rt: v${KERNEL_REL}${kernel_rt}" > ${wfile}
 	else
-		echo "kernel v${KERNEL_TAG} rebase with: device-tree/etc" > ${wfile}
+		echo "kernel v${KERNEL_TAG} rebase" > ${wfile}
+	fi
+	if [ "${TISDK}" ] ; then
+		echo "TI SDK: ${TISDK}" >> ${wfile}
 	fi
 	cat_files
 
