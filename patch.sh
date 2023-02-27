@@ -489,7 +489,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.166"
+	backport_tag="v5.10.170"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -530,7 +530,7 @@ soc
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.1.9"
+		backport_tag="v6.2.1"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
