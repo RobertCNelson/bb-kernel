@@ -443,13 +443,13 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 #wpanusb
 #bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -487,7 +487,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.170"
+	backport_tag="v5.10.172"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -507,7 +507,7 @@ backports () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	dir 'RPi'
+	#dir 'RPi'
 	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
