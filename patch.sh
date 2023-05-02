@@ -138,7 +138,7 @@ aufs () {
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-standalone' -s
 
-		${git_bin} format-patch -4 -o ../patches/aufs/
+		${git_bin} format-patch -4 -o ../patches/external/aufs/
 
 		cd ../
 		if [ -d ./aufs-standalone ] ; then
@@ -163,8 +163,8 @@ aufs () {
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" -s
 
-		${git_bin} format-patch -5 -o ../patches/aufs/
-		echo "AUFS: https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" > ../patches/git/AUFS
+		${git_bin} format-patch -5 -o ../patches/external/aufs/
+		echo "AUFS: https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" > ../patches/external/git/AUFS
 
 		rm -rf ../aufs-standalone/ || true
 
@@ -172,18 +172,18 @@ aufs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/aufs/0001-merge-aufs-kbuild.patch"
-		${git} "${DIR}/patches/aufs/0002-merge-aufs-base.patch"
-		${git} "${DIR}/patches/aufs/0003-merge-aufs-mmap.patch"
-		${git} "${DIR}/patches/aufs/0004-merge-aufs-standalone.patch"
-		${git} "${DIR}/patches/aufs/0005-merge-aufs.patch"
+		${git} "${DIR}/patches/external/aufs/0001-merge-aufs-kbuild.patch"
+		${git} "${DIR}/patches/external/aufs/0002-merge-aufs-base.patch"
+		${git} "${DIR}/patches/external/aufs/0003-merge-aufs-mmap.patch"
+		${git} "${DIR}/patches/external/aufs/0004-merge-aufs-standalone.patch"
+		${git} "${DIR}/patches/external/aufs/0005-merge-aufs.patch"
 
-		wdir="aufs"
+		wdir="external/aufs"
 		number=5
 		cleanup
 	fi
 
-	dir 'aufs'
+	dir 'external/aufs'
 }
 
 wpanusb () {
@@ -206,8 +206,8 @@ wpanusb () {
 
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/wpanusb/
-		echo "WPANUSB: https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/git/WPANUSB
+		${git_bin} format-patch -1 -o ../patches/external/wpanusb/
+		echo "WPANUSB: https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/external/git/WPANUSB
 
 		rm -rf ../wpanusb/ || true
 
@@ -215,15 +215,15 @@ wpanusb () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/wpanusb/0001-merge-wpanusb-https-git.beagleboard.org-beagleconnec.patch"
+		${git} "${DIR}/patches/external/wpanusb/0001-merge-wpanusb-https-git.beagleboard.org-beagleconnec.patch"
 
-		wdir="wpanusb"
+		wdir="external/wpanusb"
 		number=1
 		cleanup
 
 		exit 2
 	fi
-	dir 'wpanusb'
+	dir 'external/wpanusb'
 }
 
 bcfserial () {
@@ -245,8 +245,8 @@ bcfserial () {
 
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/bcfserial/
-		echo "BCFSERIAL: https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
+		${git_bin} format-patch -1 -o ../patches/external/bcfserial/
+		echo "BCFSERIAL: https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/external/git/BCFSERIAL
 
 		rm -rf ../bcfserial/ || true
 
@@ -254,15 +254,15 @@ bcfserial () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-git.beagleboard.org-beagleconn.patch"
+		${git} "${DIR}/patches/external/bcfserial/0001-merge-bcfserial-https-git.beagleboard.org-beagleconn.patch"
 
-		wdir="bcfserial"
+		wdir="external/bcfserial"
 		number=1
 		cleanup
 
 		exit 2
 	fi
-	dir 'bcfserial'
+	dir 'external/bcfserial'
 }
 
 rt_cleanup () {
@@ -283,13 +283,13 @@ rt () {
 		rm -f localversion-rt
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
-		${git_bin} format-patch -1 -o ../patches/rt/
-		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/git/RT
+		${git_bin} format-patch -1 -o ../patches/external/rt/
+		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
 
 		exit 2
 	fi
 
-	dir 'rt'
+	dir 'external/rt'
 }
 
 wireless_regdb () {
@@ -314,8 +314,8 @@ wireless_regdb () {
 		${git_bin} add -f ./firmware/regulatory.*
 		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
 
-		${git_bin} format-patch -1 -o ../patches/wireless_regdb/
-		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/git/WIRELESS_REGDB
+		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
 
 		rm -rf ../wireless-regdb/ || true
 
@@ -323,14 +323,14 @@ wireless_regdb () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/wireless_regdb/0001-Add-wireless-regdb-regulatory-database-file.patch"
+		${git} "${DIR}/patches/external/wireless_regdb/0001-Add-wireless-regdb-regulatory-database-file.patch"
 
-		wdir="wireless_regdb"
+		wdir="external/wireless_regdb"
 		number=1
 		cleanup
 	fi
 
-	dir 'wireless_regdb'
+	dir 'external/wireless_regdb'
 }
 
 ti_pm_firmware () {
@@ -355,7 +355,7 @@ ti_pm_firmware () {
 		${git_bin} add -f ./firmware/am*
 		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -m "http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
-		echo "TI_AMX3_CM3: http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" > ../patches/git/TI_AMX3_CM3
+		echo "TI_AMX3_CM3: http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" > ../patches/external/git/TI_AMX3_CM3
 
 		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
 
@@ -421,7 +421,7 @@ beagleboard_dtbs () {
 		${git_bin} add -f include/dt-bindings/
 		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
-		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/git/BBDTBS
+		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -489,7 +489,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.170"
+	backport_tag="v5.10.179"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -505,7 +505,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v5.15.96"
+	backport_tag="v5.15.110"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -519,7 +519,7 @@ backports () {
 
 		post_backports
 		exit 2
-	#else
+	else
 		patch_backports
 	fi
 
