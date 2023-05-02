@@ -329,7 +329,7 @@ wireless_regdb () {
 		cleanup
 	fi
 
-	dir 'wireless_regdb'
+	dir 'external/wireless_regdb'
 }
 
 ti_pm_firmware () {
