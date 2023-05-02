@@ -57,8 +57,6 @@ redhat_reqs () {
 	check_rpm
 	pkg="xz"
 	check_rpm
-	pkg="lzop"
-	check_rpm
 	pkg="bison"
 	check_rpm
 	pkg="flex"
