@@ -47,7 +47,7 @@ redhat_reqs () {
 	check_rpm
 	pkg="gcc"
 	check_rpm
-	pkg="lzop"
+	pkg="lz4"
 	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
@@ -56,8 +56,6 @@ redhat_reqs () {
 	pkg="fakeroot"
 	check_rpm
 	pkg="xz"
-	check_rpm
-	pkg="lzop"
 	check_rpm
 	pkg="bison"
 	check_rpm
@@ -135,7 +133,7 @@ debian_regs () {
 	check_dpkg
 	pkg="lzma"
 	check_dpkg
-	pkg="lzop"
+	pkg="lz4"
 	check_dpkg
 	pkg="man-db"
 	check_dpkg
@@ -651,7 +649,7 @@ check_for_command () {
 
 unset NEEDS_COMMAND
 check_for_command cpio --version
-check_for_command lzop --version
+check_for_command lz4 --version
 
 if [ "${NEEDS_COMMAND}" ] ; then
 	echo "Please install missing commands"
