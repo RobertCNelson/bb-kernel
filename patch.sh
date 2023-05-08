@@ -443,13 +443,13 @@ local_patch () {
 }
 
 #external_git
-aufs
+#aufs
 #wpanusb
 #bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -521,7 +521,7 @@ soc () {
 }
 
 ###
-backports
+#backports
 drivers
 soc
 

@@ -40,11 +40,11 @@ toolchain="gcc_12_arm"
 #toolchain="gcc_12_riscv64"
 
 #Kernel
-KERNEL_REL=6.3
-KERNEL_TAG=${KERNEL_REL}.1
+KERNEL_REL=6.4
+KERNEL_TAG=${KERNEL_REL}-rc1
 kernel_rt="-rt11"
 #Kernel Build
-BUILD=${build_prefix}4
+BUILD=${build_prefix}0
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
