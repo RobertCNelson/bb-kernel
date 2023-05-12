@@ -469,7 +469,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v4.19.232"
+	backport_tag="v4.19.282"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -487,7 +487,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.4.182"
+	backport_tag="v5.4.242"
 
 	subsystem="wiznet"
 	#regenerate="enable"
@@ -495,22 +495,6 @@ backports () {
 		pre_backports
 
 		cp -v ~/linux-src/drivers/net/ethernet/wiznet/* ./drivers/net/ethernet/wiznet/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
-	backport_tag="v4.20.17"
-
-	subsystem="remoteproc"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/remoteproc/* ./drivers/remoteproc/
-		cp -v ~/linux-src/include/linux/remoteproc.h ./include/linux/remoteproc.h
 
 		post_backports
 		exit 2
