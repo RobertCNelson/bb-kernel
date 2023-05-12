@@ -41,6 +41,10 @@ cat_files () {
 	if [ -f ./patches/external/git/CAN-ISOTP ] ; then
 		cat ./patches/external/git/CAN-ISOTP >> ${wfile}
 	fi
+
+	if [ -f ./patches/external/git/WIREGUARD ] ; then
+		cat ./patches/external/git/WIREGUARD >> ${wfile}
+	fi
 }
 
 DIR=$PWD
