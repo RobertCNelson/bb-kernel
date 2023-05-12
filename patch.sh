@@ -261,18 +261,14 @@ wireguard () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ ! -d ./WireGuard ] ; then
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
-			cd ./WireGuard
-				wireguard_hash=$(git rev-parse HEAD)
-			cd -
-		else
+		if [ -d ./WireGuard ] ; then
 			rm -rf ./WireGuard || true
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
-			cd ./WireGuard
-				wireguard_hash=$(git rev-parse HEAD)
-			cd -
 		fi
+
+		${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
+		cd ./WireGuard
+			wireguard_hash=$(git rev-parse HEAD)
+		cd -
 
 		#cd ./WireGuard/
 		#${git_bin}  revert --no-edit xyz
