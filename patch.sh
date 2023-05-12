@@ -284,8 +284,8 @@ wireguard () {
 
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: WireGuard' -m "https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/WireGuard/
-		echo "WIREGUARD: https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" > ../patches/git/WIREGUARD
+		${git_bin} format-patch -1 -o ../patches/external/WireGuard/
+		echo "WIREGUARD: https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" > ../patches/external/git/WIREGUARD
 
 		rm -rf ../WireGuard/ || true
 
@@ -293,14 +293,14 @@ wireguard () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
+		${git} "${DIR}/patches/external/WireGuard/0001-merge-WireGuard.patch"
 
-		wdir="WireGuard"
+		wdir="external/WireGuard"
 		number=1
 		cleanup
 	fi
 
-	dir 'WireGuard'
+	dir 'external/WireGuard'
 }
 
 wireless_regdb () {
