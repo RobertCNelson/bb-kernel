@@ -44,7 +44,7 @@ KERNEL_REL=4.19
 KERNEL_TAG=${KERNEL_REL}.280
 kernel_rt=".280-rt123"
 #Kernel Build
-BUILD=${build_prefix}75.5
+BUILD=${build_prefix}76
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
