@@ -190,18 +190,14 @@ can_isotp () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ ! -d ./can-isotp ] ; then
-			${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
-			cd ./can-isotp
-				isotp_hash=$(git rev-parse HEAD)
-			cd -
-		else
+		if [ -d ./can-isotp ] ; then
 			rm -rf ./can-isotp || true
-			${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
-			cd ./can-isotp
-				isotp_hash=$(git rev-parse HEAD)
-			cd -
 		fi
+
+		${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
+		cd ./can-isotp
+			isotp_hash=$(git rev-parse HEAD)
+		cd -
 
 		cd ./KERNEL/
 
@@ -210,8 +206,8 @@ can_isotp () {
 
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: can-isotp: https://github.com/hartkopp/can-isotp' -m "https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/can_isotp/
-		echo "CAN-ISOTP: https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" > ../patches/git/CAN-ISOTP
+		${git_bin} format-patch -1 -o ../patches/external/can_isotp/
+		echo "CAN-ISOTP: https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" > ../patches/external/git/CAN-ISOTP
 
 		rm -rf ../can-isotp/ || true
 
@@ -219,15 +215,15 @@ can_isotp () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/can_isotp/0001-merge-can-isotp-https-github.com-hartkopp-can-isotp.patch"
+		${git} "${DIR}/patches/external/can_isotp/0001-merge-can-isotp-https-github.com-hartkopp-can-isotp.patch"
 
-		wdir="can_isotp"
+		wdir="external/can_isotp"
 		number=1
 		cleanup
 
 		exit 2
 	fi
-	dir 'can_isotp'
+	dir 'external/can_isotp'
 }
 
 wpanusb () {
@@ -334,63 +330,6 @@ rt () {
 	fi
 
 	dir 'external/rt'
-}
-
-wireguard_fail () {
-	echo "WireGuard failed"
-	exit 2
-}
-
-wireguard () {
-	regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ ! -d ./WireGuard ] ; then
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
-			cd ./WireGuard
-				wireguard_hash=$(git rev-parse HEAD)
-			cd -
-		else
-			rm -rf ./WireGuard || true
-			${git_bin} clone https://git.zx2c4.com/WireGuard --depth=1
-			cd ./WireGuard
-				wireguard_hash=$(git rev-parse HEAD)
-			cd -
-		fi
-
-		#cd ./WireGuard/
-		#${git_bin}  revert --no-edit xyz
-		#cd ../
-
-		cd ./KERNEL/
-
-		../WireGuard/contrib/kernel-tree/create-patch.sh | patch -p1 || wireguard_fail
-
-		${git_bin} add .
-
-		#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=v5.4.34&id=f8c60f7a00516820589c4c9da5614e4b7f4d0b2f
-		sed -i -e 's:skb_reset_tc:skb_reset_redirect:g' ./net/wireguard/queueing.h
-		sed -i -e 's:skb_reset_tc:skb_reset_redirect:g' ./net/wireguard/compat/compat.h
-		sed -i -e 's:5, 5, 0):5, 4, 0):g' ./net/wireguard/compat/compat-asm.h
-
-		${git_bin} commit -a -m 'merge: WireGuard' -m "https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/WireGuard/
-		echo "WIREGUARD: https://git.zx2c4.com/WireGuard/commit/${wireguard_hash}" > ../patches/git/WIREGUARD
-
-		rm -rf ../WireGuard/ || true
-
-		${git_bin} reset --hard HEAD^
-
-		start_cleanup
-
-		${git} "${DIR}/patches/WireGuard/0001-merge-WireGuard.patch"
-
-		wdir="WireGuard"
-		number=1
-		cleanup
-	fi
-
-	dir 'WireGuard'
 }
 
 wireless_regdb () {
@@ -566,7 +505,6 @@ can_isotp
 wpanusb
 bcfserial
 rt
-#wireguard
 wireless_regdb
 ti_pm_firmware
 beagleboard_dtbs

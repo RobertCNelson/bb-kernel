@@ -38,12 +38,8 @@ cat_files () {
 		cat ./patches/external/git/BCFSERIAL >> ${wfile}
 	fi
 
-	if [ -f ./patches/git/CAN-ISOTP ] ; then
-		cat ./patches/git/CAN-ISOTP >> ${wfile}
-	fi
-
-	if [ -f ./patches/git/WIREGUARD ] ; then
-		cat ./patches/git/WIREGUARD >> ${wfile}
+	if [ -f ./patches/external/git/CAN-ISOTP ] ; then
+		cat ./patches/external/git/CAN-ISOTP >> ${wfile}
 	fi
 }
 
