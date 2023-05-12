@@ -1,93 +1,16 @@
-From fe0a6f36051e379a65a53adcd0f070f992207718 Mon Sep 17 00:00:00 2001
+From 0228299b6022e6547ca51c3cd13e5632cc6665ab Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 12 May 2023 13:11:47 -0500
+Date: Fri, 12 May 2023 13:22:52 -0500
 Subject: [PATCH] backports: iio: from: linux.git
 
 Reference: v4.19.282
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/iio/accel/hid-sensor-accel-3d.c |  1 +
- drivers/iio/accel/mma9551_core.c        | 10 ++++++--
- drivers/iio/adc/ad_sigma_delta.c        |  8 +++----
- drivers/iio/adc/at91-sama5d2_adc.c      |  2 +-
- drivers/iio/adc/berlin2-adc.c           |  4 +++-
- drivers/iio/adc/stm32-dfsdm-adc.c       |  1 +
- drivers/iio/adc/twl6030-gpadc.c         | 32 +++++++++++++++++++++++++
- drivers/iio/counter/104-quad-8.c        | 14 +----------
- drivers/iio/dac/cio-dac.c               |  4 ++--
- 9 files changed, 53 insertions(+), 23 deletions(-)
+ drivers/iio/adc/at91-sama5d2_adc.c |  2 +-
+ drivers/iio/counter/104-quad-8.c   | 14 +-------------
+ drivers/iio/dac/cio-dac.c          |  4 ++--
+ 3 files changed, 4 insertions(+), 16 deletions(-)
 
-diff --git a/drivers/iio/accel/hid-sensor-accel-3d.c b/drivers/iio/accel/hid-sensor-accel-3d.c
-index 32d5438d4519..d8506a83ba08 100644
---- a/drivers/iio/accel/hid-sensor-accel-3d.c
-+++ b/drivers/iio/accel/hid-sensor-accel-3d.c
-@@ -292,6 +292,7 @@ static int accel_3d_capture_sample(struct hid_sensor_hub_device *hsdev,
- 			hid_sensor_convert_timestamp(
- 					&accel_state->common_attributes,
- 					*(int64_t *)raw_data);
-+		ret = 0;
- 	break;
- 	default:
- 		break;
-diff --git a/drivers/iio/accel/mma9551_core.c b/drivers/iio/accel/mma9551_core.c
-index c34c5ce8123b..19b4fbc682e6 100644
---- a/drivers/iio/accel/mma9551_core.c
-+++ b/drivers/iio/accel/mma9551_core.c
-@@ -304,9 +304,12 @@ int mma9551_read_config_word(struct i2c_client *client, u8 app_id,
- 
- 	ret = mma9551_transfer(client, app_id, MMA9551_CMD_READ_CONFIG,
- 			       reg, NULL, 0, (u8 *)&v, 2);
-+	if (ret < 0)
-+		return ret;
-+
- 	*val = be16_to_cpu(v);
- 
--	return ret;
-+	return 0;
- }
- EXPORT_SYMBOL(mma9551_read_config_word);
- 
-@@ -362,9 +365,12 @@ int mma9551_read_status_word(struct i2c_client *client, u8 app_id,
- 
- 	ret = mma9551_transfer(client, app_id, MMA9551_CMD_READ_STATUS,
- 			       reg, NULL, 0, (u8 *)&v, 2);
-+	if (ret < 0)
-+		return ret;
-+
- 	*val = be16_to_cpu(v);
- 
--	return ret;
-+	return 0;
- }
- EXPORT_SYMBOL(mma9551_read_status_word);
- 
-diff --git a/drivers/iio/adc/ad_sigma_delta.c b/drivers/iio/adc/ad_sigma_delta.c
-index 25af4c76b57f..a96943bbd83d 100644
---- a/drivers/iio/adc/ad_sigma_delta.c
-+++ b/drivers/iio/adc/ad_sigma_delta.c
-@@ -283,10 +283,10 @@ int ad_sigma_delta_single_conversion(struct iio_dev *indio_dev,
- 	unsigned int sample, raw_sample;
- 	int ret = 0;
- 
--	if (iio_buffer_enabled(indio_dev))
--		return -EBUSY;
-+	ret = iio_device_claim_direct_mode(indio_dev);
-+	if (ret)
-+		return ret;
- 
--	mutex_lock(&indio_dev->mlock);
- 	ad_sigma_delta_set_channel(sigma_delta, chan->address);
- 
- 	spi_bus_lock(sigma_delta->spi->master);
-@@ -320,7 +320,7 @@ int ad_sigma_delta_single_conversion(struct iio_dev *indio_dev,
- 	ad_sigma_delta_set_mode(sigma_delta, AD_SD_MODE_IDLE);
- 	sigma_delta->bus_locked = false;
- 	spi_bus_unlock(sigma_delta->spi->master);
--	mutex_unlock(&indio_dev->mlock);
-+	iio_device_release_direct_mode(indio_dev);
- 
- 	if (ret)
- 		return ret;
 diff --git a/drivers/iio/adc/at91-sama5d2_adc.c b/drivers/iio/adc/at91-sama5d2_adc.c
 index b355899f54cc..41afb9b8696d 100644
 --- a/drivers/iio/adc/at91-sama5d2_adc.c
@@ -101,84 +24,6 @@ index b355899f54cc..41afb9b8696d 100644
  
  	trig->dev.parent = indio->dev.parent;
  	iio_trigger_set_drvdata(trig, indio);
-diff --git a/drivers/iio/adc/berlin2-adc.c b/drivers/iio/adc/berlin2-adc.c
-index 72d8fa94ab31..86fdfea32979 100644
---- a/drivers/iio/adc/berlin2-adc.c
-+++ b/drivers/iio/adc/berlin2-adc.c
-@@ -289,8 +289,10 @@ static int berlin2_adc_probe(struct platform_device *pdev)
- 	int ret;
- 
- 	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*priv));
--	if (!indio_dev)
-+	if (!indio_dev) {
-+		of_node_put(parent_np);
- 		return -ENOMEM;
-+	}
- 
- 	priv = iio_priv(indio_dev);
- 	platform_set_drvdata(pdev, indio_dev);
-diff --git a/drivers/iio/adc/stm32-dfsdm-adc.c b/drivers/iio/adc/stm32-dfsdm-adc.c
-index 1c492a7f4587..bb90b22b809c 100644
---- a/drivers/iio/adc/stm32-dfsdm-adc.c
-+++ b/drivers/iio/adc/stm32-dfsdm-adc.c
-@@ -1099,6 +1099,7 @@ static const struct of_device_id stm32_dfsdm_adc_match[] = {
- 	},
- 	{}
- };
-+MODULE_DEVICE_TABLE(of, stm32_dfsdm_adc_match);
- 
- static int stm32_dfsdm_adc_probe(struct platform_device *pdev)
- {
-diff --git a/drivers/iio/adc/twl6030-gpadc.c b/drivers/iio/adc/twl6030-gpadc.c
-index 765aaee157e2..3007cfbf8491 100644
---- a/drivers/iio/adc/twl6030-gpadc.c
-+++ b/drivers/iio/adc/twl6030-gpadc.c
-@@ -71,6 +71,18 @@
- #define TWL6030_GPADCS				BIT(1)
- #define TWL6030_GPADCR				BIT(0)
- 
-+#define USB_VBUS_CTRL_SET			0x04
-+#define USB_ID_CTRL_SET				0x06
-+
-+#define TWL6030_MISC1				0xE4
-+#define VBUS_MEAS				0x01
-+#define ID_MEAS					0x01
-+
-+#define VAC_MEAS                0x04
-+#define VBAT_MEAS               0x02
-+#define BB_MEAS                 0x01
-+
-+
- /**
-  * struct twl6030_chnl_calib - channel calibration
-  * @gain:		slope coefficient for ideal curve
-@@ -943,6 +955,26 @@ static int twl6030_gpadc_probe(struct platform_device *pdev)
- 		return ret;
- 	}
- 
-+	ret = twl_i2c_write_u8(TWL_MODULE_USB, VBUS_MEAS, USB_VBUS_CTRL_SET);
-+	if (ret < 0) {
-+		dev_err(dev, "failed to wire up inputs\n");
-+		return ret;
-+	}
-+
-+	ret = twl_i2c_write_u8(TWL_MODULE_USB, ID_MEAS, USB_ID_CTRL_SET);
-+	if (ret < 0) {
-+		dev_err(dev, "failed to wire up inputs\n");
-+		return ret;
-+	}
-+
-+	ret = twl_i2c_write_u8(TWL6030_MODULE_ID0,
-+				VBAT_MEAS | BB_MEAS | VAC_MEAS,
-+				TWL6030_MISC1);
-+	if (ret < 0) {
-+		dev_err(dev, "failed to wire up inputs\n");
-+		return ret;
-+	}
-+
- 	indio_dev->name = DRIVER_NAME;
- 	indio_dev->dev.parent = dev;
- 	indio_dev->info = &twl6030_gpadc_iio_info;
 diff --git a/drivers/iio/counter/104-quad-8.c b/drivers/iio/counter/104-quad-8.c
 index 92be8d0f7735..92e68cada844 100644
 --- a/drivers/iio/counter/104-quad-8.c
