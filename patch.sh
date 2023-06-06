@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2022 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2023 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -287,7 +287,6 @@ rt () {
 
 		exit 2
 	fi
-
 	dir 'external/rt'
 }
 
@@ -328,7 +327,6 @@ wireless_regdb () {
 		number=1
 		cleanup
 	fi
-
 	dir 'external/wireless_regdb'
 }
 
