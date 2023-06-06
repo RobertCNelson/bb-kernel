@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2022 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2023 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -95,8 +95,8 @@ gcc_toolchain () {
 	gcc8="8.5.0"
 	gcc9="9.5.0"
 	gcc10="10.4.0"
-	gcc11="11.3.0"
-	gcc12="12.2.0"
+	gcc11="11.4.0"
+	gcc12="12.3.0"
 	gcc13="13.1.0"
 
 	case "${toolchain}" in
