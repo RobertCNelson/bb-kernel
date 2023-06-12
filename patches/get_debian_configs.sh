@@ -25,11 +25,6 @@ image="armmp"
 unsigned=""
 dl_deb
 
-dpkg_arch="armhf"
-image="armmp-lpae"
-unsigned=""
-dl_deb
-
 rm -rf ./dl/ || true
 
 #
