@@ -437,6 +437,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="jammy"
 			;;
+		victoria)
+			#21.2
+			#http://packages.linuxmint.com/index.php
+			deb_distro="jammy"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix
@@ -487,11 +492,12 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|focal|jammy|kinetic)
+		bionic|focal|jammy|kinetic|lunar)
 			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
 			#20.04 focal:  (EOL: April 2025) lts: focal -> jammy
 			#22.04 jammy:  (EOL: April 2027) lts: jammy -> xyz
 			#22.10 kinetic: (EOL: July 2023)
+			#23.04 lunar: (EOL: January 2024)
 			unset warn_eol_distro
 			;;
 		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|cosmic|disco|eoan|groovy|hirsute|impish)
