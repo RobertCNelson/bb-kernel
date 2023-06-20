@@ -483,7 +483,7 @@ patch_backports (){
 }
 
 backports () {
-	backport_tag="v5.10.183"
+	backport_tag="v5.10.184"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -510,21 +510,18 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	#dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
-}
-
-soc () {
 	dir 'bootup_hacks'
+	#dir 'powervr'
 }
 
 ###
 backports
 drivers
-soc
 
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.3.5"
+		backport_tag="v6.3.8"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
