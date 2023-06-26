@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2022 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2023 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -39,6 +39,17 @@ else
 	gcc_dir="${DIR}/dl"
 fi
 
+check_glibc () {
+	if [ -f ./glibc_version ] ; then
+		rm ./glibc_version || true
+	fi
+
+	gcc scripts/glibc_version.c -o glibc_version
+
+	version=$(LC_ALL=C ./glibc_version | awk '{print $3}')
+	echo "glibc: $version"
+}
+
 dl_generic () {
 	binary="bin/${gcc_prefix}-"
 
@@ -64,7 +75,7 @@ dl_generic () {
 		echo "Using Existing Toolchain: ${toolchain}"
 	fi
 
-	if [ "x${ARCH}" = "xarmv7l" ] ; then
+	if [ "x${ARCH}" = "xarmv7l" ] || [ "x${ARCH}" = "xaarch64" ] ; then
 		#using native gcc
 		CC=
 	else
@@ -95,8 +106,9 @@ gcc_toolchain () {
 	gcc8="8.5.0"
 	gcc9="9.5.0"
 	gcc10="10.4.0"
-	gcc11="11.3.0"
-	gcc12="12.2.0"
+	gcc11="11.4.0"
+	gcc12="12.3.0"
+	gcc13="13.1.0"
 
 	case "${toolchain}" in
 	gcc_linaro_gnueabihf_4_9)
@@ -168,6 +180,12 @@ gcc_toolchain () {
 		datestamp="2022.${gcc_selected}-${gcc_prefix}"
 		dl_gcc_generic
 		;;
+	gcc_13_arm)
+		gcc_selected=${gcc13}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2023.${gcc_selected}-${gcc_prefix}"
+		dl_gcc_generic
+		;;
 	gcc_linaro_aarch64_gnu_6|gcc_6_aarch64)
 		gcc_selected=${gcc6}
 		gcc_prefix="aarch64-linux"
@@ -210,6 +228,12 @@ gcc_toolchain () {
 		datestamp="2022.${gcc_selected}-${gcc_prefix}-gcc"
 		dl_gcc_generic
 		;;
+	gcc_13_aarch64)
+		gcc_selected=${gcc13}
+		gcc_prefix="aarch64-linux"
+		datestamp="2023.${gcc_selected}-${gcc_prefix}-gcc"
+		dl_gcc_generic
+		;;
 	gcc_7_riscv64)
 		gcc_selected=${gcc7}
 		gcc_prefix="riscv64-linux"
@@ -246,6 +270,12 @@ gcc_toolchain () {
 		datestamp="2022.${gcc_selected}-${gcc_prefix}-gcc"
 		dl_gcc_generic
 		;;
+	gcc_13_riscv64)
+		gcc_selected=${gcc13}
+		gcc_prefix="riscv64-linux"
+		datestamp="2023.${gcc_selected}-${gcc_prefix}-gcc"
+		dl_gcc_generic
+		;;
 	*)
 		echo "bug: maintainer forgot to set:"
 		echo "toolchain=\"xzy\" in version.sh"
@@ -254,7 +284,8 @@ gcc_toolchain () {
 	esac
 }
 
-if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] ; then
+if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] && [ "x${ARCH}" != "xaarch64" ] ; then
+	check_glibc
 	gcc_toolchain
 fi
 
