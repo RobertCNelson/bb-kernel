@@ -548,16 +548,12 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/mikrobus'
-}
-
-soc () {
 	dir 'bootup_hacks'
 }
 
 ###
 backports
 drivers
-soc
 
 packaging () {
 	#do_backport="enable"
