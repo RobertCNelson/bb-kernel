@@ -511,16 +511,12 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
-}
-
-soc () {
 	dir 'bootup_hacks'
 }
 
 ###
 backports
 drivers
-soc
 
 packaging () {
 	#do_backport="enable"

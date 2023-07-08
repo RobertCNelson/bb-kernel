@@ -463,10 +463,6 @@ debian_regs () {
 
 		#Future Debian Code names:
 		case "${deb_distro}" in
-		trixie)
-			#13 trixie: https://wiki.debian.org/DebianTrixie
-			deb_distro="sid"
-			;;
 		forky)
 			#14 forky: https://wiki.debian.org/DebianForky
 			deb_distro="sid"
@@ -476,31 +472,30 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		stretch|buster|bullseye|bookworm|sid)
+		buster|bullseye|bookworm|trixie|sid)
 			#https://wiki.debian.org/LTS
-			#9 stretch: https://wiki.debian.org/DebianStretch
-			#10 buster: https://wiki.debian.org/DebianBuster
-			#11 bullseye: https://wiki.debian.org/DebianBullseye
+			#10 buster: 2024-06-30 https://wiki.debian.org/DebianBuster
+			#11 bullseye: 2026 https://wiki.debian.org/DebianBullseye
 			#12 bookworm: https://wiki.debian.org/DebianBookworm
+			#13 trixie: https://wiki.debian.org/DebianTrixie
 			unset warn_eol_distro
 			;;
-		squeeze|wheezy|jessie)
+		squeeze|wheezy|jessie|stretch)
 			#https://wiki.debian.org/LTS
 			#6 squeeze: 2016-02-29 https://wiki.debian.org/DebianSqueeze
 			#7 wheezy: 2018-05-31 https://wiki.debian.org/DebianWheezy
 			#8 jessie: 2020-06-30 https://wiki.debian.org/DebianJessie
+			#9 stretch: 2022-06-30 https://wiki.debian.org/DebianStretch
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|focal|jammy|kinetic|lunar)
-			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
-			#20.04 focal:  (EOL: April 2025) lts: focal -> jammy
-			#22.04 jammy:  (EOL: April 2027) lts: jammy -> xyz
-			#22.10 kinetic: (EOL: July 2023)
+		focal|jammy|lunar)
+			#20.04 focal: (EOL: April 2025) lts: focal -> jammy
+			#22.04 jammy: (EOL: April 2027) lts: jammy -> xyz
 			#23.04 lunar: (EOL: January 2024)
 			unset warn_eol_distro
 			;;
-		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|cosmic|disco|eoan|groovy|hirsute|impish)
+		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|groovy|hirsute|impish|kinetic)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
@@ -518,12 +513,14 @@ debian_regs () {
 			#16.10 yakkety: (EOL: July 20, 2017)
 			#17.04 zesty: (EOL: January 2018)
 			#17.10 artful: (EOL: July 2018)
+			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
 			#18.10 cosmic: (EOL: July 18, 2019)
 			#19.04 disco: (EOL: January 23, 2020)
 			#19.10 eoan: (EOL: July 2020)
 			#20.10 groovy: (EOL: July 2021)
 			#21.04 hirsute: (EOL: January 2022)
 			#21.10 impish: (EOL: July 2022)
+			#22.10 kinetic: (EOL: July 2023)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
