@@ -463,10 +463,6 @@ debian_regs () {
 
 		#Future Debian Code names:
 		case "${deb_distro}" in
-		trixie)
-			#13 trixie: https://wiki.debian.org/DebianTrixie
-			deb_distro="sid"
-			;;
 		forky)
 			#14 forky: https://wiki.debian.org/DebianForky
 			deb_distro="sid"
@@ -476,11 +472,12 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		buster|bullseye|bookworm|sid)
+		buster|bullseye|bookworm|trixie|sid)
 			#https://wiki.debian.org/LTS
 			#10 buster: 2024-06-30 https://wiki.debian.org/DebianBuster
 			#11 bullseye: 2026 https://wiki.debian.org/DebianBullseye
 			#12 bookworm: https://wiki.debian.org/DebianBookworm
+			#13 trixie: https://wiki.debian.org/DebianTrixie
 			unset warn_eol_distro
 			;;
 		squeeze|wheezy|jessie|stretch)
