@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2022 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2023 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -181,7 +181,6 @@ aufs () {
 		number=5
 		cleanup
 	fi
-
 	dir 'external/aufs'
 }
 
@@ -287,7 +286,6 @@ rt () {
 
 		exit 2
 	fi
-
 	dir 'external/rt'
 }
 
@@ -328,7 +326,6 @@ wireless_regdb () {
 		number=1
 		cleanup
 	fi
-
 	dir 'external/wireless_regdb'
 }
 
@@ -433,7 +430,6 @@ beagleboard_dtbs () {
 		number=1
 		cleanup
 	fi
-
 	dir 'soc/ti/beagleboard_dtbs'
 }
 
@@ -514,16 +510,12 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	#dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
-}
-
-soc () {
 	dir 'bootup_hacks'
 }
 
 ###
 backports
 drivers
-soc
 
 packaging () {
 	#do_backport="enable"
