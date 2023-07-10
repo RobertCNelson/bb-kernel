@@ -484,7 +484,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.185"
+	backport_tag="v5.10.186"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -500,7 +500,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v5.15.118"
+	backport_tag="v5.15.120"
 
 	subsystem="iio"
 	#regenerate="enable"
@@ -548,16 +548,12 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/mikrobus'
-}
-
-soc () {
 	dir 'bootup_hacks'
 }
 
 ###
 backports
 drivers
-soc
 
 packaging () {
 	#do_backport="enable"
