@@ -155,4 +155,9 @@ config="CONFIG_W1_SLAVE_DS2433_CRC" ; config_enable
 config="CONFIG_UIO_PDRV_GENIRQ" ; config_module
 config="CONFIG_UIO_PRUSS" ; config_module
 
+#2023.07.10
+config="CONFIG_KERNEL_LZO" ; config_disable
+config="CONFIG_KERNEL_LZ4" ; config_enable
+config="CONFIG_GCC_PLUGINS" ; config_disable
+
 cd ${DIR}/
