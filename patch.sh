@@ -490,7 +490,7 @@ post_backports () {
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 }
 
-patch_backports (){
+patch_backports () {
 	echo "dir: backports/${subsystem}"
 	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
@@ -742,9 +742,6 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/bluetooth'
 	dir 'fixes'
-}
-
-soc () {
 	dir 'bootup_hacks'
 }
 
@@ -753,7 +750,6 @@ backports
 brcmfmac
 omap
 drivers
-soc
 
 packaging () {
 	#do_backport="enable"
