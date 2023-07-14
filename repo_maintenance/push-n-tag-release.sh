@@ -37,14 +37,6 @@ cat_files () {
 	if [ -f ./patches/external/git/BCFSERIAL ] ; then
 		cat ./patches/external/git/BCFSERIAL >> ${wfile}
 	fi
-
-	if [ -f ./patches/git/CAN-ISOTP ] ; then
-		cat ./patches/git/CAN-ISOTP >> ${wfile}
-	fi
-
-	if [ -f ./patches/git/WIREGUARD ] ; then
-		cat ./patches/git/WIREGUARD >> ${wfile}
-	fi
 }
 
 DIR=$PWD
