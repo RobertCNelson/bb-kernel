@@ -167,4 +167,9 @@ config="CONFIG_KERNEL_LZO" ; config_disable
 config="CONFIG_KERNEL_LZ4" ; config_enable
 config="CONFIG_GCC_PLUGINS" ; config_disable
 
+#2023.07.14
+# MUSB DMA mode
+config="CONFIG_MUSB_PIO_ONLY" ; config_enable
+config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
+
 cd ${DIR}/
