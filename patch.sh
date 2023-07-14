@@ -110,31 +110,30 @@ aufs_fail () {
 
 aufs () {
 	#https://github.com/sfjro/aufs-standalone/tree/aufs6.0
-	aufs_prefix="aufs6-"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		KERNEL_REL=6.0
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}kbuild.patch
-		patch -p1 < ${aufs_prefix}kbuild.patch || aufs_fail
-		rm -rf ${aufs_prefix}kbuild.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-kbuild.patch
+		patch -p1 < aufs6-kbuild.patch || aufs_fail
+		rm -rf aufs6-kbuild.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-kbuild' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}base.patch
-		patch -p1 < ${aufs_prefix}base.patch || aufs_fail
-		rm -rf ${aufs_prefix}base.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-base.patch
+		patch -p1 < aufs6-base.patch || aufs_fail
+		rm -rf aufs6-base.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-base' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}mmap.patch
-		patch -p1 < ${aufs_prefix}mmap.patch || aufs_fail
-		rm -rf ${aufs_prefix}mmap.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-mmap.patch
+		patch -p1 < aufs6-mmap.patch || aufs_fail
+		rm -rf aufs6-mmap.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-mmap' -s
 
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/${aufs_prefix}standalone.patch
-		patch -p1 < ${aufs_prefix}standalone.patch || aufs_fail
-		rm -rf ${aufs_prefix}standalone.patch
+		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs6-standalone.patch
+		patch -p1 < aufs6-standalone.patch || aufs_fail
+		rm -rf aufs6-standalone.patch
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: aufs-standalone' -s
 
@@ -276,7 +275,7 @@ rt () {
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
+		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz
 		rm -f localversion-rt
@@ -484,7 +483,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.165"
+	backport_tag="v5.10.186"
 
 	subsystem="uio"
 	#regenerate="enable"
