@@ -512,6 +512,7 @@ drivers () {
 	dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
 	dir 'bootup_hacks'
+	dir 'ad777x'
 }
 
 ###
