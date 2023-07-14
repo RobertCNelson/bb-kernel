@@ -162,4 +162,9 @@ config="CONFIG_UIO_PRUSS" ; config_module
 #[   26.842097] tps65217-charger: probe of tps65217-charger failed with error -16
 config="CONFIG_CHARGER_TPS65217" ; config_disable
 
+#2023.07.10
+config="CONFIG_KERNEL_LZO" ; config_disable
+config="CONFIG_KERNEL_LZ4" ; config_enable
+config="CONFIG_GCC_PLUGINS" ; config_disable
+
 cd ${DIR}/
