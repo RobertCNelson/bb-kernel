@@ -380,7 +380,7 @@ dtb_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v6.3.x"
+	branch="v6.4.x"
 	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -444,7 +444,7 @@ bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -509,6 +509,7 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	#dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
+#	dir 'ad777x'
 }
 
 ###
@@ -516,6 +517,7 @@ backports
 drivers
 
 packaging () {
+	echo "Update builddeb"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
 		backport_tag="v6.4.3"
