@@ -518,7 +518,7 @@ drivers
 packaging () {
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.5-rc1"
+		backport_tag="v6.5-rc2"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
