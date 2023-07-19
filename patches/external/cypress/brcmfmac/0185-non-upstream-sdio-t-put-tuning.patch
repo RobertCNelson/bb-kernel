@@ -1,0 +1,287 @@
+From e9c02199d82afeee8a00457d26b032e1aa98a115 Mon Sep 17 00:00:00 2001
+From: Carter Chen <carter.chen@infineon.com>
+Date: Mon, 27 Mar 2023 21:43:26 -0500
+Subject: [PATCH 185/208] non-upstream: sdio t-put tuning
+
+verifying on SDIO In-Band interrupt only as of present
+
+add module parameter "sdio_in_isr=1" to enable it.
+
+1.) enabling skb_orphan on tx path
+2.) handling sdio_dpc in isr and using trylock to protect.
+    if it cannot acquire the mutex, enqueu to work_queue as is.
+3.) dataworker also tries to acquire mutex before execute sdio_dpc
+    if it cannot acquire the mutex, do nothing this time.
+    let the parallel task to handle it.
+
+Fixes: CYW55560A1-1343
+
+Signed-off-by: Carter Chen <carter.chen@infineon.com>
+---
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    |  2 +-
+ .../broadcom/brcm80211/brcmfmac/common.c      |  5 +
+ .../broadcom/brcm80211/brcmfmac/common.h      |  2 +
+ .../broadcom/brcm80211/brcmfmac/feature.c     |  6 ++
+ .../broadcom/brcm80211/brcmfmac/feature.h     |  9 ++
+ .../broadcom/brcm80211/brcmfmac/sdio.c        | 94 ++++++++++++++-----
+ 6 files changed, 94 insertions(+), 24 deletions(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+index 33f99807a338..cd3a78d530ef 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+@@ -9103,7 +9103,7 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
+ 		if (bandlist[i] == cpu_to_le32(WLC_BAND_6G) &&
+ 		    brcmf_feat_is_6ghz_enabled(ifp)) {
+ 			band = kmemdup(&__wl_band_6ghz, sizeof(__wl_band_6ghz),
+-					   GFP_KERNEL);
++					GFP_KERNEL);
+ 			if (!band)
+ 				return -ENOMEM;
+ 
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c
+index 98865efd05c2..a78cac9e6999 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c
+@@ -96,6 +96,10 @@ static int brcmf_disable_6ghz;
+ module_param_named(disable_6ghz, brcmf_disable_6ghz, int, 0400);
+ MODULE_PARM_DESC(disable_6ghz, "Disable 6GHz Operation");
+ 
++static int brcmf_sdio_in_isr;
++module_param_named(sdio_in_isr, brcmf_sdio_in_isr, int, 0400);
++MODULE_PARM_DESC(sdio_in_isr, "Handle SDIO DPC in ISR");
++
+ static struct brcmfmac_platform_data *brcmfmac_pdata;
+ struct brcmf_mp_global_t brcmf_mp_global;
+ 
+@@ -506,6 +510,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
+ #endif
+ 	settings->fw_ap_select = !!brcmf_fw_ap_select;
+ 	settings->disable_6ghz = !!brcmf_disable_6ghz;
++	settings->sdio_in_isr = !!brcmf_sdio_in_isr;
+ 
+ 	if (bus_type == BRCMF_BUSTYPE_SDIO)
+ 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.h
+index 81fed6b54655..48dd9f6ec43e 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.h
+@@ -42,6 +42,7 @@ extern struct brcmf_mp_global_t brcmf_mp_global;
+  * @ignore_probe_fail: Ignore probe failure.
+  * @fw_ap_select: Allow FW to select AP.
+  * @disable_6ghz: Disable 6GHz operation
++ * @sdio_in_isr: Handle SDIO DPC in ISR.
+  * @country_codes: If available, pointer to struct for translating country codes
+  * @bus: Bus specific platform data. Only SDIO at the mmoment.
+  */
+@@ -56,6 +57,7 @@ struct brcmf_mp_device {
+ 	bool		ignore_probe_fail;
+ 	bool		fw_ap_select;
+ 	bool		disable_6ghz;
++	bool		sdio_in_isr;
+ 	struct brcmfmac_pd_cc *country_codes;
+ 	const char	*board_type;
+ 	union {
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+index f653f2cc2ae3..d9389a56af49 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+@@ -337,3 +337,9 @@ bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp)
+ {
+ 	return (!ifp->drvr->settings->disable_6ghz);
+ }
++
++bool brcmf_feat_sdio_in_isr(struct brcmf_if *ifp)
++{
++	return ifp->drvr->settings->sdio_in_isr;
++}
++
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
+index c054946e4187..cc65280f0bb2 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
+@@ -137,4 +137,13 @@ bool brcmf_feat_is_quirk_enabled(struct brcmf_if *ifp,
+  */
+ bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp);
+ 
++/**
++ * brcmf_feat_sdio_in_isr() - handle SDIO DPC handler in ISR
++ *
++ * @ifp: interface instance.
++ *
++ * Return: true if handle SDIO DPC in ISR is enabled; otherwise false.
++ */
++bool brcmf_feat_sdio_in_isr(struct brcmf_if *ifp);
++
+ #endif /* _BRCMF_FEATURE_H */
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
+index 95374f29e372..a3bf9a3ae18c 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
+@@ -40,6 +40,7 @@
+ #include "fwil.h"
+ #include "bt_shared_sdio.h"
+ #include "trxhdr.h"
++#include "feature.h"
+ 
+ #define DCMD_RESP_TIMEOUT	msecs_to_jiffies(2500)
+ #define CTL_DONE_TIMEOUT	msecs_to_jiffies(2500)
+@@ -549,6 +550,7 @@ struct brcmf_sdio {
+ 	bool txglom;		/* host tx glomming enable flag */
+ 	u16 head_align;		/* buffer pointer alignment */
+ 	u16 sgentry_align;	/* scatter-gather buffer alignment */
++	struct mutex sdsem;
+ };
+ 
+ /* clkstate */
+@@ -2170,7 +2172,7 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
+ static void
+ brcmf_sdio_wait_event_wakeup(struct brcmf_sdio *bus)
+ {
+-	wake_up_interruptible(&bus->ctrl_wait);
++	wake_up(&bus->ctrl_wait);
+ 	return;
+ }
+ 
+@@ -2451,9 +2453,7 @@ static uint brcmf_sdio_sendfromq(struct brcmf_sdio *bus, uint maxframes)
+ 					      &prec_out);
+ 			if (pkt == NULL)
+ 				break;
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+ 			skb_orphan(pkt);
+-#endif
+ 			__skb_queue_tail(&pktq, pkt);
+ 		}
+ 		spin_unlock_bh(&bus->txq_lock);
+@@ -3240,8 +3240,9 @@ brcmf_sdio_bus_txctl(struct device *dev, unsigned char *msg, uint msglen)
+ 	bus->ctrl_frame_stat = true;
+ 
+ 	brcmf_sdio_trigger_dpc(bus);
+-	wait_event_interruptible_timeout(bus->ctrl_wait, !bus->ctrl_frame_stat,
+-					 CTL_DONE_TIMEOUT);
++	wait_event_timeout(bus->ctrl_wait, !bus->ctrl_frame_stat,
++			   CTL_DONE_TIMEOUT);
++
+ 	ret = 0;
+ 	if (bus->ctrl_frame_stat) {
+ 		sdio_claim_host(bus->sdiodev->func1);
+@@ -3974,14 +3975,15 @@ static int brcmf_sdio_bus_get_memdump(struct device *dev, void *data,
+ 
+ void brcmf_sdio_trigger_dpc(struct brcmf_sdio *bus)
+ {
+-	if (!bus->dpc_triggered) {
+-		bus->dpc_triggered = true;
+-		queue_work(bus->brcmf_wq, &bus->datawork);
+-	}
++	bus->dpc_triggered = true;
++	queue_work(bus->brcmf_wq, &bus->datawork);
+ }
+ 
+ void brcmf_sdio_isr(struct brcmf_sdio *bus, bool in_isr)
+ {
++	struct brcmf_bus *bus_if = dev_get_drvdata(bus->sdiodev->dev);
++	struct brcmf_if *ifp = bus_if->drvr->iflist[0];
++
+ 	brcmf_dbg(TRACE, "Enter\n");
+ 
+ 	if (!bus) {
+@@ -4002,8 +4004,26 @@ void brcmf_sdio_isr(struct brcmf_sdio *bus, bool in_isr)
+ 	if (!bus->intr)
+ 		brcmf_err("isr w/o interrupt configured!\n");
+ 
+-	bus->dpc_triggered = true;
+-	queue_work(bus->brcmf_wq, &bus->datawork);
++	if (brcmf_feat_sdio_in_isr(ifp)) {
++		if (!mutex_trylock(&bus->sdsem)) {
++			bus->dpc_triggered = true;
++			queue_work(bus->brcmf_wq, &bus->datawork);
++		} else {
++			bus->dpc_triggered = true;
++
++			/* make sure dpc_triggered is true */
++			wmb();
++			while (READ_ONCE(bus->dpc_triggered)) {
++				bus->dpc_triggered = false;
++				brcmf_sdio_dpc(bus);
++				bus->idlecount = 0;
++			}
++			mutex_unlock(&bus->sdsem);
++		}
++	} else {
++		bus->dpc_triggered = true;
++		queue_work(bus->brcmf_wq, &bus->datawork);
++	}
+ }
+ 
+ static void brcmf_sdio_bus_watchdog(struct brcmf_sdio *bus)
+@@ -4096,20 +4116,46 @@ static void brcmf_sdio_dataworker(struct work_struct *work)
+ {
+ 	struct brcmf_sdio *bus = container_of(work, struct brcmf_sdio,
+ 					      datawork);
++	struct brcmf_bus *bus_if = dev_get_drvdata(bus->sdiodev->dev);
++	struct brcmf_if *ifp = bus_if->drvr->iflist[0];
+ 
+-	bus->dpc_running = true;
+-	wmb();
+-	while (READ_ONCE(bus->dpc_triggered)) {
+-		bus->dpc_triggered = false;
+-		brcmf_sdio_dpc(bus);
+-		bus->idlecount = 0;
+-	}
+-	bus->dpc_running = false;
+-	if (brcmf_sdiod_freezing(bus->sdiodev)) {
+-		brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DOWN);
+-		brcmf_sdiod_try_freeze(bus->sdiodev);
+-		brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DATA);
++	if (brcmf_feat_sdio_in_isr(ifp)) {
++		if (mutex_trylock(&bus->sdsem)) {
++			bus->dpc_running = true;
++
++			/* make sure dpc_running is true */
++			wmb();
++			while (READ_ONCE(bus->dpc_triggered)) {
++				bus->dpc_triggered = false;
++				brcmf_sdio_dpc(bus);
++				bus->idlecount = 0;
++			}
++			mutex_unlock(&bus->sdsem);
++			bus->dpc_running = false;
++			if (brcmf_sdiod_freezing(bus->sdiodev)) {
++				brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DOWN);
++				brcmf_sdiod_try_freeze(bus->sdiodev);
++				brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DATA);
++			}
++		}
++	} else {
++		bus->dpc_running = true;
++
++		/* make sure dpc_running is true */
++		wmb();
++		while (READ_ONCE(bus->dpc_triggered)) {
++			bus->dpc_triggered = false;
++			brcmf_sdio_dpc(bus);
++			bus->idlecount = 0;
++		}
++		bus->dpc_running = false;
++		if (brcmf_sdiod_freezing(bus->sdiodev)) {
++			brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DOWN);
++			brcmf_sdiod_try_freeze(bus->sdiodev);
++			brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DATA);
++		}
+ 	}
++	return;
+ }
+ 
+ static void
+@@ -4920,6 +4966,8 @@ struct brcmf_sdio *brcmf_sdio_probe(struct brcmf_sdio_dev *sdiodev)
+ 	spin_lock_init(&bus->txq_lock);
+ 	init_waitqueue_head(&bus->ctrl_wait);
+ 	init_waitqueue_head(&bus->dcmd_resp_wait);
++	/* Initialize thread based operation and lock */
++	mutex_init(&bus->sdsem);
+ 
+ 	/* Set up the watchdog timer */
+ 	timer_setup(&bus->timer, brcmf_sdio_watchdog, 0);
+-- 
+2.17.1
+

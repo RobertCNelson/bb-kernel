@@ -1,0 +1,253 @@
+From 1270a91aa756d51c61106eb5973d51c881d8c4bf Mon Sep 17 00:00:00 2001
+From: Shelley Yang <shelley.yang@infineon.com>
+Date: Tue, 28 Mar 2023 04:49:56 -0500
+Subject: [PATCH 187/208] non-upstream: vendor cmd addition for "wpa_cli
+ wnm_maxidle"
+
+wl_tool doesn't support wnm setting, so replace by wpa_cli
+1. set
+before: wl wnm_maxidle 10 1
+after: wpa_cli wnm_maxidle period=10 option=1
+2. get
+before: wl wnm_maxidle
+after: wpa_cli wnm_maxidle
+
+Fixes: SWWLAN-145213
+
+Signed-off-by: Shelley Yang <shelley.yang@infineon.com>
+---
+ .../broadcom/brcm80211/brcmfmac/vendor.c      |  8 ++
+ .../broadcom/brcm80211/brcmfmac/vendor_ifx.c  | 85 +++++++++++++++++++
+ .../broadcom/brcm80211/brcmfmac/vendor_ifx.h  | 83 +++++++++++++++++-
+ 3 files changed, 175 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
+index ff2d03e22e0b..60802a96a0b5 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
+@@ -328,6 +328,14 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
+ 			   VENDOR_CMD_RAW_DATA,
+ 			   ifx_cfg80211_vndr_cmds_giantrx)
+ 	},
++	{
++		IFX_SUBCMD(WNM,
++			   (WIPHY_VENDOR_CMD_NEED_WDEV |
++				WIPHY_VENDOR_CMD_NEED_NETDEV),
++			ifx_vendor_attr_wnm_policy,
++			ifx_cfg80211_vndr_cmds_wnm),
++		.maxattr = IFX_VENDOR_ATTR_WNM_MAX
++	},
+ };
+ 
+ const struct nl80211_vendor_cmd_info brcmf_vendor_events[] = {
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor_ifx.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor_ifx.c
+index 38e3043694c1..8079c632469b 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor_ifx.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor_ifx.c
+@@ -824,3 +824,88 @@ int ifx_cfg80211_vndr_cmds_giantrx(struct wiphy *wiphy,
+ 	return ret;
+ }
+ 
++int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
++			       struct wireless_dev *wdev, const void  *data, int len)
++{
++	int tmp, attr_type = 0, wnm_param = 0, ret = 0;
++	const struct nlattr *attr_iter, *wnm_param_iter;
++
++	struct brcmf_cfg80211_vif *vif;
++	struct brcmf_if *ifp;
++	u8 param[64] = {0}, get_info = 0;
++	u16 buf_len = 0, wnm_id = 0;
++
++	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
++	ifp = vif->ifp;
++	nla_for_each_attr(attr_iter, data, len, tmp) {
++		attr_type = nla_type(attr_iter);
++
++		switch (attr_type) {
++		case IFX_VENDOR_ATTR_WNM_CMD:
++			wnm_id = cpu_to_le16(nla_get_u8(attr_iter));
++			break;
++		case IFX_VENDOR_ATTR_WNM_PARAMS:
++			nla_for_each_nested(wnm_param_iter, attr_iter, tmp) {
++				wnm_param = nla_type(wnm_param_iter);
++				switch (wnm_param) {
++				case IFX_VENDOR_ATTR_WNM_PARAM_GET_INFO:
++				{
++					get_info = (int)nla_get_u8(wnm_param_iter);
++				}
++					break;
++				case IFX_VENDOR_ATTR_WNM_PARAM_IDLE_PERIOD:
++				{
++					int period;
++
++					period = (int)nla_get_u8(wnm_param_iter);
++					memcpy(&param[buf_len], &period, sizeof(period));
++					buf_len += sizeof(period);
++				}
++					break;
++				case IFX_VENDOR_ATTR_WNM_PARAM_PROTECTION_OPT:
++				{
++					int option;
++
++					option = (int)nla_get_u8(wnm_param_iter);
++					memcpy(&param[buf_len], &option, sizeof(option));
++					buf_len += sizeof(option);
++				}
++					break;
++				default:
++					brcmf_err("unknown wnm param attr:%d\n", wnm_param);
++					return -EINVAL;
++				}
++			}
++			break;
++		default:
++			brcmf_err("Unknown wnm attribute %d, skipping\n",
++				  attr_type);
++			return -EINVAL;
++		}
++	}
++
++	switch (wnm_id) {
++	case IFX_WNM_CMD_IOV_WNM_MAXIDLE:
++	{
++		if (get_info) {
++			int get_period = 0;
++
++			ret = brcmf_fil_iovar_int_get(ifp, "wnm_maxidle", &get_period);
++			if (!ret)
++				ret = ifx_cfg80211_vndr_send_cmd_reply(
++					wiphy, &get_period, sizeof(get_period));
++		} else
++			ret = brcmf_fil_iovar_data_set(ifp, "wnm_maxidle", param, buf_len);
++	}
++	break;
++
++	default:
++		brcmf_err("unsupport wnm cmd:%d\n", wnm_id);
++		return -EINVAL;
++	}
++
++	if (ret)
++		brcmf_err("wnm %s error:%d\n", get_info?"get":"set", ret);
++
++	return ret;
++}
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor_ifx.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor_ifx.h
+index 791f76a6d036..f71312111587 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor_ifx.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor_ifx.h
+@@ -96,6 +96,8 @@ enum ifx_nl80211_vendor_subcmds {
+ 	 *
+ 	 * @IFX_VENDOR_SCMD_GIANTRX: Vendor command to set/get GIANTRX setting.
+ 	 *
++	 * @IFX_VENDOR_SCMD_WNM: Vendor command to set/get WNM setting.
++	 *
+ 	 * @IFX_VENDOR_SCMD_MAX: This acts as a the tail of cmds list.
+ 	 *      Make sure it located at the end of the list.
+ 	 */
+@@ -122,7 +124,8 @@ enum ifx_nl80211_vendor_subcmds {
+ 	SCMD(MBO)		= 18,
+ 	SCMD(MPC)		= 19,
+ 	SCMD(GIANTRX)		= 20,
+-	SCMD(MAX)		= 21
++	SCMD(WNM)		= 25,
++	SCMD(MAX)		= 26
+ };
+ 
+ /* enum ifx_vendor_attr - IFX nl80211 vendor attributes
+@@ -650,6 +653,81 @@ struct ifx_randmac {
+ 	u8 data[0];			/* subcommand data */
+ };
+ 
++enum ifx_vendor_attr_wnm_param {
++	IFX_VENDOR_ATTR_WNM_PARAM_UNSPEC,
++	IFX_VENDOR_ATTR_WNM_PARAM_GET_INFO,
++	IFX_VENDOR_ATTR_WNM_PARAM_IDLE_PERIOD,
++	IFX_VENDOR_ATTR_WNM_PARAM_PROTECTION_OPT,
++	IFX_VENDOR_ATTR_WNM_PARAM_MAX
++};
++
++static const struct nla_policy
++ifx_vendor_attr_wnm_param_policy[IFX_VENDOR_ATTR_WNM_PARAM_MAX + 1] = {
++	[IFX_VENDOR_ATTR_WNM_PARAM_UNSPEC] = {.type = NLA_U8},
++	[IFX_VENDOR_ATTR_WNM_PARAM_GET_INFO] = {.type = NLA_U8},
++	[IFX_VENDOR_ATTR_WNM_PARAM_IDLE_PERIOD] = {.type = NLA_U8},
++	[IFX_VENDOR_ATTR_WNM_PARAM_PROTECTION_OPT] = {.type = NLA_U8},
++	[IFX_VENDOR_ATTR_WNM_PARAM_MAX] = {.type = NLA_U8},
++};
++
++enum ifx_vendor_attr_wnm {
++	IFX_VENDOR_ATTR_WNM_UNSPEC,
++	IFX_VENDOR_ATTR_WNM_CMD,
++	IFX_VENDOR_ATTR_WNM_PARAMS,
++	IFX_VENDOR_ATTR_WNM_MAX
++};
++
++static const struct nla_policy ifx_vendor_attr_wnm_policy[IFX_VENDOR_ATTR_WNM_MAX + 1] = {
++	[IFX_VENDOR_ATTR_WNM_UNSPEC] = {.type = NLA_U8},
++	[IFX_VENDOR_ATTR_WNM_CMD] = {.type = NLA_U8},
++	[IFX_VENDOR_ATTR_WNM_PARAMS] =
++		NLA_POLICY_NESTED(ifx_vendor_attr_wnm_param_policy),
++	[IFX_VENDOR_ATTR_WNM_MAX] = {.type = NLA_U8},
++};
++
++enum {
++	IFX_WNM_CMD_IOV_WNM = 1,
++	IFX_WNM_CMD_IOV_WNM_MAXIDLE = 2,
++	IFX_WNM_CMD_IOV_WNM_TIMBC_OFFSET = 3,
++	IFX_WNM_CMD_IOV_WNM_BSSTRANS_URL = 4,
++	IFX_WNM_CMD_IOV_WNM_BSSTRANS_REQ = 5,
++	IFX_WNM_CMD_IOV_WNM_TFS_TCLASTYPE = 6,
++	IFX_WNM_CMD_IOV_WNM_PARP_DISCARD = 7,
++	IFX_WNM_CMD_IOV_WNM_PARP_ALLNODE = 8,
++	IFX_WNM_CMD_IOV_WNM_TIMBC_SET = 9,
++	IFX_WNM_CMD_IOV_WNM_TIMBC_STATUS = 10,
++	IFX_WNM_CMD_IOV_WNM_DMS_SET = 11,
++	IFX_WNM_CMD_IOV_WNM_DMS_TERM = 12,
++	IFX_WNM_CMD_IOV_WNM_SERVICE_TERM = 13,
++	IFX_WNM_CMD_IOV_WNM_SLEEP_INTV = 14,
++	IFX_WNM_CMD_IOV_WNM_SLEEP_MODE = 15,
++	IFX_WNM_CMD_IOV_WNM_BSSTRANS_QUERY = 16,
++	IFX_WNM_CMD_IOV_WNM_BSSTRANS_RESP = 17,
++	IFX_WNM_CMD_IOV_WNM_TCLAS_ADD = 18,
++	IFX_WNM_CMD_IOV_WNM_TCLAS_DEL = 19,
++	IFX_WNM_CMD_IOV_WNM_TCLAS_LIST = 20,
++	IFX_WNM_CMD_IOV_WNM_DMS_STATUS = 21,
++	IFX_WNM_CMD_IOV_WNM_KEEPALIVES_MAX_IDLE = 22,
++	IFX_WNM_CMD_IOV_WNM_PM_IGNORE_BCMC = 23,
++	IFX_WNM_CMD_IOV_WNM_DMS_DEPENDENCY = 24,
++	IFX_WNM_CMD_IOV_WNM_BSSTRANS_ROAMTHROTTLE = 25,
++	IFX_WNM_CMD_IOV_WNM_TFS_SET  = 26,
++	IFX_WNM_CMD_IOV_WNM_TFS_TERM = 27,
++	IFX_WNM_CMD_IOV_WNM_TFS_STATUS = 28,
++	IFX_WNM_CMD_IOV_WNM_BTQ_NBR_ADD = 29,
++	IFX_WNM_CMD_IOV_WNM_BTQ_NBR_DEL = 30,
++	IFX_WNM_CMD_IOV_WNM_BTQ_NBR_LIST = 31,
++	IFX_WNM_CMD_IOV_WNM_BSSTRANS_RSSI_RATE_MAP = 32,
++	IFX_WNM_CMD_IOV_WNM_KEEPALIVE_PKT_TYPE = 33,
++	IFX_WNM_CONFIG_CMD_IOV_WNM_TYPE_MAX
++};
++
++struct ifx_maxidle_wnm {
++	u8  get_info;
++	int period;
++	int protect;
++};
++
+ int ifx_cfg80211_vndr_cmds_twt(struct wiphy *wiphy,
+ 			       struct wireless_dev *wdev, const void  *data, int len);
+ int ifx_cfg80211_vndr_cmds_bsscolor(struct wiphy *wiphy,
+@@ -679,6 +757,9 @@ int ifx_cfg80211_vndr_cmds_mpc(struct wiphy *wiphy,
+ int ifx_cfg80211_vndr_cmds_giantrx(struct wiphy *wiphy,
+ 				   struct wireless_dev *wdev,
+ 				   const void *data, int len);
++int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
++			       struct wireless_dev *wdev,
++			       const void *data, int len);
+ 
+ #endif /* IFX_VENDOR_H */
+ 
+-- 
+2.17.1
+

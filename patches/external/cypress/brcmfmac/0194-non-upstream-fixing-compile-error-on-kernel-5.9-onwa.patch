@@ -1,0 +1,79 @@
+From 49ae38952c1cef14e621eddb713c08af243d450d Mon Sep 17 00:00:00 2001
+From: Carter Chen <carter.chen@infineon.com>
+Date: Tue, 2 May 2023 02:39:23 -0500
+Subject: [PATCH 194/208] non-upstream: fixing compile error on kernel 5.9
+ onward
+
+the compile error causes by sdio_rxf_thread commit,
+and from the kernel 5.9, the export_symbol of setScheduler has been
+removed.
+also fixed deprecated call of smp_read_barrier_depend
+
+as of now, the most supported backport version is 5.15.58,
+so limit kernel 5.15.58 as the upper limit.
+
+Fixes: SWLINUX-3472
+
+Signed-off-by: Carter Chen <carter.chen@infineon.com>
+---
+ .../broadcom/brcm80211/brcmfmac/sdio.c         | 18 ++++++++++++++++--
+ .../broadcom/brcm80211/brcmfmac/sdio.h         |  6 ++++++
+ 2 files changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
+index 8c1af369a69d..9d792c1a40f7 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c
+@@ -4711,7 +4711,22 @@ brcmf_sdio_rxf_thread(void *data)
+ 	 */
+ 	memset(&param, 0, sizeof(struct sched_param));
+ 	param.sched_priority = 1;
++#if LINUX_VERSION_IS_GEQ(5, 9, 0)
++	if (param.sched_priority >= MAX_RT_PRIO / 2)
++		/* If the priority is MAX_RT_PRIO/2 or higher,
++		 * it is considered as high priority.
++		 * sched_priority of FIFO task dosen't
++		 * exceed MAX_RT_PRIO/2.
++		 */
++		sched_set_fifo(current);
++	else
++		/* For when you don't much care about FIFO,
++		 * but want to be above SCHED_NORMAL.
++		 */
++		sched_set_fifo_low(current);
++#else
+ 	sched_setscheduler(current, SCHED_FIFO, &param);
++#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) */
+ 
+ 	while (1) {
+ 		if (kthread_should_stop())
+@@ -4720,8 +4735,7 @@ brcmf_sdio_rxf_thread(void *data)
+ 		if (down_interruptible(&bus->thr_rxf_ctl.sema) == 0) {
+ 			struct sk_buff *skb = NULL;
+ 
+-			smp_read_barrier_depends();
+-
++			smp_mb();/* ensure skb null */
+ 			skb = brcmf_rxf_dequeue(bus);
+ 			if (!skb) {
+ 				brcmf_err("nothing is dequeued, thread terminate\n");
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.h
+index 8af0c8f0b4b3..e6c310a4e998 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.h
+@@ -10,6 +10,12 @@
+ #include <linux/firmware.h>
+ #include "firmware.h"
+ 
++#if LINUX_VERSION_IS_LESS(5, 15, 58)
++#if LINUX_VERSION_IS_GEQ(4, 11, 0)
++#include <uapi/linux/sched/types.h>
++#endif /* kernel 4.11.0 */
++#endif /* kernel 5.15.58 */
++
+ #define SDIOD_FBR_SIZE		0x100
+ 
+ /* io_en */
+-- 
+2.17.1
+
