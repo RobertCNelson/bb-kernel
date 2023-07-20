@@ -406,7 +406,7 @@ beagleboard_dtbs () {
 
 		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
 		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
@@ -502,7 +502,7 @@ backports () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	#dir 'RPi'
+	dir 'RPi'
 	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
