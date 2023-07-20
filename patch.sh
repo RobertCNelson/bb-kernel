@@ -376,11 +376,11 @@ cleanup_dts_builds () {
 }
 
 dtb_makefile_append () {
-	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/ti/omap/Makefile
 }
 
 beagleboard_dtbs () {
-	branch="v6.3.x"
+	branch="v6.5.x"
 	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -398,10 +398,10 @@ beagleboard_dtbs () {
 		cd ./KERNEL/
 
 		cleanup_dts_builds
-		rm -rf arch/arm/boot/dts/overlays/ || true
+		rm -rf arch/arm/boot/dts/ti/omap/overlays/ || true
 
-		mkdir -p arch/arm/boot/dts/overlays/
-		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
+		mkdir -p arch/arm/boot/dts/ti/omap/overlays/
+		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/ti/omap/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
@@ -444,7 +444,7 @@ bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -502,7 +502,7 @@ backports () {
 drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
-	#dir 'RPi'
+	dir 'RPi'
 	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
@@ -516,6 +516,7 @@ backports
 drivers
 
 packaging () {
+	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
 		backport_tag="v6.5-rc2"
