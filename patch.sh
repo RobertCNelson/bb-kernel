@@ -509,7 +509,6 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	#dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
-	dir 'bootup_hacks'
 #	dir 'ad777x'
 }
 
@@ -518,6 +517,7 @@ backports
 drivers
 
 packaging () {
+	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
 		backport_tag="v6.3.13"
