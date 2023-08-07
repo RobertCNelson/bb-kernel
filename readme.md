@@ -36,7 +36,16 @@ Optional: Build Debian Package:
 
 Development/Hacking:
 
-first run (to setup baseline tree): ./build_kernel.sh
+first run (to setup baseline tree):
+
+```
+./build_kernel.sh
+```
+
 then modify files under KERNEL directory
-then run (to rebuild with your changes): ./tools/rebuild.sh
+then run (to rebuild with your changes):
+
+```
+./tools/rebuild.sh
+```
 
