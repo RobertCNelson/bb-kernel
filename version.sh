@@ -47,7 +47,7 @@ KERNEL_REL=6.3
 KERNEL_TAG=${KERNEL_REL}.13
 kernel_rt=".3-rt15"
 #Kernel Build
-BUILD=${build_prefix}15
+BUILD=${build_prefix}15.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
@@ -58,4 +58,3 @@ BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=xross
 #
-
