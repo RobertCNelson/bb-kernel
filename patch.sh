@@ -482,7 +482,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.188"
+	backport_tag="v5.10.190"
 
 	subsystem="uio"
 	#regenerate="enable"
