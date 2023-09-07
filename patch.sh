@@ -400,7 +400,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.188"
+	backport_tag="v5.10.194"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -438,7 +438,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.4.3"
+		backport_tag="v6.4.15"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
