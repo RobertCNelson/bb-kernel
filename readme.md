@@ -4,7 +4,7 @@ Script Bugs: "robertcnelson+bugs@gmail.com"
 
 Note, for older git tag's please use: https://github.com/RobertCNelson/yakbuild
 
-Dependencies: GCC ARM Cross ToolChain
+Dependencies: GCC Cross ToolChain
 
 https://mirrors.edge.kernel.org/pub/tools/crosstool/
 
