@@ -316,6 +316,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="bullseye"
 			;;
+		faye)
+			#LMDE 6
+			#http://packages.linuxmint.com/index.php
+			deb_distro="bookworm"
+			;;
 		debian)
 			deb_distro="jessie"
 			;;
@@ -458,6 +463,9 @@ debian_regs () {
 			;;
 		excalibur)
 			deb_distro="trixie"
+			;;
+		freia)
+			deb_distro="forky"
 			;;
 		esac
 
