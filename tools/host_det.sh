@@ -480,12 +480,13 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		buster|bullseye|bookworm|trixie|sid)
+		buster|bullseye|bookworm|trixie|forky|sid)
 			#https://wiki.debian.org/LTS
 			#10 buster: 2024-06-30 https://wiki.debian.org/DebianBuster
 			#11 bullseye: 2026 https://wiki.debian.org/DebianBullseye
 			#12 bookworm: https://wiki.debian.org/DebianBookworm
 			#13 trixie: https://wiki.debian.org/DebianTrixie
+			#14 forky: https://wiki.debian.org/DebianForky
 			unset warn_eol_distro
 			;;
 		squeeze|wheezy|jessie|stretch)
@@ -497,10 +498,12 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		focal|jammy|lunar)
+		focal|jammy|lunar|mantic|nobile)
 			#20.04 focal: (EOL: April 2025) lts: focal -> jammy
-			#22.04 jammy: (EOL: April 2027) lts: jammy -> xyz
+			#22.04 jammy: (EOL: April 2027) lts: jammy -> nobile
 			#23.04 lunar: (EOL: January 2024)
+			#23.10 mantic: (EOL: July 2024)
+			#24.04 nobile: (EOL: June 2029) lts: nobile -> xyz
 			unset warn_eol_distro
 			;;
 		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|groovy|hirsute|impish|kinetic)
