@@ -103,46 +103,6 @@ external_git () {
 	${git_bin} describe
 }
 
-can_isotp () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ -d ./can-isotp ] ; then
-			rm -rf ./can-isotp || true
-		fi
-
-		${git_bin} clone https://github.com/hartkopp/can-isotp --depth=1
-		cd ./can-isotp
-			isotp_hash=$(git rev-parse HEAD)
-		cd -
-
-		cd ./KERNEL/
-
-		cp -v ../can-isotp/include/uapi/linux/can/isotp.h  include/uapi/linux/can/
-		cp -v ../can-isotp/net/can/isotp.c net/can/
-
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: can-isotp: https://github.com/hartkopp/can-isotp' -m "https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/external/can_isotp/
-		echo "CAN-ISOTP: https://github.com/hartkopp/can-isotp/commit/${isotp_hash}" > ../patches/external/git/CAN-ISOTP
-
-		rm -rf ../can-isotp/ || true
-
-		${git_bin} reset --hard HEAD~1
-
-		start_cleanup
-
-		${git} "${DIR}/patches/external/can_isotp/0001-merge-can-isotp-https-github.com-hartkopp-can-isotp.patch"
-
-		wdir="external/can_isotp"
-		number=1
-		cleanup
-
-		exit 2
-	fi
-	dir 'external/can_isotp'
-}
-
 wpanusb () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -413,7 +373,6 @@ local_patch () {
 }
 
 #external_git
-can_isotp
 wpanusb
 bcfserial
 rt
