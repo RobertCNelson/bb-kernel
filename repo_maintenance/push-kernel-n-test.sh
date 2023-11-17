@@ -14,10 +14,6 @@ cat_files () {
 		cat ./patches/external/git/RT >> ${wfile}
 	fi
 
-	if [ -f ./patches/external/git/AUFS ] ; then
-		cat ./patches/external/git/AUFS >> ${wfile}
-	fi
-
 	if [ -f ./patches/external/git/WIRELESS_REGDB ] ; then
 		cat ./patches/external/git/WIRELESS_REGDB >> ${wfile}
 	fi
