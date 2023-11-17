@@ -151,4 +151,38 @@ config="CONFIG_W1_MASTER_GPIO" ; config_module
 config="CONFIG_W1_SLAVE_DS2430" ; config_module
 config="CONFIG_W1_SLAVE_DS2433_CRC" ; config_enable
 
+# We recommend to turn off Real-Time group scheduling in the
+# kernel when using systemd. RT group scheduling effectively
+# makes RT scheduling unavailable for most userspace, since it
+# requires explicit assignment of RT budgets to each unit whose
+# processes making use of RT. As there's no sensible way to
+# assign these budgets automatically this cannot really be
+# fixed, and it's best to disable group scheduling hence.
+./scripts/config --disable CONFIG_RT_GROUP_SCHED
+
+#iwd
+./scripts/config --enable CONFIG_CRYPTO_USER_API_SKCIPHER
+./scripts/config --enable CONFIG_CRYPTO_USER_API_HASH
+./scripts/config --enable CONFIG_CRYPTO_HMAC
+./scripts/config --enable CONFIG_CRYPTO_CMAC
+./scripts/config --enable CONFIG_CRYPTO_MD4
+./scripts/config --enable CONFIG_CRYPTO_MD5
+./scripts/config --enable CONFIG_CRYPTO_SHA256
+./scripts/config --enable CONFIG_CRYPTO_SHA512
+./scripts/config --enable CONFIG_CRYPTO_AES
+./scripts/config --enable CONFIG_CRYPTO_ECB
+./scripts/config --enable CONFIG_CRYPTO_DES
+./scripts/config --enable CONFIG_CRYPTO_CBC
+./scripts/config --enable CONFIG_KEY_DH_OPERATIONS
+
+#WiFi, removed in 6.7-rc1
+./scripts/config --disable CONFIG_WLAN_VENDOR_CISCO
+./scripts/config --disable CONFIG_HOSTAP
+./scripts/config --disable CONFIG_HERMES
+./scripts/config --disable CONFIG_USB_ZD1201
+./scripts/config --disable CONFIG_RTL8192U
+
+#removed in 6.7-rc1
+./scripts/config --disable CONFIG_DEV_APPLETALK
+
 cd ${DIR}/
