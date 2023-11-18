@@ -458,12 +458,12 @@ drivers () {
 	dir 'drivers/ti/gpio'
 #	dir 'drivers/ti/mmc'
 	dir 'drivers/greybus'
-	dir 'drivers/mikrobus'
+#	dir 'drivers/mikrobus'
 	dir 'drivers/serdev'
 	dir 'drivers/iio'
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/bluetooth'
-	dir 'fixes'
+#	dir 'fixes'
 }
 
 fixes () {
