@@ -398,28 +398,12 @@ post_backports () {
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 }
 
-patch_backports (){
+patch_backports () {
 	echo "dir: backports/${subsystem}"
 	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 backports () {
-	backport_tag="v5.12.19"
-
-	subsystem="greybus"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
 	backport_tag="v5.12.19"
 
 	subsystem="wlcore"
@@ -434,23 +418,9 @@ backports () {
 	else
 		patch_backports
 	fi
+}
 
-	backport_tag="1657f11c7ca109b6f7e7bec4e241bf6cbbe2d4b0"
-
-	subsystem="exfat"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/staging/exfat/* ./drivers/staging/exfat/
-		sed -i -e 's:CONFIG_EXFAT_FS:CONFIG_STAGING_EXFAT_FS:g' ./drivers/staging/Makefile
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
+brcmfmac () {
 	backport_tag="v5.4.18"
 
 	subsystem="brcm80211"
@@ -659,6 +629,7 @@ drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
+	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
 	dir 'drivers/pwm'
@@ -675,19 +646,15 @@ drivers () {
 	dir 'drivers/bluetooth'
 }
 
-soc () {
-	dir 'bootup_hacks'
-}
-
 fixes () {
 	dir 'fixes/gcc'
 }
 
 ###
 backports
+#brcmfmac
 #reverts
 drivers
-soc
 fixes
 
 packaging () {
