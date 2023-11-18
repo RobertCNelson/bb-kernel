@@ -398,28 +398,12 @@ post_backports () {
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 }
 
-patch_backports (){
+patch_backports () {
 	echo "dir: backports/${subsystem}"
 	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 backports () {
-	backport_tag="v5.12.19"
-
-	subsystem="greybus"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
 	backport_tag="v5.12.19"
 
 	subsystem="wlcore"
@@ -461,6 +445,7 @@ drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
+	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
 	dir 'drivers/spi'
@@ -481,19 +466,14 @@ drivers () {
 	dir 'fixes'
 }
 
-soc () {
-	dir 'bootup_hacks'
-}
-
 fixes () {
 	dir 'fixes/gcc'
 }
 
 ###
 backports
-reverts
+#reverts
 drivers
-soc
 fixes
 
 packaging () {
