@@ -45,7 +45,7 @@ toolchain="gcc_9_arm"
 #Kernel
 KERNEL_REL=5.6
 KERNEL_TAG=${KERNEL_REL}.19
-kernel_rt=".X-rtY"
+kernel_rt=".19-rt12"
 #Kernel Build
 BUILD=${build_prefix}27.8
 
