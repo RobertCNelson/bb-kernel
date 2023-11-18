@@ -300,7 +300,7 @@ dtb_makefile_append () {
 
 beagleboard_dtbs () {
 	branch="v5.7.x"
-	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
+	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -335,9 +335,9 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
-		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
+		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -351,7 +351,6 @@ beagleboard_dtbs () {
 		number=1
 		cleanup
 	fi
-
 	dir 'soc/ti/beagleboard_dtbs'
 }
 
@@ -398,28 +397,12 @@ post_backports () {
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 }
 
-patch_backports (){
+patch_backports () {
 	echo "dir: backports/${subsystem}"
 	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 backports () {
-	backport_tag="v5.12.19"
-
-	subsystem="greybus"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
 	backport_tag="v5.12.19"
 
 	subsystem="wlcore"
@@ -434,7 +417,9 @@ backports () {
 	else
 		patch_backports
 	fi
+}
 
+brcmfmac () {
 	backport_tag="v5.4.18"
 
 	subsystem="brcm80211"
@@ -635,6 +620,7 @@ drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
+	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
 	dir 'drivers/spi'
@@ -650,19 +636,15 @@ drivers () {
 	dir 'drivers/bluetooth'
 }
 
-soc () {
-	dir 'bootup_hacks'
-}
-
 fixes () {
 	dir 'fixes/gcc'
 }
 
 ###
 backports
-reverts
+#brcmfmac
+#reverts
 drivers
-soc
 fixes
 
 packaging () {
