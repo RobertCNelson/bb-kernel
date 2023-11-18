@@ -147,27 +147,23 @@ bcfserial () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ ! -d ./bcfserial ] ; then
-			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
-			cd ./bcfserial
-				bcfserial_hash=$(git rev-parse HEAD)
-			cd -
-		else
+		if [ -d ./bcfserial ] ; then
 			rm -rf ./bcfserial || true
-			${git_bin} clone https://github.com/statropy/bcfserial --depth=1
-			cd ./wpanusb
-				bcfserial_hash=$(git rev-parse HEAD)
-			cd -
 		fi
+
+		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/bcfserial.git --depth=1
+		cd ./bcfserial
+			bcfserial_hash=$(git rev-parse HEAD)
+		cd -
 
 		cd ./KERNEL/
 
 		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: bcfserial: https://github.com/statropy/bcfserial' -m "https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/bcfserial/
-		echo "BCFSERIAL: https://github.com/statropy/bcfserial/commit/${bcfserial_hash}" > ../patches/git/BCFSERIAL
+		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/external/bcfserial/
+		echo "BCFSERIAL: https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/external/git/BCFSERIAL
 
 		rm -rf ../bcfserial/ || true
 
@@ -175,15 +171,15 @@ bcfserial () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/bcfserial/0001-merge-bcfserial-https-github.com-statropy-bcfserial.patch"
+		${git} "${DIR}/patches/external/bcfserial/0001-merge-bcfserial-https-git.beagleboard.org-beagleconn.patch"
 
-		wdir="bcfserial"
+		wdir="external/bcfserial"
 		number=1
 		cleanup
 
 		exit 2
 	fi
-	dir 'bcfserial'
+	dir 'external/bcfserial'
 }
 
 rt_cleanup () {
