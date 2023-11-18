@@ -403,28 +403,12 @@ post_backports () {
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 }
 
-patch_backports (){
+patch_backports () {
 	echo "dir: backports/${subsystem}"
 	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 backports () {
-	backport_tag="v5.12.19"
-
-	subsystem="greybus"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/drivers/greybus/* ./drivers/greybus/
-		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
-
-		post_backports
-		exit 2
-	else
-		patch_backports
-	fi
-
 	backport_tag="v5.12.19"
 
 	subsystem="wlcore"
@@ -481,6 +465,7 @@ drivers () {
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
+	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
 	dir 'drivers/spi'
@@ -500,23 +485,19 @@ drivers () {
 	dir 'fixes'
 }
 
-soc () {
-	dir 'bootup_hacks'
-}
-
 fixes () {
 	dir 'fixes/gcc'
 }
 
 ###
 backports
-reverts
+#reverts
 omap
 drivers
-soc
 fixes
 
 packaging () {
+	echo "Update: package scripts"
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
 		backport_tag="v5.10.88"
@@ -534,7 +515,6 @@ packaging () {
 			patch_backports
 		fi
 	fi
-
 	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
 }
 
