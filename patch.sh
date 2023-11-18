@@ -194,19 +194,18 @@ rt () {
 
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
+		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
 		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 		rm -f patch-${rt_patch}.patch.xz
 		rm -f localversion-rt
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
-		${git_bin} format-patch -1 -o ../patches/rt/
-		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/git/RT
+		${git_bin} format-patch -1 -o ../patches/external/rt/
+		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
 
 		exit 2
 	fi
-
-	dir 'rt'
+	dir 'external/rt'
 }
 
 wireless_regdb () {
@@ -231,8 +230,8 @@ wireless_regdb () {
 		${git_bin} add -f ./firmware/regulatory.*
 		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
 
-		${git_bin} format-patch -1 -o ../patches/wireless_regdb/
-		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/git/WIRELESS_REGDB
+		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
 
 		rm -rf ../wireless-regdb/ || true
 
@@ -240,14 +239,13 @@ wireless_regdb () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/wireless_regdb/0001-Add-wireless-regdb-regulatory-database-file.patch"
+		${git} "${DIR}/patches/external/wireless_regdb/0001-Add-wireless-regdb-regulatory-database-file.patch"
 
-		wdir="wireless_regdb"
+		wdir="external/wireless_regdb"
 		number=1
 		cleanup
 	fi
-
-	dir 'wireless_regdb'
+	dir 'external/wireless_regdb'
 }
 
 ti_pm_firmware () {
