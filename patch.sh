@@ -107,18 +107,14 @@ wpanusb () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ ! -d ./wpanusb ] ; then
-			${git_bin} clone https://github.com/statropy/wpanusb --depth=1
-			cd ./wpanusb
-				wpanusb_hash=$(git rev-parse HEAD)
-			cd -
-		else
+		if [ -d ./wpanusb ] ; then
 			rm -rf ./wpanusb || true
-			${git_bin} clone https://github.com/statropy/wpanusb --depth=1
-			cd ./wpanusb
-				wpanusb_hash=$(git rev-parse HEAD)
-			cd -
 		fi
+
+		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/wpanusb --depth=1
+		cd ./wpanusb
+			wpanusb_hash=$(git rev-parse HEAD)
+		cd -
 
 		cd ./KERNEL/
 
@@ -126,9 +122,9 @@ wpanusb () {
 		cp -v ../wpanusb/wpanusb.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: wpanusb: https://github.com/statropy/wpanusb' -m "https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/wpanusb/
-		echo "WPANUSB: https://github.com/statropy/wpanusb/commit/${wpanusb_hash}" > ../patches/git/WPANUSB
+		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/external/wpanusb/
+		echo "WPANUSB: https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/external/git/WPANUSB
 
 		rm -rf ../wpanusb/ || true
 
@@ -136,15 +132,15 @@ wpanusb () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/wpanusb/0001-merge-wpanusb-https-github.com-statropy-wpanusb.patch"
+		${git} "${DIR}/patches/external/wpanusb/0001-merge-wpanusb-https-git.beagleboard.org-beagleconnec.patch"
 
-		wdir="wpanusb"
+		wdir="external/wpanusb"
 		number=1
 		cleanup
 
 		exit 2
 	fi
-	dir 'wpanusb'
+	dir 'external/wpanusb'
 }
 
 bcfserial () {
