@@ -481,7 +481,6 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/usb'
 	dir 'drivers/bluetooth'
-	dir 'bootup_hacks'
 }
 
 ###
@@ -489,6 +488,7 @@ backports
 drivers
 
 packaging () {
+	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
 		backport_tag="v5.17.3"
