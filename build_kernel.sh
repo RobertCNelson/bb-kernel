@@ -51,6 +51,7 @@ copy_defconfig () {
 	else
 		make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" rcn-ee_defconfig
 	fi
+	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" olddefconfig
 	cd "${DIR}/" || exit
 }
 
