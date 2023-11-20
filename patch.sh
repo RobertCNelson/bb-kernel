@@ -103,87 +103,6 @@ external_git () {
 	${git_bin} describe
 }
 
-aufs_fail () {
-	echo "aufs failed"
-	exit 2
-}
-
-aufs () {
-	#https://github.com/sfjro/aufs-standalone/tree/aufs5.15.41
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		KERNEL_REL=5.15.41
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs5-kbuild.patch
-		patch -p1 < aufs5-kbuild.patch || aufs_fail
-		rm -rf aufs5-kbuild.patch
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs-kbuild' -s
-
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs5-base.patch
-		patch -p1 < aufs5-base.patch || aufs_fail
-		rm -rf aufs5-base.patch
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs-base' -s
-
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs5-mmap.patch
-		patch -p1 < aufs5-mmap.patch || aufs_fail
-		rm -rf aufs5-mmap.patch
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs-mmap' -s
-
-		wget https://raw.githubusercontent.com/sfjro/aufs-standalone/aufs${KERNEL_REL}/aufs5-standalone.patch
-		patch -p1 < aufs5-standalone.patch || aufs_fail
-		rm -rf aufs5-standalone.patch
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs-standalone' -s
-
-		${git_bin} format-patch -4 -o ../patches/external/aufs/
-
-		cd ../
-		if [ -d ./aufs-standalone ] ; then
-			rm -rf ./aufs-standalone || true
-		fi
-
-		${git_bin} clone -b aufs${KERNEL_REL} https://github.com/sfjro/aufs-standalone --depth=1
-		cd ./aufs-standalone/
-			aufs_hash=$(git rev-parse HEAD)
-		cd -
-
-		cd ./KERNEL/
-		KERNEL_REL=5.15
-
-		cp -v ../aufs-standalone/Documentation/ABI/testing/*aufs ./Documentation/ABI/testing/
-		mkdir -p ./Documentation/filesystems/aufs/
-		cp -rv ../aufs-standalone/Documentation/filesystems/aufs/* ./Documentation/filesystems/aufs/
-		mkdir -p ./fs/aufs/
-		cp -v ../aufs-standalone/fs/aufs/* ./fs/aufs/
-		cp -v ../aufs-standalone/include/uapi/linux/aufs_type.h ./include/uapi/linux/
-
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: aufs' -m "https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" -s
-
-		${git_bin} format-patch -5 -o ../patches/external/aufs/
-		echo "AUFS: https://github.com/sfjro/aufs-standalone/commit/${aufs_hash}" > ../patches/external/git/AUFS
-
-		rm -rf ../aufs-standalone/ || true
-
-		${git_bin} reset --hard HEAD~5
-
-		start_cleanup
-
-		${git} "${DIR}/patches/external/aufs/0001-merge-aufs-kbuild.patch"
-		${git} "${DIR}/patches/external/aufs/0002-merge-aufs-base.patch"
-		${git} "${DIR}/patches/external/aufs/0003-merge-aufs-mmap.patch"
-		${git} "${DIR}/patches/external/aufs/0004-merge-aufs-standalone.patch"
-		${git} "${DIR}/patches/external/aufs/0005-merge-aufs.patch"
-
-		wdir="external/aufs"
-		number=5
-		cleanup
-	fi
-	dir 'external/aufs'
-}
-
 wpanusb () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -439,7 +358,6 @@ local_patch () {
 }
 
 #external_git
-aufs
 wpanusb
 bcfserial
 #rt
@@ -788,7 +706,6 @@ drivers () {
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/mikrobus'
-	dir 'bootup_hacks'
 }
 
 ###
@@ -797,6 +714,7 @@ backports
 drivers
 
 packaging () {
+	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
 		backport_tag="v5.18.19"
