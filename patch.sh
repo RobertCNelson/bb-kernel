@@ -401,7 +401,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.186"
+	backport_tag="v5.10.201"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -415,24 +415,6 @@ backports () {
 	else
 		patch_backports
 		dir 'drivers/ti/uio'
-	fi
-
-	backport_tag="v5.15.120"
-
-	subsystem="iio"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -rv ~/linux-src/include/linux/iio/* ./include/linux/iio/
-		cp -rv ~/linux-src/include/uapi/linux/iio/* ./include/uapi/linux/iio/
-		cp -rv ~/linux-src/drivers/iio/* ./drivers/iio/
-		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
-
-		post_backports
-		exit 2
-	#else
-		patch_backports
 	fi
 
 	backport_tag="v5.19.17"
