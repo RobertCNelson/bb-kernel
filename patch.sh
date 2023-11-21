@@ -319,7 +319,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.194"
+	backport_tag="v5.10.201"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -346,7 +346,6 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	#dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
-#	dir 'ad777x'
 }
 
 ###
