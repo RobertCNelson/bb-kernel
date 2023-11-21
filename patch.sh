@@ -430,9 +430,14 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 }
 
+fixes () {
+	dir 'fixes/gcc/13'
+}
+
 ###
 backports
 drivers
+fixes
 
 packaging () {
 	echo "Update: package scripts"
