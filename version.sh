@@ -8,7 +8,7 @@ build_prefix="-bone-rt-r"
 branch_prefix="am33x-rt-v"
 branch_postfix=""
 
-#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.1-rc1
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.6-rc1
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf
@@ -18,8 +18,8 @@ DEBARCH=armhf
 #toolchain="gcc_9_arm"
 #toolchain="gcc_10_arm"
 #toolchain="gcc_11_arm"
-toolchain="gcc_12_arm"
-#toolchain="gcc_13_arm"
+#toolchain="gcc_12_arm"
+toolchain="gcc_13_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
@@ -43,11 +43,11 @@ toolchain="gcc_12_arm"
 #toolchain="gcc_13_riscv64"
 
 #Kernel
-KERNEL_REL=6.1
-KERNEL_TAG=${KERNEL_REL}.59
-kernel_rt=".59-rt16"
+KERNEL_REL=6.6
+KERNEL_TAG=${KERNEL_REL}
+kernel_rt="-rt15"
 #Kernel Build
-BUILD=${build_prefix}24
+BUILD=${build_prefix}0.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""

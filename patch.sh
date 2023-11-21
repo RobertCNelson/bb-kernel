@@ -103,85 +103,6 @@ external_git () {
 	${git_bin} describe
 }
 
-wpanusb () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ -d ./wpanusb ] ; then
-			rm -rf ./wpanusb || true
-		fi
-
-		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/wpanusb --depth=1
-		cd ./wpanusb
-			wpanusb_hash=$(git rev-parse HEAD)
-		cd -
-
-		cd ./KERNEL/
-
-		cp -v ../wpanusb/wpanusb.h drivers/net/ieee802154/
-		cp -v ../wpanusb/wpanusb.c drivers/net/ieee802154/
-
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/external/wpanusb/
-		echo "WPANUSB: https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/external/git/WPANUSB
-
-		rm -rf ../wpanusb/ || true
-
-		${git_bin} reset --hard HEAD~1
-
-		start_cleanup
-
-		${git} "${DIR}/patches/external/wpanusb/0001-merge-wpanusb-https-git.beagleboard.org-beagleconnec.patch"
-
-		wdir="external/wpanusb"
-		number=1
-		cleanup
-
-		exit 2
-	fi
-	dir 'external/wpanusb'
-}
-
-bcfserial () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ -d ./bcfserial ] ; then
-			rm -rf ./bcfserial || true
-		fi
-
-		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/bcfserial.git --depth=1
-		cd ./bcfserial
-			bcfserial_hash=$(git rev-parse HEAD)
-		cd -
-
-		cd ./KERNEL/
-
-		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
-
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/external/bcfserial/
-		echo "BCFSERIAL: https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/external/git/BCFSERIAL
-
-		rm -rf ../bcfserial/ || true
-
-		${git_bin} reset --hard HEAD~1
-
-		start_cleanup
-
-		${git} "${DIR}/patches/external/bcfserial/0001-merge-bcfserial-https-git.beagleboard.org-beagleconn.patch"
-
-		wdir="external/bcfserial"
-		number=1
-		cleanup
-
-		exit 2
-	fi
-	dir 'external/bcfserial'
-}
-
 rt_cleanup () {
 	echo "rt: needs fixup"
 	exit 2
@@ -295,11 +216,11 @@ cleanup_dts_builds () {
 }
 
 dtb_makefile_append () {
-	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/ti/omap/Makefile
 }
 
 beagleboard_dtbs () {
-	branch="v6.1.x"
+	branch="v6.6.x"
 	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -317,20 +238,18 @@ beagleboard_dtbs () {
 		cd ./KERNEL/
 
 		cleanup_dts_builds
-		rm -rf arch/arm/boot/dts/overlays/ || true
+		rm -rf arch/arm/boot/dts/ti/omap/overlays/ || true
 
-		mkdir -p arch/arm/boot/dts/overlays/
-		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
+		mkdir -p arch/arm/boot/dts/ti/omap/overlays/
+		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/ti/omap/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#Added in v6.2.x
-		device="am335x-sancloud-bbe-extended-wifi.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
+		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -359,12 +278,10 @@ local_patch () {
 }
 
 #external_git
-wpanusb
-bcfserial
 rt
 wireless_regdb
 ti_pm_firmware
-beagleboard_dtbs
+#beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -420,16 +337,7 @@ backports () {
 }
 
 drivers () {
-	#https://github.com/raspberrypi/linux/branches
-	#exit 2
-	dir 'RPi'
 	dir 'boris'
-	dir 'drivers/ar1021_i2c'
-	dir 'drivers/ti/serial'
-	dir 'drivers/ti/tsc'
-	dir 'drivers/ti/gpio'
-	dir 'drivers/fb_ssd1306'
-#	dir 'ad777x'
 }
 
 ###
@@ -440,7 +348,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.3.13"
+		backport_tag="v6.6.2"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
