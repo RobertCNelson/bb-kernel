@@ -445,7 +445,6 @@ drivers () {
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-	dir 'bootup_hacks'
 }
 
 ###
@@ -453,6 +452,7 @@ backports
 drivers
 
 packaging () {
+	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
 		backport_tag="v6.0.19"
