@@ -213,6 +213,12 @@ cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/.*cmd || true
 	rm -rf arch/arm/boot/dts/.*tmp || true
 	rm -rf arch/arm/boot/dts/*dtb || true
+	rm -rf arch/arm/boot/dts/*dtbo || true
+	rm -rf arch/arm64/boot/dts/ti/modules.order || true
+	rm -rf arch/arm64/boot/dts/ti/.*cmd || true
+	rm -rf arch/arm64/boot/dts/ti/.*tmp || true
+	rm -rf arch/arm64/boot/dts/ti/*dtb || true
+	rm -rf arch/arm64/boot/dts/ti/*dtbo || true
 }
 
 dtb_makefile_append () {
@@ -239,22 +245,20 @@ beagleboard_dtbs () {
 
 		cleanup_dts_builds
 		rm -rf arch/arm/boot/dts/ti/omap/overlays/ || true
+		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
 
-		mkdir -p arch/arm/boot/dts/ti/omap/overlays/
-		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/ti/omap/
+		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/ti/omap/
+		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/ti/omap/
+		cp -v ../${work_dir}/src/arm64/ti/*.dts arch/arm64/boot/dts/ti/
+		cp -v ../${work_dir}/src/arm64/ti/*.dtsi arch/arm64/boot/dts/ti/
+		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
-
-		#device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
-
-		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
-
 		${git_bin} add -f arch/arm/boot/dts/
+		${git_bin} add -f arch/arm64/boot/dts/
 		${git_bin} add -f include/dt-bindings/
 		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
+		${git_bin} format-patch -1 -o ../patches/external/bbb.io/
 		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
@@ -263,13 +267,13 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
+		${git} "${DIR}/patches/external/bbb.io/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
-		wdir="soc/ti/beagleboard_dtbs"
+		wdir="external/bbb.io"
 		number=1
 		cleanup
 	fi
-	dir 'soc/ti/beagleboard_dtbs'
+	dir 'external/bbb.io'
 }
 
 local_patch () {
@@ -281,7 +285,7 @@ local_patch () {
 rt
 wireless_regdb
 ti_pm_firmware
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -334,6 +338,8 @@ backports () {
 		patch_backports
 		dir 'drivers/ti/uio'
 	fi
+
+	dir 'greybus/gb-beagleplay'
 }
 
 drivers () {
