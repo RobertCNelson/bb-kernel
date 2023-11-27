@@ -247,10 +247,11 @@ beagleboard_dtbs () {
 		rm -rf arch/arm/boot/dts/ti/omap/overlays/ || true
 		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
 
-		mkdir -p arch/arm/boot/dts/ti/omap/overlays/
-		mkdir -p arch/arm64/boot/dts/ti/overlays/
-		cp -vr ../${work_dir}/src/arm/ti/omap/* arch/arm/boot/dts/ti/omap/
-		cp -vr ../${work_dir}/src/arm64/ti/* arch/arm64/boot/dts/ti/
+		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/ti/omap/
+		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/ti/omap/
+		cp -v ../${work_dir}/src/arm64/ti/*.dts arch/arm64/boot/dts/ti/
+		cp -v ../${work_dir}/src/arm64/ti/*.dtsi arch/arm64/boot/dts/ti/
+		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		${git_bin} add -f arch/arm/boot/dts/
@@ -295,7 +296,7 @@ pre_backports () {
 	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
 	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
-		${git_bin} checkout ${backport_tag} -b tmp
+		${git_bin} checkout ${backport_tag} -f
 	fi
 	cd -
 }
@@ -303,7 +304,7 @@ pre_backports () {
 post_backports () {
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		cd ~/linux-src/
-		${git_bin} checkout master -f ; ${git_bin} branch -D tmp
+		${git_bin} checkout master -f
 		cd -
 	fi
 
