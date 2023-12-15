@@ -546,7 +546,7 @@ debian_regs () {
 	if [ "$(which lsb_release)" ] && [ ! "${stop_pkg_search}" ] ; then
 		deb_arch=$(LC_ALL=C dpkg --print-architecture)
 
-		pkg="libncurses5-dev:${deb_arch}"
+		pkg="libncurses-dev:${deb_arch}"
 		check_dpkg
 		pkg="libssl-dev:${deb_arch}"
 		check_dpkg
@@ -590,8 +590,8 @@ debian_regs () {
 	if [ "${deb_pkgs}" ] ; then
 		echo "Debian/Ubuntu/Mint: missing dependencies, please install these packages via:"
 		echo "-----------------------------"
-		echo "sudo apt-get update"
-		echo "sudo apt-get install ${deb_pkgs}"
+		echo "sudo apt update"
+		echo "sudo apt install ${deb_pkgs}"
 		echo "-----------------------------"
 		return 1
 	fi
