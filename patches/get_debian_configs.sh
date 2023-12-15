@@ -1,9 +1,11 @@
 #!/bin/bash
 
-abi="6.4.0-0"
-kernel="6.4.1-1~exp1"
+#
+abi="6.5.0-5"
+kernel="6.5.13-1"
+#
 
-debian_site="http://ftp.de.debian.org/debian/pool/main/l/linux"
+debian_site="http://ftp.us.debian.org/debian/pool/main/l/linux"
 incoming_site="http://incoming.debian.org/debian-buildd/pool/main/l/linux"
 
 dl_deb () {
