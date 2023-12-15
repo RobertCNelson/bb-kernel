@@ -296,7 +296,7 @@ pre_backports () {
 	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
 	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
-		${git_bin} checkout ${backport_tag} -b tmp
+		${git_bin} checkout ${backport_tag} -f
 	fi
 	cd -
 }
@@ -304,7 +304,7 @@ pre_backports () {
 post_backports () {
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		cd ~/linux-src/
-		${git_bin} checkout master -f ; ${git_bin} branch -D tmp
+		${git_bin} checkout master -f
 		cd -
 	fi
 
@@ -323,7 +323,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.201"
+	backport_tag="v5.10.204"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -354,7 +354,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.2"
+		backport_tag="v6.6.7"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
