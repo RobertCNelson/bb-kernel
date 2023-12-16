@@ -294,7 +294,7 @@ cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/*dtb || true
 }
 
-dtb_makefile_append () {
+arm_dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
 
@@ -316,26 +316,34 @@ beagleboard_dtbs () {
 
 		cd ./KERNEL/
 
-		cleanup_dts_builds
+		#cleanup_dts_builds
 		rm -rf arch/arm/boot/dts/overlays/ || true
+		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
 
-		mkdir -p arch/arm/boot/dts/overlays/
-		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
+		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/
+		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/
+		cp -v ../${work_dir}/src/arm64/ti/*.dts arch/arm64/boot/dts/ti/
+		cp -v ../${work_dir}/src/arm64/ti/*.dtsi arch/arm64/boot/dts/ti/
+		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
+		mkdir -p arch/arm/boot/dts/overlays/
+		cp -vr ../${work_dir}/src/arm/overlays/* arch/arm/boot/dts/overlays/
+
 		#Added in v6.2.x
-		device="am335x-sancloud-bbe-extended-wifi.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		device="am335x-sancloud-bbe-extended-wifi.dtb" ; arm_dtb_makefile_append
+		device="am335x-bonegreen-gateway.dtb" ; arm_dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 
-		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot-univ.dtb" ; arm_dtb_makefile_append
+		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; arm_dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
+		${git_bin} add -f arch/arm64/boot/dts/
 		${git_bin} add -f include/dt-bindings/
 		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
+		${git_bin} format-patch -1 -o ../patches/external/bbb.io/
 		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
@@ -344,13 +352,13 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
+		${git} "${DIR}/patches/external/bbb.io/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
-		wdir="soc/ti/beagleboard_dtbs"
+		wdir="external/bbb.io"
 		number=1
 		cleanup
 	fi
-	dir 'soc/ti/beagleboard_dtbs'
+	dir 'external/bbb.io'
 }
 
 local_patch () {
@@ -375,7 +383,7 @@ pre_backports () {
 	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
 	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
-		${git_bin} checkout ${backport_tag} -b tmp
+		${git_bin} checkout ${backport_tag} -f
 	fi
 	cd -
 }
@@ -383,7 +391,7 @@ pre_backports () {
 post_backports () {
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		cd ~/linux-src/
-		${git_bin} checkout master -f ; ${git_bin} branch -D tmp
+		${git_bin} checkout master -f
 		cd -
 	fi
 
@@ -402,7 +410,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.201"
+	backport_tag="v5.10.204"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -429,7 +437,6 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
-#	dir 'ad777x'
 }
 
 ###
@@ -440,7 +447,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.3.13"
+		backport_tag="v6.6.7"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
