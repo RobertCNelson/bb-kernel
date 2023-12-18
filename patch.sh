@@ -221,8 +221,12 @@ cleanup_dts_builds () {
 	rm -rf arch/arm64/boot/dts/ti/*dtbo || true
 }
 
-dtb_makefile_append () {
-	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/ti/omap/Makefile
+arm_dtb_makefile_append () {
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
+}
+
+k3_dtb_makefile_append () {
+	echo "dtb-\$(CONFIG_ARCH_K3) += $device" >> arch/arm64/boot/dts/ti/Makefile
 }
 
 beagleboard_dtbs () {
@@ -243,7 +247,7 @@ beagleboard_dtbs () {
 
 		cd ./KERNEL/
 
-		cleanup_dts_builds
+		#cleanup_dts_builds
 		rm -rf arch/arm/boot/dts/ti/omap/overlays/ || true
 		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
 
@@ -323,7 +327,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.203"
+	backport_tag="v5.10.204"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -352,7 +356,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.6"
+		backport_tag="v6.6.7"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
