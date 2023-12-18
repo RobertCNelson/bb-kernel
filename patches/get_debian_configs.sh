@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#https://packages.debian.org/source/experimental/linux
+
 #
 abi="6.6"
 kernel="6.6.4-1~exp1"
