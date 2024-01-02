@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #
-abi="6.6"
-kernel="6.6.4-1~exp1"
+abi="6.6.8"
+kernel="6.6.8-1"
 #
 
 debian_site="http://ftp.us.debian.org/debian/pool/main/l/linux"
