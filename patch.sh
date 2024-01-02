@@ -209,11 +209,37 @@ ti_pm_firmware () {
 }
 
 cleanup_dts_builds () {
-	rm -rf arch/arm/boot/dts/ti/omap/*.orig || true
+	rm -rf arch/arm/boot/dts/modules.order || true
+	rm -rf arch/arm/boot/dts/.*cmd || true
+	rm -rf arch/arm/boot/dts/.*tmp || true
+	rm -rf arch/arm/boot/dts/*dtb || true
+	rm -rf arch/arm/boot/dts/*dtbo || true
+	rm -rf arch/arm64/boot/dts/ti/modules.order || true
+	rm -rf arch/arm64/boot/dts/ti/.*cmd || true
+	rm -rf arch/arm64/boot/dts/ti/.*tmp || true
+	rm -rf arch/arm64/boot/dts/ti/*dtb || true
+	rm -rf arch/arm64/boot/dts/ti/*dtbo || true
+}
+
+omap_makefile_patch_of_overlays () {
+	cat arch/arm/boot/dts/ti/omap/Makefile  | grep -v '#'> arch/arm/boot/dts/ti/omap/Makefile.bak
+	echo "# SPDX-License-Identifier: GPL-2.0" > arch/arm/boot/dts/ti/omap/Makefile
+	echo "" >> arch/arm/boot/dts/ti/omap/Makefile
+	echo "ifeq (\$(CONFIG_OF_OVERLAY),y)" >> arch/arm/boot/dts/ti/omap/Makefile
+	echo "DTC_FLAGS += -@" >> arch/arm/boot/dts/ti/omap/Makefile
+	echo "endif" >> arch/arm/boot/dts/ti/omap/Makefile
+	echo "" >> arch/arm/boot/dts/ti/omap/Makefile
+	cat arch/arm/boot/dts/ti/omap/Makefile.bak >> arch/arm/boot/dts/ti/omap/Makefile
+	rm -rf arch/arm/boot/dts/ti/omap/Makefile.bak
 }
 
 dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/ti/omap/Makefile
+}
+
+dtbo_makefile_append () {
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device'.dtbo \\:g' arch/arm/boot/dts/ti/omap/Makefile
+	cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/ti/omap/${device}.dtso
 }
 
 beagleboard_dtbs () {
@@ -237,6 +263,7 @@ beagleboard_dtbs () {
 		cleanup_dts_builds
 		rm -rf arch/arm/boot/dts/ti/omap/overlays/ || true
 		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
+		omap_makefile_patch_of_overlays
 
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/ti/omap/
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/ti/omap/
@@ -245,8 +272,8 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		mkdir -p arch/arm/boot/dts/ti/omap/overlays/
-		cp -vr ../${work_dir}/src/arm/overlays/* arch/arm/boot/dts/ti/omap/overlays/
+		device="AM335X-PRU-UIO-00A0" ; dtbo_makefile_append
+		device="BBORG_FAN-A000" ; dtbo_makefile_append
 
 		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
@@ -324,7 +351,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.204"
+	backport_tag="v5.10.205"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -339,12 +366,11 @@ backports () {
 		patch_backports
 		dir 'drivers/ti/uio'
 	fi
+
+	dir 'greybus/gb-beagleplay'
 }
 
 drivers () {
-	#https://github.com/raspberrypi/linux/branches
-	#exit 2
-	dir 'RPi'
 	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
@@ -361,7 +387,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.7"
+		backport_tag="v6.6.9"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
