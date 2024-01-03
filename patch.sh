@@ -213,15 +213,38 @@ cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/.*cmd || true
 	rm -rf arch/arm/boot/dts/.*tmp || true
 	rm -rf arch/arm/boot/dts/*dtb || true
+	rm -rf arch/arm/boot/dts/*dtbo || true
+	rm -rf arch/arm64/boot/dts/ti/modules.order || true
+	rm -rf arch/arm64/boot/dts/ti/.*cmd || true
+	rm -rf arch/arm64/boot/dts/ti/.*tmp || true
+	rm -rf arch/arm64/boot/dts/ti/*dtb || true
+	rm -rf arch/arm64/boot/dts/ti/*dtbo || true
+}
+
+arm_makefile_patch_of_overlays () {
+	cat arch/arm/boot/dts/Makefile  | grep -v '#'> arch/arm/boot/dts/Makefile.bak
+	echo "# SPDX-License-Identifier: GPL-2.0" > arch/arm/boot/dts/Makefile
+	echo "" >> arch/arm/boot/dts/Makefile
+	echo "ifeq (\$(CONFIG_OF_OVERLAY),y)" >> arch/arm/boot/dts/Makefile
+	echo "DTC_FLAGS += -@" >> arch/arm/boot/dts/Makefile
+	echo "endif" >> arch/arm/boot/dts/Makefile
+	echo "" >> arch/arm/boot/dts/Makefile
+	cat arch/arm/boot/dts/Makefile.bak >> arch/arm/boot/dts/Makefile
+	rm -rf arch/arm/boot/dts/Makefile.bak
 }
 
 arm_dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
 
+arm_dtbo_makefile_append () {
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device'.dtbo \\:g' arch/arm/boot/dts/Makefile
+	cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/${device}.dtso
+}
+
 beagleboard_dtbs () {
 	branch="v6.4.x"
-	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
+	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -237,9 +260,10 @@ beagleboard_dtbs () {
 
 		cd ./KERNEL/
 
-		#cleanup_dts_builds
+		cleanup_dts_builds
 		rm -rf arch/arm/boot/dts/overlays/ || true
 		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
+		arm_makefile_patch_of_overlays
 
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/
@@ -248,12 +272,12 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		mkdir -p arch/arm/boot/dts/overlays/
-		cp -vr ../${work_dir}/src/arm/overlays/* arch/arm/boot/dts/overlays/
+		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
 
 		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 
 		#device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
 		#device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
@@ -261,9 +285,9 @@ beagleboard_dtbs () {
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/external/bbb.io/
-		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
+		echo "BBDTBS: https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -345,9 +369,6 @@ backports () {
 }
 
 drivers () {
-	#https://github.com/raspberrypi/linux/branches
-	#exit 2
-	dir 'RPi'
 	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
