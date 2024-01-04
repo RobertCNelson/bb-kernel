@@ -292,15 +292,38 @@ cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/.*cmd || true
 	rm -rf arch/arm/boot/dts/.*tmp || true
 	rm -rf arch/arm/boot/dts/*dtb || true
+	rm -rf arch/arm/boot/dts/*dtbo || true
+	rm -rf arch/arm64/boot/dts/ti/modules.order || true
+	rm -rf arch/arm64/boot/dts/ti/.*cmd || true
+	rm -rf arch/arm64/boot/dts/ti/.*tmp || true
+	rm -rf arch/arm64/boot/dts/ti/*dtb || true
+	rm -rf arch/arm64/boot/dts/ti/*dtbo || true
+}
+
+arm_makefile_patch_of_overlays () {
+	cat arch/arm/boot/dts/Makefile  | grep -v '#'> arch/arm/boot/dts/Makefile.bak
+	echo "# SPDX-License-Identifier: GPL-2.0" > arch/arm/boot/dts/Makefile
+	echo "" >> arch/arm/boot/dts/Makefile
+	echo "ifeq (\$(CONFIG_OF_OVERLAY),y)" >> arch/arm/boot/dts/Makefile
+	echo "DTC_FLAGS += -@" >> arch/arm/boot/dts/Makefile
+	echo "endif" >> arch/arm/boot/dts/Makefile
+	echo "" >> arch/arm/boot/dts/Makefile
+	cat arch/arm/boot/dts/Makefile.bak >> arch/arm/boot/dts/Makefile
+	rm -rf arch/arm/boot/dts/Makefile.bak
 }
 
 arm_dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
 }
 
+arm_dtbo_makefile_append () {
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device'.dtbo \\:g' arch/arm/boot/dts/Makefile
+	cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/${device}.dtso
+}
+
 beagleboard_dtbs () {
 	branch="v6.1.x"
-	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
+	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -316,9 +339,10 @@ beagleboard_dtbs () {
 
 		cd ./KERNEL/
 
-		#cleanup_dts_builds
+		cleanup_dts_builds
 		rm -rf arch/arm/boot/dts/overlays/ || true
 		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
+		arm_makefile_patch_of_overlays
 
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/
@@ -327,10 +351,39 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		mkdir -p arch/arm/boot/dts/overlays/
-		cp -vr ../${work_dir}/src/arm/overlays/* arch/arm/boot/dts/overlays/
+		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-4D5R-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
+		device="BB-CAPE-DISP-CT4-00A0" ; arm_dtbo_makefile_append
+		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C1-MCP7940X-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C1-RTC-DS3231" ; arm_dtbo_makefile_append
+		device="BB-I2C1-RTC-PCF8563" ; arm_dtbo_makefile_append
+		device="BB-I2C2-BME680" ; arm_dtbo_makefile_append
+		device="BB-I2C2-MPU6050" ; arm_dtbo_makefile_append
+		device="BB-LCD-ADAFRUIT-24-SPI1-00A0" ; arm_dtbo_makefile_append
+		device="BB-NHDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
+		device="BB-SPIDEV0-00A0" ; arm_dtbo_makefile_append
+		device="BB-SPIDEV1-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART4-00A0" ; arm_dtbo_makefile_append
+		device="BB-W1-P9.12-00A0" ; arm_dtbo_makefile_append
+		device="BBORG_COMMS-00A2" ; arm_dtbo_makefile_append
+		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
+		device="BBORG_RELAY-00A2" ; arm_dtbo_makefile_append
+		device="BONE-ADC" ; arm_dtbo_makefile_append
+		device="M-BB-BBG-00A0" ; arm_dtbo_makefile_append
+		device="M-BB-BBGG-00A0" ; arm_dtbo_makefile_append
+		device="PB-MIKROBUS-0" ; arm_dtbo_makefile_append
+		device="PB-MIKROBUS-1" ; arm_dtbo_makefile_append
 
-		#Added in v6.2.x
 		device="am335x-sancloud-bbe-extended-wifi.dtb" ; arm_dtb_makefile_append
 		device="am335x-bonegreen-gateway.dtb" ; arm_dtb_makefile_append
 
@@ -342,9 +395,9 @@ beagleboard_dtbs () {
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/external/bbb.io/
-		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
+		echo "BBDTBS: https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -374,6 +427,10 @@ wireless_regdb
 ti_pm_firmware
 beagleboard_dtbs
 #local_patch
+
+dtc_overlays () {
+	dir 'dtc_overlays'
+}
 
 pre_backports () {
 	echo "dir: backports/${subsystem}"
@@ -410,7 +467,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.204"
+	backport_tag="v5.10.205"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -428,9 +485,6 @@ backports () {
 }
 
 drivers () {
-	#https://github.com/raspberrypi/linux/branches
-	#exit 2
-	dir 'RPi'
 	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
@@ -440,6 +494,7 @@ drivers () {
 }
 
 ###
+dtc_overlays
 backports
 drivers
 
@@ -447,7 +502,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.7"
+		backport_tag="v6.6.9"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
