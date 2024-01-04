@@ -273,6 +273,8 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
 
 		#device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
