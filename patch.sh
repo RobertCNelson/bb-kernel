@@ -428,6 +428,10 @@ ti_pm_firmware
 beagleboard_dtbs
 #local_patch
 
+dtc_overlays () {
+	dir 'dtc_overlays'
+}
+
 pre_backports () {
 	echo "dir: backports/${subsystem}"
 
@@ -493,6 +497,7 @@ drivers () {
 }
 
 ###
+dtc_overlays
 backports
 drivers
 
