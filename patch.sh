@@ -182,6 +182,47 @@ bcfserial () {
 	dir 'external/bcfserial'
 }
 
+ksmbd () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ -d ./ksmbd ] ; then
+			rm -rf ./ksmbd || true
+		fi
+
+		${git_bin} clone https://github.com/cifsd-team/ksmbd --depth=1
+		cd ./ksmbd
+			ksmbd_hash=$(git rev-parse HEAD)
+			rm -rf .git || true
+		cd -
+
+		cd ./KERNEL/
+
+		mkdir -p ./fs/ksmbd/
+		rsync -av --delete ../ksmbd/* fs/ksmbd/
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: ksmbd: https://github.com/cifsd-team/ksmbd' -m "https://github.com/cifsd-team/ksmbd/commit/${ksmbd_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/external/ksmbd/
+		echo "KSMBD: https://github.com/cifsd-team/ksmbd/commit/${ksmbd_hash}" > ../patches/external/git/KSMBD
+
+		rm -rf ../ksmbd/ || true
+
+		${git_bin} reset --hard HEAD~1
+
+		start_cleanup
+
+		${git} "${DIR}/patches/external/ksmbd/0001-merge-ksmbd-https-github.com-cifsd-team-ksmbd.patch"
+
+		wdir="external/ksmbd"
+		number=1
+		cleanup
+
+		exit 2
+	fi
+	dir 'external/ksmbd'
+}
+
 rt_cleanup () {
 	echo "rt: needs fixup"
 	exit 2
@@ -217,7 +258,7 @@ wireless_regdb () {
 			rm -rf ./wireless-regdb || true
 		fi
 
-		${git_bin} clone git://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
+		${git_bin} clone https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
 		cd ./wireless-regdb
 			wireless_regdb_hash=$(git rev-parse HEAD)
 		cd -
@@ -321,6 +362,10 @@ arm_dtbo_makefile_append () {
 	cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/${device}.dtso
 }
 
+k3_dtb_makefile_append () {
+	echo "dtb-\$(CONFIG_ARCH_K3) += $device" >> arch/arm64/boot/dts/ti/Makefile
+}
+
 beagleboard_dtbs () {
 	branch="v6.1.x"
 	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
@@ -352,10 +397,12 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="AM57XX-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-4D4C-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-4D5R-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
@@ -389,9 +436,6 @@ beagleboard_dtbs () {
 
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 
-		device="am335x-boneblack-uboot-univ.dtb" ; arm_dtb_makefile_append
-		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; arm_dtb_makefile_append
-
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -422,6 +466,7 @@ local_patch () {
 #external_git
 wpanusb
 bcfserial
+ksmbd
 rt
 wireless_regdb
 ti_pm_firmware
@@ -461,13 +506,39 @@ post_backports () {
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 }
 
+pre_rpibackports () {
+	echo "dir: backports/${subsystem}"
+
+	cd ~/linux-rpi/
+	${git_bin} fetch --tags
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		${git_bin} checkout ${backport_tag} -f
+	fi
+	cd -
+}
+
+post_rpibackports () {
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		cd ~/linux-rpi/
+		${git_bin} checkout master -f
+		cd -
+	fi
+
+	${git_bin} add .
+	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
+		mkdir -p ../patches/backports/${subsystem}/
+	fi
+	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
+}
+
 patch_backports () {
 	echo "dir: backports/${subsystem}"
 	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 backports () {
-	backport_tag="v5.10.205"
+	backport_tag="v5.10.206"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -481,6 +552,21 @@ backports () {
 	else
 		patch_backports
 		dir 'drivers/ti/uio'
+	fi
+
+	backport_tag="rpi-6.1.y"
+
+	subsystem="edt-ft5x06"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_rpibackports
+
+		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
+
+		post_rpibackports
+		exit 2
+	else
+		patch_backports
 	fi
 }
 
@@ -502,7 +588,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.9"
+		backport_tag="v6.6.10"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
