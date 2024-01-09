@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#https://packages.debian.org/source/experimental/linux
-
 #
-abi="6.6"
-kernel="6.6.4-1~exp1"
+#https://packages.debian.org/source/sid/linux
+#
+abi="6.6.9"
+kernel="6.6.9-1"
 #
 
 debian_site="http://ftp.us.debian.org/debian/pool/main/l/linux"

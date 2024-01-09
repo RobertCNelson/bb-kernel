@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2023 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2024 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -221,8 +221,25 @@ cleanup_dts_builds () {
 	rm -rf arch/arm64/boot/dts/ti/*dtbo || true
 }
 
+omap_makefile_patch_of_overlays () {
+	cat arch/arm/boot/dts/ti/omap/Makefile  | grep -v '#'> arch/arm/boot/dts/ti/omap/Makefile.bak
+	echo "# SPDX-License-Identifier: GPL-2.0" > arch/arm/boot/dts/ti/omap/Makefile
+	echo "" >> arch/arm/boot/dts/ti/omap/Makefile
+	echo "ifeq (\$(CONFIG_OF_OVERLAY),y)" >> arch/arm/boot/dts/ti/omap/Makefile
+	echo "DTC_FLAGS += -@" >> arch/arm/boot/dts/ti/omap/Makefile
+	echo "endif" >> arch/arm/boot/dts/ti/omap/Makefile
+	echo "" >> arch/arm/boot/dts/ti/omap/Makefile
+	cat arch/arm/boot/dts/ti/omap/Makefile.bak >> arch/arm/boot/dts/ti/omap/Makefile
+	rm -rf arch/arm/boot/dts/ti/omap/Makefile.bak
+}
+
 arm_dtb_makefile_append () {
-	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/ti/omap/Makefile
+}
+
+arm_dtbo_makefile_append () {
+	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device'.dtbo \\:g' arch/arm/boot/dts/ti/omap/Makefile
+	cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/ti/omap/${device}.dtso
 }
 
 k3_dtb_makefile_append () {
@@ -231,7 +248,7 @@ k3_dtb_makefile_append () {
 
 beagleboard_dtbs () {
 	branch="v6.7.x"
-	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
+	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -247,9 +264,10 @@ beagleboard_dtbs () {
 
 		cd ./KERNEL/
 
-		#cleanup_dts_builds
+		cleanup_dts_builds
 		rm -rf arch/arm/boot/dts/ti/omap/overlays/ || true
 		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
+		omap_makefile_patch_of_overlays
 
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/ti/omap/
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/ti/omap/
@@ -258,12 +276,14 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
+		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
+
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/external/bbb.io/
-		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
+		echo "BBDTBS: https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -321,13 +341,39 @@ post_backports () {
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 }
 
+pre_rpibackports () {
+	echo "dir: backports/${subsystem}"
+
+	cd ~/linux-rpi/
+	${git_bin} fetch --tags
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		${git_bin} checkout ${backport_tag} -f
+	fi
+	cd -
+}
+
+post_rpibackports () {
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		cd ~/linux-rpi/
+		${git_bin} checkout master -f
+		cd -
+	fi
+
+	${git_bin} add .
+	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
+		mkdir -p ../patches/backports/${subsystem}/
+	fi
+	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
+}
+
 patch_backports () {
 	echo "dir: backports/${subsystem}"
 	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 backports () {
-	backport_tag="v5.10.205"
+	backport_tag="v5.10.206"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -341,6 +387,21 @@ backports () {
 	else
 		patch_backports
 		dir 'drivers/ti/uio'
+	fi
+
+	backport_tag="rpi-6.7.y"
+
+	subsystem="edt-ft5x06"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_rpibackports
+
+		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
+
+		post_rpibackports
+		exit 2
+	else
+		patch_backports
 	fi
 }
 
@@ -356,7 +417,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.9"
+		backport_tag="v6.7"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
