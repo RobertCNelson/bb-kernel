@@ -18,10 +18,6 @@ cat_files () {
 		cat ./patches/external/git/WIRELESS_REGDB >> ${wfile}
 	fi
 
-	if [ -f ./patches/external/git/KSMBD ] ; then
-		cat ./patches/external/git/KSMBD >> ${wfile}
-	fi
-
 	if [ -f ./patches/external/git/TI_AMX3_CM3 ] ; then
 		cat ./patches/external/git/TI_AMX3_CM3 >> ${wfile}
 	fi
