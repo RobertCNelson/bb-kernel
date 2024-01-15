@@ -276,6 +276,17 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
+		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="AM57XX-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
+
+		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
+
+		device="BBORG_COMMS-00A2" ; arm_dtbo_makefile_append
+		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
+
+		device="BONE-ADC" ; arm_dtbo_makefile_append
+
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
