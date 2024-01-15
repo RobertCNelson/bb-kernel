@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2023 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2024 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -111,7 +111,7 @@ wpanusb () {
 			rm -rf ./wpanusb || true
 		fi
 
-		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/wpanusb --depth=1
+		${git_bin} clone https://openbeagle.org/beagleconnect/linux/wpanusb --depth=1
 		cd ./wpanusb
 			wpanusb_hash=$(git rev-parse HEAD)
 		cd -
@@ -122,9 +122,9 @@ wpanusb () {
 		cp -v ../wpanusb/wpanusb.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
+		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://openbeagle.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/external/wpanusb/
-		echo "WPANUSB: https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/external/git/WPANUSB
+		echo "WPANUSB: https://openbeagle.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/external/git/WPANUSB
 
 		rm -rf ../wpanusb/ || true
 
@@ -151,7 +151,7 @@ bcfserial () {
 			rm -rf ./bcfserial || true
 		fi
 
-		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/bcfserial.git --depth=1
+		${git_bin} clone https://openbeagle.org/beagleconnect/linux/bcfserial.git --depth=1
 		cd ./bcfserial
 			bcfserial_hash=$(git rev-parse HEAD)
 		cd -
@@ -161,9 +161,9 @@ bcfserial () {
 		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
+		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://openbeagle.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/external/bcfserial/
-		echo "BCFSERIAL: https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/external/git/BCFSERIAL
+		echo "BCFSERIAL: https://openbeagle.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/external/git/BCFSERIAL
 
 		rm -rf ../bcfserial/ || true
 
@@ -180,47 +180,6 @@ bcfserial () {
 		exit 2
 	fi
 	dir 'external/bcfserial'
-}
-
-ksmbd () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ -d ./ksmbd ] ; then
-			rm -rf ./ksmbd || true
-		fi
-
-		${git_bin} clone https://github.com/cifsd-team/ksmbd --depth=1
-		cd ./ksmbd
-			ksmbd_hash=$(git rev-parse HEAD)
-			rm -rf .git || true
-		cd -
-
-		cd ./KERNEL/
-
-		mkdir -p ./fs/ksmbd/
-		rsync -av --delete ../ksmbd/* fs/ksmbd/
-
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: ksmbd: https://github.com/cifsd-team/ksmbd' -m "https://github.com/cifsd-team/ksmbd/commit/${ksmbd_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/external/ksmbd/
-		echo "KSMBD: https://github.com/cifsd-team/ksmbd/commit/${ksmbd_hash}" > ../patches/external/git/KSMBD
-
-		rm -rf ../ksmbd/ || true
-
-		${git_bin} reset --hard HEAD~1
-
-		start_cleanup
-
-		${git} "${DIR}/patches/external/ksmbd/0001-merge-ksmbd-https-github.com-cifsd-team-ksmbd.patch"
-
-		wdir="external/ksmbd"
-		number=1
-		cleanup
-
-		exit 2
-	fi
-	dir 'external/ksmbd'
 }
 
 rt_cleanup () {
@@ -431,10 +390,15 @@ beagleboard_dtbs () {
 		device="PB-MIKROBUS-0" ; arm_dtbo_makefile_append
 		device="PB-MIKROBUS-1" ; arm_dtbo_makefile_append
 
-		device="am335x-sancloud-bbe-extended-wifi.dtb" ; arm_dtb_makefile_append
-		device="am335x-bonegreen-gateway.dtb" ; arm_dtb_makefile_append
-
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
+
+#		device="am335x-sancloud-bbe-uboot.dtb" ; arm_dtb_makefile_append
+#		device="am335x-sancloud-bbe-lite-uboot.dtb" ; arm_dtb_makefile_append
+#		device="am335x-sancloud-bbe-extended-wifi-uboot.dtb" ; arm_dtb_makefile_append
+
+		#device="k3-am625-beagleplay-cc33xx.dtb" ; k3_dtb_makefile_append
+		#device="k3-am625-pocketbeagle2.dtb" ; k3_dtb_makefile_append
+		#device="k3-j721e-beagleboneai64-no-shared-mem.dtb" ; k3_dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
@@ -466,7 +430,6 @@ local_patch () {
 #external_git
 wpanusb
 bcfserial
-ksmbd
 rt
 wireless_regdb
 ti_pm_firmware
@@ -538,7 +501,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.206"
+	backport_tag="v5.10.207"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -575,7 +538,7 @@ drivers () {
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
-	dir 'drivers/ti/gpio'
+	#dir 'drivers/ti/gpio'
 	dir 'drivers/fb_ssd1306'
 }
 
@@ -588,7 +551,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.10"
+		backport_tag="v6.6.11"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
