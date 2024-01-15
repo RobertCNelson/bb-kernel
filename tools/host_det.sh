@@ -447,6 +447,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="jammy"
 			;;
+		virginia)
+			#21.3
+			#http://packages.linuxmint.com/index.php
+			deb_distro="jammy"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix

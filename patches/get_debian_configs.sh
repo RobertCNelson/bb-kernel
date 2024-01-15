@@ -1,8 +1,7 @@
 #!/bin/bash
 
 #
-#https://packages.debian.org/source/bookworm/linux
-#
+#https://packages.debian.org/source/trixie/linux
 #
 abi="6.5.0-5"
 kernel="6.5.13-1"
