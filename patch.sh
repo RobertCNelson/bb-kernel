@@ -418,6 +418,7 @@ backports () {
 
 drivers () {
 	dir 'boris'
+	dir 'drivers/ti/gpio'
 }
 
 ###
