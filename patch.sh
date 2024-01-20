@@ -279,6 +279,9 @@ beagleboard_dtbs () {
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="AM57XX-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
 
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 
@@ -384,7 +387,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.206"
+	backport_tag="v5.10.208"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -430,7 +433,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.11"
+		backport_tag="v6.6.12"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
