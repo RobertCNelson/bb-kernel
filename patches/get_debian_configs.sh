@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-#https://packages.debian.org/source/sid/linux
+#https://packages.debian.org/source/trixie/linux
 #
 abi="6.6.11"
 kernel="6.6.11-1"
