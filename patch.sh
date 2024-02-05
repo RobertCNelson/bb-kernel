@@ -404,7 +404,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="rpi-6.7.y"
+	backport_tag="rpi-6.8.y"
 
 	subsystem="edt-ft5x06"
 	#regenerate="enable"
@@ -434,7 +434,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.7.2"
+		backport_tag="v6.7.3"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
