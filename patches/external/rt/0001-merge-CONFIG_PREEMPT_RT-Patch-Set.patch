@@ -1,9 +1,9 @@
-From 47eb75b0c93ed08fa2215f34f8e11ac4a3dfea3e Mon Sep 17 00:00:00 2001
+From 0144ac029cd9a874774c4cdbc70da30af61f978a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 19 Jan 2024 19:04:31 -0600
+Date: Mon, 19 Feb 2024 17:13:00 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.6.12-rt20.patch.xz
+patch-6.6.15-rt22.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -20,7 +20,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/riscv/Kconfig                            |    2 +
  arch/riscv/include/asm/cpufeature.h           |    2 -
  arch/riscv/include/asm/thread_info.h          |    2 +
- arch/riscv/kernel/cpufeature.c                |   84 +-
+ arch/riscv/kernel/cpufeature.c                |   90 +-
  arch/riscv/kernel/smpboot.c                   |    1 -
  arch/x86/Kconfig                              |    2 +
  arch/x86/include/asm/thread_info.h            |    6 +-
@@ -96,7 +96,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/sa1100.c                   |   20 +-
  drivers/tty/serial/samsung_tty.c              |   50 +-
  drivers/tty/serial/sb1250-duart.c             |   12 +-
- drivers/tty/serial/sc16is7xx.c                |   40 +-
+ drivers/tty/serial/sc16is7xx.c                |    5 +
  drivers/tty/serial/serial-tegra.c             |   32 +-
  drivers/tty/serial/serial_core.c              |   92 +-
  drivers/tty/serial/serial_mctrl_gpio.c        |    4 +-
@@ -125,15 +125,12 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/entry-kvm.h                     |    2 +-
  include/linux/interrupt.h                     |   29 +
  include/linux/netdevice.h                     |    4 +
- include/linux/preempt.h                       |   10 +-
  include/linux/printk.h                        |   30 +-
- include/linux/rcupdate.h                      |    6 +
  include/linux/sched.h                         |   16 +-
  include/linux/sched/idle.h                    |    8 +-
  include/linux/sched/rt.h                      |    4 +
  include/linux/serial_8250.h                   |    6 +
- include/linux/serial_core.h                   |  117 +-
- include/linux/srcu.h                          |    2 +-
+ include/linux/serial_core.h                   |   42 +-
  include/linux/thread_info.h                   |   24 +
  include/linux/trace_events.h                  |    8 +-
  kernel/Kconfig.preempt                        |   17 +-
@@ -174,7 +171,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/trace_output.c                   |   16 +-
  net/core/dev.c                                |   39 +-
  net/core/skbuff.c                             |    7 +-
- 167 files changed, 5185 insertions(+), 1554 deletions(-)
+ 164 files changed, 5078 insertions(+), 1539 deletions(-)
  create mode 100644 kernel/printk/nbcon.c
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
@@ -430,7 +427,7 @@ index 7e8773a2d99d..9fde36fcb80c 100644
  EXPORT_SYMBOL(kernel_neon_end);
  
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index 6062a52a084f..e216d14fc1a4 100644
+index b5df38c2a006..bc53a9889d03 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
 @@ -97,6 +97,7 @@ config ARM64
@@ -442,7 +439,7 @@ index 6062a52a084f..e216d14fc1a4 100644
  	select ARCH_WANT_COMPAT_IPC_PARSE_VERSION if COMPAT
  	select ARCH_WANT_DEFAULT_BPF_JIT
 diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
-index 4640cee33f12..3db651366e20 100644
+index 2fe51e0ad637..116444551038 100644
 --- a/arch/powerpc/Kconfig
 +++ b/arch/powerpc/Kconfig
 @@ -166,6 +166,7 @@ config PPC
@@ -674,7 +671,7 @@ index d18ce0113ca1..e18710fe51f0 100644
  #define _TIF_WORK_MASK \
  	(_TIF_NOTIFY_RESUME | _TIF_SIGPENDING | _TIF_NEED_RESCHED | \
 diff --git a/arch/riscv/kernel/cpufeature.c b/arch/riscv/kernel/cpufeature.c
-index e12cd22755c7..c3208b21e678 100644
+index e12cd22755c7..32a21e9a0fff 100644
 --- a/arch/riscv/kernel/cpufeature.c
 +++ b/arch/riscv/kernel/cpufeature.c
 @@ -8,6 +8,7 @@
@@ -711,7 +708,20 @@ index e12cd22755c7..c3208b21e678 100644
  	void *dst;
  	void *src;
  	long speed = RISCV_HWPROBE_MISALIGNED_SLOW;
-@@ -630,7 +633,7 @@ void check_unaligned_access(int cpu)
+@@ -572,12 +575,6 @@ void check_unaligned_access(int cpu)
+ 	if (per_cpu(misaligned_access_speed, cpu) != RISCV_HWPROBE_MISALIGNED_UNKNOWN)
+ 		return;
+ 
+-	page = alloc_pages(GFP_NOWAIT, get_order(MISALIGNED_BUFFER_SIZE));
+-	if (!page) {
+-		pr_warn("Can't alloc pages to measure memcpy performance");
+-		return;
+-	}
+-
+ 	/* Make an unaligned destination buffer. */
+ 	dst = (void *)((unsigned long)page_address(page) | 0x1);
+ 	/* Unalign src as well, but differently (off by 1 + 2 = 3). */
+@@ -630,7 +627,7 @@ void check_unaligned_access(int cpu)
  		pr_warn("cpu%d: rdtime lacks granularity needed to measure unaligned access speed\n",
  			cpu);
  
@@ -720,7 +730,7 @@ index e12cd22755c7..c3208b21e678 100644
  	}
  
  	if (word_cycles < byte_cycles)
-@@ -644,18 +647,83 @@ void check_unaligned_access(int cpu)
+@@ -644,18 +641,83 @@ void check_unaligned_access(int cpu)
  		(speed == RISCV_HWPROBE_MISALIGNED_FAST) ? "fast" : "slow");
  
  	per_cpu(misaligned_access_speed, cpu) = speed;
@@ -736,10 +746,12 @@ index e12cd22755c7..c3208b21e678 100644
 +
 +	if (smp_processor_id() != 0)
 +		check_unaligned_access(pages[cpu]);
-+}
-+
+ }
+ 
+-static int check_unaligned_access_boot_cpu(void)
 +static int riscv_online_cpu(unsigned int cpu)
-+{
+ {
+-	check_unaligned_access(0);
 +	static struct page *buf;
 +
 +	/* We are already set since the last check */
@@ -755,13 +767,11 @@ index e12cd22755c7..c3208b21e678 100644
 +	check_unaligned_access(buf);
 +	__free_pages(buf, MISALIGNED_BUFFER_ORDER);
 +	return 0;
- }
- 
--static int check_unaligned_access_boot_cpu(void)
++}
++
 +/* Measure unaligned access on all CPUs present at boot in parallel. */
 +static int check_unaligned_access_all_cpus(void)
- {
--	check_unaligned_access(0);
++{
 +	unsigned int cpu;
 +	unsigned int cpu_count = num_possible_cpus();
 +	struct page **bufs = kzalloc(cpu_count * sizeof(struct page *),
@@ -1880,7 +1890,7 @@ index a1f2259cc9a9..53c284bb271d 100644
  		if (status & (UART_LSR_DR | UART_LSR_BI)) {
  			dw8250_writel_ext(p, RZN1_UART_RDMACR, 0);
 diff --git a/drivers/tty/serial/8250/8250_exar.c b/drivers/tty/serial/8250/8250_exar.c
-index 077c3ba3539e..07ad21336301 100644
+index 8385be846840..91cf690b7c71 100644
 --- a/drivers/tty/serial/8250/8250_exar.c
 +++ b/drivers/tty/serial/8250/8250_exar.c
 @@ -201,9 +201,9 @@ static int xr17v35x_startup(struct uart_port *port)
@@ -1963,7 +1973,7 @@ index 74da5676ce67..23457daae8a1 100644
  	if (tty_termios_baud_rate(termios))
  		tty_termios_encode_baud_rate(termios, baud, baud);
 diff --git a/drivers/tty/serial/8250/8250_omap.c b/drivers/tty/serial/8250/8250_omap.c
-index 1122f37fe744..5e0fbf340ef6 100644
+index 346167afe9e1..db5519ce0192 100644
 --- a/drivers/tty/serial/8250/8250_omap.c
 +++ b/drivers/tty/serial/8250/8250_omap.c
 @@ -401,7 +401,7 @@ static void omap_8250_set_termios(struct uart_port *port,
@@ -3333,7 +3343,7 @@ index cd3913b933c7..19200ab2af75 100644
  	clk_disable(uap->clk);
  }
 diff --git a/drivers/tty/serial/apbuart.c b/drivers/tty/serial/apbuart.c
-index d7658f380838..716cb014c028 100644
+index d3cb341f2c55..364599f256db 100644
 --- a/drivers/tty/serial/apbuart.c
 +++ b/drivers/tty/serial/apbuart.c
 @@ -133,7 +133,7 @@ static irqreturn_t apbuart_int(int irq, void *dev_id)
@@ -4526,7 +4536,7 @@ index 819f957b6b84..a75eafbcbea3 100644
  
  static const char *icom_type(struct uart_port *port)
 diff --git a/drivers/tty/serial/imx.c b/drivers/tty/serial/imx.c
-index 13cb78340709..0fb679cdb15e 100644
+index 2fbb9b597752..54b760d845c0 100644
 --- a/drivers/tty/serial/imx.c
 +++ b/drivers/tty/serial/imx.c
 @@ -575,7 +575,7 @@ static void imx_uart_dma_tx_callback(void *data)
@@ -4757,7 +4767,7 @@ index 13cb78340709..0fb679cdb15e 100644
  
  	return 0;
  }
-@@ -2005,9 +2005,9 @@ imx_uart_console_write(struct console *co, const char *s, unsigned int count)
+@@ -2001,9 +2001,9 @@ imx_uart_console_write(struct console *co, const char *s, unsigned int count)
  	if (sport->port.sysrq)
  		locked = 0;
  	else if (oops_in_progress)
@@ -4769,7 +4779,7 @@ index 13cb78340709..0fb679cdb15e 100644
  
  	/*
  	 *	First, save UCR1/2/3 and then disable interrupts
-@@ -2035,7 +2035,7 @@ imx_uart_console_write(struct console *co, const char *s, unsigned int count)
+@@ -2031,7 +2031,7 @@ imx_uart_console_write(struct console *co, const char *s, unsigned int count)
  	imx_uart_ucrs_restore(sport, &old_ucr);
  
  	if (locked)
@@ -4778,7 +4788,7 @@ index 13cb78340709..0fb679cdb15e 100644
  }
  
  /*
-@@ -2193,10 +2193,10 @@ static enum hrtimer_restart imx_trigger_start_tx(struct hrtimer *t)
+@@ -2189,10 +2189,10 @@ static enum hrtimer_restart imx_trigger_start_tx(struct hrtimer *t)
  	struct imx_port *sport = container_of(t, struct imx_port, trigger_start_tx);
  	unsigned long flags;
  
@@ -4791,7 +4801,7 @@ index 13cb78340709..0fb679cdb15e 100644
  
  	return HRTIMER_NORESTART;
  }
-@@ -2206,10 +2206,10 @@ static enum hrtimer_restart imx_trigger_stop_tx(struct hrtimer *t)
+@@ -2202,10 +2202,10 @@ static enum hrtimer_restart imx_trigger_stop_tx(struct hrtimer *t)
  	struct imx_port *sport = container_of(t, struct imx_port, trigger_stop_tx);
  	unsigned long flags;
  
@@ -4804,7 +4814,7 @@ index 13cb78340709..0fb679cdb15e 100644
  
  	return HRTIMER_NORESTART;
  }
-@@ -2482,9 +2482,9 @@ static void imx_uart_restore_context(struct imx_port *sport)
+@@ -2472,9 +2472,9 @@ static void imx_uart_restore_context(struct imx_port *sport)
  {
  	unsigned long flags;
  
@@ -4816,7 +4826,7 @@ index 13cb78340709..0fb679cdb15e 100644
  		return;
  	}
  
-@@ -2499,7 +2499,7 @@ static void imx_uart_restore_context(struct imx_port *sport)
+@@ -2489,7 +2489,7 @@ static void imx_uart_restore_context(struct imx_port *sport)
  	imx_uart_writel(sport, sport->saved_reg[2], UCR3);
  	imx_uart_writel(sport, sport->saved_reg[3], UCR4);
  	sport->context_saved = false;
@@ -4825,7 +4835,7 @@ index 13cb78340709..0fb679cdb15e 100644
  }
  
  static void imx_uart_save_context(struct imx_port *sport)
-@@ -2507,7 +2507,7 @@ static void imx_uart_save_context(struct imx_port *sport)
+@@ -2497,7 +2497,7 @@ static void imx_uart_save_context(struct imx_port *sport)
  	unsigned long flags;
  
  	/* Save necessary regs */
@@ -4834,7 +4844,7 @@ index 13cb78340709..0fb679cdb15e 100644
  	sport->saved_reg[0] = imx_uart_readl(sport, UCR1);
  	sport->saved_reg[1] = imx_uart_readl(sport, UCR2);
  	sport->saved_reg[2] = imx_uart_readl(sport, UCR3);
-@@ -2519,7 +2519,7 @@ static void imx_uart_save_context(struct imx_port *sport)
+@@ -2509,7 +2509,7 @@ static void imx_uart_save_context(struct imx_port *sport)
  	sport->saved_reg[8] = imx_uart_readl(sport, UBMR);
  	sport->saved_reg[9] = imx_uart_readl(sport, IMX21_UTS);
  	sport->context_saved = true;
@@ -6015,7 +6025,7 @@ index ea924e9b913b..0255646bc175 100644
  
  static int mvebu_uart_console_setup(struct console *co, char *options)
 diff --git a/drivers/tty/serial/omap-serial.c b/drivers/tty/serial/omap-serial.c
-index 0ead88c5a19a..90369adc33f0 100644
+index 135a838f517a..1097fca22307 100644
 --- a/drivers/tty/serial/omap-serial.c
 +++ b/drivers/tty/serial/omap-serial.c
 @@ -390,10 +390,10 @@ static void serial_omap_throttle(struct uart_port *port)
@@ -7304,150 +7314,28 @@ index f3cd69346482..dbec29d9a6c3 100644
  
  static int __init sbd_console_setup(struct console *co, char *options)
 diff --git a/drivers/tty/serial/sc16is7xx.c b/drivers/tty/serial/sc16is7xx.c
-index 6a0a3208d090..e5031658a4a6 100644
+index f75b8bceb8ca..2d7470457af4 100644
 --- a/drivers/tty/serial/sc16is7xx.c
 +++ b/drivers/tty/serial/sc16is7xx.c
-@@ -667,9 +667,9 @@ static void sc16is7xx_handle_tx(struct uart_port *port)
- 	}
+@@ -804,6 +804,7 @@ static void sc16is7xx_tx_proc(struct kthread_work *ws)
+ {
+ 	struct uart_port *port = &(to_sc16is7xx_one(ws, tx_work)->port);
+ 	struct sc16is7xx_one *one = to_sc16is7xx_one(port, port);
++	unsigned long flags;
  
- 	if (uart_circ_empty(xmit) || uart_tx_stopped(port)) {
--		spin_lock_irqsave(&port->lock, flags);
-+		uart_port_lock_irqsave(port, &flags);
- 		sc16is7xx_stop_tx(port);
--		spin_unlock_irqrestore(&port->lock, flags);
-+		uart_port_unlock_irqrestore(port, flags);
- 		return;
- 	}
- 
-@@ -695,13 +695,13 @@ static void sc16is7xx_handle_tx(struct uart_port *port)
- 		sc16is7xx_fifo_write(port, to_send);
- 	}
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
- 		uart_write_wakeup(port);
- 
- 	if (uart_circ_empty(xmit))
- 		sc16is7xx_stop_tx(port);
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static unsigned int sc16is7xx_get_hwmctrl(struct uart_port *port)
-@@ -733,7 +733,7 @@ static void sc16is7xx_update_mlines(struct sc16is7xx_one *one)
- 
- 	one->old_mctrl = status;
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 	if ((changed & TIOCM_RNG) && (status & TIOCM_RNG))
- 		port->icount.rng++;
- 	if (changed & TIOCM_DSR)
-@@ -744,7 +744,7 @@ static void sc16is7xx_update_mlines(struct sc16is7xx_one *one)
- 		uart_handle_cts_change(port, status & TIOCM_CTS);
- 
- 	wake_up_interruptible(&port->state->port.delta_msr_wait);
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static bool sc16is7xx_port_irq(struct sc16is7xx_port *s, int portno)
-@@ -835,9 +835,9 @@ static void sc16is7xx_tx_proc(struct kthread_work *ws)
+ 	if ((port->rs485.flags & SER_RS485_ENABLED) &&
+ 	    (port->rs485.delay_rts_before_send > 0))
+@@ -812,6 +813,10 @@ static void sc16is7xx_tx_proc(struct kthread_work *ws)
+ 	mutex_lock(&one->efr_lock);
  	sc16is7xx_handle_tx(port);
- 	mutex_unlock(&s->efr_lock);
- 
--	spin_lock_irqsave(&port->lock, flags);
+ 	mutex_unlock(&one->efr_lock);
++
 +	uart_port_lock_irqsave(port, &flags);
- 	sc16is7xx_ier_set(port, SC16IS7XX_IER_THRI_BIT);
--	spin_unlock_irqrestore(&port->lock, flags);
++	sc16is7xx_ier_set(port, SC16IS7XX_IER_THRI_BIT);
 +	uart_port_unlock_irqrestore(port, flags);
  }
  
  static void sc16is7xx_reconf_rs485(struct uart_port *port)
-@@ -848,14 +848,14 @@ static void sc16is7xx_reconf_rs485(struct uart_port *port)
- 	struct serial_rs485 *rs485 = &port->rs485;
- 	unsigned long irqflags;
- 
--	spin_lock_irqsave(&port->lock, irqflags);
-+	uart_port_lock_irqsave(port, &irqflags);
- 	if (rs485->flags & SER_RS485_ENABLED) {
- 		efcr |=	SC16IS7XX_EFCR_AUTO_RS485_BIT;
- 
- 		if (rs485->flags & SER_RS485_RTS_AFTER_SEND)
- 			efcr |= SC16IS7XX_EFCR_RTS_INVERT_BIT;
- 	}
--	spin_unlock_irqrestore(&port->lock, irqflags);
-+	uart_port_unlock_irqrestore(port, irqflags);
- 
- 	sc16is7xx_port_update(port, SC16IS7XX_EFCR_REG, mask, efcr);
- }
-@@ -866,10 +866,10 @@ static void sc16is7xx_reg_proc(struct kthread_work *ws)
- 	struct sc16is7xx_one_config config;
- 	unsigned long irqflags;
- 
--	spin_lock_irqsave(&one->port.lock, irqflags);
-+	uart_port_lock_irqsave(&one->port, &irqflags);
- 	config = one->config;
- 	memset(&one->config, 0, sizeof(one->config));
--	spin_unlock_irqrestore(&one->port.lock, irqflags);
-+	uart_port_unlock_irqrestore(&one->port, irqflags);
- 
- 	if (config.flags & SC16IS7XX_RECONF_MD) {
- 		u8 mcr = 0;
-@@ -975,18 +975,18 @@ static void sc16is7xx_throttle(struct uart_port *port)
- 	 * value set in MCR register. Stop reading data from RX FIFO so the
- 	 * AutoRTS feature will de-activate RTS output.
- 	 */
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 	sc16is7xx_ier_clear(port, SC16IS7XX_IER_RDI_BIT);
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static void sc16is7xx_unthrottle(struct uart_port *port)
- {
- 	unsigned long flags;
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 	sc16is7xx_ier_set(port, SC16IS7XX_IER_RDI_BIT);
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static unsigned int sc16is7xx_tx_empty(struct uart_port *port)
-@@ -1125,7 +1125,7 @@ static void sc16is7xx_set_termios(struct uart_port *port,
- 	/* Setup baudrate generator */
- 	baud = sc16is7xx_set_baud(port, baud);
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 
- 	/* Update timeout according to new baud rate */
- 	uart_update_timeout(port, termios->c_cflag, baud);
-@@ -1133,7 +1133,7 @@ static void sc16is7xx_set_termios(struct uart_port *port,
- 	if (UART_ENABLE_MS(port, termios->c_cflag))
- 		sc16is7xx_enable_ms(port);
- 
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static int sc16is7xx_config_rs485(struct uart_port *port, struct ktermios *termios,
-@@ -1220,9 +1220,9 @@ static int sc16is7xx_startup(struct uart_port *port)
- 	sc16is7xx_port_write(port, SC16IS7XX_IER_REG, val);
- 
- 	/* Enable modem status polling */
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 	sc16is7xx_enable_ms(port);
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- 
- 	return 0;
- }
 diff --git a/drivers/tty/serial/serial-tegra.c b/drivers/tty/serial/serial-tegra.c
 index d4ec943cb8e9..6d4006b41975 100644
 --- a/drivers/tty/serial/serial-tegra.c
@@ -7589,7 +7477,7 @@ index d4ec943cb8e9..6d4006b41975 100644
  
  static const char *tegra_uart_type(struct uart_port *u)
 diff --git a/drivers/tty/serial/serial_core.c b/drivers/tty/serial/serial_core.c
-index f912f8bf1e63..975e1f276697 100644
+index 083ea4de48f9..fea8a8eca0c0 100644
 --- a/drivers/tty/serial/serial_core.c
 +++ b/drivers/tty/serial/serial_core.c
 @@ -79,7 +79,7 @@ static inline void uart_port_deref(struct uart_port *uport)
@@ -7702,19 +7590,19 @@ index f912f8bf1e63..975e1f276697 100644
  	uart_port_deref(uport);
  
  	icount->cts         = cnow.cts;
-@@ -1413,9 +1413,9 @@ static int uart_rs485_config(struct uart_port *port)
- 	uart_sanitize_serial_rs485(port, rs485);
+@@ -1432,9 +1432,9 @@ static int uart_rs485_config(struct uart_port *port)
  	uart_set_rs485_termination(port, rs485);
+ 	uart_set_rs485_rx_during_tx(port, rs485);
  
 -	spin_lock_irqsave(&port->lock, flags);
 +	uart_port_lock_irqsave(port, &flags);
  	ret = port->rs485_config(port, NULL, rs485);
 -	spin_unlock_irqrestore(&port->lock, flags);
 +	uart_port_unlock_irqrestore(port, flags);
- 	if (ret)
+ 	if (ret) {
  		memset(rs485, 0, sizeof(*rs485));
- 
-@@ -1428,9 +1428,9 @@ static int uart_get_rs485_config(struct uart_port *port,
+ 		/* unset GPIOs */
+@@ -1451,9 +1451,9 @@ static int uart_get_rs485_config(struct uart_port *port,
  	unsigned long flags;
  	struct serial_rs485 aux;
  
@@ -7726,25 +7614,25 @@ index f912f8bf1e63..975e1f276697 100644
  
  	if (copy_to_user(rs485, &aux, sizeof(aux)))
  		return -EFAULT;
-@@ -1457,7 +1457,7 @@ static int uart_set_rs485_config(struct tty_struct *tty, struct uart_port *port,
- 	uart_sanitize_serial_rs485(port, &rs485);
+@@ -1481,7 +1481,7 @@ static int uart_set_rs485_config(struct tty_struct *tty, struct uart_port *port,
  	uart_set_rs485_termination(port, &rs485);
+ 	uart_set_rs485_rx_during_tx(port, &rs485);
  
 -	spin_lock_irqsave(&port->lock, flags);
 +	uart_port_lock_irqsave(port, &flags);
  	ret = port->rs485_config(port, &tty->termios, &rs485);
  	if (!ret) {
  		port->rs485 = rs485;
-@@ -1466,7 +1466,7 @@ static int uart_set_rs485_config(struct tty_struct *tty, struct uart_port *port,
+@@ -1490,7 +1490,7 @@ static int uart_set_rs485_config(struct tty_struct *tty, struct uart_port *port,
  		if (!(rs485.flags & SER_RS485_ENABLED))
  			port->ops->set_mctrl(port, port->mctrl);
  	}
 -	spin_unlock_irqrestore(&port->lock, flags);
 +	uart_port_unlock_irqrestore(port, flags);
- 	if (ret)
- 		return ret;
- 
-@@ -1485,9 +1485,9 @@ static int uart_get_iso7816_config(struct uart_port *port,
+ 	if (ret) {
+ 		/* restore old GPIO settings */
+ 		gpiod_set_value_cansleep(port->rs485_term_gpio,
+@@ -1515,9 +1515,9 @@ static int uart_get_iso7816_config(struct uart_port *port,
  	if (!port->iso7816_config)
  		return -ENOTTY;
  
@@ -7756,7 +7644,7 @@ index f912f8bf1e63..975e1f276697 100644
  
  	if (copy_to_user(iso7816, &aux, sizeof(aux)))
  		return -EFAULT;
-@@ -1516,9 +1516,9 @@ static int uart_set_iso7816_config(struct uart_port *port,
+@@ -1546,9 +1546,9 @@ static int uart_set_iso7816_config(struct uart_port *port,
  		if (iso7816.reserved[i])
  			return -EINVAL;
  
@@ -7768,7 +7656,7 @@ index f912f8bf1e63..975e1f276697 100644
  	if (ret)
  		return ret;
  
-@@ -1735,9 +1735,9 @@ static void uart_tty_port_shutdown(struct tty_port *port)
+@@ -1765,9 +1765,9 @@ static void uart_tty_port_shutdown(struct tty_port *port)
  	if (WARN(!uport, "detached port still initialized!\n"))
  		return;
  
@@ -7780,7 +7668,7 @@ index f912f8bf1e63..975e1f276697 100644
  
  	uart_port_shutdown(port);
  
-@@ -1751,10 +1751,10 @@ static void uart_tty_port_shutdown(struct tty_port *port)
+@@ -1781,10 +1781,10 @@ static void uart_tty_port_shutdown(struct tty_port *port)
  	/*
  	 * Free the transmit buffer.
  	 */
@@ -7793,7 +7681,7 @@ index f912f8bf1e63..975e1f276697 100644
  
  	free_page((unsigned long)buf);
  
-@@ -1897,10 +1897,10 @@ static bool uart_carrier_raised(struct tty_port *port)
+@@ -1927,10 +1927,10 @@ static bool uart_carrier_raised(struct tty_port *port)
  	 */
  	if (WARN_ON(!uport))
  		return true;
@@ -7806,7 +7694,7 @@ index f912f8bf1e63..975e1f276697 100644
  	uart_port_deref(uport);
  
  	return mctrl & TIOCM_CAR;
-@@ -2017,9 +2017,9 @@ static void uart_line_info(struct seq_file *m, struct uart_driver *drv, int i)
+@@ -2047,9 +2047,9 @@ static void uart_line_info(struct seq_file *m, struct uart_driver *drv, int i)
  		pm_state = state->pm_state;
  		if (pm_state != UART_PM_STATE_ON)
  			uart_change_pm(state, UART_PM_STATE_ON);
@@ -7818,7 +7706,7 @@ index f912f8bf1e63..975e1f276697 100644
  		if (pm_state != UART_PM_STATE_ON)
  			uart_change_pm(state, pm_state);
  
-@@ -2358,9 +2358,9 @@ int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
+@@ -2388,9 +2388,9 @@ int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
  	 */
  	if (!console_suspend_enabled && uart_console(uport)) {
  		if (uport->ops->start_rx) {
@@ -7830,7 +7718,7 @@ index f912f8bf1e63..975e1f276697 100644
  		}
  		goto unlock;
  	}
-@@ -2375,7 +2375,7 @@ int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
+@@ -2405,7 +2405,7 @@ int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
  		tty_port_set_suspended(port, true);
  		tty_port_set_initialized(port, false);
  
@@ -7839,7 +7727,7 @@ index f912f8bf1e63..975e1f276697 100644
  		ops->stop_tx(uport);
  		if (!(uport->rs485.flags & SER_RS485_ENABLED))
  			ops->set_mctrl(uport, 0);
-@@ -2383,7 +2383,7 @@ int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
+@@ -2413,7 +2413,7 @@ int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
  		mctrl = uport->mctrl;
  		uport->mctrl = 0;
  		ops->stop_rx(uport);
@@ -7848,7 +7736,7 @@ index f912f8bf1e63..975e1f276697 100644
  
  		/*
  		 * Wait for the transmitter to empty.
-@@ -2455,9 +2455,9 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
+@@ -2485,9 +2485,9 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
  			uart_change_pm(state, UART_PM_STATE_ON);
  		uport->ops->set_termios(uport, &termios, NULL);
  		if (!console_suspend_enabled && uport->ops->start_rx) {
@@ -7860,7 +7748,7 @@ index f912f8bf1e63..975e1f276697 100644
  		}
  		if (console_suspend_enabled)
  			console_start(uport->cons);
-@@ -2468,10 +2468,10 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
+@@ -2498,10 +2498,10 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
  		int ret;
  
  		uart_change_pm(state, UART_PM_STATE_ON);
@@ -7873,7 +7761,7 @@ index f912f8bf1e63..975e1f276697 100644
  		if (console_suspend_enabled || !uart_console(uport)) {
  			/* Protected by port mutex for now */
  			struct tty_struct *tty = port->tty;
-@@ -2481,11 +2481,11 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
+@@ -2511,11 +2511,11 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
  				if (tty)
  					uart_change_line_settings(tty, state, NULL);
  				uart_rs485_config(uport);
@@ -7887,7 +7775,7 @@ index f912f8bf1e63..975e1f276697 100644
  				tty_port_set_initialized(port, true);
  			} else {
  				/*
-@@ -2588,11 +2588,11 @@ uart_configure_port(struct uart_driver *drv, struct uart_state *state,
+@@ -2618,11 +2618,11 @@ uart_configure_port(struct uart_driver *drv, struct uart_state *state,
  		 * keep the DTR setting that is set in uart_set_options()
  		 * We probably don't need a spinlock around this, but
  		 */
@@ -8571,10 +8459,10 @@ index 92b9f6894006..a821f5d76a26 100644
  
  static int asc_console_setup(struct console *co, char *options)
 diff --git a/drivers/tty/serial/stm32-usart.c b/drivers/tty/serial/stm32-usart.c
-index 5e9cf0c48813..8c51ec9433d6 100644
+index b6f4f436a565..f0901bedcc28 100644
 --- a/drivers/tty/serial/stm32-usart.c
 +++ b/drivers/tty/serial/stm32-usart.c
-@@ -537,7 +537,7 @@ static void stm32_usart_rx_dma_complete(void *arg)
+@@ -533,7 +533,7 @@ static void stm32_usart_rx_dma_complete(void *arg)
  	unsigned int size;
  	unsigned long flags;
  
@@ -8583,7 +8471,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  	size = stm32_usart_receive_chars(port, false);
  	uart_unlock_and_check_sysrq_irqrestore(port, flags);
  	if (size)
-@@ -643,9 +643,9 @@ static void stm32_usart_tx_dma_complete(void *arg)
+@@ -639,9 +639,9 @@ static void stm32_usart_tx_dma_complete(void *arg)
  	stm32_usart_tx_dma_terminate(stm32port);
  
  	/* Let's see if we have pending data to send */
@@ -8595,7 +8483,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  }
  
  static void stm32_usart_tx_interrupt_enable(struct uart_port *port)
-@@ -889,7 +889,7 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
+@@ -885,7 +885,7 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
  	if (!stm32_port->throttled) {
  		if (((sr & USART_SR_RXNE) && !stm32_usart_rx_dma_started(stm32_port)) ||
  		    ((sr & USART_SR_ERR_MASK) && stm32_usart_rx_dma_started(stm32_port))) {
@@ -8604,7 +8492,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  			size = stm32_usart_receive_chars(port, false);
  			uart_unlock_and_check_sysrq(port);
  			if (size)
-@@ -898,14 +898,14 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
+@@ -894,14 +894,14 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
  	}
  
  	if ((sr & USART_SR_TXE) && !(stm32_port->tx_ch)) {
@@ -8622,7 +8510,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  		size = stm32_usart_receive_chars(port, false);
  		uart_unlock_and_check_sysrq(port);
  		if (size)
-@@ -993,7 +993,7 @@ static void stm32_usart_throttle(struct uart_port *port)
+@@ -989,7 +989,7 @@ static void stm32_usart_throttle(struct uart_port *port)
  	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
  	unsigned long flags;
  
@@ -8631,7 +8519,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  
  	/*
  	 * Pause DMA transfer, so the RX data gets queued into the FIFO.
-@@ -1006,7 +1006,7 @@ static void stm32_usart_throttle(struct uart_port *port)
+@@ -1002,7 +1002,7 @@ static void stm32_usart_throttle(struct uart_port *port)
  		stm32_usart_clr_bits(port, ofs->cr3, stm32_port->cr3_irq);
  
  	stm32_port->throttled = true;
@@ -8640,7 +8528,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  }
  
  /* Unthrottle the remote, the input buffer can now accept data. */
-@@ -1016,7 +1016,7 @@ static void stm32_usart_unthrottle(struct uart_port *port)
+@@ -1012,7 +1012,7 @@ static void stm32_usart_unthrottle(struct uart_port *port)
  	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
  	unsigned long flags;
  
@@ -8649,7 +8537,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  	stm32_usart_set_bits(port, ofs->cr1, stm32_port->cr1_irq);
  	if (stm32_port->cr3_irq)
  		stm32_usart_set_bits(port, ofs->cr3, stm32_port->cr3_irq);
-@@ -1030,7 +1030,7 @@ static void stm32_usart_unthrottle(struct uart_port *port)
+@@ -1026,7 +1026,7 @@ static void stm32_usart_unthrottle(struct uart_port *port)
  	if (stm32_port->rx_ch)
  		stm32_usart_rx_dma_start_or_resume(port);
  
@@ -8658,7 +8546,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  }
  
  /* Receive stop */
-@@ -1158,7 +1158,7 @@ static void stm32_usart_set_termios(struct uart_port *port,
+@@ -1154,7 +1154,7 @@ static void stm32_usart_set_termios(struct uart_port *port,
  
  	baud = uart_get_baud_rate(port, termios, old, 0, port->uartclk / 8);
  
@@ -8667,7 +8555,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  
  	ret = readl_relaxed_poll_timeout_atomic(port->membase + ofs->isr,
  						isr,
-@@ -1349,7 +1349,7 @@ static void stm32_usart_set_termios(struct uart_port *port,
+@@ -1345,7 +1345,7 @@ static void stm32_usart_set_termios(struct uart_port *port,
  	writel_relaxed(cr1, port->membase + ofs->cr1);
  
  	stm32_usart_set_bits(port, ofs->cr1, BIT(cfg->uart_enable_bit));
@@ -8676,7 +8564,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  
  	/* Handle modem control interrupts */
  	if (UART_ENABLE_MS(port, termios->c_cflag))
-@@ -1399,9 +1399,9 @@ static void stm32_usart_pm(struct uart_port *port, unsigned int state,
+@@ -1395,9 +1395,9 @@ static void stm32_usart_pm(struct uart_port *port, unsigned int state,
  		pm_runtime_get_sync(port->dev);
  		break;
  	case UART_PM_STATE_OFF:
@@ -8688,7 +8576,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  		pm_runtime_put_sync(port->dev);
  		break;
  	}
-@@ -1884,9 +1884,9 @@ static void stm32_usart_console_write(struct console *co, const char *s,
+@@ -1880,9 +1880,9 @@ static void stm32_usart_console_write(struct console *co, const char *s,
  	int locked = 1;
  
  	if (oops_in_progress)
@@ -8700,7 +8588,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  
  	/* Save and disable interrupts, enable the transmitter */
  	old_cr1 = readl_relaxed(port->membase + ofs->cr1);
-@@ -1900,7 +1900,7 @@ static void stm32_usart_console_write(struct console *co, const char *s,
+@@ -1896,7 +1896,7 @@ static void stm32_usart_console_write(struct console *co, const char *s,
  	writel_relaxed(old_cr1, port->membase + ofs->cr1);
  
  	if (locked)
@@ -8709,7 +8597,7 @@ index 5e9cf0c48813..8c51ec9433d6 100644
  }
  
  static int stm32_usart_console_setup(struct console *co, char *options)
-@@ -2035,7 +2035,7 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
+@@ -2031,7 +2031,7 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
  		 * low-power mode.
  		 */
  		if (stm32_port->rx_ch) {
@@ -9846,10 +9734,10 @@ index 2e5e86a00a77..9c13dac1d4d1 100644
  
  	return uart_resume_port(cdns_uart->cdns_uart_driver, port);
 diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c
-index 8a94e5a43c6d..383159639f65 100644
+index 493fc4742895..afa52883c498 100644
 --- a/drivers/tty/tty_io.c
 +++ b/drivers/tty/tty_io.c
-@@ -3540,8 +3540,15 @@ static ssize_t show_cons_active(struct device *dev,
+@@ -3543,8 +3543,15 @@ static ssize_t show_cons_active(struct device *dev,
  	for_each_console(c) {
  		if (!c->device)
  			continue;
@@ -10201,34 +10089,6 @@ index b8e60a20416b..ffa5248a90e2 100644
  };
  
  static inline void input_queue_head_incr(struct softnet_data *sd)
-diff --git a/include/linux/preempt.h b/include/linux/preempt.h
-index 9aa6358a1a16..cd16f0330fba 100644
---- a/include/linux/preempt.h
-+++ b/include/linux/preempt.h
-@@ -230,15 +230,21 @@ do { \
- #define preempt_enable() \
- do { \
- 	barrier(); \
--	if (unlikely(preempt_count_dec_and_test())) \
-+	if (unlikely(preempt_count_dec_and_test())) { \
-+		instrumentation_begin(); \
- 		__preempt_schedule(); \
-+		instrumentation_end(); \
-+	} \
- } while (0)
- 
- #define preempt_enable_notrace() \
- do { \
- 	barrier(); \
--	if (unlikely(__preempt_count_dec_and_test())) \
-+	if (unlikely(__preempt_count_dec_and_test())) { \
-+		instrumentation_begin(); \
- 		__preempt_schedule_notrace(); \
-+		instrumentation_end(); \
-+	} \
- } while (0)
- 
- #define preempt_check_resched() \
 diff --git a/include/linux/printk.h b/include/linux/printk.h
 index 8ef499ab3c1e..7a942e987b16 100644
 --- a/include/linux/printk.h
@@ -10296,30 +10156,6 @@ index 8ef499ab3c1e..7a942e987b16 100644
  #endif
  
  #ifdef CONFIG_SMP
-diff --git a/include/linux/rcupdate.h b/include/linux/rcupdate.h
-index 5e5f920ade90..44aab5c0bd2c 100644
---- a/include/linux/rcupdate.h
-+++ b/include/linux/rcupdate.h
-@@ -303,6 +303,11 @@ static inline void rcu_lock_acquire(struct lockdep_map *map)
- 	lock_acquire(map, 0, 0, 2, 0, NULL, _THIS_IP_);
- }
- 
-+static inline void rcu_try_lock_acquire(struct lockdep_map *map)
-+{
-+	lock_acquire(map, 0, 1, 2, 0, NULL, _THIS_IP_);
-+}
-+
- static inline void rcu_lock_release(struct lockdep_map *map)
- {
- 	lock_release(map, _THIS_IP_);
-@@ -317,6 +322,7 @@ int rcu_read_lock_any_held(void);
- #else /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
- 
- # define rcu_lock_acquire(a)		do { } while (0)
-+# define rcu_try_lock_acquire(a)	do { } while (0)
- # define rcu_lock_release(a)		do { } while (0)
- 
- static inline int rcu_read_lock_held(void)
 diff --git a/include/linux/sched.h b/include/linux/sched.h
 index 77f01ac385f7..c02fd12b49dc 100644
 --- a/include/linux/sched.h
@@ -10461,101 +10297,79 @@ index be65de65fe61..ec46e3b49ee9 100644
  int serial8250_console_exit(struct uart_port *port);
  
 diff --git a/include/linux/serial_core.h b/include/linux/serial_core.h
-index bb6f073bc159..245c11753eff 100644
+index bbbafc0feb5b..a49ce4bf7fae 100644
 --- a/include/linux/serial_core.h
 +++ b/include/linux/serial_core.h
-@@ -588,6 +588,111 @@ struct uart_port {
- 	void			*private_data;		/* generic platform data pointer */
- };
+@@ -595,6 +595,7 @@ struct uart_port {
+ static inline void uart_port_lock(struct uart_port *up)
+ {
+ 	spin_lock(&up->lock);
++	nbcon_acquire(up);
+ }
  
-+/**
-+ * uart_port_lock - Lock the UART port
-+ * @up:		Pointer to UART port structure
-+ */
-+static inline void uart_port_lock(struct uart_port *up)
-+{
-+	spin_lock(&up->lock);
+ /**
+@@ -604,6 +605,7 @@ static inline void uart_port_lock(struct uart_port *up)
+ static inline void uart_port_lock_irq(struct uart_port *up)
+ {
+ 	spin_lock_irq(&up->lock);
 +	nbcon_acquire(up);
-+}
-+
-+/**
-+ * uart_port_lock_irq - Lock the UART port and disable interrupts
-+ * @up:		Pointer to UART port structure
-+ */
-+static inline void uart_port_lock_irq(struct uart_port *up)
-+{
-+	spin_lock_irq(&up->lock);
+ }
+ 
+ /**
+@@ -614,6 +616,7 @@ static inline void uart_port_lock_irq(struct uart_port *up)
+ static inline void uart_port_lock_irqsave(struct uart_port *up, unsigned long *flags)
+ {
+ 	spin_lock_irqsave(&up->lock, *flags);
 +	nbcon_acquire(up);
-+}
-+
-+/**
-+ * uart_port_lock_irqsave - Lock the UART port, save and disable interrupts
-+ * @up:		Pointer to UART port structure
-+ * @flags:	Pointer to interrupt flags storage
-+ */
-+static inline void uart_port_lock_irqsave(struct uart_port *up, unsigned long *flags)
-+{
-+	spin_lock_irqsave(&up->lock, *flags);
-+	nbcon_acquire(up);
-+}
-+
-+/**
-+ * uart_port_trylock - Try to lock the UART port
-+ * @up:		Pointer to UART port structure
-+ *
-+ * Returns: True if lock was acquired, false otherwise
-+ */
-+static inline bool uart_port_trylock(struct uart_port *up)
-+{
+ }
+ 
+ /**
+@@ -624,7 +627,11 @@ static inline void uart_port_lock_irqsave(struct uart_port *up, unsigned long *f
+  */
+ static inline bool uart_port_trylock(struct uart_port *up)
+ {
+-	return spin_trylock(&up->lock);
 +	if (!spin_trylock(&up->lock))
 +		return false;
 +
 +	nbcon_acquire(up);
 +	return true;
-+}
-+
-+/**
-+ * uart_port_trylock_irqsave - Try to lock the UART port, save and disable interrupts
-+ * @up:		Pointer to UART port structure
-+ * @flags:	Pointer to interrupt flags storage
-+ *
-+ * Returns: True if lock was acquired, false otherwise
-+ */
-+static inline bool uart_port_trylock_irqsave(struct uart_port *up, unsigned long *flags)
-+{
+ }
+ 
+ /**
+@@ -636,7 +643,11 @@ static inline bool uart_port_trylock(struct uart_port *up)
+  */
+ static inline bool uart_port_trylock_irqsave(struct uart_port *up, unsigned long *flags)
+ {
+-	return spin_trylock_irqsave(&up->lock, *flags);
 +	if (!spin_trylock_irqsave(&up->lock, *flags))
 +		return false;
 +
 +	nbcon_acquire(up);
 +	return true;
-+}
-+
-+/**
-+ * uart_port_unlock - Unlock the UART port
-+ * @up:		Pointer to UART port structure
-+ */
-+static inline void uart_port_unlock(struct uart_port *up)
-+{
+ }
+ 
+ /**
+@@ -645,6 +656,7 @@ static inline bool uart_port_trylock_irqsave(struct uart_port *up, unsigned long
+  */
+ static inline void uart_port_unlock(struct uart_port *up)
+ {
 +	nbcon_release(up);
-+	spin_unlock(&up->lock);
-+}
-+
-+/**
-+ * uart_port_unlock_irq - Unlock the UART port and re-enable interrupts
-+ * @up:		Pointer to UART port structure
-+ */
-+static inline void uart_port_unlock_irq(struct uart_port *up)
-+{
+ 	spin_unlock(&up->lock);
+ }
+ 
+@@ -654,6 +666,7 @@ static inline void uart_port_unlock(struct uart_port *up)
+  */
+ static inline void uart_port_unlock_irq(struct uart_port *up)
+ {
 +	nbcon_release(up);
-+	spin_unlock_irq(&up->lock);
-+}
-+
-+/**
-+ * uart_port_lock_irqrestore - Unlock the UART port, restore interrupts
-+ * @up:		Pointer to UART port structure
-+ * @flags:	The saved interrupt flags for restore
-+ */
-+static inline void uart_port_unlock_irqrestore(struct uart_port *up, unsigned long flags)
+ 	spin_unlock_irq(&up->lock);
+ }
+ 
+@@ -663,6 +676,19 @@ static inline void uart_port_unlock_irq(struct uart_port *up)
+  * @flags:	The saved interrupt flags for restore
+  */
+ static inline void uart_port_unlock_irqrestore(struct uart_port *up, unsigned long flags)
 +{
 +	nbcon_release(up);
 +	spin_unlock_irqrestore(&up->lock, flags);
@@ -10569,14 +10383,10 @@ index bb6f073bc159..245c11753eff 100644
 +
 +/* Only for use in the console->driver_exit() callback. */
 +static inline void __uart_port_unlock_irqrestore(struct uart_port *up, unsigned long flags)
-+{
-+	spin_unlock_irqrestore(&up->lock, flags);
-+}
-+
- static inline int serial_port_in(struct uart_port *up, int offset)
  {
- 	return up->serial_in(up, offset);
-@@ -956,14 +1061,14 @@ static inline void uart_unlock_and_check_sysrq(struct uart_port *port)
+ 	spin_unlock_irqrestore(&up->lock, flags);
+ }
+@@ -1035,14 +1061,14 @@ static inline void uart_unlock_and_check_sysrq(struct uart_port *port)
  	u8 sysrq_ch;
  
  	if (!port->has_sysrq) {
@@ -10593,7 +10403,7 @@ index bb6f073bc159..245c11753eff 100644
  
  	if (sysrq_ch)
  		handle_sysrq(sysrq_ch);
-@@ -975,14 +1080,14 @@ static inline void uart_unlock_and_check_sysrq_irqrestore(struct uart_port *port
+@@ -1054,14 +1080,14 @@ static inline void uart_unlock_and_check_sysrq_irqrestore(struct uart_port *port
  	u8 sysrq_ch;
  
  	if (!port->has_sysrq) {
@@ -10610,7 +10420,7 @@ index bb6f073bc159..245c11753eff 100644
  
  	if (sysrq_ch)
  		handle_sysrq(sysrq_ch);
-@@ -998,12 +1103,12 @@ static inline int uart_prepare_sysrq_char(struct uart_port *port, u8 ch)
+@@ -1077,12 +1103,12 @@ static inline int uart_prepare_sysrq_char(struct uart_port *port, u8 ch)
  }
  static inline void uart_unlock_and_check_sysrq(struct uart_port *port)
  {
@@ -10624,19 +10434,6 @@ index bb6f073bc159..245c11753eff 100644
 +	uart_port_unlock_irqrestore(port, flags);
  }
  #endif	/* CONFIG_MAGIC_SYSRQ_SERIAL */
- 
-diff --git a/include/linux/srcu.h b/include/linux/srcu.h
-index 127ef3b2e607..236610e4a8fa 100644
---- a/include/linux/srcu.h
-+++ b/include/linux/srcu.h
-@@ -229,7 +229,7 @@ static inline int srcu_read_lock_nmisafe(struct srcu_struct *ssp) __acquires(ssp
- 
- 	srcu_check_nmi_safety(ssp, true);
- 	retval = __srcu_read_lock_nmisafe(ssp);
--	rcu_lock_acquire(&ssp->dep_map);
-+	rcu_try_lock_acquire(&ssp->dep_map);
- 	return retval;
- }
  
 diff --git a/include/linux/thread_info.h b/include/linux/thread_info.h
 index 9ea0b28068f4..5ded1450ac1a 100644
@@ -15308,7 +15105,7 @@ index 4c3d0d9f3db6..63e19b89c8c3 100644
  }
  late_initcall(sched_init_debug);
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index fa9fff0f9620..988c68097ebe 100644
+index d336af9cba13..cf1584dd9c2e 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
 @@ -1016,8 +1016,10 @@ static void clear_buddies(struct cfs_rq *cfs_rq, struct sched_entity *se);
@@ -15710,7 +15507,7 @@ index 760793998cdd..9f4d7ab03e39 100644
  
  	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
 diff --git a/kernel/time/tick-sched.c b/kernel/time/tick-sched.c
-index 87015e9deacc..3bea1d0f2016 100644
+index 55cbc49f70d1..1a0ed106b192 100644
 --- a/kernel/time/tick-sched.c
 +++ b/kernel/time/tick-sched.c
 @@ -795,7 +795,7 @@ static void tick_nohz_restart(struct tick_sched *ts, ktime_t now)
@@ -15754,7 +15551,7 @@ index 63a8ce7177dd..b3fbe97d1e34 100644
  
  /*
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index a55f7d091355..76fb8f2d77c5 100644
+index fc00356a5a0a..5e1752c747d4 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
 @@ -2694,6 +2694,8 @@ unsigned int tracing_gen_ctx_irq_test(unsigned int irqs_status)
@@ -15767,7 +15564,7 @@ index a55f7d091355..76fb8f2d77c5 100644
  		trace_flags |= TRACE_FLAG_PREEMPT_RESCHED;
  	return (trace_flags << 16) | (min_t(unsigned int, pc & 0xff, 0xf)) |
 diff --git a/kernel/trace/trace_output.c b/kernel/trace/trace_output.c
-index db575094c498..c251a44ad8ac 100644
+index 3b7d3e9eb6ea..5a4fefbc0856 100644
 --- a/kernel/trace/trace_output.c
 +++ b/kernel/trace/trace_output.c
 @@ -460,17 +460,29 @@ int trace_print_lat_fmt(struct trace_seq *s, struct trace_entry *entry)
@@ -15803,7 +15600,7 @@ index db575094c498..c251a44ad8ac 100644
  		need_resched = 'p';
  		break;
 diff --git a/net/core/dev.c b/net/core/dev.c
-index e480afb50d4c..227338b8cda8 100644
+index d72a4ff689ca..3c08e3dd115b 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -4705,15 +4705,6 @@ static void rps_trigger_softirq(void *data)
@@ -15855,7 +15652,7 @@ index e480afb50d4c..227338b8cda8 100644
  static int napi_threaded_poll(void *data)
  {
  	struct napi_struct *napi = data;
-@@ -11606,7 +11623,11 @@ static int __init net_dev_init(void)
+@@ -11615,7 +11632,11 @@ static int __init net_dev_init(void)
  		INIT_CSD(&sd->csd, rps_trigger_softirq, sd);
  		sd->cpu = i;
  #endif
