@@ -3,11 +3,11 @@
 #
 #https://packages.debian.org/source/trixie/linux
 #
-abi="6.6.11"
-kernel="6.6.11-1"
+abi="6.6.15"
+kernel="6.6.15-2"
 #
 
-mirror_site="http://192.168.1.12/debian/pool/main/l/linux"
+mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
 debian_site="http://ftp.us.debian.org/debian/pool/main/l/linux"
 incoming_site="http://incoming.debian.org/debian-buildd/pool/main/l/linux"
 
