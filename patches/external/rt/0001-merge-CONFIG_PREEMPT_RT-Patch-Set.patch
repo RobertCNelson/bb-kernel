@@ -1,12 +1,13 @@
-From 4e2c26352cb86be9e7cdbf79471dca6e4417f4ea Mon Sep 17 00:00:00 2001
+From 616aa2572c6e5f2415130227de0408c177da2e98 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 29 Jan 2024 13:21:13 -0600
+Date: Mon, 19 Feb 2024 16:44:09 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.8-rc1-rt2.patch.xz
+patch-6.8-rc4-rt4.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
+ .../admin-guide/kernel-parameters.txt         |  12 +
  arch/arm/Kconfig                              |   6 +-
  arch/arm/mm/fault.c                           |   6 +
  arch/arm/vfp/vfpmodule.c                      |  74 +-
@@ -34,18 +35,18 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/gpu/drm/i915/i915_trace.h             |   6 +-
  drivers/gpu/drm/i915/i915_utils.h             |   2 +-
  drivers/tty/serial/8250/8250_core.c           |  42 +-
- drivers/tty/serial/8250/8250_port.c           | 159 +++-
+ drivers/tty/serial/8250/8250_port.c           | 160 +++-
  drivers/tty/serial/amba-pl011.c               |  12 +-
  drivers/tty/serial/omap-serial.c              |  12 +-
- drivers/tty/tty_io.c                          |  11 +-
+ drivers/tty/tty_io.c                          |   9 +-
  fs/proc/consoles.c                            |  14 +-
  include/linux/bottom_half.h                   |   2 +
- include/linux/console.h                       |  21 +
+ include/linux/console.h                       | 127 ++-
  include/linux/entry-common.h                  |   2 +-
  include/linux/entry-kvm.h                     |   2 +-
  include/linux/interrupt.h                     |  29 +
  include/linux/netdevice.h                     |   4 +
- include/linux/printk.h                        |  30 +-
+ include/linux/printk.h                        |  32 +-
  include/linux/sched.h                         |  13 +-
  include/linux/sched/idle.h                    |   8 +-
  include/linux/serial_8250.h                   |   6 +
@@ -58,10 +59,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/ksysfs.c                               |  12 +
  kernel/locking/lockdep.c                      |   5 +
  kernel/panic.c                                |  17 +
- kernel/printk/internal.h                      |  90 +++
- kernel/printk/nbcon.c                         | 731 ++++++++++++++++--
- kernel/printk/printk.c                        | 642 +++++++++++----
- kernel/printk/printk_ringbuffer.c             | 360 +++++++--
+ kernel/printk/internal.h                      |  98 +++
+ kernel/printk/nbcon.c                         | 732 ++++++++++++++++--
+ kernel/printk/printk.c                        | 675 ++++++++++++----
+ kernel/printk/printk_ringbuffer.c             | 335 ++++++--
  kernel/printk/printk_ringbuffer.h             |  54 +-
  kernel/printk/printk_safe.c                   |  12 +
  kernel/rcu/rcutorture.c                       |   6 +
@@ -79,10 +80,34 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/time/timer.c                           |  11 +-
  kernel/trace/trace.c                          |   2 +
  kernel/trace/trace_output.c                   |  16 +-
+ lib/dump_stack.c                              |  16 +-
  net/core/dev.c                                |  39 +-
  net/core/skbuff.c                             |   7 +-
- 74 files changed, 2558 insertions(+), 425 deletions(-)
+ 76 files changed, 2704 insertions(+), 431 deletions(-)
 
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 31b3a25680d0..b77aa4b1674d 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -6487,6 +6487,18 @@
+ 			Force threading of all interrupt handlers except those
+ 			marked explicitly IRQF_NO_THREAD.
+ 
++	threadprintk	[KNL]
++			Force threaded printing of all legacy consoles. Be
++			aware that with this option, the shutdown, reboot, and
++			panic messages may not be printed on the legacy
++			consoles. Also, earlycon/earlyprintk printing will be
++			delayed until a regular console or the kthread is
++			available.
++
++			Users can view /proc/consoles to see if their console
++			driver is legacy or not. Non-legacy (NBCON) console
++			drivers are already threaded and are shown with 'N'.
++
+ 	topology=	[S390]
+ 			Format: {off | on}
+ 			Specify if the kernel should make use of the cpu
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index 0af6709570d1..25424a7468d9 100644
 --- a/arch/arm/Kconfig
@@ -122,10 +147,10 @@ index 0af6709570d1..25424a7468d9 100644
  	select HAVE_REGS_AND_STACK_ACCESS_API
  	select HAVE_RSEQ
 diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
-index e96fb40b9cc3..5d08af98bdbb 100644
+index 07565b593ed6..3761c1e995cf 100644
 --- a/arch/arm/mm/fault.c
 +++ b/arch/arm/mm/fault.c
-@@ -434,6 +434,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
+@@ -436,6 +436,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
  	if (addr < TASK_SIZE)
  		return do_page_fault(addr, fsr, regs);
  
@@ -135,7 +160,7 @@ index e96fb40b9cc3..5d08af98bdbb 100644
  	if (user_mode(regs))
  		goto bad_area;
  
-@@ -504,6 +507,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
+@@ -506,6 +509,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
  static int
  do_sect_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
  {
@@ -719,7 +744,7 @@ index 3b94d12f41b4..dfc364b0d072 100644
  	ktime_t ac_time;
  #endif
 diff --git a/drivers/gpu/drm/i915/Kconfig b/drivers/gpu/drm/i915/Kconfig
-index b5d6e3352071..4ef176361ad4 100644
+index 3089029abba4..2d5828c5d359 100644
 --- a/drivers/gpu/drm/i915/Kconfig
 +++ b/drivers/gpu/drm/i915/Kconfig
 @@ -3,7 +3,6 @@ config DRM_I915
@@ -781,7 +806,7 @@ index 8a84a31c7b48..73a561af13d1 100644
  	if (intel_vgpu_active(dev_priv))
  		goto out;
 diff --git a/drivers/gpu/drm/i915/display/intel_vblank.c b/drivers/gpu/drm/i915/display/intel_vblank.c
-index fe256bf7b485..5bcb3536967f 100644
+index fe256bf7b485..a3c3faa8f305 100644
 --- a/drivers/gpu/drm/i915/display/intel_vblank.c
 +++ b/drivers/gpu/drm/i915/display/intel_vblank.c
 @@ -275,6 +275,26 @@ int intel_crtc_scanline_to_hw(struct intel_crtc *crtc, int scanline)
@@ -794,7 +819,7 @@ index fe256bf7b485..5bcb3536967f 100644
 +#ifdef I915
 +	spin_lock_irqsave(&i915->uncore.lock, *flags);
 +#else
-+	*flags = NULL;
++	*flags = 0;
 +#endif
 +}
 +
@@ -805,7 +830,7 @@ index fe256bf7b485..5bcb3536967f 100644
 +	spin_unlock_irqrestore(&i915->uncore.lock, flags);
 +#else
 +	if (flags)
-+		;
++		return;
 +#endif
 +}
  static void intel_vblank_section_enter(struct drm_i915_private *i915)
@@ -1078,7 +1103,7 @@ index b62ad9006780..ae637155fe7c 100644
  	.data		= &serial8250_reg,
  };
 diff --git a/drivers/tty/serial/8250/8250_port.c b/drivers/tty/serial/8250/8250_port.c
-index 8ca061d3bbb9..3b26105f0157 100644
+index 8ca061d3bbb9..f799c34f1603 100644
 --- a/drivers/tty/serial/8250/8250_port.c
 +++ b/drivers/tty/serial/8250/8250_port.c
 @@ -550,6 +550,11 @@ static int serial8250_em485_init(struct uart_8250_port *p)
@@ -1121,7 +1146,15 @@ index 8ca061d3bbb9..3b26105f0157 100644
  #ifdef CONFIG_SERIAL_8250_RSA
  /*
   * Attempts to turn on the RSA FIFO.  Returns zero on failure.
-@@ -3320,6 +3337,11 @@ static void serial8250_console_putchar(struct uart_port *port, unsigned char ch)
+@@ -3276,6 +3293,7 @@ void serial8250_init_port(struct uart_8250_port *up)
+ 	struct uart_port *port = &up->port;
+ 
+ 	spin_lock_init(&port->lock);
++	port->nbcon_locked_port = false;
+ 	port->ctrl_id = 0;
+ 	port->pm = NULL;
+ 	port->ops = &serial8250_pops;
+@@ -3320,6 +3338,11 @@ static void serial8250_console_putchar(struct uart_port *port, unsigned char ch)
  
  	wait_for_xmitr(up, UART_LSR_THRE);
  	serial_port_out(port, UART_TX, ch);
@@ -1133,7 +1166,7 @@ index 8ca061d3bbb9..3b26105f0157 100644
  }
  
  /*
-@@ -3348,6 +3370,7 @@ static void serial8250_console_restore(struct uart_8250_port *up)
+@@ -3348,6 +3371,7 @@ static void serial8250_console_restore(struct uart_8250_port *up)
  	serial8250_out_MCR(up, up->mcr | UART_MCR_DTR | UART_MCR_RTS);
  }
  
@@ -1141,7 +1174,7 @@ index 8ca061d3bbb9..3b26105f0157 100644
  /*
   * Print a string to the serial port using the device FIFO
   *
-@@ -3406,7 +3429,7 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3406,7 +3430,7 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  	 *	First save the IER then disable the interrupts
  	 */
  	ier = serial_port_in(port, UART_IER);
@@ -1150,7 +1183,7 @@ index 8ca061d3bbb9..3b26105f0157 100644
  
  	/* check scratch reg to see if port powered off during system sleep */
  	if (up->canary && (up->canary != serial_port_in(port, UART_SCR))) {
-@@ -3472,6 +3495,135 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3472,6 +3496,135 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  	if (locked)
  		uart_port_unlock_irqrestore(port, flags);
  }
@@ -1286,7 +1319,7 @@ index 8ca061d3bbb9..3b26105f0157 100644
  
  static unsigned int probe_baud(struct uart_port *port)
  {
-@@ -3490,6 +3642,7 @@ static unsigned int probe_baud(struct uart_port *port)
+@@ -3490,6 +3643,7 @@ static unsigned int probe_baud(struct uart_port *port)
  
  int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
  {
@@ -1294,7 +1327,7 @@ index 8ca061d3bbb9..3b26105f0157 100644
  	int baud = 9600;
  	int bits = 8;
  	int parity = 'n';
-@@ -3499,6 +3652,8 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
+@@ -3499,6 +3653,8 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
  	if (!port->iobase && !port->membase)
  		return -ENODEV;
  
@@ -1366,20 +1399,18 @@ index f5a0b401af63..c7a039a977cf 100644
  
  static int __init
 diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c
-index 407b0d87b7c1..3d4decd5676f 100644
+index 407b0d87b7c1..c9c914bc033c 100644
 --- a/drivers/tty/tty_io.c
 +++ b/drivers/tty/tty_io.c
-@@ -3567,8 +3567,15 @@ static ssize_t show_cons_active(struct device *dev,
+@@ -3567,8 +3567,13 @@ static ssize_t show_cons_active(struct device *dev,
  	for_each_console(c) {
  		if (!c->device)
  			continue;
 -		if (!c->write)
 -			continue;
 +		if (c->flags & CON_NBCON) {
-+			if (!c->write_atomic &&
-+			    !(c->write_thread && c->kthread)) {
++			if (!c->write_atomic && !c->write_thread)
 +				continue;
-+			}
 +		} else {
 +			if (!c->write)
 +				continue;
@@ -1441,7 +1472,7 @@ index fc53e0ad56d9..448bbef47456 100644
  
  #endif /* _LINUX_BH_H */
 diff --git a/include/linux/console.h b/include/linux/console.h
-index 779d388af8a0..467dee94f73a 100644
+index 779d388af8a0..02d6cabbe500 100644
 --- a/include/linux/console.h
 +++ b/include/linux/console.h
 @@ -16,7 +16,9 @@
@@ -1454,13 +1485,38 @@ index 779d388af8a0..467dee94f73a 100644
  #include <linux/types.h>
  
  struct vc_data;
-@@ -303,9 +305,15 @@ struct nbcon_write_context {
+@@ -137,7 +139,7 @@ static inline int con_debug_leave(void)
+  */
+ 
+ /**
+- * cons_flags - General console flags
++ * enum cons_flags - General console flags
+  * @CON_PRINTBUFFER:	Used by newly registered consoles to avoid duplicate
+  *			output of messages that were already shown by boot
+  *			consoles or read by userspace via syslog() syscall.
+@@ -218,7 +220,7 @@ struct nbcon_state {
+ static_assert(sizeof(struct nbcon_state) <= sizeof(int));
+ 
+ /**
+- * nbcon_prio - console owner priority for nbcon consoles
++ * enum nbcon_prio - console owner priority for nbcon consoles
+  * @NBCON_PRIO_NONE:		Unused
+  * @NBCON_PRIO_NORMAL:		Normal (non-emergency) usage
+  * @NBCON_PRIO_EMERGENCY:	Emergency output (WARN/OOPS...)
+@@ -285,7 +287,7 @@ struct nbcon_write_context {
+ /**
+  * struct console - The console descriptor structure
+  * @name:		The name of the console driver
+- * @write:		Write callback to output messages (Optional)
++ * @write:		Legacy write callback to output messages (Optional)
+  * @read:		Read callback for console input (Optional)
+  * @device:		The underlying TTY device driver (Optional)
+  * @unblank:		Callback to unblank the console (Optional)
+@@ -302,10 +304,12 @@ struct nbcon_write_context {
+  * @data:		Driver private data
   * @node:		hlist node for the console list
   *
-  * @write_atomic:	Write callback for atomic context
-+ * @write_thread:	Write callback for non-atomic context
-+ * @driver_enter:	Callback to begin synchronization with driver code
-+ * @driver_exit:	Callback to finish synchronization with driver code
+- * @write_atomic:	Write callback for atomic context
   * @nbcon_state:	State for nbcon consoles
   * @nbcon_seq:		Sequence number of the next record for nbcon to print
   * @pbufs:		Pointer to nbcon private buffer
@@ -1470,14 +1526,116 @@ index 779d388af8a0..467dee94f73a 100644
   */
  struct console {
  	char			name[16];
-@@ -329,9 +337,16 @@ struct console {
+@@ -327,11 +331,116 @@ struct console {
+ 	struct hlist_node	node;
+ 
  	/* nbcon console specific members */
- 	bool			(*write_atomic)(struct console *con,
- 						struct nbcon_write_context *wctxt);
-+	bool			(*write_thread)(struct console *con,
-+						struct nbcon_write_context *wctxt);
-+	void			(*driver_enter)(struct console *con, unsigned long *flags);
-+	void			(*driver_exit)(struct console *con, unsigned long flags);
+-	bool			(*write_atomic)(struct console *con,
+-						struct nbcon_write_context *wctxt);
++
++	/**
++	 * @write_atomic:
++	 *
++	 * NBCON callback to write out text in any context. (Optional)
++	 *
++	 * This callback is called with the console already acquired. The
++	 * callback can use nbcon_can_proceed() at any time to verify that
++	 * it is still the owner of the console. In the case that it has
++	 * lost ownership, it is no longer allowed to go forward. In this
++	 * case it must back out immediately and carefully. The buffer
++	 * content is also no longer trusted since it no longer belongs to
++	 * the context.
++	 *
++	 * If the callback needs to perform actions where ownership is not
++	 * allowed to be taken over, nbcon_enter_unsafe() and
++	 * nbcon_exit_unsafe() can be used to mark such sections. These
++	 * functions are also points of possible ownership transfer. If
++	 * either function returns false, ownership has been lost.
++	 *
++	 * If the driver must reacquire ownership in order to finalize or
++	 * revert hardware changes, nbcon_reacquire() can be used. However,
++	 * on reacquire the buffer content is no longer available. A
++	 * reacquire cannot be used to resume printing.
++	 *
++	 * This callback can be called from any context (including NMI).
++	 * Therefore it must avoid usage of any locking and instead rely
++	 * on the console ownership for synchronization.
++	 *
++	 * Returns true if all text was successfully written out and
++	 * ownership was never lost, otherwise false.
++	 */
++	bool (*write_atomic)(struct console *con, struct nbcon_write_context *wctxt);
++
++	/**
++	 * @write_thread:
++	 *
++	 * NBCON callback to write out text in task context. (Optional)
++	 *
++	 * This callback is called with the console already acquired. Any
++	 * additional driver synchronization should have been performed by
++	 * driver_enter().
++	 *
++	 * This callback is always called from task context but with migration
++	 * disabled.
++	 *
++	 * The same criteria for console ownership verification and unsafe
++	 * sections applies as with write_atomic(). The difference between
++	 * this callback and write_atomic() is that this callback is used
++	 * during normal operation and is always called from task context.
++	 * This provides drivers with a relatively relaxed locking context
++	 * for synchronizing output to the hardware.
++	 *
++	 * Returns true if all text was successfully written out, otherwise
++	 * false.
++	 */
++	bool (*write_thread)(struct console *con, struct nbcon_write_context *wctxt);
++
++	/**
++	 * @driver_enter:
++	 *
++	 * NBCON callback to begin synchronization with driver code.
++	 * (Required for NBCON if write_thread is provided)
++	 *
++	 * Console drivers typically must deal with access to the hardware
++	 * via user input/output (such as an interactive login shell) and
++	 * output of kernel messages via printk() calls. This callback is
++	 * called before the kernel begins output via the write_thread()
++	 * callback due to printk() calls. The driver can use this
++	 * callback to acquire some driver lock in order to synchronize
++	 * against user input/output (or any other driver functionality).
++	 *
++	 * This callback is always called from task context. It may use any
++	 * synchronization method required by the driver. BUT this callback
++	 * MUST disable migration. The console driver may be using a
++	 * sychronization mechanism that already takes care of this (such as
++	 * spinlocks). Otherwise this function must explicitly call
++	 * migrate_disable().
++	 *
++	 * The flags argument is provided as a convenience to the driver. It
++	 * will be passed again to driver_exit() when printing is completed
++	 * (for example, if spin_lock_irqsave() was used). It can be ignored
++	 * if the driver does not need it.
++	 */
++	void (*driver_enter)(struct console *con, unsigned long *flags);
++
++	/**
++	 * @driver_exit:
++	 *
++	 * NBCON callback to finish synchronization with driver code.
++	 * (Required for NBCON if write_thread is provided)
++	 *
++	 * This callback is called after the kernel has finished printing a
++	 * printk message. It is the counterpart to driver_enter().
++	 *
++	 * This callback is always called from task context. It must
++	 * appropriately re-enable migration (depending on how driver_enter()
++	 * disabled migration).
++	 *
++	 * The flags argument is the value of the same variable that was
++	 * passed to driver_enter().
++	 */
++	void (*driver_exit)(struct console *con, unsigned long flags);
++
  	atomic_t		__private nbcon_state;
  	atomic_long_t		__private nbcon_seq;
  	struct printk_buffers	*pbufs;
@@ -1487,7 +1645,7 @@ index 779d388af8a0..467dee94f73a 100644
  };
  
  #ifdef CONFIG_LOCKDEP
-@@ -459,13 +474,19 @@ static inline bool console_is_registered(const struct console *con)
+@@ -459,13 +568,19 @@ static inline bool console_is_registered(const struct console *con)
  	hlist_for_each_entry(con, &console_list, node)
  
  #ifdef CONFIG_PRINTK
@@ -1590,7 +1748,7 @@ index 118c40258d07..18920348ba30 100644
  
  static inline void input_queue_head_incr(struct softnet_data *sd)
 diff --git a/include/linux/printk.h b/include/linux/printk.h
-index 8ef499ab3c1e..7a942e987b16 100644
+index 8ef499ab3c1e..a2d40a637226 100644
 --- a/include/linux/printk.h
 +++ b/include/linux/printk.h
 @@ -9,6 +9,8 @@
@@ -1626,13 +1784,13 @@ index 8ef499ab3c1e..7a942e987b16 100644
  extern asmlinkage void dump_stack(void) __cold;
  void printk_trigger_flush(void);
 +void printk_legacy_allow_panic_sync(void);
-+extern void nbcon_acquire(struct uart_port *up);
-+extern void nbcon_release(struct uart_port *up);
++extern void uart_nbcon_acquire(struct uart_port *up);
++extern void uart_nbcon_release(struct uart_port *up);
 +void nbcon_atomic_flush_unsafe(void);
  #else
  static inline __printf(1, 0)
  int vprintk(const char *s, va_list args)
-@@ -271,6 +280,23 @@ static inline void dump_stack(void)
+@@ -271,8 +280,27 @@ static inline void dump_stack(void)
  static inline void printk_trigger_flush(void)
  {
  }
@@ -1641,11 +1799,11 @@ index 8ef499ab3c1e..7a942e987b16 100644
 +{
 +}
 +
-+static inline void nbcon_acquire(struct uart_port *up)
++static inline void uart_nbcon_acquire(struct uart_port *up)
 +{
 +}
 +
-+static inline void nbcon_release(struct uart_port *up)
++static inline void uart_nbcon_release(struct uart_port *up)
 +{
 +}
 +
@@ -1655,9 +1813,13 @@ index 8ef499ab3c1e..7a942e987b16 100644
 +
  #endif
  
++bool this_cpu_in_panic(void);
++
  #ifdef CONFIG_SMP
+ extern int __printk_cpu_sync_try_get(void);
+ extern void __printk_cpu_sync_wait(void);
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index cdb8ea53c365..30d82d979855 100644
+index ffe8f618ab86..cb4df5d70e3d 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
 @@ -1791,6 +1791,7 @@ static inline int dl_task_check_affinity(struct task_struct *p, const struct cpu
@@ -1772,7 +1934,7 @@ index be65de65fe61..ec46e3b49ee9 100644
  int serial8250_console_exit(struct uart_port *port);
  
 diff --git a/include/linux/serial_core.h b/include/linux/serial_core.h
-index 536b2581d3e2..4d45b8f9ec9e 100644
+index 536b2581d3e2..4446af2ec09c 100644
 --- a/include/linux/serial_core.h
 +++ b/include/linux/serial_core.h
 @@ -488,6 +488,7 @@ struct uart_port {
@@ -1787,7 +1949,7 @@ index 536b2581d3e2..4d45b8f9ec9e 100644
  static inline void uart_port_lock(struct uart_port *up)
  {
  	spin_lock(&up->lock);
-+	nbcon_acquire(up);
++	uart_nbcon_acquire(up);
  }
  
  /**
@@ -1795,7 +1957,7 @@ index 536b2581d3e2..4d45b8f9ec9e 100644
  static inline void uart_port_lock_irq(struct uart_port *up)
  {
  	spin_lock_irq(&up->lock);
-+	nbcon_acquire(up);
++	uart_nbcon_acquire(up);
  }
  
  /**
@@ -1803,7 +1965,7 @@ index 536b2581d3e2..4d45b8f9ec9e 100644
  static inline void uart_port_lock_irqsave(struct uart_port *up, unsigned long *flags)
  {
  	spin_lock_irqsave(&up->lock, *flags);
-+	nbcon_acquire(up);
++	uart_nbcon_acquire(up);
  }
  
  /**
@@ -1815,7 +1977,7 @@ index 536b2581d3e2..4d45b8f9ec9e 100644
 +	if (!spin_trylock(&up->lock))
 +		return false;
 +
-+	nbcon_acquire(up);
++	uart_nbcon_acquire(up);
 +	return true;
  }
  
@@ -1828,7 +1990,7 @@ index 536b2581d3e2..4d45b8f9ec9e 100644
 +	if (!spin_trylock_irqsave(&up->lock, *flags))
 +		return false;
 +
-+	nbcon_acquire(up);
++	uart_nbcon_acquire(up);
 +	return true;
  }
  
@@ -1837,7 +1999,7 @@ index 536b2581d3e2..4d45b8f9ec9e 100644
   */
  static inline void uart_port_unlock(struct uart_port *up)
  {
-+	nbcon_release(up);
++	uart_nbcon_release(up);
  	spin_unlock(&up->lock);
  }
  
@@ -1845,7 +2007,7 @@ index 536b2581d3e2..4d45b8f9ec9e 100644
   */
  static inline void uart_port_unlock_irq(struct uart_port *up)
  {
-+	nbcon_release(up);
++	uart_nbcon_release(up);
  	spin_unlock_irq(&up->lock);
  }
  
@@ -1854,7 +2016,7 @@ index 536b2581d3e2..4d45b8f9ec9e 100644
   */
  static inline void uart_port_unlock_irqrestore(struct uart_port *up, unsigned long flags)
 +{
-+	nbcon_release(up);
++	uart_nbcon_release(up);
 +	spin_unlock_irqrestore(&up->lock, flags);
 +}
 +
@@ -2151,10 +2313,32 @@ index 2807639aab51..9fa44bc38f46 100644
  
  #ifdef CONFIG_BUG
 diff --git a/kernel/printk/internal.h b/kernel/printk/internal.h
-index 6c2afee5ef62..7db6992c54f3 100644
+index 6c2afee5ef62..1abb4207186f 100644
 --- a/kernel/printk/internal.h
 +++ b/kernel/printk/internal.h
-@@ -44,6 +44,17 @@ enum printk_info_flags {
+@@ -4,6 +4,7 @@
+  */
+ #include <linux/percpu.h>
+ #include <linux/console.h>
++#include <linux/jump_label.h>
+ #include "printk_ringbuffer.h"
+ 
+ #if defined(CONFIG_PRINTK) && defined(CONFIG_SYSCTL)
+@@ -20,6 +21,13 @@ int devkmsg_sysctl_set_loglvl(struct ctl_table *table, int write,
+ 		(con->flags & CON_BOOT) ? "boot" : "",		\
+ 		con->name, con->index, ##__VA_ARGS__)
+ 
++#ifdef CONFIG_PREEMPT_RT
++# define force_printkthreads()		(true)
++#else
++DECLARE_STATIC_KEY_FALSE(force_printkthreads_key);
++# define force_printkthreads()		(static_branch_unlikely(&force_printkthreads_key))
++#endif
++
+ #ifdef CONFIG_PRINTK
+ 
+ #ifdef CONFIG_PRINTK_CALLER
+@@ -44,6 +52,17 @@ enum printk_info_flags {
  };
  
  extern struct printk_ringbuffer *prb;
@@ -2172,7 +2356,7 @@ index 6c2afee5ef62..7db6992c54f3 100644
  
  __printf(4, 0)
  int vprintk_store(int facility, int level,
-@@ -71,12 +82,78 @@ void defer_console_output(void);
+@@ -71,12 +90,79 @@ void defer_console_output(void);
  
  u16 printk_parse_prefix(const char *text, int *level,
  			enum printk_info_flags *flags);
@@ -2186,7 +2370,8 @@ index 6c2afee5ef62..7db6992c54f3 100644
  void nbcon_free(struct console *con);
 +enum nbcon_prio nbcon_get_default_prio(void);
 +void nbcon_atomic_flush_all(void);
-+bool nbcon_atomic_emit_next_record(struct console *con, bool *handover, int cookie);
++bool nbcon_legacy_emit_next_record(struct console *con, bool *handover,
++				   int cookie, bool use_atomic);
 +void nbcon_kthread_create(struct console *con);
 +void nbcon_wake_threads(void);
 +void nbcon_legacy_kthread_create(void);
@@ -2210,7 +2395,7 @@ index 6c2afee5ef62..7db6992c54f3 100644
 +			if (!con->write_atomic)
 +				return false;
 +		} else {
-+			if (!con->write_thread || !con->kthread)
++			if (!con->write_thread)
 +				return false;
 +		}
 +	} else {
@@ -2251,7 +2436,7 @@ index 6c2afee5ef62..7db6992c54f3 100644
  
  #else
  
-@@ -84,6 +161,11 @@ void nbcon_free(struct console *con);
+@@ -84,6 +170,11 @@ void nbcon_free(struct console *con);
  #define PRINTK_MESSAGE_MAX	0
  #define PRINTKRB_RECORD_MAX	0
  
@@ -2263,30 +2448,22 @@ index 6c2afee5ef62..7db6992c54f3 100644
  /*
   * In !PRINTK builds we still export console_sem
   * semaphore and some of console functions (console_unlock()/etc.), so
-@@ -98,6 +180,13 @@ static inline void nbcon_seq_force(struct console *con, u64 seq) { }
+@@ -98,6 +189,13 @@ static inline void nbcon_seq_force(struct console *con, u64 seq) { }
  static inline bool nbcon_alloc(struct console *con) { return false; }
  static inline void nbcon_init(struct console *con) { }
  static inline void nbcon_free(struct console *con) { }
 +static inline enum nbcon_prio nbcon_get_default_prio(void) { return NBCON_PRIO_NONE; }
 +static inline void nbcon_atomic_flush_all(void) { }
-+static inline bool nbcon_atomic_emit_next_record(struct console *con, bool *handover,
-+						 int cookie) { return false; }
++static inline bool nbcon_legacy_emit_next_record(struct console *con, bool *handover,
++						 int cookie, bool use_atomic) { return false; }
 +
 +static inline bool console_is_usable(struct console *con, short flags,
 +				     bool use_atomic) { return false; }
  
  #endif /* CONFIG_PRINTK */
  
-@@ -130,6 +219,7 @@ struct printk_message {
- };
- 
- bool other_cpu_in_panic(void);
-+bool this_cpu_in_panic(void);
- bool printk_get_next_message(struct printk_message *pmsg, u64 seq,
- 			     bool is_extended, bool may_supress);
- 
 diff --git a/kernel/printk/nbcon.c b/kernel/printk/nbcon.c
-index b96077152f49..b53d93585ee7 100644
+index b96077152f49..f2d59a0a93e5 100644
 --- a/kernel/printk/nbcon.c
 +++ b/kernel/printk/nbcon.c
 @@ -5,7 +5,11 @@
@@ -2459,7 +2636,7 @@ index b96077152f49..b53d93585ee7 100644
  
  	/*
  	 * The printk buffers are filled within an unsafe section. This
-@@ -924,17 +929,26 @@ static bool nbcon_emit_next_record(struct nbcon_write_context *wctxt)
+@@ -924,17 +929,24 @@ static bool nbcon_emit_next_record(struct nbcon_write_context *wctxt)
  	nbcon_state_read(con, &cur);
  	wctxt->unsafe_takeover = cur.unsafe_takeover;
  
@@ -2473,9 +2650,7 @@ index b96077152f49..b53d93585ee7 100644
 -		done = false;
 +
 +	} else if (!use_atomic &&
-+		   con->write_thread &&
-+		   con->kthread) {
-+		WARN_ON_ONCE(con->kthread != current);
++		   con->write_thread) {
 +		done = con->write_thread(con, wctxt);
  	}
  
@@ -2493,7 +2668,7 @@ index b96077152f49..b53d93585ee7 100644
  
  	/*
  	 * Since any dropped message was successfully output, reset the
-@@ -961,6 +975,511 @@ static bool nbcon_emit_next_record(struct nbcon_write_context *wctxt)
+@@ -961,6 +973,514 @@ static bool nbcon_emit_next_record(struct nbcon_write_context *wctxt)
  	return nbcon_context_exit_unsafe(ctxt);
  }
  
@@ -2688,10 +2863,11 @@ index b96077152f49..b53d93585ee7 100644
 +}
 +
 +/**
-+ * nbcon_atomic_emit_one - Print one record for an nbcon console using the
-+ *				write_atomic() callback
++ * nbcon_emit_one - Print one record for an nbcon console using the
++ *			specified callback
 + * @wctxt:	An initialized write context struct to use
 + *		for this context
++ * @use_atomic:	True if the write_atomic callback is to be used
 + *
 + * Return:	False if the given console could not print a record or there
 + *		are no more records to print, otherwise true.
@@ -2699,7 +2875,7 @@ index b96077152f49..b53d93585ee7 100644
 + * This is an internal helper to handle the locking of the console before
 + * calling nbcon_emit_next_record().
 + */
-+static bool nbcon_atomic_emit_one(struct nbcon_write_context *wctxt)
++static bool nbcon_emit_one(struct nbcon_write_context *wctxt, bool use_atomic)
 +{
 +	struct nbcon_context *ctxt = &ACCESS_PRIVATE(wctxt, ctxt);
 +
@@ -2711,7 +2887,7 @@ index b96077152f49..b53d93585ee7 100644
 +	 * handed over or taken over. In both cases the context is no
 +	 * longer valid.
 +	 */
-+	if (!nbcon_emit_next_record(wctxt, true))
++	if (!nbcon_emit_next_record(wctxt, use_atomic))
 +		return false;
 +
 +	nbcon_context_release(ctxt);
@@ -2742,53 +2918,55 @@ index b96077152f49..b53d93585ee7 100644
 +}
 +
 +/**
-+ * nbcon_atomic_emit_next_record - Print one record for an nbcon console
-+ *					using the write_atomic() callback
++ * nbcon_legacy_emit_next_record - Print one record for an nbcon console
++ *					in legacy contexts
 + * @con:	The console to print on
 + * @handover:	Will be set to true if a printk waiter has taken over the
 + *		console_lock, in which case the caller is no longer holding
 + *		both the console_lock and the SRCU read lock. Otherwise it
 + *		is set to false.
 + * @cookie:	The cookie from the SRCU read lock.
++ * @use_atomic:	True if the write_atomic callback is to be used
 + *
 + * Context:	Any context which could not be migrated to another CPU.
 + * Return:	True if a record could be printed, otherwise false.
 + *
 + * This function is meant to be called by console_flush_all() to print records
-+ * on nbcon consoles using the write_atomic() callback. Essentially it is the
-+ * nbcon version of console_emit_next_record().
++ * on nbcon consoles from legacy context (printing via console unlocking).
++ * Essentially it is the nbcon version of console_emit_next_record().
 + */
-+bool nbcon_atomic_emit_next_record(struct console *con, bool *handover, int cookie)
++bool nbcon_legacy_emit_next_record(struct console *con, bool *handover,
++				   int cookie, bool use_atomic)
 +{
 +	struct nbcon_write_context wctxt = { };
 +	struct nbcon_context *ctxt = &ACCESS_PRIVATE(&wctxt, ctxt);
-+	unsigned long driver_flags;
 +	bool progress = false;
 +	unsigned long flags;
 +
 +	*handover = false;
 +
-+	/* Use the same locking order as console_emit_next_record(). */
-+	if (!IS_ENABLED(CONFIG_PREEMPT_RT)) {
++	ctxt->console = con;
++
++	if (use_atomic) {
++		/* Use the same procedure as console_emit_next_record(). */
 +		printk_safe_enter_irqsave(flags);
 +		console_lock_spinning_enable();
 +		stop_critical_timings();
-+	}
 +
-+	con->driver_enter(con, &driver_flags);
-+	cant_migrate();
++		ctxt->prio = nbcon_get_default_prio();
++		progress = nbcon_emit_one(&wctxt, use_atomic);
 +
-+	ctxt->console	= con;
-+	ctxt->prio	= nbcon_get_default_prio();
-+
-+	progress = nbcon_atomic_emit_one(&wctxt);
-+
-+	con->driver_exit(con, driver_flags);
-+
-+	if (!IS_ENABLED(CONFIG_PREEMPT_RT)) {
 +		start_critical_timings();
 +		*handover = console_lock_spinning_disable_and_check(cookie);
 +		printk_safe_exit_irqrestore(flags);
++	} else {
++		con->driver_enter(con, &flags);
++		cant_migrate();
++
++		ctxt->prio = nbcon_get_default_prio();
++		progress = nbcon_emit_one(&wctxt, use_atomic);
++
++		con->driver_exit(con, flags);
 +	}
 +
 +	return progress;
@@ -2845,7 +3023,7 @@ index b96077152f49..b53d93585ee7 100644
 +
 +			ctxt->prio = nbcon_get_default_prio();
 +
-+			any_progress |= nbcon_atomic_emit_one(&wctxt);
++			any_progress |= nbcon_emit_one(&wctxt, true);
 +
 +			local_irq_restore(irq_flags);
 +		}
@@ -2995,7 +3173,7 @@ index b96077152f49..b53d93585ee7 100644
 +	printk_threads_enabled = true;
 +	for_each_console(con)
 +		nbcon_kthread_create(con);
-+	if (IS_ENABLED(CONFIG_PREEMPT_RT) && printing_via_unlock)
++	if (force_printkthreads() && printing_via_unlock)
 +		nbcon_legacy_kthread_create();
 +	console_list_unlock();
 +	return 0;
@@ -3005,7 +3183,7 @@ index b96077152f49..b53d93585ee7 100644
  /**
   * nbcon_alloc - Allocate buffers needed by the nbcon console
   * @con:	Console to allocate buffers for
-@@ -1007,8 +1526,11 @@ void nbcon_init(struct console *con)
+@@ -1007,8 +1527,11 @@ void nbcon_init(struct console *con)
  	/* nbcon_alloc() must have been called and successful! */
  	BUG_ON(!con->pbufs);
  
@@ -3017,7 +3195,7 @@ index b96077152f49..b53d93585ee7 100644
  }
  
  /**
-@@ -1019,6 +1541,7 @@ void nbcon_free(struct console *con)
+@@ -1019,6 +1542,7 @@ void nbcon_free(struct console *con)
  {
  	struct nbcon_state state = { };
  
@@ -3025,7 +3203,7 @@ index b96077152f49..b53d93585ee7 100644
  	nbcon_state_set(con, &state);
  
  	/* Boot consoles share global printk buffers. */
-@@ -1027,3 +1550,115 @@ void nbcon_free(struct console *con)
+@@ -1027,3 +1551,115 @@ void nbcon_free(struct console *con)
  
  	con->pbufs = NULL;
  }
@@ -3045,7 +3223,7 @@ index b96077152f49..b53d93585ee7 100644
 +}
 +
 +/**
-+ * nbcon_acquire - The second half of the port locking wrapper
++ * uart_nbcon_acquire - The second half of the port locking wrapper
 + * @up:		The uart port whose @lock was locked
 + *
 + * The uart_port_lock() wrappers will first lock the spin_lock @up->lock.
@@ -3057,7 +3235,7 @@ index b96077152f49..b53d93585ee7 100644
 + * nbcon consoles acquired via the port lock wrapper always use priority
 + * NBCON_PRIO_NORMAL.
 + */
-+void nbcon_acquire(struct uart_port *up)
++void uart_nbcon_acquire(struct uart_port *up)
 +{
 +	struct console *con = up->cons;
 +	struct nbcon_context ctxt;
@@ -3078,10 +3256,10 @@ index b96077152f49..b53d93585ee7 100644
 +
 +	up->nbcon_locked_port = true;
 +}
-+EXPORT_SYMBOL_GPL(nbcon_acquire);
++EXPORT_SYMBOL_GPL(uart_nbcon_acquire);
 +
 +/**
-+ * nbcon_release - The first half of the port unlocking wrapper
++ * uart_nbcon_release - The first half of the port unlocking wrapper
 + * @up:		The uart port whose @lock is about to be unlocked
 + *
 + * The uart_port_unlock() wrappers will first call this function to implement
@@ -3094,7 +3272,7 @@ index b96077152f49..b53d93585ee7 100644
 + * nbcon consoles acquired via the port lock wrapper always use priority
 + * NBCON_PRIO_NORMAL.
 + */
-+void nbcon_release(struct uart_port *up)
++void uart_nbcon_release(struct uart_port *up)
 +{
 +	struct console *con = up->cons;
 +	struct nbcon_context ctxt = {
@@ -3110,7 +3288,7 @@ index b96077152f49..b53d93585ee7 100644
 +
 +	up->nbcon_locked_port = false;
 +}
-+EXPORT_SYMBOL_GPL(nbcon_release);
++EXPORT_SYMBOL_GPL(uart_nbcon_release);
 +
 +/**
 + * printk_kthread_shutdown - shutdown all threaded printers
@@ -3142,10 +3320,28 @@ index b96077152f49..b53d93585ee7 100644
 +}
 +device_initcall(printk_init_ops);
 diff --git a/kernel/printk/printk.c b/kernel/printk/printk.c
-index f2444b581e16..90e951bd0252 100644
+index f2444b581e16..e29f77f4f8b4 100644
 --- a/kernel/printk/printk.c
 +++ b/kernel/printk/printk.c
-@@ -282,6 +282,7 @@ EXPORT_SYMBOL(console_list_unlock);
+@@ -195,6 +195,17 @@ static int __init control_devkmsg(char *str)
+ }
+ __setup("printk.devkmsg=", control_devkmsg);
+ 
++#if !defined(CONFIG_PREEMPT_RT)
++DEFINE_STATIC_KEY_FALSE(force_printkthreads_key);
++
++static int __init setup_forced_printkthreads(char *arg)
++{
++        static_branch_enable(&force_printkthreads_key);
++        return 0;
++}
++early_param("threadprintk", setup_forced_printkthreads);
++#endif
++
+ char devkmsg_log_str[DEVKMSG_STR_MAX_SIZE] = "ratelimit";
+ #if defined(CONFIG_PRINTK) && defined(CONFIG_SYSCTL)
+ int devkmsg_sysctl_set_loglvl(struct ctl_table *table, int write,
+@@ -282,6 +293,7 @@ EXPORT_SYMBOL(console_list_unlock);
   * Return: A cookie to pass to console_srcu_read_unlock().
   */
  int console_srcu_read_lock(void)
@@ -3153,7 +3349,7 @@ index f2444b581e16..90e951bd0252 100644
  {
  	return srcu_read_lock_nmisafe(&console_srcu);
  }
-@@ -295,6 +296,7 @@ EXPORT_SYMBOL(console_srcu_read_lock);
+@@ -295,6 +307,7 @@ EXPORT_SYMBOL(console_srcu_read_lock);
   * Counterpart to console_srcu_read_lock()
   */
  void console_srcu_read_unlock(int cookie)
@@ -3161,7 +3357,7 @@ index f2444b581e16..90e951bd0252 100644
  {
  	srcu_read_unlock_nmisafe(&console_srcu, cookie);
  }
-@@ -347,6 +349,29 @@ static bool panic_in_progress(void)
+@@ -347,6 +360,29 @@ static bool panic_in_progress(void)
  	return unlikely(atomic_read(&panic_cpu) != PANIC_CPU_INVALID);
  }
  
@@ -3191,7 +3387,7 @@ index f2444b581e16..90e951bd0252 100644
  /*
   * This is used for debugging the mess that is the VT code by
   * keeping track if we have the console semaphore held. It's
-@@ -438,14 +463,33 @@ static int console_msg_format = MSG_FORMAT_DEFAULT;
+@@ -438,14 +474,33 @@ static int console_msg_format = MSG_FORMAT_DEFAULT;
  /* syslog_lock protects syslog_* variables and write access to clear_seq. */
  static DEFINE_MUTEX(syslog_lock);
  
@@ -3202,10 +3398,9 @@ index f2444b581e16..90e951bd0252 100644
 + * Specifies if a legacy console is registered. If legacy consoles are
 + * present, it is necessary to perform the console_lock/console_unlock dance
 + * whenever console flushing should occur.
-  */
--static int __read_mostly suppress_panic_printk;
++ */
 +bool have_legacy_console;
- 
++
 +/*
 + * Specifies if an nbcon console is registered. If nbcon consoles are present,
 + * synchronous printing of legacy consoles will not occur during panic until
@@ -3218,9 +3413,10 @@ index f2444b581e16..90e951bd0252 100644
 + * nbcon consoles cannot print simultaneously and must be synchronized by
 + * the console lock. This is because boot consoles and nbcon consoles may
 + * have mapped the same hardware.
-+ */
+  */
+-static int __read_mostly suppress_panic_printk;
 +bool have_boot_console;
-+
+ 
 +#ifdef CONFIG_PRINTK
  DECLARE_WAIT_QUEUE_HEAD(log_wait);
 +
@@ -3229,7 +3425,7 @@ index f2444b581e16..90e951bd0252 100644
  /* All 3 protected by @syslog_lock. */
  /* the next printk record to read by syslog(READ) or /proc/kmsg */
  static u64 syslog_seq;
-@@ -1844,12 +1888,25 @@ static bool console_waiter;
+@@ -1844,12 +1899,25 @@ static bool console_waiter;
   * there may be a waiter spinning (like a spinlock). Also it must be
   * ready to hand over the lock at the end of the section.
   */
@@ -3256,7 +3452,7 @@ index f2444b581e16..90e951bd0252 100644
  	/* The waiter may spin on us after setting console_owner */
  	spin_acquire(&console_owner_dep_map, 0, 0, _THIS_IP_);
  }
-@@ -1870,10 +1927,26 @@ static void console_lock_spinning_enable(void)
+@@ -1870,10 +1938,26 @@ static void console_lock_spinning_enable(void)
   *
   * Return: 1 if the lock rights were passed, 0 otherwise.
   */
@@ -3284,7 +3480,7 @@ index f2444b581e16..90e951bd0252 100644
  	raw_spin_lock(&console_owner_lock);
  	waiter = READ_ONCE(console_waiter);
  	console_owner = NULL;
-@@ -2259,55 +2332,123 @@ int vprintk_store(int facility, int level,
+@@ -2259,55 +2343,123 @@ int vprintk_store(int facility, int level,
  	return ret;
  }
  
@@ -3304,7 +3500,7 @@ index f2444b581e16..90e951bd0252 100644
  			    const char *fmt, va_list args)
  {
 +	bool do_trylock_unlock = printing_via_unlock &&
-+				 !IS_ENABLED(CONFIG_PREEMPT_RT);
++				 !force_printkthreads();
  	int printed_len;
 -	bool in_sched = false;
  
@@ -3423,7 +3619,7 @@ index f2444b581e16..90e951bd0252 100644
  
  	return printed_len;
  }
-@@ -2335,6 +2476,14 @@ EXPORT_SYMBOL(_printk);
+@@ -2335,6 +2487,14 @@ EXPORT_SYMBOL(_printk);
  static bool pr_flush(int timeout_ms, bool reset_on_progress);
  static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progress);
  
@@ -3438,7 +3634,7 @@ index f2444b581e16..90e951bd0252 100644
  #else /* CONFIG_PRINTK */
  
  #define printk_time		false
-@@ -2348,6 +2497,8 @@ static u64 syslog_seq;
+@@ -2348,6 +2508,8 @@ static u64 syslog_seq;
  static bool pr_flush(int timeout_ms, bool reset_on_progress) { return true; }
  static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progress) { return true; }
  
@@ -3447,7 +3643,7 @@ index f2444b581e16..90e951bd0252 100644
  #endif /* CONFIG_PRINTK */
  
  #ifdef CONFIG_EARLY_PRINTK
-@@ -2563,6 +2714,8 @@ void suspend_console(void)
+@@ -2563,6 +2725,8 @@ void suspend_console(void)
  void resume_console(void)
  {
  	struct console *con;
@@ -3456,7 +3652,7 @@ index f2444b581e16..90e951bd0252 100644
  
  	if (!console_suspend_enabled)
  		return;
-@@ -2579,6 +2732,20 @@ void resume_console(void)
+@@ -2579,6 +2743,20 @@ void resume_console(void)
  	 */
  	synchronize_srcu(&console_srcu);
  
@@ -3477,17 +3673,17 @@ index f2444b581e16..90e951bd0252 100644
  	pr_flush(1000, true);
  }
  
-@@ -2593,7 +2760,8 @@ void resume_console(void)
+@@ -2593,7 +2771,8 @@ void resume_console(void)
   */
  static int console_cpu_notify(unsigned int cpu)
  {
 -	if (!cpuhp_tasks_frozen) {
 +	if (!cpuhp_tasks_frozen && printing_via_unlock &&
-+	    !IS_ENABLED(CONFIG_PREEMPT_RT)) {
++	    !force_printkthreads()) {
  		/* If trylock fails, someone else is doing the printing */
  		if (console_trylock())
  			console_unlock();
-@@ -2601,26 +2769,6 @@ static int console_cpu_notify(unsigned int cpu)
+@@ -2601,26 +2780,6 @@ static int console_cpu_notify(unsigned int cpu)
  	return 0;
  }
  
@@ -3514,7 +3710,7 @@ index f2444b581e16..90e951bd0252 100644
  /**
   * console_lock - block the console subsystem from printing
   *
-@@ -2670,42 +2818,14 @@ int is_console_locked(void)
+@@ -2670,36 +2829,6 @@ int is_console_locked(void)
  }
  EXPORT_SYMBOL(is_console_locked);
  
@@ -3551,15 +3747,7 @@ index f2444b581e16..90e951bd0252 100644
  static void __console_unlock(void)
  {
  	console_locked = 0;
- 	up_console_sem();
- }
- 
-+static DEFINE_WAIT_OVERRIDE_MAP(printk_legacy_map, LD_WAIT_SLEEP);
-+
- #ifdef CONFIG_PRINTK
- 
- /*
-@@ -2776,8 +2896,6 @@ void console_prepend_dropped(struct printk_message *pmsg, unsigned long dropped)
+@@ -2776,8 +2905,6 @@ void console_prepend_dropped(struct printk_message *pmsg, unsigned long dropped)
  bool printk_get_next_message(struct printk_message *pmsg, u64 seq,
  			     bool is_extended, bool may_suppress)
  {
@@ -3568,7 +3756,7 @@ index f2444b581e16..90e951bd0252 100644
  	struct printk_buffers *pbufs = pmsg->pbufs;
  	const size_t scratchbuf_sz = sizeof(pbufs->scratchbuf);
  	const size_t outbuf_sz = sizeof(pbufs->outbuf);
-@@ -2805,17 +2923,6 @@ bool printk_get_next_message(struct printk_message *pmsg, u64 seq,
+@@ -2805,17 +2932,6 @@ bool printk_get_next_message(struct printk_message *pmsg, u64 seq,
  	pmsg->seq = r.info->seq;
  	pmsg->dropped = r.info->seq - seq;
  
@@ -3586,7 +3774,41 @@ index f2444b581e16..90e951bd0252 100644
  	/* Skip record that has level above the console loglevel. */
  	if (may_suppress && suppress_message_printing(r.info->level))
  		goto out;
-@@ -2881,31 +2988,45 @@ static bool console_emit_next_record(struct console *con, bool *handover, int co
+@@ -2832,6 +2948,33 @@ bool printk_get_next_message(struct printk_message *pmsg, u64 seq,
+ 	return true;
+ }
+ 
++/*
++ * Legacy console printing from printk() caller context does not respect
++ * raw_spinlock/spinlock nesting. For !PREEMPT_RT the lockdep warning is a
++ * false positive. For PREEMPT_RT the false positive condition does not
++ * occur.
++ *
++ * This map is used to establish LD_WAIT_SLEEP context for the console write
++ * callbacks when legacy printing to avoid false positive lockdep complaints,
++ * thus allowing lockdep to continue to function for real issues.
++ */
++#ifdef CONFIG_PREEMPT_RT
++static inline void printk_legacy_lock_map_acquire_try(void) { }
++static inline void printk_legacy_lock_map_release(void) { }
++#else
++DEFINE_WAIT_OVERRIDE_MAP(printk_legacy_map, LD_WAIT_SLEEP);
++
++static inline void printk_legacy_lock_map_acquire_try(void)
++{
++	lock_map_acquire_try(&printk_legacy_map);
++}
++
++static inline void printk_legacy_lock_map_release(void)
++{
++	lock_map_release(&printk_legacy_map);
++}
++#endif /* CONFIG_PREEMPT_RT */
++
+ /*
+  * Used as the printk buffers for non-panic, serialized console printing.
+  * This is for legacy (!CON_NBCON) as well as all boot (CON_BOOT) consoles.
+@@ -2881,31 +3024,45 @@ static bool console_emit_next_record(struct console *con, bool *handover, int co
  		con->dropped = 0;
  	}
  
@@ -3606,10 +3828,10 @@ index f2444b581e16..90e951bd0252 100644
  
 -	/* Do not trace print latency. */
 -	stop_critical_timings();
-+	if (IS_ENABLED(CONFIG_PREEMPT_RT)) {
++	if (force_printkthreads()) {
 +		/*
-+		 * On PREEMPT_RT this function is either in a thread or
-+		 * panic context. So there is no need for concern about
++		 * With forced threading this function is either in a thread
++		 * or panic context. So there is no need for concern about
 +		 * printk reentrance, handovers, or lockdep complaints.
 +		 */
  
@@ -3636,9 +3858,9 @@ index f2444b581e16..90e951bd0252 100644
 +		stop_critical_timings();
  
 -	con->seq = pmsg.seq + 1;
-+		lock_map_acquire_try(&printk_legacy_map);
++		printk_legacy_lock_map_acquire_try();
 +		con->write(con, outbuf, pmsg.outbuf_len);
-+		lock_map_release(&printk_legacy_map);
++		printk_legacy_lock_map_release();
  
 -	*handover = console_lock_spinning_disable_and_check(cookie);
 -	printk_safe_exit_irqrestore(flags);
@@ -3652,7 +3874,7 @@ index f2444b581e16..90e951bd0252 100644
  skip:
  	return true;
  }
-@@ -2958,13 +3079,33 @@ static bool console_flush_all(bool do_cond_resched, u64 *next_seq, bool *handove
+@@ -2958,13 +3115,30 @@ static bool console_flush_all(bool do_cond_resched, u64 *next_seq, bool *handove
  
  		cookie = console_srcu_read_lock();
  		for_each_console_srcu(con) {
@@ -3668,17 +3890,14 @@ index f2444b581e16..90e951bd0252 100644
 +			if ((flags & CON_NBCON) && con->kthread)
 +				continue;
 +
-+			if (!console_is_usable(con, flags, true))
++			if (!console_is_usable(con, flags, !do_cond_resched))
  				continue;
  			any_usable = true;
  
 -			progress = console_emit_next_record(con, handover, cookie);
 +			if (flags & CON_NBCON) {
-+
-+				lock_map_acquire_try(&printk_legacy_map);
-+				progress = nbcon_atomic_emit_next_record(con, handover, cookie);
-+				lock_map_release(&printk_legacy_map);
-+
++				progress = nbcon_legacy_emit_next_record(con, handover, cookie,
++									 !do_cond_resched);
 +				printk_seq = nbcon_seq_read(con);
 +			} else {
 +				progress = console_emit_next_record(con, handover, cookie);
@@ -3688,7 +3907,7 @@ index f2444b581e16..90e951bd0252 100644
  
  			/*
  			 * If a handover has occurred, the SRCU read lock
-@@ -2974,8 +3115,8 @@ static bool console_flush_all(bool do_cond_resched, u64 *next_seq, bool *handove
+@@ -2974,8 +3148,8 @@ static bool console_flush_all(bool do_cond_resched, u64 *next_seq, bool *handove
  				return false;
  
  			/* Track the next of the highest seq flushed. */
@@ -3699,7 +3918,7 @@ index f2444b581e16..90e951bd0252 100644
  
  			if (!progress)
  				continue;
-@@ -2998,19 +3139,7 @@ static bool console_flush_all(bool do_cond_resched, u64 *next_seq, bool *handove
+@@ -2998,19 +3172,7 @@ static bool console_flush_all(bool do_cond_resched, u64 *next_seq, bool *handove
  	return false;
  }
  
@@ -3720,7 +3939,7 @@ index f2444b581e16..90e951bd0252 100644
  {
  	bool do_cond_resched;
  	bool handover;
-@@ -3054,6 +3183,32 @@ void console_unlock(void)
+@@ -3054,6 +3216,32 @@ void console_unlock(void)
  		 */
  	} while (prb_read_valid(prb, next_seq, NULL) && console_trylock());
  }
@@ -3740,10 +3959,10 @@ index f2444b581e16..90e951bd0252 100644
 +void console_unlock(void)
 +{
 +	/*
-+	 * PREEMPT_RT relies on kthread and atomic consoles for printing.
-+	 * It never attempts to print from console_unlock().
++	 * Forced threading relies on kthread and atomic consoles for
++	 * printing. It never attempts to print from console_unlock().
 +	 */
-+	if (IS_ENABLED(CONFIG_PREEMPT_RT)) {
++	if (force_printkthreads()) {
 +		__console_unlock();
 +		return;
 +	}
@@ -3753,7 +3972,7 @@ index f2444b581e16..90e951bd0252 100644
  EXPORT_SYMBOL(console_unlock);
  
  /**
-@@ -3187,7 +3342,10 @@ void console_flush_on_panic(enum con_flush_mode mode)
+@@ -3187,7 +3375,10 @@ void console_flush_on_panic(enum con_flush_mode mode)
  		console_srcu_read_unlock(cookie);
  	}
  
@@ -3765,7 +3984,7 @@ index f2444b581e16..90e951bd0252 100644
  }
  
  /*
-@@ -3244,13 +3402,122 @@ EXPORT_SYMBOL(console_stop);
+@@ -3244,13 +3435,122 @@ EXPORT_SYMBOL(console_stop);
  
  void console_start(struct console *console)
  {
@@ -3863,7 +4082,7 @@ index f2444b581e16..90e951bd0252 100644
 +
 +	lockdep_assert_held(&console_mutex);
 +
-+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
++	if (!force_printkthreads())
 +		return;
 +
 +	if (!printk_threads_enabled || nbcon_legacy_kthread)
@@ -3888,7 +4107,7 @@ index f2444b581e16..90e951bd0252 100644
  static int __read_mostly keep_bootcon;
  
  static int __init keep_bootcon_setup(char *str)
-@@ -3382,11 +3649,20 @@ static void console_init_seq(struct console *newcon, bool bootcon_registered)
+@@ -3382,11 +3682,20 @@ static void console_init_seq(struct console *newcon, bool bootcon_registered)
  
  				newcon->seq = prb_next_seq(prb);
  				for_each_console(con) {
@@ -3913,7 +4132,7 @@ index f2444b581e16..90e951bd0252 100644
  				}
  			}
  
-@@ -3503,8 +3779,16 @@ void register_console(struct console *newcon)
+@@ -3503,8 +3812,16 @@ void register_console(struct console *newcon)
  	newcon->dropped = 0;
  	console_init_seq(newcon, bootcon_registered);
  
@@ -3931,7 +4150,7 @@ index f2444b581e16..90e951bd0252 100644
  
  	/*
  	 * Put this console in the list - keep the
-@@ -3558,6 +3842,11 @@ EXPORT_SYMBOL(register_console);
+@@ -3558,6 +3875,11 @@ EXPORT_SYMBOL(register_console);
  /* Must be called under console_list_lock(). */
  static int unregister_console_locked(struct console *console)
  {
@@ -3943,7 +4162,7 @@ index f2444b581e16..90e951bd0252 100644
  	int res;
  
  	lockdep_assert_console_list_lock_held();
-@@ -3605,6 +3894,42 @@ static int unregister_console_locked(struct console *console)
+@@ -3605,6 +3927,42 @@ static int unregister_console_locked(struct console *console)
  	if (console->exit)
  		res = console->exit(console);
  
@@ -3986,7 +4205,7 @@ index f2444b581e16..90e951bd0252 100644
  	return res;
  }
  
-@@ -3755,31 +4080,42 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
+@@ -3755,31 +4113,42 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
  	u64 last_diff = 0;
  	u64 printk_seq;
  	short flags;
@@ -4008,7 +4227,7 @@ index f2444b581e16..90e951bd0252 100644
 +	 * Otherwise this function will just wait for the threaded printers
 +	 * to print up to @seq.
 +	 */
-+	if (printing_via_unlock && !IS_ENABLED(CONFIG_PREEMPT_RT)) {
++	if (printing_via_unlock && !force_printkthreads()) {
 +		console_lock();
 +		console_unlock();
 +	}
@@ -4040,7 +4259,7 @@ index f2444b581e16..90e951bd0252 100644
  
  		cookie = console_srcu_read_lock();
  		for_each_console_srcu(c) {
-@@ -3793,12 +4129,15 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
+@@ -3793,12 +4162,15 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
  			 * that they make forward progress, so only increment
  			 * @diff for usable consoles.
  			 */
@@ -4057,7 +4276,7 @@ index f2444b581e16..90e951bd0252 100644
  				printk_seq = c->seq;
  			}
  
-@@ -3810,7 +4149,8 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
+@@ -3810,7 +4182,8 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
  		if (diff != last_diff && reset_on_progress)
  			remaining_jiffies = timeout_jiffies;
  
@@ -4067,15 +4286,15 @@ index f2444b581e16..90e951bd0252 100644
  
  		/* Note: @diff is 0 if there are no usable consoles. */
  		if (diff == 0 || remaining_jiffies == 0)
-@@ -3862,9 +4202,16 @@ static void wake_up_klogd_work_func(struct irq_work *irq_work)
+@@ -3862,9 +4235,16 @@ static void wake_up_klogd_work_func(struct irq_work *irq_work)
  	int pending = this_cpu_xchg(printk_pending, 0);
  
  	if (pending & PRINTK_PENDING_OUTPUT) {
 -		/* If trylock fails, someone else is doing the printing */
 -		if (console_trylock())
 -			console_unlock();
-+		if (IS_ENABLED(CONFIG_PREEMPT_RT)) {
-+			wake_up_interruptible(&legacy_wait);
++		if (force_printkthreads()) {
++			wake_up_legacy_kthread();
 +		} else {
 +			/*
 +			 * If trylock fails, some other context
@@ -4087,7 +4306,7 @@ index f2444b581e16..90e951bd0252 100644
  	}
  
  	if (pending & PRINTK_PENDING_WAKEUP)
-@@ -3932,11 +4279,16 @@ void defer_console_output(void)
+@@ -3932,11 +4312,16 @@ void defer_console_output(void)
  	 * New messages may have been added directly to the ringbuffer
  	 * using vprintk_store(), so wake any waiters as well.
  	 */
@@ -4106,7 +4325,7 @@ index f2444b581e16..90e951bd0252 100644
  }
  
 diff --git a/kernel/printk/printk_ringbuffer.c b/kernel/printk/printk_ringbuffer.c
-index fde338606ce8..e7b808b829a0 100644
+index fde338606ce8..88e8f3a61922 100644
 --- a/kernel/printk/printk_ringbuffer.c
 +++ b/kernel/printk/printk_ringbuffer.c
 @@ -6,6 +6,7 @@
@@ -4321,45 +4540,7 @@ index fde338606ce8..e7b808b829a0 100644
  }
  
  /*
-@@ -1746,6 +1857,8 @@ static bool copy_data(struct prb_data_ring *data_ring,
-  * descriptor. However, it also verifies that the record is finalized and has
-  * the sequence number @seq. On success, 0 is returned.
-  *
-+ * For the panic CPU, committed descriptors are also considered finalized.
-+ *
-  * Error return values:
-  * -EINVAL: A finalized record with sequence number @seq does not exist.
-  * -ENOENT: A finalized record with sequence number @seq exists, but its data
-@@ -1764,16 +1877,25 @@ static int desc_read_finalized_seq(struct prb_desc_ring *desc_ring,
- 
- 	/*
- 	 * An unexpected @id (desc_miss) or @seq mismatch means the record
--	 * does not exist. A descriptor in the reserved or committed state
--	 * means the record does not yet exist for the reader.
-+	 * does not exist. A descriptor in the reserved state means the
-+	 * record does not yet exist for the reader.
- 	 */
- 	if (d_state == desc_miss ||
- 	    d_state == desc_reserved ||
--	    d_state == desc_committed ||
- 	    s != seq) {
- 		return -EINVAL;
- 	}
- 
-+	/*
-+	 * A descriptor in the committed state means the record does not yet
-+	 * exist for the reader. However, for the panic CPU, committed
-+	 * records are also handled as finalized records since they contain
-+	 * message data in a consistent state and may contain additional
-+	 * hints as to the cause of the panic.
-+	 */
-+	if (d_state == desc_committed && !this_cpu_in_panic())
-+		return -EINVAL;
-+
- 	/*
- 	 * A descriptor in the reusable state may no longer have its data
- 	 * available; report it as existing but with lost data. Or the record
-@@ -1832,7 +1954,7 @@ static int prb_read(struct printk_ringbuffer *rb, u64 seq,
+@@ -1832,7 +1943,7 @@ static int prb_read(struct printk_ringbuffer *rb, u64 seq,
  }
  
  /* Get the sequence number of the tail descriptor. */
@@ -4368,7 +4549,7 @@ index fde338606ce8..e7b808b829a0 100644
  {
  	struct prb_desc_ring *desc_ring = &rb->desc_ring;
  	enum desc_state d_state;
-@@ -1875,12 +1997,131 @@ static u64 prb_first_seq(struct printk_ringbuffer *rb)
+@@ -1875,12 +1986,123 @@ static u64 prb_first_seq(struct printk_ringbuffer *rb)
  	return seq;
  }
  
@@ -4410,8 +4591,8 @@ index fde338606ce8..e7b808b829a0 100644
 +	last_finalized_seq = desc_last_finalized_seq(rb);
 +
 +	/*
-+	 * @head_id is loaded after @last_finalized_seq to ensure that it is
-+	 * at or beyond @last_finalized_seq.
++	 * @head_id is loaded after @last_finalized_seq to ensure that
++	 * it points to the record with @last_finalized_seq or newer.
 +	 *
 +	 * Memory barrier involvement:
 +	 *
@@ -4444,25 +4625,20 @@ index fde338606ce8..e7b808b829a0 100644
 +	if (err == -EINVAL) {
 +		if (last_finalized_seq == 0) {
 +			/*
-+			 * @last_finalized_seq still contains its initial
-+			 * value. Probably no record has been finalized yet.
-+			 * This means the ringbuffer is not yet full and the
-+			 * @head_id value can be used directly (subtracting
-+			 * off the id value corresponding to seq=0).
-+			 */
-+
-+			/*
-+			 * Because of hack#2 of the bootstrapping phase, the
-+			 * @head_id initial value must be handled separately.
++			 * No record has been finalized or even reserved yet.
++			 *
++			 * The @head_id is initialized such that the first
++			 * increment will yield the first record (seq=0).
++			 * Handle it separately to avoid a negative @diff
++			 * below.
 +			 */
 +			if (head_id == DESC0_ID(desc_ring->count_bits))
 +				return 0;
 +
 +			/*
-+			 * The @head_id is initialized such that the first
-+			 * increment will yield the first record (seq=0).
-+			 * Therefore use the initial value +1 as the base to
-+			 * subtract from @head_id.
++			 * One or more descriptors are already reserved. Use
++			 * the descriptor ID of the first one (@seq=0) for
++			 * the @diff below.
 +			 */
 +			last_finalized_id = DESC0_ID(desc_ring->count_bits) + 1;
 +		} else {
@@ -4471,10 +4647,7 @@ index fde338606ce8..e7b808b829a0 100644
 +		}
 +	}
 +
-+	/*
-+	 * @diff is the number of records beyond the last record available
-+	 * to readers.
-+	 */
++	/* Diff of known descriptor IDs to compute related sequence numbers. */
 +	diff = head_id - last_finalized_id;
 +
 +	/*
@@ -4489,22 +4662,22 @@ index fde338606ce8..e7b808b829a0 100644
 - * Non-blocking read of a record. Updates @seq to the last finalized record
 - * (which may have no data available).
 + * Non-blocking read of a record.
-  *
-- * See the description of prb_read_valid() and prb_read_valid_info()
-- * for details.
++ *
 + * On success @seq is updated to the record that was read and (if provided)
 + * @r and @line_count will contain the read/calculated data.
 + *
 + * On failure @seq is updated to a record that is not yet available to the
 + * reader, but it will be the next record available to the reader.
-+ *
+  *
+- * See the description of prb_read_valid() and prb_read_valid_info()
+- * for details.
 + * Note: When the current CPU is in panic, this function will skip over any
 + *       non-existent/non-finalized records in order to allow the panic CPU
 + *       to print any and all records that have been finalized.
   */
  static bool _prb_read_valid(struct printk_ringbuffer *rb, u64 *seq,
  			    struct printk_record *r, unsigned int *line_count)
-@@ -1899,12 +2140,32 @@ static bool _prb_read_valid(struct printk_ringbuffer *rb, u64 *seq,
+@@ -1899,12 +2121,32 @@ static bool _prb_read_valid(struct printk_ringbuffer *rb, u64 *seq,
  			*seq = tail_seq;
  
  		} else if (err == -ENOENT) {
@@ -4540,7 +4713,7 @@ index fde338606ce8..e7b808b829a0 100644
  		}
  	}
  
-@@ -1932,7 +2193,7 @@ static bool _prb_read_valid(struct printk_ringbuffer *rb, u64 *seq,
+@@ -1932,7 +2174,7 @@ static bool _prb_read_valid(struct printk_ringbuffer *rb, u64 *seq,
   * On success, the reader must check r->info.seq to see which record was
   * actually read. This allows the reader to detect dropped records.
   *
@@ -4549,7 +4722,7 @@ index fde338606ce8..e7b808b829a0 100644
   */
  bool prb_read_valid(struct printk_ringbuffer *rb, u64 seq,
  		    struct printk_record *r)
-@@ -1962,7 +2223,7 @@ bool prb_read_valid(struct printk_ringbuffer *rb, u64 seq,
+@@ -1962,7 +2204,7 @@ bool prb_read_valid(struct printk_ringbuffer *rb, u64 seq,
   * On success, the reader must check info->seq to see which record meta data
   * was actually read. This allows the reader to detect dropped records.
   *
@@ -4558,7 +4731,7 @@ index fde338606ce8..e7b808b829a0 100644
   */
  bool prb_read_valid_info(struct printk_ringbuffer *rb, u64 seq,
  			 struct printk_info *info, unsigned int *line_count)
-@@ -2008,7 +2269,9 @@ u64 prb_first_valid_seq(struct printk_ringbuffer *rb)
+@@ -2008,7 +2250,9 @@ u64 prb_first_valid_seq(struct printk_ringbuffer *rb)
   * newest sequence number available to readers will be.
   *
   * This provides readers a sequence number to jump to if all currently
@@ -4569,7 +4742,7 @@ index fde338606ce8..e7b808b829a0 100644
   *
   * Context: Any context.
   * Return: The sequence number of the next newest (not yet available) record
-@@ -2016,34 +2279,19 @@ u64 prb_first_valid_seq(struct printk_ringbuffer *rb)
+@@ -2016,34 +2260,19 @@ u64 prb_first_valid_seq(struct printk_ringbuffer *rb)
   */
  u64 prb_next_seq(struct printk_ringbuffer *rb)
  {
@@ -4614,7 +4787,7 @@ index fde338606ce8..e7b808b829a0 100644
  
  	/*
  	 * The information about the last finalized @seq might be inaccurate.
-@@ -2085,7 +2333,7 @@ void prb_init(struct printk_ringbuffer *rb,
+@@ -2085,7 +2314,7 @@ void prb_init(struct printk_ringbuffer *rb,
  	rb->desc_ring.infos = infos;
  	atomic_long_set(&rb->desc_ring.head_id, DESC0_ID(descbits));
  	atomic_long_set(&rb->desc_ring.tail_id, DESC0_ID(descbits));
@@ -5285,10 +5458,10 @@ index 210cf5f8d92c..cae0ae2e2b0b 100644
  }
  early_initcall(spawn_ksoftirqd);
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index 760793998cdd..9f4d7ab03e39 100644
+index edb0f821dcea..a7290012179a 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
-@@ -1808,7 +1808,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1809,7 +1809,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	if (!ktime_before(now, cpu_base->softirq_expires_next)) {
  		cpu_base->softirq_expires_next = KTIME_MAX;
  		cpu_base->softirq_activated = 1;
@@ -5297,7 +5470,7 @@ index 760793998cdd..9f4d7ab03e39 100644
  	}
  
  	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
-@@ -1921,7 +1921,7 @@ void hrtimer_run_queues(void)
+@@ -1922,7 +1922,7 @@ void hrtimer_run_queues(void)
  	if (!ktime_before(now, cpu_base->softirq_expires_next)) {
  		cpu_base->softirq_expires_next = KTIME_MAX;
  		cpu_base->softirq_activated = 1;
@@ -5307,7 +5480,7 @@ index 760793998cdd..9f4d7ab03e39 100644
  
  	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
 diff --git a/kernel/time/tick-sched.c b/kernel/time/tick-sched.c
-index d2501673028d..80ef14a743bc 100644
+index 01fb50c1b17e..910c04d7fa0d 100644
 --- a/kernel/time/tick-sched.c
 +++ b/kernel/time/tick-sched.c
 @@ -796,7 +796,7 @@ static void tick_nohz_restart(struct tick_sched *ts, ktime_t now)
@@ -5351,10 +5524,10 @@ index 352b161113cd..d6bf128262c9 100644
  
  /*
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index 2a7c6fd934e9..c984a071e277 100644
+index 9ff8a439d674..1239c35a7772 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
-@@ -2703,6 +2703,8 @@ unsigned int tracing_gen_ctx_irq_test(unsigned int irqs_status)
+@@ -2714,6 +2714,8 @@ unsigned int tracing_gen_ctx_irq_test(unsigned int irqs_status)
  
  	if (tif_need_resched())
  		trace_flags |= TRACE_FLAG_NEED_RESCHED;
@@ -5399,8 +5572,41 @@ index 3e7fa44dc2b2..5e120c2404cf 100644
  	case TRACE_FLAG_PREEMPT_RESCHED:
  		need_resched = 'p';
  		break;
+diff --git a/lib/dump_stack.c b/lib/dump_stack.c
+index 83471e81501a..222c6d6c8281 100644
+--- a/lib/dump_stack.c
++++ b/lib/dump_stack.c
+@@ -96,15 +96,25 @@ static void __dump_stack(const char *log_lvl)
+  */
+ asmlinkage __visible void dump_stack_lvl(const char *log_lvl)
+ {
++	bool in_panic = this_cpu_in_panic();
+ 	unsigned long flags;
+ 
+ 	/*
+ 	 * Permit this cpu to perform nested stack dumps while serialising
+-	 * against other CPUs
++	 * against other CPUs, unless this CPU is in panic.
++	 *
++	 * When in panic, non-panic CPUs are not permitted to store new
++	 * printk messages so there is no need to synchronize the output.
++	 * This avoids potential deadlock in panic() if another CPU is
++	 * holding and unable to release the printk_cpu_sync.
+ 	 */
+-	printk_cpu_sync_get_irqsave(flags);
++	if (!in_panic)
++		printk_cpu_sync_get_irqsave(flags);
++
+ 	__dump_stack(log_lvl);
+-	printk_cpu_sync_put_irqrestore(flags);
++
++	if (!in_panic)
++		printk_cpu_sync_put_irqrestore(flags);
+ }
+ EXPORT_SYMBOL(dump_stack_lvl);
+ 
 diff --git a/net/core/dev.c b/net/core/dev.c
-index f01a9b858347..9e53d6395c29 100644
+index cb2dab0feee0..d7d1d5096cc8 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -4684,15 +4684,6 @@ static void rps_trigger_softirq(void *data)
@@ -5452,7 +5658,7 @@ index f01a9b858347..9e53d6395c29 100644
  static int napi_threaded_poll(void *data)
  {
  	struct napi_struct *napi = data;
-@@ -11723,7 +11740,11 @@ static int __init net_dev_init(void)
+@@ -11732,7 +11749,11 @@ static int __init net_dev_init(void)
  		INIT_CSD(&sd->csd, rps_trigger_softirq, sd);
  		sd->cpu = i;
  #endif
