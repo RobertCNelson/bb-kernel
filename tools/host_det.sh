@@ -452,6 +452,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="jammy"
 			;;
+		wilma)
+			#22
+			#http://packages.linuxmint.com/index.php
+			deb_distro="noble"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix
@@ -503,15 +508,14 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		focal|jammy|lunar|mantic|nobile)
+		focal|jammy|mantic|noble)
 			#20.04 focal: (EOL: April 2025) lts: focal -> jammy
-			#22.04 jammy: (EOL: April 2027) lts: jammy -> nobile
-			#23.04 lunar: (EOL: January 2024)
+			#22.04 jammy: (EOL: April 2027) lts: jammy -> noble
 			#23.10 mantic: (EOL: July 2024)
-			#24.04 nobile: (EOL: June 2029) lts: nobile -> xyz
+			#24.04 noble: (EOL: June 2029) lts: noble -> xyz
 			unset warn_eol_distro
 			;;
-		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|groovy|hirsute|impish|kinetic)
+		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|groovy|hirsute|impish|kinetic|lunar)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
@@ -537,6 +541,7 @@ debian_regs () {
 			#21.04 hirsute: (EOL: January 2022)
 			#21.10 impish: (EOL: July 2022)
 			#22.10 kinetic: (EOL: July 2023)
+			#23.04 lunar: (EOL: January 2024)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
