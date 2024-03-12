@@ -388,7 +388,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.211"
+	backport_tag="v5.10.212"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -422,8 +422,6 @@ backports () {
 
 drivers () {
 	dir 'boris'
-	###FIXME: this driver needs to be rewritten to use gpiolib directly, instead of hacking and reverting gpiolib changes to make it steal access
-	#dir 'drivers/ti/gpio'
 }
 
 ###
@@ -434,7 +432,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.7.8"
+		backport_tag="v6.8"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
