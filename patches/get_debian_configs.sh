@@ -3,8 +3,8 @@
 #
 #https://packages.debian.org/source/trixie/linux
 #
-abi="6.5.0-5"
-kernel="6.5.13-1"
+abi="6.6.15"
+kernel="6.6.15-2"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
