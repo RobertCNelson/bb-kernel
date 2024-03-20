@@ -1,13 +1,13 @@
-From 15c26a0d9733f2c658705a3d7432a675ca83581f Mon Sep 17 00:00:00 2001
+From fcf02300888013f7b84797e17518b3120546f761 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 26 Feb 2024 16:08:02 -0600
+Date: Tue, 19 Mar 2024 20:31:36 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.1.77-rt24.patch.xz
+patch-6.1.80-rt26.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- arch/arm/Kconfig                              |   5 +-
+ arch/arm/Kconfig                              |   7 +-
  arch/arm/include/asm/thread_info.h            |   6 +-
  arch/arm/kernel/asm-offsets.c                 |   1 +
  arch/arm/kernel/entry-armv.S                  |  19 +-
@@ -184,10 +184,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/netfilter/nf_tables_api.c                 |   4 +-
  net/openvswitch/datapath.c                    |   4 +-
  net/openvswitch/flow_table.c                  |   9 +-
- 177 files changed, 2422 insertions(+), 684 deletions(-)
+ 177 files changed, 2423 insertions(+), 685 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
-index 6d5afe2e6ba3..d1f2e062ce0b 100644
+index 6d5afe2e6ba3..5d92aef787e3 100644
 --- a/arch/arm/Kconfig
 +++ b/arch/arm/Kconfig
 @@ -33,6 +33,7 @@ config ARM
@@ -207,6 +207,15 @@ index 6d5afe2e6ba3..d1f2e062ce0b 100644
  	select HAVE_ARCH_KFENCE if MMU && !XIP_KERNEL
  	select HAVE_ARCH_KGDB if !CPU_ENDIAN_BE32 && MMU
  	select HAVE_ARCH_KASAN if MMU && !XIP_KERNEL
+@@ -94,7 +95,7 @@ config ARM
+ 	select HAVE_DYNAMIC_FTRACE_WITH_REGS if HAVE_DYNAMIC_FTRACE
+ 	select HAVE_EFFICIENT_UNALIGNED_ACCESS if (CPU_V6 || CPU_V6K || CPU_V7) && MMU
+ 	select HAVE_EXIT_THREAD
+-	select HAVE_FAST_GUP if ARM_LPAE
++	select HAVE_FAST_GUP if ARM_LPAE && !(PREEMPT_RT && HIGHPTE)
+ 	select HAVE_FTRACE_MCOUNT_RECORD if !XIP_KERNEL
+ 	select HAVE_FUNCTION_GRAPH_TRACER
+ 	select HAVE_FUNCTION_TRACER if !XIP_KERNEL
 @@ -115,6 +116,8 @@ config ARM
  	select HAVE_PERF_EVENTS
  	select HAVE_PERF_REGS
@@ -513,7 +522,7 @@ index 1c8460e23583..b1653c160bab 100644
  	canary ^= LINUX_VERSION_CODE;
  	canary &= CANARY_MASK;
 diff --git a/arch/powerpc/include/asm/thread_info.h b/arch/powerpc/include/asm/thread_info.h
-index af58f1ed3952..520864de8bb2 100644
+index c4b798aa6ce8..923621486811 100644
 --- a/arch/powerpc/include/asm/thread_info.h
 +++ b/arch/powerpc/include/asm/thread_info.h
 @@ -53,6 +53,8 @@
@@ -1330,10 +1339,10 @@ index 044b8afde69a..e296546f03cd 100644
  	stats->rx_dropped = rx_drops;
  	stats->tx_dropped = tx_drops;
 diff --git a/drivers/net/ethernet/aquantia/atlantic/aq_ring.c b/drivers/net/ethernet/aquantia/atlantic/aq_ring.c
-index 9c314fe14ab6..0367ea605871 100644
+index 0eaaba3a18ee..4f6315e5b714 100644
 --- a/drivers/net/ethernet/aquantia/atlantic/aq_ring.c
 +++ b/drivers/net/ethernet/aquantia/atlantic/aq_ring.c
-@@ -928,7 +928,7 @@ unsigned int aq_ring_fill_stats_data(struct aq_ring_s *self, u64 *data)
+@@ -941,7 +941,7 @@ unsigned int aq_ring_fill_stats_data(struct aq_ring_s *self, u64 *data)
  		/* This data should mimic aq_ethtool_queue_rx_stat_names structure */
  		do {
  			count = 0;
@@ -1342,7 +1351,7 @@ index 9c314fe14ab6..0367ea605871 100644
  			data[count] = self->stats.rx.packets;
  			data[++count] = self->stats.rx.jumbo_packets;
  			data[++count] = self->stats.rx.lro_packets;
-@@ -945,15 +945,15 @@ unsigned int aq_ring_fill_stats_data(struct aq_ring_s *self, u64 *data)
+@@ -958,15 +958,15 @@ unsigned int aq_ring_fill_stats_data(struct aq_ring_s *self, u64 *data)
  			data[++count] = self->stats.rx.xdp_tx;
  			data[++count] = self->stats.rx.xdp_invalid;
  			data[++count] = self->stats.rx.xdp_redirect;
@@ -1892,7 +1901,7 @@ index 107bcca7db8c..8f36fe90180f 100644
  	/* Once we successfully copy the stats in, update the data pointer */
  	*data += size;
 diff --git a/drivers/net/ethernet/intel/i40e/i40e_main.c b/drivers/net/ethernet/intel/i40e/i40e_main.c
-index 63d43ef86f9b..8003cf091eee 100644
+index 76455405a6d8..ba3918878831 100644
 --- a/drivers/net/ethernet/intel/i40e/i40e_main.c
 +++ b/drivers/net/ethernet/intel/i40e/i40e_main.c
 @@ -425,10 +425,10 @@ static void i40e_get_netdev_stats_struct_tx(struct i40e_ring *ring,
@@ -2785,10 +2794,10 @@ index 5ea9dc251dd9..c678876a7826 100644
  
  static const struct net_device_ops axienet_netdev_ops = {
 diff --git a/drivers/net/hyperv/netvsc_drv.c b/drivers/net/hyperv/netvsc_drv.c
-index c1aac6ceb29e..8ef5ef955c27 100644
+index 1b7405539984..453ff84b784a 100644
 --- a/drivers/net/hyperv/netvsc_drv.c
 +++ b/drivers/net/hyperv/netvsc_drv.c
-@@ -1264,12 +1264,12 @@ static void netvsc_get_vf_stats(struct net_device *net,
+@@ -1268,12 +1268,12 @@ static void netvsc_get_vf_stats(struct net_device *net,
  		unsigned int start;
  
  		do {
@@ -2803,7 +2812,7 @@ index c1aac6ceb29e..8ef5ef955c27 100644
  
  		tot->rx_packets += rx_packets;
  		tot->tx_packets += tx_packets;
-@@ -1294,12 +1294,12 @@ static void netvsc_get_pcpu_stats(struct net_device *net,
+@@ -1298,12 +1298,12 @@ static void netvsc_get_pcpu_stats(struct net_device *net,
  		unsigned int start;
  
  		do {
@@ -2818,7 +2827,7 @@ index c1aac6ceb29e..8ef5ef955c27 100644
  		this_tot->rx_packets = this_tot->vf_rx_packets;
  		this_tot->tx_packets = this_tot->vf_tx_packets;
  		this_tot->rx_bytes   = this_tot->vf_rx_bytes;
-@@ -1318,20 +1318,20 @@ static void netvsc_get_pcpu_stats(struct net_device *net,
+@@ -1322,20 +1322,20 @@ static void netvsc_get_pcpu_stats(struct net_device *net,
  
  		tx_stats = &nvchan->tx_stats;
  		do {
@@ -2843,7 +2852,7 @@ index c1aac6ceb29e..8ef5ef955c27 100644
  
  		this_tot->rx_bytes	+= bytes;
  		this_tot->rx_packets	+= packets;
-@@ -1370,21 +1370,21 @@ static void netvsc_get_stats64(struct net_device *net,
+@@ -1374,21 +1374,21 @@ static void netvsc_get_stats64(struct net_device *net,
  
  		tx_stats = &nvchan->tx_stats;
  		do {
@@ -2869,7 +2878,7 @@ index c1aac6ceb29e..8ef5ef955c27 100644
  
  		t->rx_bytes	+= bytes;
  		t->rx_packets	+= packets;
-@@ -1527,24 +1527,24 @@ static void netvsc_get_ethtool_stats(struct net_device *dev,
+@@ -1531,24 +1531,24 @@ static void netvsc_get_ethtool_stats(struct net_device *dev,
  		tx_stats = &nvdev->chan_table[j].tx_stats;
  
  		do {
@@ -4200,7 +4209,7 @@ index 583a340f9934..1f31320820a6 100644
  	  This selects whether you want to include the driver for the standard
  	  serial ports.  The standard answer is Y.  People who might say N
 diff --git a/drivers/tty/serial/amba-pl011.c b/drivers/tty/serial/amba-pl011.c
-index c74eaf2552c3..38eb30b8491b 100644
+index 2f0f05259778..eee5141ecd3a 100644
 --- a/drivers/tty/serial/amba-pl011.c
 +++ b/drivers/tty/serial/amba-pl011.c
 @@ -2316,18 +2316,24 @@ pl011_console_write(struct console *co, const char *s, unsigned int count)
@@ -4562,10 +4571,10 @@ index 0373e0935990..55d698367883 100644
  
  static inline void input_queue_head_incr(struct softnet_data *sd)
 diff --git a/include/linux/preempt.h b/include/linux/preempt.h
-index 8cfcc5d45451..9fc4c4bb320f 100644
+index 9aa6358a1a16..e9f0d08733f4 100644
 --- a/include/linux/preempt.h
 +++ b/include/linux/preempt.h
-@@ -207,6 +207,20 @@ extern void preempt_count_sub(int val);
+@@ -208,6 +208,20 @@ extern void preempt_count_sub(int val);
  #define preempt_count_inc() preempt_count_add(1)
  #define preempt_count_dec() preempt_count_sub(1)
  
@@ -4586,7 +4595,7 @@ index 8cfcc5d45451..9fc4c4bb320f 100644
  #ifdef CONFIG_PREEMPT_COUNT
  
  #define preempt_disable() \
-@@ -215,6 +229,12 @@ do { \
+@@ -216,6 +230,12 @@ do { \
  	barrier(); \
  } while (0)
  
@@ -4599,7 +4608,7 @@ index 8cfcc5d45451..9fc4c4bb320f 100644
  #define sched_preempt_enable_no_resched() \
  do { \
  	barrier(); \
-@@ -246,6 +266,18 @@ do { \
+@@ -247,6 +267,18 @@ do { \
  		__preempt_schedule(); \
  } while (0)
  
@@ -4618,7 +4627,7 @@ index 8cfcc5d45451..9fc4c4bb320f 100644
  #else /* !CONFIG_PREEMPTION */
  #define preempt_enable() \
  do { \
-@@ -253,6 +285,12 @@ do { \
+@@ -254,6 +286,12 @@ do { \
  	preempt_count_dec(); \
  } while (0)
  
@@ -4631,7 +4640,7 @@ index 8cfcc5d45451..9fc4c4bb320f 100644
  #define preempt_enable_notrace() \
  do { \
  	barrier(); \
-@@ -293,6 +331,9 @@ do { \
+@@ -294,6 +332,9 @@ do { \
  #define preempt_enable_notrace()		barrier()
  #define preemptible()				0
  
@@ -4641,7 +4650,7 @@ index 8cfcc5d45451..9fc4c4bb320f 100644
  #endif /* CONFIG_PREEMPT_COUNT */
  
  #ifdef MODULE
-@@ -311,7 +352,7 @@ do { \
+@@ -312,7 +353,7 @@ do { \
  } while (0)
  #define preempt_fold_need_resched() \
  do { \
@@ -4650,7 +4659,7 @@ index 8cfcc5d45451..9fc4c4bb320f 100644
  		set_preempt_need_resched(); \
  } while (0)
  
-@@ -427,8 +468,15 @@ extern void migrate_enable(void);
+@@ -428,8 +469,15 @@ extern void migrate_enable(void);
  
  #else
  
@@ -4763,7 +4772,7 @@ index 20099268fa25..669e8cff40c7 100644
  
  	/* ITIMER_REAL timer for the process */
 diff --git a/include/linux/sched/task.h b/include/linux/sched/task.h
-index 7291fb6399d2..de7ebd2bf3ba 100644
+index aaa25ed1a8fe..a51c36397324 100644
 --- a/include/linux/sched/task.h
 +++ b/include/linux/sched/task.h
 @@ -141,8 +141,12 @@ static inline void put_task_struct(struct task_struct *t)
@@ -4779,7 +4788,7 @@ index 7291fb6399d2..de7ebd2bf3ba 100644
 +	}
  }
  
- static inline void put_task_struct_many(struct task_struct *t, int nr)
+ DEFINE_FREE(put_task, struct task_struct *, if (_T) put_task_struct(_T))
 diff --git a/include/linux/serial_8250.h b/include/linux/serial_8250.h
 index 79b328861c5f..35f44352e641 100644
 --- a/include/linux/serial_8250.h
@@ -4893,10 +4902,10 @@ index 46040d66334a..ffe48e69b3f3 100644
 -
  #endif /* _LINUX_U64_STATS_SYNC_H */
 diff --git a/init/Kconfig b/init/Kconfig
-index 148704640252..918974d0c9f7 100644
+index ffb927bf6034..213550cdadd3 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -1582,6 +1582,10 @@ config PRINTK
+@@ -1591,6 +1591,10 @@ config PRINTK
  	  very difficult to diagnose system problems, saying N here is
  	  strongly discouraged.
  
@@ -7209,10 +7218,10 @@ index c8a6913c067d..af9e879bbbf7 100644
  }
  early_initcall(spawn_ksoftirqd);
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index 5561dabc9b22..c5d480d5da15 100644
+index 9bb88836c42e..11c704bfd4fb 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
-@@ -1805,7 +1805,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1806,7 +1806,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	if (!ktime_before(now, cpu_base->softirq_expires_next)) {
  		cpu_base->softirq_expires_next = KTIME_MAX;
  		cpu_base->softirq_activated = 1;
@@ -7221,7 +7230,7 @@ index 5561dabc9b22..c5d480d5da15 100644
  	}
  
  	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
-@@ -1918,7 +1918,7 @@ void hrtimer_run_queues(void)
+@@ -1919,7 +1919,7 @@ void hrtimer_run_queues(void)
  	if (!ktime_before(now, cpu_base->softirq_expires_next)) {
  		cpu_base->softirq_expires_next = KTIME_MAX;
  		cpu_base->softirq_activated = 1;
@@ -7305,10 +7314,10 @@ index 717fcb9fb14a..e6219da89933 100644
  
  /*
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index 2b3c4cd8382b..cacc87a941cf 100644
+index f667d6bdddda..3bc4f34507f0 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
-@@ -2630,11 +2630,19 @@ unsigned int tracing_gen_ctx_irq_test(unsigned int irqs_status)
+@@ -2644,11 +2644,19 @@ unsigned int tracing_gen_ctx_irq_test(unsigned int irqs_status)
  	if (softirq_count() >> (SOFTIRQ_SHIFT + 1))
  		trace_flags |= TRACE_FLAG_BH_OFF;
  
@@ -7330,7 +7339,7 @@ index 2b3c4cd8382b..cacc87a941cf 100644
  		(min_t(unsigned int, migration_disable_value(), 0xf)) << 4;
  }
  
-@@ -4226,15 +4234,17 @@ unsigned long trace_total_entries(struct trace_array *tr)
+@@ -4240,15 +4248,17 @@ unsigned long trace_total_entries(struct trace_array *tr)
  
  static void print_lat_help_header(struct seq_file *m)
  {
@@ -7357,7 +7366,7 @@ index 2b3c4cd8382b..cacc87a941cf 100644
  }
  
  static void print_event_info(struct array_buffer *buf, struct seq_file *m)
-@@ -4268,14 +4278,16 @@ static void print_func_help_header_irq(struct array_buffer *buf, struct seq_file
+@@ -4282,14 +4292,16 @@ static void print_func_help_header_irq(struct array_buffer *buf, struct seq_file
  
  	print_event_info(buf, m);
  
@@ -7625,7 +7634,7 @@ index 9ffd40b8270c..bc75fa1e4666 100644
  		u64_stats_add(&stats->rx_packets, rxpackets);
  		u64_stats_add(&stats->rx_bytes, rxbytes);
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 1ba3662faf0a..2927bffed389 100644
+index 60619fe8af5f..d01dbab0d338 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -4621,15 +4621,6 @@ static void rps_trigger_softirq(void *data)
@@ -7787,10 +7796,10 @@ index c8d137ef5980..b71ccaec0991 100644
  
  static int
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 8a819d0a7bfb..424ad963fa0c 100644
+index d4bd10f8723d..02445cd294ab 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -6682,6 +6682,11 @@ nodefer:	__kfree_skb(skb);
+@@ -6683,6 +6683,11 @@ nodefer:	__kfree_skb(skb);
  	/* Make sure to trigger NET_RX_SOFTIRQ on the remote CPU
  	 * if we are unlucky enough (this seems very unlikely).
  	 */
@@ -7840,10 +7849,10 @@ index 5fe075bf479e..28ee63ec1d1d 100644
  		data[1] += tx_bytes;
  		data[2] += rx_packets;
 diff --git a/net/ipv4/af_inet.c b/net/ipv4/af_inet.c
-index 2f646335d218..61dad9302f10 100644
+index 9408dc3bb42d..b4aaecb4b3ee 100644
 --- a/net/ipv4/af_inet.c
 +++ b/net/ipv4/af_inet.c
-@@ -1730,9 +1730,9 @@ u64 snmp_get_cpu_field64(void __percpu *mib, int cpu, int offt,
+@@ -1732,9 +1732,9 @@ u64 snmp_get_cpu_field64(void __percpu *mib, int cpu, int offt,
  	bhptr = per_cpu_ptr(mib, cpu);
  	syncp = (struct u64_stats_sync *)(bhptr + syncp_offset);
  	do {
@@ -7876,10 +7885,10 @@ index 8370726ae7bf..487f8e98deaa 100644
  		counters.packets += packets;
  		counters.bytes += bytes;
 diff --git a/net/mac80211/sta_info.c b/net/mac80211/sta_info.c
-index f3d6c3e4c970..4ffa43b2b8de 100644
+index bd56015b2925..a87823b1976a 100644
 --- a/net/mac80211/sta_info.c
 +++ b/net/mac80211/sta_info.c
-@@ -2400,9 +2400,9 @@ static inline u64 sta_get_tidstats_msdu(struct ieee80211_sta_rx_stats *rxstats,
+@@ -2402,9 +2402,9 @@ static inline u64 sta_get_tidstats_msdu(struct ieee80211_sta_rx_stats *rxstats,
  	u64 value;
  
  	do {
@@ -7891,7 +7900,7 @@ index f3d6c3e4c970..4ffa43b2b8de 100644
  
  	return value;
  }
-@@ -2468,9 +2468,9 @@ static inline u64 sta_get_stats_bytes(struct ieee80211_sta_rx_stats *rxstats)
+@@ -2470,9 +2470,9 @@ static inline u64 sta_get_stats_bytes(struct ieee80211_sta_rx_stats *rxstats)
  	u64 value;
  
  	do {
@@ -7940,10 +7949,10 @@ index 17a1b731a76b..2be696513629 100644
  		seq_printf(seq, "%3X %8LX %8LX %8LX %16LX %16LX\n",
  			   i, (u64)conns, (u64)inpkts,
 diff --git a/net/netfilter/nf_tables_api.c b/net/netfilter/nf_tables_api.c
-index 49acb89ba9c5..a1a723944055 100644
+index e21ec3ad8093..6c0e8c6ec6e6 100644
 --- a/net/netfilter/nf_tables_api.c
 +++ b/net/netfilter/nf_tables_api.c
-@@ -1693,10 +1693,10 @@ static int nft_dump_stats(struct sk_buff *skb, struct nft_stats __percpu *stats)
+@@ -1695,10 +1695,10 @@ static int nft_dump_stats(struct sk_buff *skb, struct nft_stats __percpu *stats)
  	for_each_possible_cpu(cpu) {
  		cpu_stats = per_cpu_ptr(stats, cpu);
  		do {
