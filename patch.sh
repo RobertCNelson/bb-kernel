@@ -103,6 +103,85 @@ external_git () {
 	${git_bin} describe
 }
 
+wpanusb () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ -d ./wpanusb ] ; then
+			rm -rf ./wpanusb || true
+		fi
+
+		${git_bin} clone https://openbeagle.org/beagleconnect/linux/wpanusb --depth=1
+		cd ./wpanusb
+			wpanusb_hash=$(git rev-parse HEAD)
+		cd -
+
+		cd ./KERNEL/
+
+		cp -v ../wpanusb/wpanusb.h drivers/net/ieee802154/
+		cp -v ../wpanusb/wpanusb.c drivers/net/ieee802154/
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://openbeagle.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/external/wpanusb/
+		echo "WPANUSB: https://openbeagle.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/external/git/WPANUSB
+
+		rm -rf ../wpanusb/ || true
+
+		${git_bin} reset --hard HEAD~1
+
+		start_cleanup
+
+		${git} "${DIR}/patches/external/wpanusb/0001-merge-wpanusb-https-git.beagleboard.org-beagleconnec.patch"
+
+		wdir="external/wpanusb"
+		number=1
+		cleanup
+
+		exit 2
+	fi
+	dir 'external/wpanusb'
+}
+
+bcfserial () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cd ../
+		if [ -d ./bcfserial ] ; then
+			rm -rf ./bcfserial || true
+		fi
+
+		${git_bin} clone https://openbeagle.org/beagleconnect/linux/bcfserial.git --depth=1
+		cd ./bcfserial
+			bcfserial_hash=$(git rev-parse HEAD)
+		cd -
+
+		cd ./KERNEL/
+
+		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
+
+		${git_bin} add .
+		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://openbeagle.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/external/bcfserial/
+		echo "BCFSERIAL: https://openbeagle.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/external/git/BCFSERIAL
+
+		rm -rf ../bcfserial/ || true
+
+		${git_bin} reset --hard HEAD~1
+
+		start_cleanup
+
+		${git} "${DIR}/patches/external/bcfserial/0001-merge-bcfserial-https-git.beagleboard.org-beagleconn.patch"
+
+		wdir="external/bcfserial"
+		number=1
+		cleanup
+
+		exit 2
+	fi
+	dir 'external/bcfserial'
+}
+
 rt_cleanup () {
 	echo "rt: needs fixup"
 	exit 2
@@ -320,6 +399,8 @@ local_patch () {
 }
 
 #external_git
+wpanusb
+bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
@@ -388,7 +469,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.212"
+	backport_tag="v5.10.213"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -422,6 +503,7 @@ backports () {
 
 drivers () {
 	dir 'boris'
+	dir 'drivers/sdhci-omap'
 }
 
 ###
@@ -432,7 +514,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.8"
+		backport_tag="v6.8.1"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
