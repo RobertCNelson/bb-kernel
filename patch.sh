@@ -209,7 +209,7 @@ rt () {
 }
 
 wireless_regdb () {
-	#https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/
+	#https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
@@ -217,7 +217,7 @@ wireless_regdb () {
 			rm -rf ./wireless-regdb || true
 		fi
 
-		${git_bin} clone https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
+		${git_bin} clone https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git --depth=1
 		cd ./wireless-regdb
 			wireless_regdb_hash=$(git rev-parse HEAD)
 		cd -
@@ -228,10 +228,10 @@ wireless_regdb () {
 		cp -v ../wireless-regdb/regulatory.db ./firmware/
 		cp -v ../wireless-regdb/regulatory.db.p7s ./firmware/
 		${git_bin} add -f ./firmware/regulatory.*
-		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
 
 		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
-		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
 
 		rm -rf ../wireless-regdb/ || true
 
@@ -300,7 +300,7 @@ dtb_makefile_append () {
 
 beagleboard_dtbs () {
 	branch="v5.15.x"
-	https_repo="https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees.git"
+	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -333,9 +333,9 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
-		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/external/bbb.io/
+		echo "BBDTBS: https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -343,13 +343,13 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
+		${git} "${DIR}/patches/external/bbb.io/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
-		wdir="soc/ti/beagleboard_dtbs"
+		wdir="external/bbb.io"
 		number=1
 		cleanup
 	fi
-	dir 'soc/ti/beagleboard_dtbs'
+	dir 'external/bbb.io'
 }
 
 local_patch () {
@@ -428,7 +428,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.201"
+	backport_tag="v5.10.213"
 
 	subsystem="uio"
 	#regenerate="enable"
