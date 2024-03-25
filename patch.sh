@@ -404,7 +404,7 @@ bcfserial
 #rt
 wireless_regdb
 ti_pm_firmware
-#beagleboard_dtbs
+beagleboard_dtbs
 #local_patch
 
 pre_backports () {
@@ -507,7 +507,7 @@ drivers () {
 }
 
 ###
-#backports
+backports
 drivers
 
 packaging () {
