@@ -469,7 +469,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.213"
+	backport_tag="v5.10.214"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -485,7 +485,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="rpi-6.8.y"
+	backport_tag="rpi-6.9.y"
 
 	subsystem="edt-ft5x06"
 	#regenerate="enable"
@@ -503,35 +503,11 @@ backports () {
 
 drivers () {
 	dir 'boris'
-	dir 'drivers/sdhci-omap'
 }
 
 ###
 backports
 drivers
 
-packaging () {
-	echo "Update: package scripts"
-	#do_backport="enable"
-	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.8.1"
-
-		subsystem="bindeb-pkg"
-		#regenerate="enable"
-		if [ "x${regenerate}" = "xenable" ] ; then
-			pre_backports
-
-			cp -v ~/linux-src/scripts/package/* ./scripts/package/
-
-			post_backports
-			exit 2
-		else
-			patch_backports
-		fi
-	fi
-	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
-}
-
-packaging
 echo "patch.sh ran successfully"
 #

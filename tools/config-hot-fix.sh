@@ -213,4 +213,7 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_FUNCTION_TRACER
 ./scripts/config --enable CONFIG_DYNAMIC_FTRACE
 
+#xz backdoor https://lwn.net/Articles/967180/
+./scripts/config --enable CONFIG_MODULE_COMPRESS_ZSTD
+
 cd ${DIR}/
