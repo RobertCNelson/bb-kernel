@@ -499,6 +499,7 @@ backports () {
 
 drivers () {
 	dir 'boris'
+	dir 'mmc'
 }
 
 ###
