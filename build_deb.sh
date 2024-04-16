@@ -82,7 +82,7 @@ make_deb () {
 	#Just use "linux-upstream"...
 	#https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/scripts/package/builddeb?id=3716001bcb7f5822382ac1f2f54226b87312cc6b
 	build_opts="${build_opts} KDEB_SOURCENAME=linux-upstream"
-	build_opts="${build_opts} KDEB_COMPRESS=zstd"
+	build_opts="${build_opts} KDEB_COMPRESS=xz"
 
 	echo "-----------------------------"
 	echo "make ${build_opts} CROSS_COMPILE="${CC}" bindeb-pkg"
