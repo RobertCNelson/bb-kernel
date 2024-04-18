@@ -465,14 +465,12 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.215"
-
 	subsystem="uio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
+		unset backport_tag
 
-		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
+		cp -v ../patches/drivers/ti/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
 		exit 2
