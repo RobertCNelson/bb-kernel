@@ -55,8 +55,6 @@ redhat_reqs () {
 	check_rpm
 	pkg="fakeroot"
 	check_rpm
-	pkg="xz"
-	check_rpm
 	pkg="bison"
 	check_rpm
 	pkg="flex"
@@ -131,8 +129,6 @@ debian_regs () {
 	check_dpkg
 	pkg="lsb-release"
 	check_dpkg
-	pkg="lzma"
-	check_dpkg
 	pkg="lz4"
 	check_dpkg
 	pkg="man-db"
@@ -153,6 +149,8 @@ debian_regs () {
 	check_dpkg
 	#"mkimage" command not found - U-Boot images will not be built
 	pkg="u-boot-tools"
+	check_dpkg
+	pkg="zstd"
 	check_dpkg
 
 	unset stop_pkg_search
@@ -674,6 +672,7 @@ check_for_command () {
 unset NEEDS_COMMAND
 check_for_command cpio --version
 check_for_command lz4 --version
+check_for_command zstd --version
 
 if [ "${NEEDS_COMMAND}" ] ; then
 	echo "Please install missing commands"
