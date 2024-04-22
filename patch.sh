@@ -96,6 +96,14 @@ cherrypick () {
 	num=$(($num+1))
 }
 
+copy_mainline_driver () {
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		cp -v ./drivers/mmc/core/quirks.h ../patches/mainline/mmc/
+		cp -v ./drivers/gpu/drm/bridge/ite-it66121.c ../patches/mainline/it66121/
+	fi
+}
+
 external_git () {
 	git_tag=""
 	echo "pulling: ${git_tag}"
@@ -111,7 +119,7 @@ wpanusb () {
 			rm -rf ./wpanusb || true
 		fi
 
-		${git_bin} clone https://openbeagle.org/beagleconnect/linux/wpanusb --depth=1
+		${git_bin} clone https://openbeagle.org/beagleconnect/linux/wpanusb.git --depth=1
 		cd ./wpanusb
 			wpanusb_hash=$(git rev-parse HEAD)
 		cd -
@@ -394,6 +402,7 @@ local_patch () {
 	${git} "${DIR}/patches/dir/0001-patch.patch"
 }
 
+copy_mainline_driver
 #external_git
 wpanusb
 #bcfserial
@@ -465,14 +474,12 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="v5.10.215"
-
 	subsystem="uio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
+		unset backport_tag
 
-		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
+		cp -v ../patches/drivers/ti/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
 		exit 2
@@ -510,7 +517,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.8.6"
+		backport_tag="v6.8.7"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
