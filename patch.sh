@@ -100,7 +100,6 @@ copy_mainline_driver () {
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cp -v ./drivers/mmc/core/quirks.h ../patches/mainline/mmc/
-		cp -v ./drivers/gpu/drm/bridge/ite-it66121.c ../patches/mainline/it66121/
 	fi
 }
 
@@ -517,7 +516,7 @@ packaging () {
 	echo "Update: package scripts"
 	#do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.8.7"
+		backport_tag="v6.8.8"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
