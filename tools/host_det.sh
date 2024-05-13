@@ -511,6 +511,7 @@ debian_regs () {
 			#22.04 jammy: (EOL: April 2027) lts: jammy -> noble
 			#23.10 mantic: (EOL: July 2024)
 			#24.04 noble: (EOL: June 2029) lts: noble -> xyz
+			#24.10 oracular: (EOL: July 2025)
 			unset warn_eol_distro
 			;;
 		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|groovy|hirsute|impish|kinetic|lunar)
