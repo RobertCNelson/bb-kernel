@@ -1,9 +1,9 @@
-From dc77a3608dee7b43fae7e8663192bae6c86f07d3 Mon Sep 17 00:00:00 2001
+From 047c18dec9c994ed5a0ccb1d7251b19125deeeb8 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 13 May 2024 12:26:22 -0500
+Date: Mon, 17 Jun 2024 11:37:08 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.9-rc6-rt4.patch.xz
+patch-6.9-rt5.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -36,7 +36,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/gpu/drm/i915/i915_trace.h             |   4 +
  drivers/gpu/drm/i915/i915_utils.h             |   2 +-
  drivers/gpu/drm/ttm/tests/ttm_bo_test.c       |   8 +-
- drivers/net/ethernet/chelsio/cxgb4/sge.c      |   6 +-
  drivers/tty/serial/8250/8250_core.c           |  48 +-
  drivers/tty/serial/8250/8250_port.c           | 157 +++-
  drivers/tty/serial/amba-pl011.c               |   2 +-
@@ -87,13 +86,13 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/trace_output.c                   |  16 +-
  net/core/dev.c                                | 217 +++--
  net/core/skbuff.c                             |   4 +-
- 80 files changed, 2933 insertions(+), 437 deletions(-)
+ 79 files changed, 2930 insertions(+), 434 deletions(-)
 
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index 213d0719e2b7..adbaccfc1f5d 100644
+index 396137ee018d..4f572ec5bbd5 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
-@@ -6551,6 +6551,18 @@
+@@ -6552,6 +6552,18 @@
  			Force threading of all interrupt handlers except those
  			marked explicitly IRQF_NO_THREAD.
  
@@ -472,7 +471,7 @@ index afc0f6a61337..dc3f63c2687d 100644
  	select MPIC
  	select OF_DYNAMIC
 diff --git a/arch/powerpc/platforms/pseries/iommu.c b/arch/powerpc/platforms/pseries/iommu.c
-index e8c4129697b1..c61e29deac8d 100644
+index b1e6d275cda9..9a8d3970da3c 100644
 --- a/arch/powerpc/platforms/pseries/iommu.c
 +++ b/arch/powerpc/platforms/pseries/iommu.c
 @@ -25,6 +25,7 @@
@@ -1066,34 +1065,6 @@ index 1f8a4f8adc92..9cc367a79534 100644
  
  	/* The deadlock will be caught by WW mutex, don't warn about it */
  	lock_release(&bo2->base.resv->lock.base.dep_map, 1);
-diff --git a/drivers/net/ethernet/chelsio/cxgb4/sge.c b/drivers/net/ethernet/chelsio/cxgb4/sge.c
-index 49d5808b7d11..de52bcb884c4 100644
---- a/drivers/net/ethernet/chelsio/cxgb4/sge.c
-+++ b/drivers/net/ethernet/chelsio/cxgb4/sge.c
-@@ -2670,12 +2670,12 @@ int cxgb4_selftest_lb_pkt(struct net_device *netdev)
- 	lb->loopback = 1;
- 
- 	q = &adap->sge.ethtxq[pi->first_qset];
--	__netif_tx_lock(q->txq, smp_processor_id());
-+	__netif_tx_lock_bh(q->txq);
- 
- 	reclaim_completed_tx(adap, &q->q, -1, true);
- 	credits = txq_avail(&q->q) - ndesc;
- 	if (unlikely(credits < 0)) {
--		__netif_tx_unlock(q->txq);
-+		__netif_tx_unlock_bh(q->txq);
- 		return -ENOMEM;
- 	}
- 
-@@ -2710,7 +2710,7 @@ int cxgb4_selftest_lb_pkt(struct net_device *netdev)
- 	init_completion(&lb->completion);
- 	txq_advance(&q->q, ndesc);
- 	cxgb4_ring_tx_db(adap, &q->q, ndesc);
--	__netif_tx_unlock(q->txq);
-+	__netif_tx_unlock_bh(q->txq);
- 
- 	/* wait for the pkt to return */
- 	ret = wait_for_completion_timeout(&lb->completion, 10 * HZ);
 diff --git a/drivers/tty/serial/8250/8250_core.c b/drivers/tty/serial/8250/8250_core.c
 index b62ad9006780..42b3f5f6eaa3 100644
 --- a/drivers/tty/serial/8250/8250_core.c
@@ -5918,7 +5889,7 @@ index ae50f212775e..dc61da7d90d3 100644
  
  extern struct rt_bandwidth def_rt_bandwidth;
 diff --git a/kernel/softirq.c b/kernel/softirq.c
-index b315b21fb28c..abda7fc72dde 100644
+index 02582017759a..00e32e279fa9 100644
 --- a/kernel/softirq.c
 +++ b/kernel/softirq.c
 @@ -248,6 +248,19 @@ void __local_bh_enable_ip(unsigned long ip, unsigned int cnt)
@@ -5941,7 +5912,7 @@ index b315b21fb28c..abda7fc72dde 100644
  /*
   * Invoked from ksoftirqd_run() outside of the interrupt disabled section
   * to acquire the per CPU local lock for reentrancy protection.
-@@ -620,6 +633,24 @@ static inline void tick_irq_exit(void)
+@@ -624,6 +637,24 @@ static inline void tick_irq_exit(void)
  #endif
  }
  
@@ -5966,7 +5937,7 @@ index b315b21fb28c..abda7fc72dde 100644
  static inline void __irq_exit_rcu(void)
  {
  #ifndef __ARCH_IRQ_EXIT_IRQS_DISABLED
-@@ -632,6 +663,10 @@ static inline void __irq_exit_rcu(void)
+@@ -636,6 +667,10 @@ static inline void __irq_exit_rcu(void)
  	if (!in_interrupt() && local_softirq_pending())
  		invoke_softirq();
  
@@ -5977,7 +5948,7 @@ index b315b21fb28c..abda7fc72dde 100644
  	tick_irq_exit();
  }
  
-@@ -968,12 +1003,70 @@ static struct smp_hotplug_thread softirq_threads = {
+@@ -972,12 +1007,70 @@ static struct smp_hotplug_thread softirq_threads = {
  	.thread_comm		= "ksoftirqd/%u",
  };
  
@@ -6604,10 +6575,10 @@ index 331848eca7d3..1180675fd390 100644
  	dev_boot_phase = 0;
  
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index b99127712e67..17617c29be2d 100644
+index 4096e679f61c..e03441de54b7 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -7039,8 +7039,8 @@ nodefer:	__kfree_skb(skb);
+@@ -7050,8 +7050,8 @@ nodefer:	__kfree_skb(skb);
  	/* Make sure to trigger NET_RX_SOFTIRQ on the remote CPU
  	 * if we are unlucky enough (this seems very unlikely).
  	 */

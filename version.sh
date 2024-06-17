@@ -44,10 +44,10 @@ toolchain="gcc_13_arm"
 
 #Kernel
 KERNEL_REL=6.9
-KERNEL_TAG=${KERNEL_REL}
-kernel_rt="-rc6-rt4"
+KERNEL_TAG=${KERNEL_REL}.5
+kernel_rt="-rt5"
 #Kernel Build
-BUILD=${build_prefix}8
+BUILD=${build_prefix}8.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
