@@ -289,7 +289,7 @@ arm_dtbo_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v6.9.x"
+	branch="v6.10.x"
 	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -468,7 +468,7 @@ drivers () {
 }
 
 ###
-backports
+#backports
 drivers
 
 packaging () {
