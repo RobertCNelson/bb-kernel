@@ -288,6 +288,29 @@ arm_dtbo_makefile_append () {
 	cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/ti/omap/${device}.dtso
 }
 
+k3_dtb_makefile_append () {
+	echo "dtb-\$(CONFIG_ARCH_K3) += $device" >> arch/arm64/boot/dts/ti/Makefile
+}
+
+k3_dtbo_makefile_append () {
+	echo "dtb-\$(CONFIG_ARCH_K3) += $device.dtbo" >> arch/arm64/boot/dts/ti/Makefile
+	cp -v ../${work_dir}/src/arm64/overlays/${device}.dts arch/arm64/boot/dts/ti/${device}.dtso
+	sed -i -e 's:ti/k3-:k3-:g' arch/arm64/boot/dts/ti/${device}.dtso
+}
+
+k3_makefile_patch_cleanup_overlays () {
+	cat arch/arm64/boot/dts/ti/Makefile | grep -v 'DTC_FLAGS_k3' | grep -v '# Enable' > arch/arm64/boot/dts/ti/Makefile.bak
+	cat arch/arm64/boot/dts/ti/Makefile | grep 'DTC_FLAGS_k3' | grep -v '# Enable' > arch/arm64/boot/dts/ti/Makefile.dtc
+	rm arch/arm64/boot/dts/ti/Makefile
+	mv arch/arm64/boot/dts/ti/Makefile.bak arch/arm64/boot/dts/ti/Makefile
+	echo "" >> arch/arm64/boot/dts/ti/Makefile
+	echo "# Enable support for device-tree overlays" >> arch/arm64/boot/dts/ti/Makefile
+	cat arch/arm64/boot/dts/ti/Makefile.dtc >> arch/arm64/boot/dts/ti/Makefile
+	rm arch/arm64/boot/dts/ti/Makefile.dtc
+	echo "DTC_FLAGS_k3-am67a-beagley-ai += -@" >> arch/arm64/boot/dts/ti/Makefile
+	echo "DTC_FLAGS_k3-j721e-beagleboneai64 += -@" >> arch/arm64/boot/dts/ti/Makefile
+}
+
 beagleboard_dtbs () {
 	branch="v6.10.x"
 	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
@@ -333,6 +356,13 @@ beagleboard_dtbs () {
 		device="BONE-ADC" ; arm_dtbo_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
+
+		device="k3-am67a-beagley-ai.dtb" ; k3_dtb_makefile_append
+
+		device="BONE-I2C1" ; k3_dtbo_makefile_append
+		device="BONE-I2C2" ; k3_dtbo_makefile_append
+		device="BONE-I2C3" ; k3_dtbo_makefile_append
+		k3_makefile_patch_cleanup_overlays
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
@@ -434,20 +464,20 @@ patch_backports () {
 }
 
 backports () {
-	subsystem="uio"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		unset backport_tag
+#	subsystem="uio"
+#	#regenerate="enable"
+#	if [ "x${regenerate}" = "xenable" ] ; then
+#		unset backport_tag
+#
+#		cp -v ../patches/drivers/ti/uio/uio_pruss.c ./drivers/uio/
+#
+#		post_backports
+#	else
+#		patch_backports
+#		dir 'drivers/ti/uio'
+#	fi
 
-		cp -v ../patches/drivers/ti/uio/uio_pruss.c ./drivers/uio/
-
-		post_backports
-	else
-		patch_backports
-		dir 'drivers/ti/uio'
-	fi
-
-	backport_tag="rpi-6.9.y"
+	backport_tag="rpi-6.10.y"
 
 	subsystem="edt-ft5x06"
 	#regenerate="enable"
@@ -468,7 +498,7 @@ drivers () {
 }
 
 ###
-#backports
+backports
 drivers
 
 packaging () {
