@@ -215,45 +215,6 @@ wireless_regdb () {
 	dir 'external/wireless_regdb'
 }
 
-ti_pm_firmware () {
-	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ -d ./ti-amx3-cm3-pm-firmware ] ; then
-			rm -rf ./ti-amx3-cm3-pm-firmware || true
-		fi
-
-		${git_bin} clone -b ti-v4.1.y git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
-		cd ./ti-amx3-cm3-pm-firmware
-			ti_amx3_cm3_hash=$(git rev-parse HEAD)
-		cd -
-
-		cd ./KERNEL/
-
-		mkdir -p ./firmware/ || true
-		cp -v ../ti-amx3-cm3-pm-firmware/bin/am* ./firmware/
-
-		${git_bin} add -f ./firmware/am*
-		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -m "http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
-		echo "TI_AMX3_CM3: http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" > ../patches/external/git/TI_AMX3_CM3
-
-		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
-
-		${git_bin} reset --hard HEAD^
-
-		start_cleanup
-
-		${git} "${DIR}/patches/drivers/ti/firmware/0001-Add-AM335x-CM3-Power-Managment-Firmware.patch"
-
-		wdir="drivers/ti/firmware"
-		number=1
-		cleanup
-	fi
-	dir 'drivers/ti/firmware'
-}
-
 cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/modules.order || true
 	rm -rf arch/arm/boot/dts/.*cmd || true
@@ -396,7 +357,6 @@ copy_mainline_driver
 wpanusb
 #rt
 wireless_regdb
-ti_pm_firmware
 beagleboard_dtbs
 #local_patch
 
@@ -495,6 +455,7 @@ backports () {
 drivers () {
 	dir 'boris'
 	dir 'mmc'
+	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 
 ###
