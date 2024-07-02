@@ -50,7 +50,7 @@ KERNEL_REL=6.6
 KERNEL_TAG=${KERNEL_REL}.36
 kernel_rt=".36-rt35"
 #Kernel Build
-BUILD=${build_prefix}14.1
+BUILD=${build_prefix}15
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
