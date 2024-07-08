@@ -168,7 +168,7 @@ rt () {
 		${git_bin} add .
 		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 		${git_bin} format-patch -1 -o ../patches/external/rt/
-		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
+		#echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
 
 		exit 2
 	fi
@@ -213,45 +213,6 @@ wireless_regdb () {
 		cleanup
 	fi
 	dir 'external/wireless_regdb'
-}
-
-ti_pm_firmware () {
-	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ -d ./ti-amx3-cm3-pm-firmware ] ; then
-			rm -rf ./ti-amx3-cm3-pm-firmware || true
-		fi
-
-		${git_bin} clone -b ti-v4.1.y git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
-		cd ./ti-amx3-cm3-pm-firmware
-			ti_amx3_cm3_hash=$(git rev-parse HEAD)
-		cd -
-
-		cd ./KERNEL/
-
-		mkdir -p ./firmware/ || true
-		cp -v ../ti-amx3-cm3-pm-firmware/bin/am* ./firmware/
-
-		${git_bin} add -f ./firmware/am*
-		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -m "http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
-		echo "TI_AMX3_CM3: http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" > ../patches/external/git/TI_AMX3_CM3
-
-		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
-
-		${git_bin} reset --hard HEAD^
-
-		start_cleanup
-
-		${git} "${DIR}/patches/drivers/ti/firmware/0001-Add-AM335x-CM3-Power-Managment-Firmware.patch"
-
-		wdir="drivers/ti/firmware"
-		number=1
-		cleanup
-	fi
-	dir 'drivers/ti/firmware'
 }
 
 cleanup_dts_builds () {
@@ -300,7 +261,7 @@ k3_dtbo_makefile_append () {
 
 k3_makefile_patch_cleanup_overlays () {
 	cat arch/arm64/boot/dts/ti/Makefile | grep -v 'DTC_FLAGS_k3' | grep -v '# Enable' > arch/arm64/boot/dts/ti/Makefile.bak
-	cat arch/arm64/boot/dts/ti/Makefile | grep 'DTC_FLAGS_k3' | grep -v '# Enable' > arch/arm64/boot/dts/ti/Makefile.dtc
+	cat arch/arm64/boot/dts/ti/Makefile | grep 'DTC_FLAGS_k3' > arch/arm64/boot/dts/ti/Makefile.dtc
 	rm arch/arm64/boot/dts/ti/Makefile
 	mv arch/arm64/boot/dts/ti/Makefile.bak arch/arm64/boot/dts/ti/Makefile
 	echo "" >> arch/arm64/boot/dts/ti/Makefile
@@ -396,7 +357,6 @@ copy_mainline_driver
 wpanusb
 #rt
 wireless_regdb
-ti_pm_firmware
 beagleboard_dtbs
 #local_patch
 
@@ -490,10 +450,31 @@ backports () {
 	else
 		patch_backports
 	fi
+
+	${git} "${DIR}/patches/backports/mmc-core-quirks/0002-MMC-added-alternative-MMC-driver.patch"
+	${git} "${DIR}/patches/backports/mmc-core-quirks/0003-drivers-mmc-apply-SD-quirks-earlier-during-probe.patch"
+	${git} "${DIR}/patches/backports/mmc-core-quirks/0004-drivers-mmc-disable-write-caching-on-Samsung-2023-mo.patch"
+
+	backport_tag="rpi-6.10.y"
+
+	subsystem="mmc-core-quirks"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_rpibackports
+
+		cp -v ~/linux-rpi/drivers/mmc/core/quirks.h ./drivers/mmc/core/quirks.h
+
+	#	post_rpibackports
+	#else
+		patch_backports
+	fi
 }
 
 drivers () {
-	dir 'boris'
+	dir 'branding/boris'
+
+	dir 'external/ti-amx3-cm3-pm-firmware'
+
 	dir 'mmc'
 }
 
