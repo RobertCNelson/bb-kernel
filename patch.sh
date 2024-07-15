@@ -245,8 +245,12 @@ arm_dtb_makefile_append () {
 }
 
 arm_dtbo_makefile_append () {
-	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device'.dtbo \\:g' arch/arm/boot/dts/ti/omap/Makefile
-	cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/ti/omap/${device}.dtso
+	if [ -f ../${work_dir}/src/arm/overlays/${device}.dts ] ; then
+		sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device'.dtbo \\:g' arch/arm/boot/dts/ti/omap/Makefile
+		cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/ti/omap/${device}.dtso
+	else
+		echo "Missing [${device}]"
+	fi
 }
 
 k3_dtb_makefile_append () {
@@ -254,9 +258,13 @@ k3_dtb_makefile_append () {
 }
 
 k3_dtbo_makefile_append () {
-	echo "dtb-\$(CONFIG_ARCH_K3) += $device.dtbo" >> arch/arm64/boot/dts/ti/Makefile
-	cp -v ../${work_dir}/src/arm64/overlays/${device}.dts arch/arm64/boot/dts/ti/${device}.dtso
-	sed -i -e 's:ti/k3-:k3-:g' arch/arm64/boot/dts/ti/${device}.dtso
+	if [ -f ../${work_dir}/src/arm64/overlays/${device}.dts ] ; then
+		echo "dtb-\$(CONFIG_ARCH_K3) += $device.dtbo" >> arch/arm64/boot/dts/ti/Makefile
+		cp -v ../${work_dir}/src/arm64/overlays/${device}.dts arch/arm64/boot/dts/ti/${device}.dtso
+		sed -i -e 's:ti/k3-:k3-:g' arch/arm64/boot/dts/ti/${device}.dtso
+	else
+		echo "Missing [${device}]"
+	fi
 }
 
 k3_makefile_patch_cleanup_overlays () {
@@ -323,6 +331,17 @@ beagleboard_dtbs () {
 		device="BONE-I2C1" ; k3_dtbo_makefile_append
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
+
+		#ls src/arm64/overlays/ | grep beaglebone
+
+		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_14" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_14-p9_16" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_16" ; k3_dtbo_makefile_append
+
 		k3_makefile_patch_cleanup_overlays
 
 		${git_bin} add -f arch/arm/boot/dts/
