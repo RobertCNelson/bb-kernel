@@ -494,7 +494,7 @@ drivers () {
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
-	dir 'mmc'
+	dir 'drivers/mmc'
 }
 
 ###
