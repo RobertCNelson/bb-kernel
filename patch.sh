@@ -321,6 +321,17 @@ beagleboard_dtbs () {
 		device="BONE-I2C1" ; k3_dtbo_makefile_append
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
+
+		#ls src/arm64/overlays/ | grep beaglebone
+
+		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_14" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_14-p9_16" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_16" ; k3_dtbo_makefile_append
+
 		k3_makefile_patch_cleanup_overlays
 
 		${git_bin} add -f arch/arm/boot/dts/
@@ -454,7 +465,6 @@ backports () {
 drivers () {
 	dir 'branding/boris'
 
-	dir 'mmc'
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 
