@@ -318,10 +318,10 @@ linux_stable="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stabl
 unsecure_linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
 
 if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
-	torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/linux.git"
-	unsecure_torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/linux.git"
-	linux_stable="https://git.gfnd.rcn-ee.org/kernel.org/linux-stable.git"
-	unsecure_linux_stable="https://git.gfnd.rcn-ee.org/kernel.org/linux-stable.git"
+	torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux.git"
+	unsecure_torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux.git"
+	linux_stable="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
+	unsecure_linux_stable="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
 fi
 
 if [ ! -f "${DIR}/.yakbuild" ] ; then
