@@ -70,15 +70,11 @@ git_kernel_stable () {
 	${git_bin} fetch "${linux_stable}" master --tags || unsecure_git_kernel_stable
 }
 
-unsecure_git_kernel_torvalds () {
-	${git_bin} pull --no-edit "${unsecure_torvalds_linux}" master --tags
-}
-
 git_kernel_torvalds () {
 	echo "-----------------------------"
 	echo "scripts/git: pulling from: ${torvalds_linux}"
 	echo "log: [${git_bin} pull --no-rebase --no-edit "${torvalds_linux}" master --tags]"
-	${git_bin} pull --no-rebase --no-edit "${torvalds_linux}" master --tags || unsecure_git_kernel_torvalds
+	${git_bin} pull --no-rebase --no-edit "${torvalds_linux}" master --tags
 	${git_bin} tag | grep v"${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable
 }
 
@@ -312,14 +308,12 @@ if [ ! "${git_config_user_name}" ] ; then
 	${git_bin} config --local user.name "Your Name"
 fi
 
-torvalds_linux="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-unsecure_torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+torvalds_linux="https://github.com/beagleboard/mirror-linux.git"
 linux_stable="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
 unsecure_linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
 
 if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
 	torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux.git"
-	unsecure_torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux.git"
 	linux_stable="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
 	unsecure_linux_stable="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
 fi
