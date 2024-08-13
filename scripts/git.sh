@@ -33,7 +33,7 @@ build_git () {
 	echo "-----------------------------"
 	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`], building and installing: [${debian_stable_git}] to /usr/local/"
 
-	wget --quiet -c --directory-prefix="${DIR}/ignore/" https://www.kernel.org/pub/software/scm/git/git-${debian_stable_git}.tar.gz
+	wget --quiet -c --directory-prefix="${DIR}/ignore/" https://mirrors.edge.kernel.org/pub/software/scm/git/git-${debian_stable_git}.tar.gz
 	if [ -f "${DIR}/ignore/git-${debian_stable_git}.tar.gz" ] ; then
 		cd "${DIR}/ignore/" || true
 		tar xf git-${debian_stable_git}.tar.gz
