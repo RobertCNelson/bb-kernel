@@ -300,8 +300,8 @@ if [ ! "${git_config_user_name}" ] ; then
 	${git_bin} config --local user.name "Your Name"
 fi
 
-torvalds_linux="https://github.com/beagleboard/mirror-linux.git"
-linux_stable="https://github.com/beagleboard/mirror-linux-stable.git"
+torvalds_linux="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 
 if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
 	torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux.git"
