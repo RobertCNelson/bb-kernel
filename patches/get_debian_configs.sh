@@ -3,8 +3,8 @@
 #
 #https://packages.debian.org/source/sid/linux
 #
-abi="6.9.12"
-kernel="6.9.12-1"
+abi="6.10.4"
+kernel="6.10.4-1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
