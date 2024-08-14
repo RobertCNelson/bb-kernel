@@ -1,9 +1,9 @@
-From c9d9c19c5d6f27dd17fc0405cce4b97ea3aa335c Mon Sep 17 00:00:00 2001
+From e7645207012f03e8608dc1999881337bc78c7f5b Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Mon, 8 Jul 2024 11:41:28 -0500
+Date: Wed, 14 Aug 2024 16:59:15 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.10-rc6-rt11.patch.xz
+patch-6.10.2-rt14.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -27,6 +27,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/block/zram/zram_drv.h                 |   7 +-
  drivers/gpu/drm/i915/Kconfig                  |   1 -
  drivers/gpu/drm/i915/display/intel_crtc.c     |   9 +-
+ drivers/gpu/drm/i915/display/intel_cursor.c   |   9 +-
  .../drm/i915/display/intel_display_trace.h    |   4 +
  drivers/gpu/drm/i915/display/intel_vblank.c   |  44 +-
  .../drm/i915/gt/intel_execlists_submission.c  |  17 +-
@@ -48,7 +49,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/console.h                       | 150 ++-
  include/linux/entry-common.h                  |   2 +-
  include/linux/entry-kvm.h                     |   2 +-
- include/linux/filter.h                        | 149 ++-
+ include/linux/filter.h                        | 125 ++-
  include/linux/interrupt.h                     |  29 +
  include/linux/local_lock.h                    |  21 +
  include/linux/local_lock_internal.h           |  31 +
@@ -97,7 +98,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/sched/rt.c                             |   5 +-
  kernel/sched/sched.h                          |   1 +
  kernel/softirq.c                              |  95 +-
- kernel/task_work.c                            |  59 +-
+ kernel/task_work.c                            |  65 +-
  kernel/time/hrtimer.c                         |   4 +-
  kernel/time/tick-sched.c                      |   2 +-
  kernel/time/timer.c                           |  11 +-
@@ -105,9 +106,9 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/trace_output.c                   |  16 +-
  net/bpf/test_run.c                            |  11 +-
  net/bridge/br_netfilter_hooks.c               |  20 +-
- net/core/dev.c                                |  68 +-
+ net/core/dev.c                                |  69 +-
  net/core/dev.h                                |  18 +
- net/core/filter.c                             |  97 +-
+ net/core/filter.c                             |  92 +-
  net/core/lwt_bpf.c                            |   9 +-
  net/core/skbuff.c                             |  37 +-
  net/dccp/minisocks.c                          |   3 +-
@@ -115,10 +116,10 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/ipv4/tcp_ipv4.c                           |  15 +-
  net/ipv4/tcp_minisocks.c                      |   3 +-
  net/ipv4/tcp_sigpool.c                        |  17 +-
- net/ipv6/seg6_local.c                         |  25 +-
+ net/ipv6/seg6_local.c                         |  22 +-
  net/xdp/xsk.c                                 |  25 +-
  security/keys/keyctl.c                        |   2 +-
- 111 files changed, 3495 insertions(+), 615 deletions(-)
+ 112 files changed, 3475 insertions(+), 619 deletions(-)
  create mode 100644 include/linux/netdevice_xmit.h
 
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
@@ -691,10 +692,10 @@ index 12da7dfd5ef1..38e2cf05525e 100644
  #define _TIF_SSBD		(1 << TIF_SSBD)
  #define _TIF_SPEC_IB		(1 << TIF_SPEC_IB)
 diff --git a/drivers/acpi/processor_idle.c b/drivers/acpi/processor_idle.c
-index bd6a7857ce05..d45dfd10b636 100644
+index 831fa4a12159..5af3ebec0f74 100644
 --- a/drivers/acpi/processor_idle.c
 +++ b/drivers/acpi/processor_idle.c
-@@ -108,7 +108,7 @@ static const struct dmi_system_id processor_power_dmi_table[] = {
+@@ -107,7 +107,7 @@ static const struct dmi_system_id processor_power_dmi_table[] = {
   */
  static void __cpuidle acpi_safe_halt(void)
  {
@@ -838,6 +839,38 @@ index 25593f6aae7d..22b80004574f 100644
  
  	if (intel_vgpu_active(dev_priv))
  		goto out;
+diff --git a/drivers/gpu/drm/i915/display/intel_cursor.c b/drivers/gpu/drm/i915/display/intel_cursor.c
+index 23a122ee20c9..b5676e667c1f 100644
+--- a/drivers/gpu/drm/i915/display/intel_cursor.c
++++ b/drivers/gpu/drm/i915/display/intel_cursor.c
+@@ -797,13 +797,15 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
+ 		 */
+ 		intel_psr_wait_for_idle_locked(crtc_state);
+ 
+-		local_irq_disable();
++		if (!IS_ENABLED(CONFIG_PREEMPT_RT))
++			local_irq_disable();
+ 
+ 		intel_vblank_evade(&evade);
+ 
+ 		drm_crtc_vblank_put(&crtc->base);
+ 	} else {
+-		local_irq_disable();
++		if (!IS_ENABLED(CONFIG_PREEMPT_RT))
++			local_irq_disable();
+ 	}
+ 
+ 	if (new_plane_state->uapi.visible) {
+@@ -813,7 +815,8 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
+ 		intel_plane_disable_arm(plane, crtc_state);
+ 	}
+ 
+-	local_irq_enable();
++	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
++		local_irq_enable();
+ 
+ 	intel_psr_unlock(crtc_state);
+ 
 diff --git a/drivers/gpu/drm/i915/display/intel_display_trace.h b/drivers/gpu/drm/i915/display/intel_display_trace.h
 index 49a5e6d9dc0d..b15c999d91e6 100644
 --- a/drivers/gpu/drm/i915/display/intel_display_trace.h
@@ -1102,7 +1135,7 @@ index 1f8a4f8adc92..9cc367a79534 100644
  	/* The deadlock will be caught by WW mutex, don't warn about it */
  	lock_release(&bo2->base.resv->lock.base.dep_map, 1);
 diff --git a/drivers/net/tun.c b/drivers/net/tun.c
-index 9254bca2813d..9b24861464bc 100644
+index 4a5107117b4a..1d06c560c5e6 100644
 --- a/drivers/net/tun.c
 +++ b/drivers/net/tun.c
 @@ -1661,6 +1661,7 @@ static struct sk_buff *tun_build_skb(struct tun_struct *tun,
@@ -1136,7 +1169,7 @@ index 9254bca2813d..9b24861464bc 100644
  	rcu_read_unlock();
  	local_bh_enable();
  	return NULL;
-@@ -2566,6 +2570,7 @@ static int tun_sendmsg(struct socket *sock, struct msghdr *m, size_t total_len)
+@@ -2569,6 +2573,7 @@ static int tun_sendmsg(struct socket *sock, struct msghdr *m, size_t total_len)
  
  	if (m->msg_controllen == sizeof(struct tun_msg_ctl) &&
  	    ctl && ctl->type == TUN_MSG_PTR) {
@@ -1144,7 +1177,7 @@ index 9254bca2813d..9b24861464bc 100644
  		struct tun_page tpage;
  		int n = ctl->num;
  		int flush = 0, queued = 0;
-@@ -2574,6 +2579,7 @@ static int tun_sendmsg(struct socket *sock, struct msghdr *m, size_t total_len)
+@@ -2577,6 +2582,7 @@ static int tun_sendmsg(struct socket *sock, struct msghdr *m, size_t total_len)
  
  		local_bh_disable();
  		rcu_read_lock();
@@ -1152,7 +1185,7 @@ index 9254bca2813d..9b24861464bc 100644
  
  		for (i = 0; i < n; i++) {
  			xdp = &((struct xdp_buff *)ctl->ptr)[i];
-@@ -2588,6 +2594,7 @@ static int tun_sendmsg(struct socket *sock, struct msghdr *m, size_t total_len)
+@@ -2591,6 +2597,7 @@ static int tun_sendmsg(struct socket *sock, struct msghdr *m, size_t total_len)
  		if (tfile->napi_enabled && queued > 0)
  			napi_schedule(&tfile->napi);
  
@@ -1926,10 +1959,10 @@ index 6813171afccb..674a622c91be 100644
  struct kvm_vcpu;
  
 diff --git a/include/linux/filter.h b/include/linux/filter.h
-index 5669da513cd7..2b8503fecd02 100644
+index 5669da513cd7..b1d9bc714c98 100644
 --- a/include/linux/filter.h
 +++ b/include/linux/filter.h
-@@ -733,21 +733,152 @@ struct bpf_nh_params {
+@@ -733,21 +733,128 @@ struct bpf_nh_params {
  	};
  };
  
@@ -1939,7 +1972,6 @@ index 5669da513cd7..2b8503fecd02 100644
 +#define BPF_RI_F_CPU_MAP_INIT	BIT(2)
 +#define BPF_RI_F_DEV_MAP_INIT	BIT(3)
 +#define BPF_RI_F_XSK_MAP_INIT	BIT(4)
-+#define BPF_RI_F_SEG6_STATE	BIT(5)
 +
  struct bpf_redirect_info {
  	u64 tgt_index;
@@ -2060,33 +2092,10 @@ index 5669da513cd7..2b8503fecd02 100644
 +	    kern_flags & BPF_RI_F_XSK_MAP_INIT && !list_empty(lh))
 +		*lh_xsk = lh;
 +}
-+
-+static inline bool bpf_net_ctx_seg6_state_avail(void)
-+{
-+	struct bpf_net_context *bpf_net_ctx = bpf_net_ctx_get();
-+
-+	if (!bpf_net_ctx)
-+		return false;
-+	return bpf_net_ctx->ri.kern_flags & BPF_RI_F_SEG6_STATE;
-+}
-+
-+static inline void bpf_net_ctx_seg6_state_set(void)
-+{
-+	struct bpf_net_context *bpf_net_ctx = bpf_net_ctx_get();
-+
-+	bpf_net_ctx->ri.kern_flags |= BPF_RI_F_SEG6_STATE;
-+}
-+
-+static inline void bpf_net_ctx_seg6_state_clr(void)
-+{
-+	struct bpf_net_context *bpf_net_ctx = bpf_net_ctx_get();
-+
-+	bpf_net_ctx->ri.kern_flags &= ~BPF_RI_F_SEG6_STATE;
-+}
  
  /* Compute the linear packet data range [data, data_end) which
   * will be accessed by various program types (cls_bpf, act_bpf,
-@@ -1018,25 +1149,23 @@ struct bpf_prog *bpf_patch_insn_single(struct bpf_prog *prog, u32 off,
+@@ -1018,25 +1125,23 @@ struct bpf_prog *bpf_patch_insn_single(struct bpf_prog *prog, u32 off,
  				       const struct bpf_insn *patch, u32 len);
  int bpf_remove_insns(struct bpf_prog *prog, u32 off, u32 cnt);
  
@@ -2115,7 +2124,7 @@ index 5669da513cd7..2b8503fecd02 100644
  
  	ri->kern_flags &= ~BPF_RI_F_RF_NO_DIRECT;
  }
-@@ -1592,7 +1721,7 @@ static __always_inline long __bpf_xdp_redirect_map(struct bpf_map *map, u64 inde
+@@ -1592,7 +1697,7 @@ static __always_inline long __bpf_xdp_redirect_map(struct bpf_map *map, u64 inde
  						   u64 flags, const u64 flag_mask,
  						   void *lookup_elem(struct bpf_map *map, u32 key))
  {
@@ -2500,7 +2509,7 @@ index 65c5184470f1..1da78bc3c326 100644
  
  bool this_cpu_in_panic(void);
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index 61591ac6eab6..c582eb3ed7a6 100644
+index a5f4b48fca18..913f76cf0107 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
 @@ -36,6 +36,7 @@
@@ -6655,10 +6664,10 @@ index 460efecd077b..833a75167ac9 100644
  
  	/*
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index bcf2c4cc0522..8c3c8929bd6b 100644
+index 59ce0841eb1f..0d8f36c80fe0 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
-@@ -899,14 +899,15 @@ static inline void hrtick_rq_init(struct rq *rq)
+@@ -898,14 +898,15 @@ static inline void hrtick_rq_init(struct rq *rq)
  
  #if defined(CONFIG_SMP) && defined(TIF_POLLING_NRFLAG)
  /*
@@ -6677,7 +6686,7 @@ index bcf2c4cc0522..8c3c8929bd6b 100644
  }
  
  /*
-@@ -923,7 +924,7 @@ static bool set_nr_if_polling(struct task_struct *p)
+@@ -922,7 +923,7 @@ static bool set_nr_if_polling(struct task_struct *p)
  	do {
  		if (!(val & _TIF_POLLING_NRFLAG))
  			return false;
@@ -6686,7 +6695,7 @@ index bcf2c4cc0522..8c3c8929bd6b 100644
  			return true;
  	} while (!try_cmpxchg(&ti->flags, &val, val | _TIF_NEED_RESCHED));
  
-@@ -931,9 +932,9 @@ static bool set_nr_if_polling(struct task_struct *p)
+@@ -930,9 +931,9 @@ static bool set_nr_if_polling(struct task_struct *p)
  }
  
  #else
@@ -6698,7 +6707,7 @@ index bcf2c4cc0522..8c3c8929bd6b 100644
  	return true;
  }
  
-@@ -1038,28 +1039,47 @@ void wake_up_q(struct wake_q_head *head)
+@@ -1037,28 +1038,47 @@ void wake_up_q(struct wake_q_head *head)
   * might also involve a cross-CPU call to trigger the scheduler on
   * the target CPU.
   */
@@ -6754,7 +6763,7 @@ index bcf2c4cc0522..8c3c8929bd6b 100644
  }
  
  void resched_cpu(int cpu)
-@@ -1154,7 +1174,7 @@ static void wake_up_idle_cpu(int cpu)
+@@ -1153,7 +1173,7 @@ static void wake_up_idle_cpu(int cpu)
  	 * and testing of the above solutions didn't appear to report
  	 * much benefits.
  	 */
@@ -6763,7 +6772,7 @@ index bcf2c4cc0522..8c3c8929bd6b 100644
  		smp_send_reschedule(cpu);
  	else
  		trace_sched_wake_idle_without_ipi(cpu);
-@@ -8910,6 +8930,21 @@ static inline void preempt_dynamic_init(void) { }
+@@ -8913,6 +8933,21 @@ static inline void preempt_dynamic_init(void) { }
  
  #endif /* #ifdef CONFIG_PREEMPT_DYNAMIC */
  
@@ -6823,7 +6832,7 @@ index c1eb9a1afd13..272078fa8f5a 100644
  }
  late_initcall(sched_init_debug);
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index 8a5b1ae0aa55..ac224c8d4b52 100644
+index 24dda708b699..a143ecc3439d 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
 @@ -974,8 +974,10 @@ static void clear_buddies(struct cfs_rq *cfs_rq, struct sched_entity *se);
@@ -6954,7 +6963,7 @@ index 8a5b1ae0aa55..ac224c8d4b52 100644
  }
  
  #ifdef CONFIG_SMP
-@@ -12573,7 +12589,7 @@ static inline void task_tick_core(struct rq *rq, struct task_struct *curr)
+@@ -12567,7 +12583,7 @@ static inline void task_tick_core(struct rq *rq, struct task_struct *curr)
  	 */
  	if (rq->core->core_forceidle_count && rq->cfs.nr_running == 1 &&
  	    __entity_slice_used(&curr->se, MIN_NR_TASKS_DURING_FORCEIDLE))
@@ -6963,7 +6972,7 @@ index 8a5b1ae0aa55..ac224c8d4b52 100644
  }
  
  /*
-@@ -12740,7 +12756,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
+@@ -12734,7 +12750,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
  	 */
  	if (task_current(rq, p)) {
  		if (p->prio > oldprio)
@@ -7014,10 +7023,10 @@ index aa4c1c874fa4..f38ffe14aad2 100644
  		rd->rto_cpu = -1;
  
 diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
-index a831af102070..2fe76a61937b 100644
+index ef20c61004eb..43332bdb7fbf 100644
 --- a/kernel/sched/sched.h
 +++ b/kernel/sched/sched.h
-@@ -2466,6 +2466,7 @@ extern void init_sched_fair_class(void);
+@@ -2467,6 +2467,7 @@ extern void init_sched_fair_class(void);
  extern void reweight_task(struct task_struct *p, int prio);
  
  extern void resched_curr(struct rq *rq);
@@ -7158,10 +7167,10 @@ index 02582017759a..00e32e279fa9 100644
  }
  early_initcall(spawn_ksoftirqd);
 diff --git a/kernel/task_work.c b/kernel/task_work.c
-index 95a7e1b7f1da..05fb41fe09f5 100644
+index 95a7e1b7f1da..8f9c30e732a0 100644
 --- a/kernel/task_work.c
 +++ b/kernel/task_work.c
-@@ -1,10 +1,19 @@
+@@ -1,10 +1,21 @@
  // SPDX-License-Identifier: GPL-2.0
 +#include <linux/irq_work.h>
  #include <linux/spinlock.h>
@@ -7171,17 +7180,19 @@ index 95a7e1b7f1da..05fb41fe09f5 100644
  
  static struct callback_head work_exited; /* all we need is ->next == NULL */
  
++#ifdef CONFIG_IRQ_WORK
 +static void task_work_set_notify_irq(struct irq_work *entry)
 +{
 +	test_and_set_tsk_thread_flag(current, TIF_NOTIFY_RESUME);
 +}
 +static DEFINE_PER_CPU(struct irq_work, irq_work_NMI_resume) =
 +	IRQ_WORK_INIT_HARD(task_work_set_notify_irq);
++#endif
 +
  /**
   * task_work_add - ask the @task to execute @work->func()
   * @task: the task which should run the callback
-@@ -12,7 +21,7 @@ static struct callback_head work_exited; /* all we need is ->next == NULL */
+@@ -12,7 +23,7 @@ static struct callback_head work_exited; /* all we need is ->next == NULL */
   * @notify: how to notify the targeted task
   *
   * Queue @work for task_work_run() below and notify the @task if @notify
@@ -7190,7 +7201,7 @@ index 95a7e1b7f1da..05fb41fe09f5 100644
   *
   * @TWA_SIGNAL works like signals, in that the it will interrupt the targeted
   * task and run the task_work, regardless of whether the task is currently
-@@ -24,6 +33,8 @@ static struct callback_head work_exited; /* all we need is ->next == NULL */
+@@ -24,6 +35,8 @@ static struct callback_head work_exited; /* all we need is ->next == NULL */
   * kernel anyway.
   * @TWA_RESUME work is run only when the task exits the kernel and returns to
   * user mode, or before entering guest mode.
@@ -7199,7 +7210,7 @@ index 95a7e1b7f1da..05fb41fe09f5 100644
   *
   * Fails if the @task is exiting/exited and thus it can't process this @work.
   * Otherwise @work->func() will be called when the @task goes through one of
-@@ -44,8 +55,13 @@ int task_work_add(struct task_struct *task, struct callback_head *work,
+@@ -44,8 +57,15 @@ int task_work_add(struct task_struct *task, struct callback_head *work,
  {
  	struct callback_head *head;
  
@@ -7208,6 +7219,8 @@ index 95a7e1b7f1da..05fb41fe09f5 100644
 +	if (notify == TWA_NMI_CURRENT) {
 +		if (WARN_ON_ONCE(task != current))
 +			return -EINVAL;
++		if (!IS_ENABLED(CONFIG_IRQ_WORK))
++			return -EINVAL;
 +	} else {
 +		/* record the work call stack in order to print it in KASAN reports */
 +		kasan_record_aux_stack(work);
@@ -7215,17 +7228,19 @@ index 95a7e1b7f1da..05fb41fe09f5 100644
  
  	head = READ_ONCE(task->task_works);
  	do {
-@@ -66,6 +82,9 @@ int task_work_add(struct task_struct *task, struct callback_head *work,
+@@ -66,6 +86,11 @@ int task_work_add(struct task_struct *task, struct callback_head *work,
  	case TWA_SIGNAL_NO_IPI:
  		__set_notify_signal(task);
  		break;
++#ifdef CONFIG_IRQ_WORK
 +	case TWA_NMI_CURRENT:
 +		irq_work_queue(this_cpu_ptr(&irq_work_NMI_resume));
 +		break;
++#endif
  	default:
  		WARN_ON_ONCE(1);
  		break;
-@@ -120,9 +139,9 @@ static bool task_work_func_match(struct callback_head *cb, void *data)
+@@ -120,9 +145,9 @@ static bool task_work_func_match(struct callback_head *cb, void *data)
  }
  
  /**
@@ -7238,7 +7253,7 @@ index 95a7e1b7f1da..05fb41fe09f5 100644
   *
   * Find the last queued pending work with ->func == @func and remove
   * it from queue.
-@@ -131,11 +150,35 @@ static bool task_work_func_match(struct callback_head *cb, void *data)
+@@ -131,11 +156,35 @@ static bool task_work_func_match(struct callback_head *cb, void *data)
   * The found work or NULL if not found.
   */
  struct callback_head *
@@ -7275,7 +7290,7 @@ index 95a7e1b7f1da..05fb41fe09f5 100644
  /**
   * task_work_run - execute the works added by task_work_add()
   *
-@@ -168,7 +211,7 @@ void task_work_run(void)
+@@ -168,7 +217,7 @@ void task_work_run(void)
  		if (!work)
  			break;
  		/*
@@ -7529,7 +7544,7 @@ index bf30c50b5689..3c9f6538990e 100644
  		kfree_skb(skb);
  		return -EMSGSIZE;
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 2b4819b610b8..78184fe9e388 100644
+index 2b4819b610b8..cf00b2f662d5 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -229,7 +229,7 @@ static inline void backlog_lock_irq_save(struct softnet_data *sd,
@@ -7699,13 +7714,14 @@ index 2b4819b610b8..78184fe9e388 100644
  		act = netif_receive_generic_xdp(pskb, &xdp, xdp_prog);
  		if (act != XDP_PASS) {
  			switch (act) {
-@@ -5114,11 +5147,13 @@ int do_xdp_generic(struct bpf_prog *xdp_prog, struct sk_buff **pskb)
+@@ -5114,11 +5147,14 @@ int do_xdp_generic(struct bpf_prog *xdp_prog, struct sk_buff **pskb)
  				generic_xdp_tx(*pskb, xdp_prog);
  				break;
  			}
 +			bpf_net_ctx_clear(bpf_net_ctx);
  			return XDP_DROP;
  		}
++		bpf_net_ctx_clear(bpf_net_ctx);
  	}
  	return XDP_PASS;
  out_redir:
@@ -7713,7 +7729,7 @@ index 2b4819b610b8..78184fe9e388 100644
  	kfree_skb_reason(*pskb, SKB_DROP_REASON_XDP);
  	return XDP_DROP;
  }
-@@ -5935,6 +5970,7 @@ static void flush_backlog(struct work_struct *work)
+@@ -5935,6 +5971,7 @@ static void flush_backlog(struct work_struct *work)
  	}
  	backlog_unlock_irq_enable(sd);
  
@@ -7721,7 +7737,7 @@ index 2b4819b610b8..78184fe9e388 100644
  	skb_queue_walk_safe(&sd->process_queue, skb, tmp) {
  		if (skb->dev->reg_state == NETREG_UNREGISTERING) {
  			__skb_unlink(skb, &sd->process_queue);
-@@ -5942,6 +5978,7 @@ static void flush_backlog(struct work_struct *work)
+@@ -5942,6 +5979,7 @@ static void flush_backlog(struct work_struct *work)
  			rps_input_queue_head_incr(sd);
  		}
  	}
@@ -7729,7 +7745,7 @@ index 2b4819b610b8..78184fe9e388 100644
  	local_bh_enable();
  }
  
-@@ -6063,7 +6100,9 @@ static int process_backlog(struct napi_struct *napi, int quota)
+@@ -6063,7 +6101,9 @@ static int process_backlog(struct napi_struct *napi, int quota)
  	while (again) {
  		struct sk_buff *skb;
  
@@ -7739,7 +7755,7 @@ index 2b4819b610b8..78184fe9e388 100644
  			rcu_read_lock();
  			__netif_receive_skb(skb);
  			rcu_read_unlock();
-@@ -6072,7 +6111,9 @@ static int process_backlog(struct napi_struct *napi, int quota)
+@@ -6072,7 +6112,9 @@ static int process_backlog(struct napi_struct *napi, int quota)
  				return work;
  			}
  
@@ -7749,7 +7765,7 @@ index 2b4819b610b8..78184fe9e388 100644
  
  		backlog_lock_irq_disable(sd);
  		if (skb_queue_empty(&sd->input_pkt_queue)) {
-@@ -6087,8 +6128,10 @@ static int process_backlog(struct napi_struct *napi, int quota)
+@@ -6087,8 +6129,10 @@ static int process_backlog(struct napi_struct *napi, int quota)
  			napi->state &= NAPIF_STATE_THREADED;
  			again = false;
  		} else {
@@ -7760,7 +7776,7 @@ index 2b4819b610b8..78184fe9e388 100644
  		}
  		backlog_unlock_irq_enable(sd);
  	}
-@@ -6301,6 +6344,7 @@ enum {
+@@ -6301,6 +6345,7 @@ enum {
  static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
  			   unsigned flags, u16 budget)
  {
@@ -7768,7 +7784,7 @@ index 2b4819b610b8..78184fe9e388 100644
  	bool skip_schedule = false;
  	unsigned long timeout;
  	int rc;
-@@ -6318,6 +6362,7 @@ static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
+@@ -6318,6 +6363,7 @@ static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
  	clear_bit(NAPI_STATE_IN_BUSY_POLL, &napi->state);
  
  	local_bh_disable();
@@ -7776,7 +7792,7 @@ index 2b4819b610b8..78184fe9e388 100644
  
  	if (flags & NAPI_F_PREFER_BUSY_POLL) {
  		napi->defer_hard_irqs_count = READ_ONCE(napi->dev->napi_defer_hard_irqs);
-@@ -6340,6 +6385,7 @@ static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
+@@ -6340,6 +6386,7 @@ static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
  	netpoll_poll_unlock(have_poll_lock);
  	if (rc == budget)
  		__busy_poll_stop(napi, skip_schedule);
@@ -7784,7 +7800,7 @@ index 2b4819b610b8..78184fe9e388 100644
  	local_bh_enable();
  }
  
-@@ -6349,6 +6395,7 @@ static void __napi_busy_loop(unsigned int napi_id,
+@@ -6349,6 +6396,7 @@ static void __napi_busy_loop(unsigned int napi_id,
  {
  	unsigned long start_time = loop_end ? busy_loop_current_time() : 0;
  	int (*napi_poll)(struct napi_struct *napi, int budget);
@@ -7792,7 +7808,7 @@ index 2b4819b610b8..78184fe9e388 100644
  	void *have_poll_lock = NULL;
  	struct napi_struct *napi;
  
-@@ -6367,6 +6414,7 @@ static void __napi_busy_loop(unsigned int napi_id,
+@@ -6367,6 +6415,7 @@ static void __napi_busy_loop(unsigned int napi_id,
  		int work = 0;
  
  		local_bh_disable();
@@ -7800,7 +7816,7 @@ index 2b4819b610b8..78184fe9e388 100644
  		if (!napi_poll) {
  			unsigned long val = READ_ONCE(napi->state);
  
-@@ -6397,6 +6445,7 @@ static void __napi_busy_loop(unsigned int napi_id,
+@@ -6397,6 +6446,7 @@ static void __napi_busy_loop(unsigned int napi_id,
  			__NET_ADD_STATS(dev_net(napi->dev),
  					LINUX_MIB_BUSYPOLLRXPACKETS, work);
  		skb_defer_free_flush(this_cpu_ptr(&softnet_data));
@@ -7808,7 +7824,7 @@ index 2b4819b610b8..78184fe9e388 100644
  		local_bh_enable();
  
  		if (!loop_end || loop_end(loop_end_arg, start_time))
-@@ -6824,6 +6873,7 @@ static int napi_thread_wait(struct napi_struct *napi)
+@@ -6824,6 +6874,7 @@ static int napi_thread_wait(struct napi_struct *napi)
  
  static void napi_threaded_poll_loop(struct napi_struct *napi)
  {
@@ -7816,7 +7832,7 @@ index 2b4819b610b8..78184fe9e388 100644
  	struct softnet_data *sd;
  	unsigned long last_qs = jiffies;
  
-@@ -6832,6 +6882,8 @@ static void napi_threaded_poll_loop(struct napi_struct *napi)
+@@ -6832,6 +6883,8 @@ static void napi_threaded_poll_loop(struct napi_struct *napi)
  		void *have;
  
  		local_bh_disable();
@@ -7825,7 +7841,7 @@ index 2b4819b610b8..78184fe9e388 100644
  		sd = this_cpu_ptr(&softnet_data);
  		sd->in_napi_threaded_poll = true;
  
-@@ -6847,6 +6899,7 @@ static void napi_threaded_poll_loop(struct napi_struct *napi)
+@@ -6847,6 +6900,7 @@ static void napi_threaded_poll_loop(struct napi_struct *napi)
  			net_rps_action_and_irq_enable(sd);
  		}
  		skb_defer_free_flush(sd);
@@ -7833,7 +7849,7 @@ index 2b4819b610b8..78184fe9e388 100644
  		local_bh_enable();
  
  		if (!repoll)
-@@ -6872,10 +6925,12 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
+@@ -6872,10 +6926,12 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
  	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
  	unsigned long time_limit = jiffies +
  		usecs_to_jiffies(READ_ONCE(net_hotdata.netdev_budget_usecs));
@@ -7846,7 +7862,7 @@ index 2b4819b610b8..78184fe9e388 100644
  start:
  	sd->in_net_rx_action = true;
  	local_irq_disable();
-@@ -6928,7 +6983,8 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
+@@ -6928,7 +6984,8 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
  		sd->in_net_rx_action = false;
  
  	net_rps_action_and_irq_enable(sd);
@@ -7892,7 +7908,7 @@ index b7b518bc2be5..4984dd9b334b 100644
  
  #endif
 diff --git a/net/core/filter.c b/net/core/filter.c
-index 9933851c685e..9556453a8b56 100644
+index 9933851c685e..5002f4cd9f18 100644
 --- a/net/core/filter.c
 +++ b/net/core/filter.c
 @@ -1658,9 +1658,12 @@ struct bpf_scratchpad {
@@ -8120,36 +8136,38 @@ index 9933851c685e..9556453a8b56 100644
  
  	if (unlikely(flags))
  		return XDP_ABORTED;
-@@ -6455,6 +6459,9 @@ BPF_CALL_4(bpf_lwt_seg6_store_bytes, struct sk_buff *, skb, u32, offset,
+@@ -6455,6 +6459,7 @@ BPF_CALL_4(bpf_lwt_seg6_store_bytes, struct sk_buff *, skb, u32, offset,
  	void *srh_tlvs, *srh_end, *ptr;
  	int srhoff = 0;
  
-+	if (!bpf_net_ctx_seg6_state_avail())
-+		return -EINVAL;
 +	lockdep_assert_held(&srh_state->bh_lock);
  	if (srh == NULL)
  		return -EINVAL;
  
-@@ -6511,6 +6518,9 @@ BPF_CALL_4(bpf_lwt_seg6_action, struct sk_buff *, skb,
+@@ -6511,6 +6516,7 @@ BPF_CALL_4(bpf_lwt_seg6_action, struct sk_buff *, skb,
  	int hdroff = 0;
  	int err;
  
-+	if (!bpf_net_ctx_seg6_state_avail())
-+		return -EINVAL;
 +	lockdep_assert_held(&srh_state->bh_lock);
  	switch (action) {
  	case SEG6_LOCAL_ACTION_END_X:
  		if (!seg6_bpf_has_valid_srh(skb))
-@@ -6587,6 +6597,9 @@ BPF_CALL_3(bpf_lwt_seg6_adjust_srh, struct sk_buff *, skb, u32, offset,
+@@ -6587,6 +6593,7 @@ BPF_CALL_3(bpf_lwt_seg6_adjust_srh, struct sk_buff *, skb, u32, offset,
  	int srhoff = 0;
  	int ret;
  
-+	if (!bpf_net_ctx_seg6_state_avail())
-+		return -EINVAL;
 +	lockdep_assert_held(&srh_state->bh_lock);
  	if (unlikely(srh == NULL))
  		return -EINVAL;
  
+@@ -11040,7 +11047,6 @@ const struct bpf_verifier_ops lwt_seg6local_verifier_ops = {
+ };
+ 
+ const struct bpf_prog_ops lwt_seg6local_prog_ops = {
+-	.test_run		= bpf_prog_test_run_skb,
+ };
+ 
+ const struct bpf_verifier_ops cg_sock_verifier_ops = {
 diff --git a/net/core/lwt_bpf.c b/net/core/lwt_bpf.c
 index 4a0797f0a154..afb05f58b64c 100644
 --- a/net/core/lwt_bpf.c
@@ -8583,7 +8601,7 @@ index 8512cb09ebc0..d8a4f192873a 100644
  	ahash_request_free(c->req);
  	crypto_free_ahash(hash);
 diff --git a/net/ipv6/seg6_local.c b/net/ipv6/seg6_local.c
-index c434940131b1..3e3a48b7266b 100644
+index c434940131b1..c74705ead984 100644
 --- a/net/ipv6/seg6_local.c
 +++ b/net/ipv6/seg6_local.c
 @@ -1380,7 +1380,9 @@ static int input_action_end_b6_encap(struct sk_buff *skb,
@@ -8615,7 +8633,7 @@ index c434940131b1..3e3a48b7266b 100644
  	struct ipv6_sr_hdr *srh;
  	int ret;
  
-@@ -1420,10 +1422,15 @@ static int input_action_end_bpf(struct sk_buff *skb,
+@@ -1420,10 +1422,14 @@ static int input_action_end_bpf(struct sk_buff *skb,
  	}
  	advance_nextseg(srh, &ipv6_hdr(skb)->daddr);
  
@@ -8629,16 +8647,14 @@ index c434940131b1..3e3a48b7266b 100644
  	 */
 -	preempt_disable();
 +	local_lock_nested_bh(&seg6_bpf_srh_states.bh_lock);
-+	bpf_net_ctx_seg6_state_set();
 +	srh_state = this_cpu_ptr(&seg6_bpf_srh_states);
  	srh_state->srh = srh;
  	srh_state->hdrlen = srh->hdrlen << 3;
  	srh_state->valid = true;
-@@ -1446,15 +1453,17 @@ static int input_action_end_bpf(struct sk_buff *skb,
+@@ -1446,15 +1452,15 @@ static int input_action_end_bpf(struct sk_buff *skb,
  
  	if (srh_state->srh && !seg6_bpf_has_valid_srh(skb))
  		goto drop;
-+	bpf_net_ctx_seg6_state_clr();
 +	local_unlock_nested_bh(&seg6_bpf_srh_states.bh_lock);
  
 -	preempt_enable();
@@ -8649,7 +8665,6 @@ index c434940131b1..3e3a48b7266b 100644
  
  drop:
 -	preempt_enable();
-+	bpf_net_ctx_seg6_state_clr();
 +	local_unlock_nested_bh(&seg6_bpf_srh_states.bh_lock);
  	kfree_skb(skb);
  	return -EINVAL;
