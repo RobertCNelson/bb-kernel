@@ -62,8 +62,7 @@ dl_generic () {
 
 	if [ ! -f "${gcc_dir}/${filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
-		echo "-----------------------------"
-		if [ ! -f "${gcc_html_path}${gcc_filename_prefix}.tar.xz" ] ; then
+		if [ ! -f "${gcc_dir}/${gcc_filename_prefix}.tar.xz" ] ; then
 			${WGET} "${gcc_html_path}${gcc_filename_prefix}.tar.xz"
 		fi
 		if [ -d "${gcc_dir}/${filename_prefix}" ] ; then
