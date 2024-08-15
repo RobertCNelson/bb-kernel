@@ -150,6 +150,8 @@ debian_regs () {
 	#"mkimage" command not found - U-Boot images will not be built
 	pkg="u-boot-tools"
 	check_dpkg
+	pkg="xz-utils"
+	check_dpkg
 	pkg="zstd"
 	check_dpkg
 
@@ -511,6 +513,7 @@ debian_regs () {
 			#22.04 jammy: (EOL: April 2027) lts: jammy -> noble
 			#23.10 mantic: (EOL: July 2024)
 			#24.04 noble: (EOL: June 2029) lts: noble -> xyz
+			#24.10 oracular: (EOL: July 2025)
 			unset warn_eol_distro
 			;;
 		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|groovy|hirsute|impish|kinetic|lunar)
@@ -598,8 +601,8 @@ debian_regs () {
 	if [ "${deb_pkgs}" ] ; then
 		echo "Debian/Ubuntu/Mint: missing dependencies, please install these packages via:"
 		echo "-----------------------------"
-		echo "sudo apt update"
-		echo "sudo apt install ${deb_pkgs}"
+		echo "sudo apt-get update"
+		echo "sudo apt-get install ${deb_pkgs}"
 		echo "-----------------------------"
 		return 1
 	fi
@@ -672,7 +675,7 @@ check_for_command () {
 unset NEEDS_COMMAND
 check_for_command cpio --version
 check_for_command lz4 --version
-check_for_command zstd --version
+check_for_command xz --version
 
 if [ "${NEEDS_COMMAND}" ] ; then
 	echo "Please install missing commands"

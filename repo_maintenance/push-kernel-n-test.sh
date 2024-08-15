@@ -18,10 +18,6 @@ cat_files () {
 		cat ./patches/external/git/WIRELESS_REGDB >> ${wfile}
 	fi
 
-	if [ -f ./patches/external/git/TI_AMX3_CM3 ] ; then
-		cat ./patches/external/git/TI_AMX3_CM3 >> ${wfile}
-	fi
-
 	if [ -f ./patches/external/git/WPANUSB ] ; then
 		cat ./patches/external/git/WPANUSB >> ${wfile}
 	fi
@@ -53,8 +49,8 @@ if [ -e ${DIR}/version.sh ]; then
 	else
 		echo "kernel v${KERNEL_TAG}${BUILD} rebase external git projects" > ${wfile}
 	fi
-	if [ "${TISDK}" ] ; then
-		echo "TI SDK: ${TISDK}" >> ${wfile}
+	if [ "${SDK}" ] ; then
+		echo "TI SDK: ${SDK}" >> ${wfile}
 	fi
 	cat_files
 
