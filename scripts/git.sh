@@ -61,8 +61,8 @@ build_git () {
 }
 
 git_kernel_stable () {
-	echo "-----------------------------"
 	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
+		echo "-----------------------------"
 		echo "scripts/git: fetching from: ${linux_stable}"
 		${git_bin} fetch "${linux_stable}" master --tags
 	fi
