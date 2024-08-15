@@ -48,7 +48,8 @@ toolchain="gcc_13_arm"
 #Kernel
 KERNEL_REL=6.11
 KERNEL_TAG=${KERNEL_REL}-rc3
-kernel_rt="-rc6-rt11"
+#https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.11/
+kernel_rt="-rc3-rt2"
 #Kernel Build
 BUILD=${build_prefix}1
 
