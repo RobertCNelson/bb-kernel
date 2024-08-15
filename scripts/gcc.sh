@@ -62,8 +62,9 @@ dl_generic () {
 
 	if [ ! -f "${gcc_dir}/${filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
-		echo "-----------------------------"
-		${WGET} "${gcc_html_path}${gcc_filename_prefix}.tar.xz"
+		if [ ! -f "${gcc_dir}/${gcc_filename_prefix}.tar.xz" ] ; then
+			${WGET} "${gcc_html_path}${gcc_filename_prefix}.tar.xz"
+		fi
 		if [ -d "${gcc_dir}/${filename_prefix}" ] ; then
 			rm -rf "${gcc_dir}/${filename_prefix}" || true
 		fi
@@ -106,10 +107,10 @@ gcc_toolchain () {
 	gcc8="8.5.0"
 	gcc9="9.5.0"
 	gcc10="10.5.0"
-	gcc11="11.4.0"
+	gcc11="11.5.0"
 	gcc12="12.4.0"
 	gcc13="13.3.0"
-	gcc14="14.1.0"
+	gcc14="14.2.0"
 
 	case "${toolchain}" in
 	gcc_linaro_gnueabihf_4_9)
