@@ -49,8 +49,8 @@ if [ -e ${DIR}/version.sh ]; then
 	else
 		echo "kernel v${KERNEL_TAG}${BUILD} rebase external git projects" > ${wfile}
 	fi
-	if [ "${TISDK}" ] ; then
-		echo "TI SDK: ${TISDK}" >> ${wfile}
+	if [ "${SDK}" ] ; then
+		echo "TI SDK: ${SDK}" >> ${wfile}
 	fi
 	cat_files
 
