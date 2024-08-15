@@ -33,7 +33,7 @@ build_git () {
 	echo "-----------------------------"
 	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`], building and installing: [${debian_stable_git}] to /usr/local/"
 
-	wget --quiet -c --directory-prefix="${DIR}/ignore/" https://www.kernel.org/pub/software/scm/git/git-${debian_stable_git}.tar.gz
+	wget --quiet -c --directory-prefix="${DIR}/ignore/" https://mirrors.edge.kernel.org/pub/software/scm/git/git-${debian_stable_git}.tar.gz
 	if [ -f "${DIR}/ignore/git-${debian_stable_git}.tar.gz" ] ; then
 		cd "${DIR}/ignore/" || true
 		tar xf git-${debian_stable_git}.tar.gz
@@ -60,30 +60,20 @@ build_git () {
 	fi
 }
 
-unsecure_git_kernel_stable () {
-	${git_bin} fetch "${unsecure_linux_stable}" master --tags
-}
-
 git_kernel_stable () {
-	echo "-----------------------------"
-	echo "scripts/git: fetching from: ${linux_stable}"
-	${git_bin} fetch "${linux_stable}" master --tags || unsecure_git_kernel_stable
-}
-
-unsecure_git_kernel_torvalds () {
-	${git_bin} pull --no-edit "${unsecure_torvalds_linux}" master --tags
+	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
+		echo "-----------------------------"
+		echo "scripts/git: fetching from: ${linux_stable}"
+		${git_bin} fetch "${linux_stable}" master --tags
+	fi
 }
 
 git_kernel_torvalds () {
 	echo "-----------------------------"
 	echo "scripts/git: pulling from: ${torvalds_linux}"
 	echo "log: [${git_bin} pull --no-rebase --no-edit "${torvalds_linux}" master --tags]"
-	${git_bin} pull --no-rebase --no-edit "${torvalds_linux}" master --tags || unsecure_git_kernel_torvalds
+	${git_bin} pull --no-rebase --no-edit "${torvalds_linux}" master --tags
 	${git_bin} tag | grep v"${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable
-}
-
-unsecure_check_and_or_clone () {
-	${git_bin} clone "${unsecure_torvalds_linux}" "${DIR}/ignore/linux-src"
 }
 
 check_and_or_clone () {
@@ -101,7 +91,7 @@ check_and_or_clone () {
 			echo "-----------------------------"
 			echo "scripts/git: LINUX_GIT not defined in system.sh"
 			echo "cloning ${torvalds_linux} into default location: ${DIR}/ignore/linux-src"
-			${git_bin} clone "${torvalds_linux}" "${DIR}/ignore/linux-src" || unsecure_check_and_or_clone
+			${git_bin} clone "${torvalds_linux}" "${DIR}/ignore/linux-src"
 		fi
 		LINUX_GIT="${DIR}/ignore/linux-src"
 	fi
@@ -312,10 +302,13 @@ if [ ! "${git_config_user_name}" ] ; then
 	${git_bin} config --local user.name "Your Name"
 fi
 
-torvalds_linux="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-unsecure_torvalds_linux="git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-linux_stable="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
-unsecure_linux_stable="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"
+torvalds_linux="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
+
+if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
+	torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
+	linux_stable="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
+fi
 
 if [ ! -f "${DIR}/.yakbuild" ] ; then
 	git_kernel
