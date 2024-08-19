@@ -456,7 +456,7 @@ backports () {
 #		dir 'drivers/ti/uio'
 #	fi
 
-	backport_tag="rpi-6.10.y"
+	backport_tag="rpi-6.11.y"
 
 	subsystem="edt-ft5x06"
 	#regenerate="enable"
