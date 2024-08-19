@@ -52,7 +52,7 @@ linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stab
 KERNEL_REL=6.11
 KERNEL_TAG=${KERNEL_REL}-rc3
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.11/
-kernel_rt="-rc3-rt2"
+kernel_rt="-rc3-rt3"
 #Kernel Build
 BUILD=${build_prefix}1
 
