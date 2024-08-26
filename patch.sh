@@ -470,23 +470,7 @@ backports () {
 		patch_backports
 	fi
 
-	${git} "${DIR}/patches/backports/mmc-core-quirks/0002-MMC-added-alternative-MMC-driver.patch"
-	${git} "${DIR}/patches/backports/mmc-core-quirks/0003-drivers-mmc-apply-SD-quirks-earlier-during-probe.patch"
-	${git} "${DIR}/patches/backports/mmc-core-quirks/0004-drivers-mmc-disable-write-caching-on-Samsung-2023-mo.patch"
-
-	backport_tag="rpi-6.10.y"
-
-	subsystem="mmc-core-quirks"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_rpibackports
-
-		cp -v ~/linux-rpi/drivers/mmc/core/quirks.h ./drivers/mmc/core/quirks.h
-
-	#	post_rpibackports
-	#else
-		patch_backports
-	fi
+	${git} "${DIR}/patches/backports/mmc-core-quirks/0002-mmc-core-apply-SD-quirks-earlier-during-probe.patch"
 }
 
 drivers () {
