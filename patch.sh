@@ -218,6 +218,12 @@ wireless_regdb () {
 	dir 'external/wireless_regdb'
 }
 
+mainline_patches () {
+	#exit 2
+	dir 'rfc/mainline'
+	#exit 2
+}
+
 cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/modules.order || true
 	rm -rf arch/arm/boot/dts/.*cmd || true
@@ -377,6 +383,7 @@ copy_mainline_driver
 wpanusb
 rt
 wireless_regdb
+mainline_patches
 beagleboard_dtbs
 #local_patch
 
