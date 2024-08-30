@@ -21,6 +21,16 @@
 # THE SOFTWARE.
 
 DIR=$PWD
+
+#For:
+#Kernel Git
+. "${DIR}/version.sh"
+
+if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
+	linux_repo="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
+	linux_stable_repo="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
+fi
+
 CORES=$(getconf _NPROCESSORS_ONLN)
 debian_stable_git="2.20.1"
 #git hard requirements:
@@ -63,16 +73,16 @@ build_git () {
 git_kernel_stable () {
 	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
 		echo "-----------------------------"
-		echo "scripts/git: fetching from: ${linux_stable}"
-		${git_bin} fetch "${linux_stable}" master --tags
+		echo "scripts/git: fetching from: ${linux_stable_repo}"
+		${git_bin} fetch "${linux_stable_repo}" master --tags
 	fi
 }
 
 git_kernel_torvalds () {
 	echo "-----------------------------"
-	echo "scripts/git: pulling from: ${torvalds_linux}"
-	echo "log: [${git_bin} pull --no-rebase --no-edit "${torvalds_linux}" master --tags]"
-	${git_bin} pull --no-rebase --no-edit "${torvalds_linux}" master --tags
+	echo "scripts/git: pulling from: ${linux_repo}"
+	echo "log: [${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags]"
+	${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags
 	${git_bin} tag | grep v"${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable
 }
 
@@ -90,8 +100,8 @@ check_and_or_clone () {
 		else
 			echo "-----------------------------"
 			echo "scripts/git: LINUX_GIT not defined in system.sh"
-			echo "cloning ${torvalds_linux} into default location: ${DIR}/ignore/linux-src"
-			${git_bin} clone "${torvalds_linux}" "${DIR}/ignore/linux-src"
+			echo "cloning ${linux_repo} into default location: ${DIR}/ignore/linux-src"
+			${git_bin} clone "${linux_repo}" "${DIR}/ignore/linux-src"
 		fi
 		LINUX_GIT="${DIR}/ignore/linux-src"
 	fi
@@ -192,8 +202,8 @@ git_kernel () {
 	fi
 
 	if [ "${TOPOFTREE}" ] ; then
-		${git_bin} pull --no-edit "${torvalds_linux}" master || true
-		${git_bin} pull --no-edit "${torvalds_linux}" master --tags || true
+		${git_bin} pull --no-edit "${linux_repo}" master || true
+		${git_bin} pull --no-edit "${linux_repo}" master --tags || true
 	fi
 
 	${git_bin} describe
@@ -300,14 +310,6 @@ unset git_config_user_name
 git_config_user_name=$(${git_bin} config --global --get user.name || true)
 if [ ! "${git_config_user_name}" ] ; then
 	${git_bin} config --local user.name "Your Name"
-fi
-
-torvalds_linux="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
-linux_stable="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
-
-if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
-	torvalds_linux="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
-	linux_stable="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
 fi
 
 if [ ! -f "${DIR}/.yakbuild" ] ; then
