@@ -218,6 +218,12 @@ wireless_regdb () {
 	dir 'external/wireless_regdb'
 }
 
+mainline_patches () {
+	#exit 2
+	dir 'rfc/mainline'
+	#exit 2
+}
+
 cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/modules.order || true
 	rm -rf arch/arm/boot/dts/.*cmd || true
@@ -329,11 +335,20 @@ beagleboard_dtbs () {
 
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 
-		device="k3-am67a-beagley-ai.dtb" ; k3_dtb_makefile_append
-
 		device="BONE-I2C1" ; k3_dtbo_makefile_append
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
+
+		#ls src/arm64/overlays/ | grep beaglebone
+
+		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_14" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_14-p9_16" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_16" ; k3_dtbo_makefile_append
+
 		k3_makefile_patch_cleanup_overlays
 
 		${git_bin} add -f arch/arm/boot/dts/
@@ -366,8 +381,9 @@ local_patch () {
 copy_mainline_driver
 #external_git
 wpanusb
-#rt
+rt
 wireless_regdb
+mainline_patches
 beagleboard_dtbs
 #local_patch
 
@@ -464,9 +480,11 @@ backports () {
 }
 
 drivers () {
-	dir 'boris'
-	dir 'mmc'
+	dir 'branding/boris'
+
 	dir 'external/ti-amx3-cm3-pm-firmware'
+
+	dir 'drivers/mmc'
 }
 
 ###
