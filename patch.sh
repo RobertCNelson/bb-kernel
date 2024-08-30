@@ -155,24 +155,27 @@ rt_cleanup () {
 }
 
 rt () {
-	rt_patch="${KERNEL_REL}${kernel_rt}"
+	#rt_enable="enable"
+	if [ "x${rt_enable}" = "xenable" ] ; then
+		rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+		#${git_bin} revert --no-edit xyz
 
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
-		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
-		rm -f patch-${rt_patch}.patch.xz
-		rm -f localversion-rt
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
-		${git_bin} format-patch -1 -o ../patches/external/rt/
-		#echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wget -c https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
+			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
+			rm -f patch-${rt_patch}.patch.xz
+			rm -f localversion-rt
+			${git_bin} add .
+			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
+			${git_bin} format-patch -1 -o ../patches/external/rt/
+			#echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
 
-		exit 2
+			exit 2
+		fi
+		dir 'external/rt'
 	fi
-	dir 'external/rt'
 }
 
 wireless_regdb () {
@@ -213,6 +216,12 @@ wireless_regdb () {
 		cleanup
 	fi
 	dir 'external/wireless_regdb'
+}
+
+mainline_patches () {
+	#exit 2
+	dir 'rfc/mainline'
+	#exit 2
 }
 
 cleanup_dts_builds () {
@@ -326,8 +335,6 @@ beagleboard_dtbs () {
 
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 
-		device="k3-am67a-beagley-ai.dtb" ; k3_dtb_makefile_append
-
 		device="BONE-I2C1" ; k3_dtbo_makefile_append
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
@@ -374,8 +381,9 @@ local_patch () {
 copy_mainline_driver
 #external_git
 wpanusb
-#rt
+rt
 wireless_regdb
+mainline_patches
 beagleboard_dtbs
 #local_patch
 
@@ -470,23 +478,7 @@ backports () {
 		patch_backports
 	fi
 
-	${git} "${DIR}/patches/backports/mmc-core-quirks/0002-MMC-added-alternative-MMC-driver.patch"
-	${git} "${DIR}/patches/backports/mmc-core-quirks/0003-drivers-mmc-apply-SD-quirks-earlier-during-probe.patch"
-	${git} "${DIR}/patches/backports/mmc-core-quirks/0004-drivers-mmc-disable-write-caching-on-Samsung-2023-mo.patch"
-
-	backport_tag="rpi-6.10.y"
-
-	subsystem="mmc-core-quirks"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_rpibackports
-
-		cp -v ~/linux-rpi/drivers/mmc/core/quirks.h ./drivers/mmc/core/quirks.h
-
-	#	post_rpibackports
-	#else
-		patch_backports
-	fi
+	${git} "${DIR}/patches/backports/mmc-core-quirks/0002-mmc-core-apply-SD-quirks-earlier-during-probe.patch"
 }
 
 drivers () {
