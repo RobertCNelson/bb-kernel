@@ -95,6 +95,13 @@ make_deb () {
 
 	KERNEL_UTS=$(cat "${DIR}/KERNEL/include/generated/utsrelease.h" | awk '{print $3}' | sed 's/\"//g' )
 
+	if [ "${DTBS_CHECK}" ] ; then
+		echo "-----------------------------"
+		echo "make -j4 ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" dtbs_check"
+		echo "-----------------------------"
+		make -j4 ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" dtbs_check
+	fi
+
 	cd "${DIR}/" || exit
 }
 
