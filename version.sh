@@ -31,6 +31,7 @@ toolchain="gcc_8_arm"
 #toolchain="gcc_11_aarch64"
 #toolchain="gcc_12_aarch64"
 #toolchain="gcc_13_aarch64"
+#toolchain="gcc_14_aarch64"
 #riscv64
 #KERNEL_ARCH=riscv
 #DEBARCH=riscv64
@@ -41,10 +42,15 @@ toolchain="gcc_8_arm"
 #toolchain="gcc_11_riscv64"
 #toolchain="gcc_12_riscv64"
 #toolchain="gcc_13_riscv64"
+#toolchain="gcc_14_riscv64"
 
 #Kernel
+linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
+#
 KERNEL_REL=5.4
 KERNEL_TAG=${KERNEL_REL}.257
+#https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/5.4/
 kernel_rt=".257-rt87"
 #Kernel Build
 BUILD=${build_prefix}68

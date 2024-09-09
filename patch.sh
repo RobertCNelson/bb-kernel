@@ -385,11 +385,12 @@ pre_backports () {
 	echo "dir: backports/${subsystem}"
 
 	cd ~/linux-src/
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git master
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git master --tags
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
-		${git_bin} checkout ${backport_tag} -b tmp
+		echo "${git_bin} checkout ${backport_tag} -f"
+		${git_bin} checkout ${backport_tag} -f
 	fi
 	cd -
 }
