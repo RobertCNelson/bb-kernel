@@ -470,7 +470,7 @@ drivers () {
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
-	dir 'drivers/mmc'
+	#dir 'drivers/mmc'
 }
 
 ###
