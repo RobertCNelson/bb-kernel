@@ -22,15 +22,6 @@
 
 DIR=$PWD
 
-#For:
-#Kernel Git
-. "${DIR}/version.sh"
-
-if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
-	linux_repo="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
-	linux_stable_repo="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
-fi
-
 CORES=$(getconf _NPROCESSORS_ONLN)
 debian_stable_git="2.20.1"
 #git hard requirements:
@@ -71,11 +62,9 @@ build_git () {
 }
 
 git_kernel_stable () {
-	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
-		echo "-----------------------------"
-		echo "scripts/git: fetching from: ${linux_stable_repo}"
-		${git_bin} fetch "${linux_stable_repo}" master --tags
-	fi
+	echo "-----------------------------"
+	echo "scripts/git: fetching from: ${linux_stable_repo}"
+	${git_bin} fetch "${linux_stable_repo}" master --tags
 }
 
 git_kernel_torvalds () {
@@ -267,6 +256,11 @@ git_shallow () {
 
 . "${DIR}/version.sh"
 . "${DIR}/system.sh"
+
+if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
+	linux_repo="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
+	linux_stable_repo="https://git.gfnd.rcn-ee.org/kernel.org/mirror-linux-stable.git"
+fi
 
 git_bin=$(which git)
 

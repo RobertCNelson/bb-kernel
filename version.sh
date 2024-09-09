@@ -50,11 +50,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.10
-KERNEL_TAG=${KERNEL_REL}.7
+KERNEL_TAG=${KERNEL_REL}.9
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.10/
 kernel_rt=".2-rt14"
 #Kernel Build
-BUILD=${build_prefix}10.1
+BUILD=${build_prefix}10.2
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
