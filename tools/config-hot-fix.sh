@@ -236,13 +236,30 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_FUNCTION_TRACER
 ./scripts/config --enable CONFIG_DYNAMIC_FTRACE
 
-./scripts/config --disable CONFIG_MODULE_COMPRESS_ZSTD
+./scripts/config --enable CONFIG_MODULE_COMPRESS
+./scripts/config --disable CONFIG_MODULE_COMPRESS_GZIP
 ./scripts/config --enable CONFIG_MODULE_COMPRESS_XZ
+./scripts/config --disable CONFIG_MODULE_COMPRESS_ZSTD
+./scripts/config --enable CONFIG_MODULE_COMPRESS_ALL
 ./scripts/config --enable CONFIG_GPIO_AGGREGATOR
 ./scripts/config --module CONFIG_PWM_GPIO
 
 #10.00.05
 ./scripts/config --module CONFIG_RPMSG_PRU
+
+#new in v6.12.x
+./scripts/config --module CONFIG_RPMB
+./scripts/config --module CONFIG_ADXL380_SPI
+./scripts/config --module CONFIG_ADXL380_I2C
+./scripts/config --module CONFIG_AD4000
+./scripts/config --module CONFIG_AD4695
+./scripts/config --module CONFIG_PAC1921
+./scripts/config --module CONFIG_LTC2664
+./scripts/config --module CONFIG_ENS210
+./scripts/config --module CONFIG_BH1745
+./scripts/config --module CONFIG_SDP500
+./scripts/config --module CONFIG_HX9023S
+./scripts/config --module CONFIG_AW96103
 
 #configure CONFIG_EXTRA_FIRMWARE
 ./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin am43x-evm-scale-data.bin"
