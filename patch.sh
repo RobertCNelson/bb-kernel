@@ -254,9 +254,9 @@ arm_dtb_makefile_append () {
 }
 
 arm_dtbo_makefile_append () {
-	if [ -f ../${work_dir}/src/arm/overlays/${device}.dts ] ; then
+	if [ -f ../${work_dir}/src/arm/overlays/${device}.dtso ] ; then
 		sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device'.dtbo \\:g' arch/arm/boot/dts/ti/omap/Makefile
-		cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/ti/omap/${device}.dtso
+		cp -v ../${work_dir}/src/arm/overlays/${device}.dtso arch/arm/boot/dts/ti/omap/${device}.dtso
 	else
 		echo "Missing [${device}]"
 	fi
@@ -267,9 +267,9 @@ k3_dtb_makefile_append () {
 }
 
 k3_dtbo_makefile_append () {
-	if [ -f ../${work_dir}/src/arm64/overlays/${device}.dts ] ; then
+	if [ -f ../${work_dir}/src/arm64/overlays/${device}.dtso ] ; then
 		echo "dtb-\$(CONFIG_ARCH_K3) += $device.dtbo" >> arch/arm64/boot/dts/ti/Makefile
-		cp -v ../${work_dir}/src/arm64/overlays/${device}.dts arch/arm64/boot/dts/ti/${device}.dtso
+		cp -v ../${work_dir}/src/arm64/overlays/${device}.dtso arch/arm64/boot/dts/ti/${device}.dtso
 		sed -i -e 's:ti/k3-:k3-:g' arch/arm64/boot/dts/ti/${device}.dtso
 	else
 		echo "Missing [${device}]"
@@ -320,7 +320,6 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
-		device="AM57XX-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
