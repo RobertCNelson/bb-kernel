@@ -232,9 +232,13 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_FUNCTION_TRACER
 ./scripts/config --enable CONFIG_DYNAMIC_FTRACE
 
-./scripts/config --disable CONFIG_MODULE_COMPRESS_ZSTD
+./scripts/config --disable CONFIG_MODULE_COMPRESS_GZIP
 ./scripts/config --enable CONFIG_MODULE_COMPRESS_XZ
+./scripts/config --disable CONFIG_MODULE_COMPRESS_ZSTD
 ./scripts/config --enable CONFIG_GPIO_AGGREGATOR
+
+#10.00.05
+./scripts/config --module CONFIG_RPMSG_PRU
 
 #configure CONFIG_EXTRA_FIRMWARE
 ./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin am43x-evm-scale-data.bin"
