@@ -474,7 +474,7 @@ drivers () {
 }
 
 ###
-#backports
+backports
 drivers
 
 packaging () {
