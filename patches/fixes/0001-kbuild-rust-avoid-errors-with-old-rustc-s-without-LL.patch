@@ -1,0 +1,73 @@
+From 8d6d0c800ccf80466461048398654f4bbd1b8a70 Mon Sep 17 00:00:00 2001
+From: Miguel Ojeda <ojeda@kernel.org>
+Date: Sun, 27 Oct 2024 15:56:36 +0100
+Subject: [PATCH] kbuild: rust: avoid errors with old `rustc`s without LLVM
+ patch version
+
+Some old versions of `rustc` did not report the LLVM version without
+the patch version, e.g.:
+
+    $ rustc --version --verbose
+    rustc 1.48.0 (7eac88abb 2020-11-16)
+    binary: rustc
+    commit-hash: 7eac88abb2e57e752f3302f02be5f3ce3d7adfb4
+    commit-date: 2020-11-16
+    host: x86_64-unknown-linux-gnu
+    release: 1.48.0
+    LLVM version: 11.0
+
+Which would make the new `scripts/rustc-llvm-version.sh` fail and,
+in turn, the build:
+
+    $ make LLVM=1
+      SYNC    include/config/auto.conf.cmd
+    ./scripts/rustc-llvm-version.sh: 13: arithmetic expression: expecting primary: "10000 * 10 + 100 * 0 + "
+    init/Kconfig:83: syntax error
+    init/Kconfig:83: invalid statement
+    make[3]: *** [scripts/kconfig/Makefile:85: syncconfig] Error 1
+    make[2]: *** [Makefile:679: syncconfig] Error 2
+    make[1]: *** [/home/cam/linux/Makefile:780: include/config/auto.conf.cmd] Error 2
+    make: *** [Makefile:224: __sub-make] Error 2
+
+Since we do not need to support such binaries, we can avoid adding logic
+for computing `rustc`'s LLVM version for those old binaries.
+
+Thus, instead, just make the match stricter.
+
+Other `rustc` binaries (even newer) did not report the LLVM version at
+all, but that was fine, since it would not match "LLVM", e.g.:
+
+    $ rustc --version --verbose
+    rustc 1.49.0 (e1884a8e3 2020-12-29)
+    binary: rustc
+    commit-hash: e1884a8e3c3e813aada8254edfa120e85bf5ffca
+    commit-date: 2020-12-29
+    host: x86_64-unknown-linux-gnu
+    release: 1.49.0
+
+Cc: Thorsten Leemhuis <regressions@leemhuis.info>
+Cc: Gary Guo <gary@garyguo.net>
+Reported-by: Cameron MacPherson <cameron.macpherson@gmail.com>
+Closes: https://bugzilla.kernel.org/show_bug.cgi?id=219423
+Fixes: af0121c2d303 ("kbuild: rust: add `CONFIG_RUSTC_LLVM_VERSION`")
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ scripts/rustc-llvm-version.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/rustc-llvm-version.sh b/scripts/rustc-llvm-version.sh
+index b6063cbe5bdc..a500d1ae3101 100755
+--- a/scripts/rustc-llvm-version.sh
++++ b/scripts/rustc-llvm-version.sh
+@@ -13,7 +13,7 @@ get_canonical_version()
+ 	echo $((10000 * $1 + 100 * $2 + $3))
+ }
+ 
+-if output=$("$@" --version --verbose 2>/dev/null | grep LLVM); then
++if output=$("$@" --version --verbose 2>/dev/null | grep -E 'LLVM.*[0-9]+\.[0-9]+\.[0-9]+'); then
+ 	set -- $output
+ 	get_canonical_version $3
+ else
+-- 
+2.39.5
+
