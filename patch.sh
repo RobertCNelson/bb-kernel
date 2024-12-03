@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2021 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2024 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -226,8 +226,6 @@ can_isotp () {
 		wdir="can_isotp"
 		number=1
 		cleanup
-
-		exit 2
 	fi
 	dir 'can_isotp'
 }
@@ -238,25 +236,27 @@ rt_cleanup () {
 }
 
 rt () {
-	rt_patch="${KERNEL_REL}${kernel_rt}"
+	rt_enable="enable"
+	if [ "x${rt_enable}" = "xenable" ] ; then
+		rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+		#${git_bin} revert --no-edit xyz
 
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
-		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
-		rm -f patch-${rt_patch}.patch.xz
-		rm -f localversion-rt
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
-		${git_bin} format-patch -1 -o ../patches/rt/
-		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/git/RT
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wget -c https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
+			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
+			rm -f patch-${rt_patch}.patch.xz
+			rm -f localversion-rt
+			${git_bin} add .
+			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
+			${git_bin} format-patch -1 -o ../patches/rt/
+			echo "RT: patch-${rt_patch}.patch.xz" > ../patches/git/RT
 
-		exit 2
+			exit 2
+		fi
+		dir 'rt'
 	fi
-
-	dir 'rt'
 }
 
 wireguard_fail () {
@@ -306,7 +306,6 @@ wireguard () {
 		number=1
 		cleanup
 	fi
-
 	dir 'WireGuard'
 }
 
@@ -351,7 +350,6 @@ wireless_regdb () {
 		number=1
 		cleanup
 	fi
-
 	dir 'wireless_regdb'
 }
 
@@ -395,7 +393,6 @@ ti_pm_firmware () {
 		number=1
 		cleanup
 	fi
-
 	dir 'drivers/ti/firmware'
 }
 
@@ -476,7 +473,6 @@ beagleboard_dtbs () {
 		number=1
 		cleanup
 	fi
-
 	dir 'soc/ti/beagleboard_dtbs'
 }
 
@@ -499,11 +495,12 @@ pre_backports () {
 	echo "dir: backports/${subsystem}"
 
 	cd ~/linux-src/
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git master
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git master --tags
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
-		${git_bin} checkout ${backport_tag} -b tmp
+		echo "${git_bin} checkout ${backport_tag} -f"
+		${git_bin} checkout ${backport_tag} -f
 	fi
 	cd -
 }
@@ -511,7 +508,7 @@ pre_backports () {
 post_backports () {
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		cd ~/linux-src/
-		${git_bin} checkout master -f ; ${git_bin} branch -D tmp
+		${git_bin} checkout master -f
 		cd -
 	fi
 
@@ -522,6 +519,7 @@ post_backports () {
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
+	exit 2
 }
 
 patch_backports (){
@@ -540,7 +538,6 @@ backports () {
 		cp -rv ~/linux-src/drivers/staging/greybus/* ./drivers/staging/greybus/
 
 		post_backports
-		exit 2
 	else
 		patch_backports
 		${git} "${DIR}/patches/backports/greybus/0002-greybus-drivers-staging-greybus-module.c-no-struct_s.patch"
@@ -556,7 +553,6 @@ backports () {
 		cp -rv ~/linux-src/drivers/net/ethernet/wiznet/* ./drivers/net/ethernet/wiznet/
 
 		post_backports
-		exit 2
 	else
 		patch_backports
 	fi
@@ -574,7 +570,6 @@ backports () {
 		cp -rv ~/linux-src/drivers/staging/iio/* ./drivers/staging/iio/
 
 		post_backports
-		exit 2
 	else
 		patch_backports
 	fi
@@ -680,12 +675,10 @@ packaging () {
 			cp -v ~/linux-src/scripts/package/* ./scripts/package/
 
 			post_backports
-			exit 2
 		else
 			patch_backports
 		fi
 	fi
-
 	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
 }
 
