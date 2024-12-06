@@ -17,14 +17,6 @@ cat_files () {
 	if [ -f ./patches/external/git/WIRELESS_REGDB ] ; then
 		cat ./patches/external/git/WIRELESS_REGDB >> ${wfile}
 	fi
-
-	if [ -f ./patches/external/git/WPANUSB ] ; then
-		cat ./patches/external/git/WPANUSB >> ${wfile}
-	fi
-
-	if [ -f ./patches/external/git/BCFSERIAL ] ; then
-		cat ./patches/external/git/BCFSERIAL >> ${wfile}
-	fi
 }
 
 DIR=$PWD
