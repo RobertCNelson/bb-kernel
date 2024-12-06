@@ -253,7 +253,7 @@ k3_makefile_patch_cleanup_overlays () {
 }
 
 beagleboard_dtbs () {
-	branch="v6.12.x"
+	branch="v6.13.x"
 	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -414,7 +414,7 @@ patch_backports () {
 }
 
 backports () {
-	backport_tag="rpi-6.12.y"
+	backport_tag="rpi-6.13.y"
 
 	subsystem="edt-ft5x06"
 	#regenerate="enable"
