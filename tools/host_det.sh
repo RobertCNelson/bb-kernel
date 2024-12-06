@@ -457,6 +457,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="noble"
 			;;
+		xia)
+			#22.1
+			#http://packages.linuxmint.com/index.php
+			deb_distro="noble"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix
