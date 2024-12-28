@@ -1,17 +1,17 @@
-From eafebd758a3b4b2eadb7b5f805df25837c3f3848 Mon Sep 17 00:00:00 2001
+From bf659ede1155ac260142b626767930dfb9898850 Mon Sep 17 00:00:00 2001
 From: Matthijs van Duin <matthijsvanduin@gmail.com>
 Date: Sat, 9 Feb 2019 17:44:46 +0100
 Subject: [PATCH] uio-pruss: cleanups and pruss v2 (pru-icss) support
 
 ---
- drivers/uio/uio_pruss.c | 124 +++++++++++++++++++++++++++++-----------
- 1 file changed, 90 insertions(+), 34 deletions(-)
+ drivers/uio/uio_pruss.c | 119 +++++++++++++++++++++++++++++-----------
+ 1 file changed, 88 insertions(+), 31 deletions(-)
 
 diff --git a/drivers/uio/uio_pruss.c b/drivers/uio/uio_pruss.c
-index 1cc175d3c25c..dabc37ed6459 100644
+index 77e2dc404885..2edf68535644 100644
 --- a/drivers/uio/uio_pruss.c
 +++ b/drivers/uio/uio_pruss.c
-@@ -26,14 +26,22 @@
+@@ -18,14 +18,22 @@
  #include <linux/dma-mapping.h>
  #include <linux/sizes.h>
  #include <linux/slab.h>
@@ -35,7 +35,7 @@ index 1cc175d3c25c..dabc37ed6459 100644
  
  static int extram_pool_sz = SZ_256K;
  module_param(extram_pool_sz, int, 0);
-@@ -61,22 +69,23 @@ MODULE_PARM_DESC(extram_pool_sz, "external ram pool size to allocate");
+@@ -53,22 +61,23 @@ MODULE_PARM_DESC(extram_pool_sz, "external ram pool size to allocate");
  #define PINTC_HIER	0x1500
  
  struct uio_pruss_dev {
@@ -65,7 +65,7 @@ index 1cc175d3c25c..dabc37ed6459 100644
  	int val, intr_mask = (1 << intr_bit);
  	void __iomem *base = gdev->prussio_vaddr + gdev->pintc_base;
  	void __iomem *intren_reg = base + PINTC_HIER;
-@@ -94,53 +103,50 @@ static irqreturn_t pruss_handler(int irq, struct uio_info *info)
+@@ -86,41 +95,41 @@ static irqreturn_t pruss_handler(int irq, struct uio_info *info)
  
  static void pruss_cleanup(struct device *dev, struct uio_pruss_dev *gdev)
  {
@@ -75,10 +75,8 @@ index 1cc175d3c25c..dabc37ed6459 100644
  
 -	for (cnt = 0; cnt < MAX_PRUSS_EVT; cnt++, p++) {
 -		uio_unregister_device(p);
--		kfree(p->name);
 +	for (i = 0; i < MAX_PRUSS_EVT; i++) {
 +		uio_unregister_device(&gdev->info[i]);
-+		kfree(gdev->info[i].name);
  	}
  	iounmap(gdev->prussio_vaddr);
  	if (gdev->ddr_vaddr) {
@@ -90,14 +88,11 @@ index 1cc175d3c25c..dabc37ed6459 100644
  		gen_pool_free(gdev->sram_pool,
  			      gdev->sram_vaddr,
  			      sram_pool_sz);
--	kfree(gdev->info);
  	clk_disable(gdev->pruss_clk);
- 	clk_put(gdev->pruss_clk);
 +#else
 +	pm_runtime_put(dev);
 +	pm_runtime_disable(dev);
 +#endif
- 	kfree(gdev);
  }
  
  static int pruss_probe(struct platform_device *pdev)
@@ -110,30 +105,21 @@ index 1cc175d3c25c..dabc37ed6459 100644
 +	int ret, i, len;
  	struct uio_pruss_pdata *pdata = dev_get_platdata(dev);
  
- 	gdev = kzalloc(sizeof(struct uio_pruss_dev), GFP_KERNEL);
+ 	gdev = devm_kzalloc(dev, sizeof(struct uio_pruss_dev), GFP_KERNEL);
  	if (!gdev)
  		return -ENOMEM;
  
--	gdev->info = kcalloc(MAX_PRUSS_EVT, sizeof(*p), GFP_KERNEL);
--	if (!gdev->info) {
--		ret = -ENOMEM;
--		goto err_free_gdev;
--	}
+-	gdev->info = devm_kcalloc(dev, MAX_PRUSS_EVT, sizeof(*p), GFP_KERNEL);
+-	if (!gdev->info)
+-		return -ENOMEM;
 -
 +#ifdef CONFIG_ARCH_DAVINCI_DA850
  	/* Power on PRU in case its not done as part of boot-loader */
- 	gdev->pruss_clk = clk_get(dev, "pruss");
+ 	gdev->pruss_clk = devm_clk_get(dev, "pruss");
  	if (IS_ERR(gdev->pruss_clk)) {
- 		dev_err(dev, "Failed to get clock\n");
- 		ret = PTR_ERR(gdev->pruss_clk);
--		goto err_free_info;
-+		goto err_free_gdev;
- 	}
- 
- 	ret = clk_enable(gdev->pruss_clk);
-@@ -148,6 +154,15 @@ static int pruss_probe(struct platform_device *pdev)
+@@ -133,6 +142,15 @@ static int pruss_probe(struct platform_device *pdev)
  		dev_err(dev, "Failed to enable clock\n");
- 		goto err_clk_put;
+ 		return ret;
  	}
 +#else
 +	pm_runtime_enable(dev);
@@ -141,13 +127,13 @@ index 1cc175d3c25c..dabc37ed6459 100644
 +	if (ret < 0) {
 +		dev_err(dev, "pm_runtime_get_sync() failed\n");
 +		pm_runtime_disable(dev);
-+		goto err_free_gdev;
++		return ret;
 +	}
 +#endif
  
  	regs_prussio = platform_get_resource(pdev, IORESOURCE_MEM, 0);
  	if (!regs_prussio) {
-@@ -162,6 +177,18 @@ static int pruss_probe(struct platform_device *pdev)
+@@ -147,6 +165,19 @@ static int pruss_probe(struct platform_device *pdev)
  		goto err_clk_disable;
  	}
  
@@ -159,14 +145,15 @@ index 1cc175d3c25c..dabc37ed6459 100644
 +			dev_err(dev, "Can't parse ti,pintc-offset property\n");
 +			goto err_clk_disable;
 +		}
-+	} else
++	} else {
 +		gdev->pintc_base = pdata->pintc_base;
++	}
 +
 +#ifdef CONFIG_ARCH_DAVINCI_DA850
  	if (pdata->sram_pool) {
  		gdev->sram_pool = pdata->sram_pool;
  		gdev->sram_vaddr =
-@@ -173,9 +200,10 @@ static int pruss_probe(struct platform_device *pdev)
+@@ -158,9 +189,10 @@ static int pruss_probe(struct platform_device *pdev)
  			goto err_clk_disable;
  		}
  	}
@@ -178,7 +165,7 @@ index 1cc175d3c25c..dabc37ed6459 100644
  	if (!gdev->ddr_vaddr) {
  		dev_err(dev, "Could not allocate external memory\n");
  		ret = -ENOMEM;
-@@ -185,32 +213,48 @@ static int pruss_probe(struct platform_device *pdev)
+@@ -170,36 +202,47 @@ static int pruss_probe(struct platform_device *pdev)
  	len = resource_size(regs_prussio);
  	gdev->prussio_vaddr = ioremap(regs_prussio->start, len);
  	if (!gdev->prussio_vaddr) {
@@ -188,11 +175,15 @@ index 1cc175d3c25c..dabc37ed6459 100644
  		goto err_free_ddr_vaddr;
  	}
  
--	gdev->pintc_base = pdata->pintc_base;
--	gdev->hostirq_start = platform_get_irq(pdev, 0);
+-	ret = platform_get_irq(pdev, 0);
+-	if (ret < 0)
+-		goto err_unmap;
 +	for (i = 0; i < MAX_PRUSS_EVT; i++) {
 +		struct uio_info *p = &gdev->info[i];
  
+-	gdev->hostirq_start = ret;
+-	gdev->pintc_base = pdata->pintc_base;
+-
 -	for (cnt = 0, p = gdev->info; cnt < MAX_PRUSS_EVT; cnt++, p++) {
 +		p->mem[0].name = "pruss";
  		p->mem[0].addr = regs_prussio->start;
@@ -217,33 +208,31 @@ index 1cc175d3c25c..dabc37ed6459 100644
 +		p->mem[1].memtype = UIO_MEM_PHYS;
 +#endif
  
--		p->name = kasprintf(GFP_KERNEL, "pruss_evt%d", cnt);
+-		p->name = devm_kasprintf(dev, GFP_KERNEL, "pruss_evt%d", cnt);
++		p->name = devm_kasprintf(dev, GFP_KERNEL, "pruss_evt%d", i);
+ 		p->version = DRV_VERSION;
+ 
+ 		/* Register PRUSS IRQ lines */
+-		p->irq = gdev->hostirq_start + cnt;
 +		ret = platform_get_irq(pdev, i);
 +		if (ret < 0) {
 +			dev_err(dev, "Failed to obtain irq %d (%d)\n", i, ret);
 +			goto err_unloop;
 +		}
-+
-+		p->name = kasprintf(GFP_KERNEL, "pruss_evt%d", i);
- 		p->version = DRV_VERSION;
- 
- 		/* Register PRUSS IRQ lines */
--		p->irq = gdev->hostirq_start + cnt;
 +		p->irq = ret;
  		p->handler = pruss_handler;
  		p->priv = gdev;
  
-@@ -225,23 +269,27 @@ static int pruss_probe(struct platform_device *pdev)
+@@ -212,19 +255,25 @@ static int pruss_probe(struct platform_device *pdev)
  	return 0;
  
  err_unloop:
 -	for (i = 0, p = gdev->info; i < cnt; i++, p++) {
 -		uio_unregister_device(p);
--		kfree(p->name);
 +	while( --i >= 0 ) {
 +		uio_unregister_device(&gdev->info[i]);
-+		kfree(gdev->info[i].name);
  	}
+-err_unmap:
  	iounmap(gdev->prussio_vaddr);
  err_free_ddr_vaddr:
  	dma_free_coherent(dev, extram_pool_sz, gdev->ddr_vaddr,
@@ -252,21 +241,18 @@ index 1cc175d3c25c..dabc37ed6459 100644
 +#ifdef CONFIG_ARCH_DAVINCI_DA850
  	if (pdata->sram_pool)
  		gen_pool_free(gdev->sram_pool, gdev->sram_vaddr, sram_pool_sz);
++#endif
  err_clk_disable:
++#ifdef CONFIG_ARCH_DAVINCI_DA850
  	clk_disable(gdev->pruss_clk);
- err_clk_put:
- 	clk_put(gdev->pruss_clk);
--err_free_info:
--	kfree(gdev->info);
 +#else
-+err_clk_disable:
 +	pm_runtime_put(dev);
 +	pm_runtime_disable(dev);
 +#endif
- err_free_gdev:
- 	kfree(gdev);
  
-@@ -256,11 +304,19 @@ static int pruss_remove(struct platform_device *dev)
+ 	return ret;
+ }
+@@ -237,11 +286,19 @@ static int pruss_remove(struct platform_device *dev)
  	return 0;
  }
  
@@ -287,5 +273,5 @@ index 1cc175d3c25c..dabc37ed6459 100644
  };
  
 -- 
-2.20.1
+2.30.2
 
