@@ -1,24 +1,35 @@
-From c5081ee82608cae3473b7dbe93d31c9afa7e26d6 Mon Sep 17 00:00:00 2001
+From 819455c6acf373ff1fec056cfa6bf5f113c5ff87 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 6 Dec 2024 16:14:30 -0600
+Date: Mon, 13 Jan 2025 12:51:17 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.13-rc1-rt1.patch.xz
+patch-6.13-rc6-rt3.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  arch/arm/Kconfig                              |   6 +-
+ arch/arm/kernel/module-plts.c                 |   4 +-
  arch/arm/kernel/traps.c                       |  11 +-
  arch/arm/mm/fault.c                           |   6 +
+ arch/arm64/kernel/ftrace.c                    |   7 +-
  arch/arm64/kernel/traps.c                     |  12 +-
- arch/powerpc/Kconfig                          |   2 +
+ arch/loongarch/kernel/ftrace_dyn.c            |   9 +-
+ arch/loongarch/kernel/unwind_orc.c            |   4 +-
+ arch/powerpc/Kconfig                          |   3 +
  arch/powerpc/include/asm/stackprotector.h     |   7 +-
+ arch/powerpc/include/asm/thread_info.h        |   9 +-
+ arch/powerpc/kernel/interrupt.c               |   4 +-
+ arch/powerpc/kernel/trace/ftrace.c            |   6 +-
+ arch/powerpc/kernel/trace/ftrace_64_pg.c      |   6 +-
  arch/powerpc/kernel/traps.c                   |   4 +-
  arch/powerpc/kvm/Kconfig                      |   1 +
+ arch/powerpc/lib/vmx-helper.c                 |   2 +-
  arch/powerpc/platforms/pseries/Kconfig        |   1 +
  arch/powerpc/platforms/pseries/iommu.c        |  31 ++--
  arch/s390/kernel/dumpstack.c                  |   9 +-
+ arch/x86/kernel/callthunks.c                  |   3 +-
  arch/x86/kernel/dumpstack.c                   |   7 +-
+ arch/x86/kernel/unwind_orc.c                  |   4 +-
  arch/xtensa/kernel/traps.c                    |   6 +-
  drivers/gpu/drm/i915/Kconfig                  |   1 -
  drivers/gpu/drm/i915/display/intel_crtc.c     |   9 +-
@@ -32,19 +43,29 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/gpu/drm/i915/i915_utils.h             |   9 +-
  drivers/tty/serial/8250/8250_core.c           |  42 ++++-
  drivers/tty/serial/8250/8250_port.c           | 157 +++++++++++++++++-
+ include/linux/kallsyms.h                      |   3 +-
+ include/linux/module.h                        |   2 +-
  include/linux/preempt.h                       |   2 +
  include/linux/serial_8250.h                   |   6 +
- include/linux/vermagic.h                      |   6 +-
+ kernel/cfi.c                                  |   5 +-
+ kernel/jump_label.c                           |  31 ++--
+ kernel/kprobes.c                              |   4 +-
  kernel/ksysfs.c                               |  12 ++
+ kernel/livepatch/core.c                       |   4 +-
  kernel/module/internal.h                      |  11 --
- kernel/module/kallsyms.c                      |  45 ++---
- kernel/module/main.c                          |  64 +++----
+ kernel/module/kallsyms.c                      |  73 +++-----
+ kernel/module/main.c                          | 103 ++++--------
  kernel/module/tracking.c                      |   2 -
- kernel/module/version.c                       |  11 +-
+ kernel/module/tree_lookup.c                   |   8 +-
+ kernel/module/version.c                       |  14 +-
  kernel/sched/core.c                           |  24 +++
+ kernel/static_call_inline.c                   |  13 +-
+ kernel/trace/bpf_trace.c                      |  19 +--
  kernel/trace/trace.c                          |   6 +-
+ kernel/trace/trace_kprobe.c                   |   9 +-
+ lib/bug.c                                     |  22 +--
  lib/dump_stack.c                              |   4 +-
- 37 files changed, 404 insertions(+), 197 deletions(-)
+ 58 files changed, 509 insertions(+), 335 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index 202397be76d8..d70e3c69f5ef 100644
@@ -84,6 +105,23 @@ index 202397be76d8..d70e3c69f5ef 100644
  	select MMU_GATHER_RCU_TABLE_FREE if SMP && ARM_LPAE
  	select HAVE_REGS_AND_STACK_ACCESS_API
  	select HAVE_RSEQ
+diff --git a/arch/arm/kernel/module-plts.c b/arch/arm/kernel/module-plts.c
+index da2ee8d6ef1a..354ce16d83cb 100644
+--- a/arch/arm/kernel/module-plts.c
++++ b/arch/arm/kernel/module-plts.c
+@@ -285,11 +285,9 @@ bool in_module_plt(unsigned long loc)
+ 	struct module *mod;
+ 	bool ret;
+ 
+-	preempt_disable();
++	guard(rcu)();
+ 	mod = __module_text_address(loc);
+ 	ret = mod && (loc - (u32)mod->arch.core.plt_ent < mod->arch.core.plt_count * PLT_ENT_SIZE ||
+ 		      loc - (u32)mod->arch.init.plt_ent < mod->arch.init.plt_count * PLT_ENT_SIZE);
+-	preempt_enable();
+-
+ 	return ret;
+ }
 diff --git a/arch/arm/kernel/traps.c b/arch/arm/kernel/traps.c
 index 6ea645939573..1254992184d2 100644
 --- a/arch/arm/kernel/traps.c
@@ -137,6 +175,28 @@ index ab01b51de559..cd030e2734e5 100644
  	do_bad_area(addr, fsr, regs);
  	return 0;
  }
+diff --git a/arch/arm64/kernel/ftrace.c b/arch/arm64/kernel/ftrace.c
+index 245cb419ca24..2b76939b6304 100644
+--- a/arch/arm64/kernel/ftrace.c
++++ b/arch/arm64/kernel/ftrace.c
+@@ -257,14 +257,13 @@ static bool ftrace_find_callable_addr(struct dyn_ftrace *rec,
+ 	 * dealing with an out-of-range condition, we can assume it
+ 	 * is due to a module being loaded far away from the kernel.
+ 	 *
+-	 * NOTE: __module_text_address() must be called with preemption
+-	 * disabled, but we can rely on ftrace_lock to ensure that 'mod'
++	 * NOTE: __module_text_address() must be called within a RCU read
++	 * section, but we can rely on ftrace_lock to ensure that 'mod'
+ 	 * retains its validity throughout the remainder of this code.
+ 	 */
+ 	if (!mod) {
+-		preempt_disable();
++		guard(rcu)();
+ 		mod = __module_text_address(pc);
+-		preempt_enable();
+ 	}
+ 
+ 	if (WARN_ON(!mod))
 diff --git a/arch/arm64/kernel/traps.c b/arch/arm64/kernel/traps.c
 index 4e26bd356a48..0b6f92fcdb30 100644
 --- a/arch/arm64/kernel/traps.c
@@ -167,11 +227,70 @@ index 4e26bd356a48..0b6f92fcdb30 100644
  
  	/* trap and error numbers are mostly meaningless on ARM */
  	ret = notify_die(DIE_OOPS, str, regs, err, 0, SIGSEGV);
+diff --git a/arch/loongarch/kernel/ftrace_dyn.c b/arch/loongarch/kernel/ftrace_dyn.c
+index 18056229e22e..5b7b8ac13e35 100644
+--- a/arch/loongarch/kernel/ftrace_dyn.c
++++ b/arch/loongarch/kernel/ftrace_dyn.c
+@@ -85,14 +85,13 @@ static bool ftrace_find_callable_addr(struct dyn_ftrace *rec, struct module *mod
+ 	 * dealing with an out-of-range condition, we can assume it
+ 	 * is due to a module being loaded far away from the kernel.
+ 	 *
+-	 * NOTE: __module_text_address() must be called with preemption
+-	 * disabled, but we can rely on ftrace_lock to ensure that 'mod'
++	 * NOTE: __module_text_address() must be called within a RCU read
++	 * section, but we can rely on ftrace_lock to ensure that 'mod'
+ 	 * retains its validity throughout the remainder of this code.
+ 	 */
+ 	if (!mod) {
+-		preempt_disable();
+-		mod = __module_text_address(pc);
+-		preempt_enable();
++		scoped_guard(rcu)
++			mod = __module_text_address(pc);
+ 	}
+ 
+ 	if (WARN_ON(!mod))
+diff --git a/arch/loongarch/kernel/unwind_orc.c b/arch/loongarch/kernel/unwind_orc.c
+index b25722876331..d623935a7547 100644
+--- a/arch/loongarch/kernel/unwind_orc.c
++++ b/arch/loongarch/kernel/unwind_orc.c
+@@ -399,7 +399,7 @@ bool unwind_next_frame(struct unwind_state *state)
+ 		return false;
+ 
+ 	/* Don't let modules unload while we're reading their ORC data. */
+-	preempt_disable();
++	guard(rcu)();
+ 
+ 	if (is_entry_func(state->pc))
+ 		goto end;
+@@ -514,14 +514,12 @@ bool unwind_next_frame(struct unwind_state *state)
+ 	if (!__kernel_text_address(state->pc))
+ 		goto err;
+ 
+-	preempt_enable();
+ 	return true;
+ 
+ err:
+ 	state->error = true;
+ 
+ end:
+-	preempt_enable();
+ 	state->stack_info.type = STACK_TYPE_UNKNOWN;
+ 	return false;
+ }
 diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
-index a0ce777f9706..7ece090edf4d 100644
+index a0ce777f9706..56e6189d25b5 100644
 --- a/arch/powerpc/Kconfig
 +++ b/arch/powerpc/Kconfig
-@@ -168,6 +168,7 @@ config PPC
+@@ -145,6 +145,7 @@ config PPC
+ 	select ARCH_HAS_NON_OVERLAPPING_ADDRESS_SPACE
+ 	select ARCH_HAS_PHYS_TO_DMA
+ 	select ARCH_HAS_PMEM_API
++	select ARCH_HAS_PREEMPT_LAZY
+ 	select ARCH_HAS_PTE_DEVMAP		if PPC_BOOK3S_64
+ 	select ARCH_HAS_PTE_SPECIAL
+ 	select ARCH_HAS_SCALED_CPUTIME		if VIRT_CPU_ACCOUNTING_NATIVE && PPC_BOOK3S_64
+@@ -168,6 +169,7 @@ config PPC
  	select ARCH_STACKWALK
  	select ARCH_SUPPORTS_ATOMIC_RMW
  	select ARCH_SUPPORTS_DEBUG_PAGEALLOC	if PPC_BOOK3S || PPC_8xx
@@ -179,7 +298,7 @@ index a0ce777f9706..7ece090edf4d 100644
  	select ARCH_USE_BUILTIN_BSWAP
  	select ARCH_USE_CMPXCHG_LOCKREF		if PPC64
  	select ARCH_USE_MEMTEST
-@@ -271,6 +272,7 @@ config PPC
+@@ -271,6 +273,7 @@ config PPC
  	select HAVE_PERF_EVENTS_NMI		if PPC64
  	select HAVE_PERF_REGS
  	select HAVE_PERF_USER_STACK_DUMP
@@ -206,6 +325,96 @@ index 283c34647856..4727f40052dd 100644
  	current->stack_canary = canary;
  #ifdef CONFIG_PPC64
  	get_paca()->canary = canary;
+diff --git a/arch/powerpc/include/asm/thread_info.h b/arch/powerpc/include/asm/thread_info.h
+index 6ebca2996f18..2785c7462ebf 100644
+--- a/arch/powerpc/include/asm/thread_info.h
++++ b/arch/powerpc/include/asm/thread_info.h
+@@ -103,6 +103,7 @@ void arch_setup_new_exec(void);
+ #define TIF_PATCH_PENDING	6	/* pending live patching update */
+ #define TIF_SYSCALL_AUDIT	7	/* syscall auditing active */
+ #define TIF_SINGLESTEP		8	/* singlestepping active */
++#define TIF_NEED_RESCHED_LAZY	9       /* Scheduler driven lazy preemption */
+ #define TIF_SECCOMP		10	/* secure computing */
+ #define TIF_RESTOREALL		11	/* Restore all regs (implies NOERROR) */
+ #define TIF_NOERROR		12	/* Force successful syscall return */
+@@ -122,6 +123,7 @@ void arch_setup_new_exec(void);
+ #define _TIF_SYSCALL_TRACE	(1<<TIF_SYSCALL_TRACE)
+ #define _TIF_SIGPENDING		(1<<TIF_SIGPENDING)
+ #define _TIF_NEED_RESCHED	(1<<TIF_NEED_RESCHED)
++#define _TIF_NEED_RESCHED_LAZY	(1<<TIF_NEED_RESCHED_LAZY)
+ #define _TIF_NOTIFY_SIGNAL	(1<<TIF_NOTIFY_SIGNAL)
+ #define _TIF_POLLING_NRFLAG	(1<<TIF_POLLING_NRFLAG)
+ #define _TIF_32BIT		(1<<TIF_32BIT)
+@@ -142,9 +144,10 @@ void arch_setup_new_exec(void);
+ 				 _TIF_SYSCALL_EMU)
+ 
+ #define _TIF_USER_WORK_MASK	(_TIF_SIGPENDING | _TIF_NEED_RESCHED | \
+-				 _TIF_NOTIFY_RESUME | _TIF_UPROBE | \
+-				 _TIF_RESTORE_TM | _TIF_PATCH_PENDING | \
+-				 _TIF_NOTIFY_SIGNAL)
++				 _TIF_NEED_RESCHED_LAZY | _TIF_NOTIFY_RESUME | \
++				 _TIF_UPROBE | _TIF_RESTORE_TM | \
++				 _TIF_PATCH_PENDING | _TIF_NOTIFY_SIGNAL)
++
+ #define _TIF_PERSYSCALL_MASK	(_TIF_RESTOREALL|_TIF_NOERROR)
+ 
+ /* Bits in local_flags */
+diff --git a/arch/powerpc/kernel/interrupt.c b/arch/powerpc/kernel/interrupt.c
+index af62ec974b97..8f4acc55407b 100644
+--- a/arch/powerpc/kernel/interrupt.c
++++ b/arch/powerpc/kernel/interrupt.c
+@@ -185,7 +185,7 @@ interrupt_exit_user_prepare_main(unsigned long ret, struct pt_regs *regs)
+ 	ti_flags = read_thread_flags();
+ 	while (unlikely(ti_flags & (_TIF_USER_WORK_MASK & ~_TIF_RESTORE_TM))) {
+ 		local_irq_enable();
+-		if (ti_flags & _TIF_NEED_RESCHED) {
++		if (ti_flags & (_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY)) {
+ 			schedule();
+ 		} else {
+ 			/*
+@@ -396,7 +396,7 @@ notrace unsigned long interrupt_exit_kernel_prepare(struct pt_regs *regs)
+ 		/* Returning to a kernel context with local irqs enabled. */
+ 		WARN_ON_ONCE(!(regs->msr & MSR_EE));
+ again:
+-		if (IS_ENABLED(CONFIG_PREEMPT)) {
++		if (IS_ENABLED(CONFIG_PREEMPTION)) {
+ 			/* Return to preemptible kernel context */
+ 			if (unlikely(read_thread_flags() & _TIF_NEED_RESCHED)) {
+ 				if (preempt_count() == 0)
+diff --git a/arch/powerpc/kernel/trace/ftrace.c b/arch/powerpc/kernel/trace/ftrace.c
+index 5ccd791761e8..558d7f4e4bea 100644
+--- a/arch/powerpc/kernel/trace/ftrace.c
++++ b/arch/powerpc/kernel/trace/ftrace.c
+@@ -115,10 +115,8 @@ static unsigned long ftrace_lookup_module_stub(unsigned long ip, unsigned long a
+ {
+ 	struct module *mod = NULL;
+ 
+-	preempt_disable();
+-	mod = __module_text_address(ip);
+-	preempt_enable();
+-
++	scoped_guard(rcu)
++		mod = __module_text_address(ip);
+ 	if (!mod)
+ 		pr_err("No module loaded at addr=%lx\n", ip);
+ 
+diff --git a/arch/powerpc/kernel/trace/ftrace_64_pg.c b/arch/powerpc/kernel/trace/ftrace_64_pg.c
+index 98787376eb87..531d40f10c8a 100644
+--- a/arch/powerpc/kernel/trace/ftrace_64_pg.c
++++ b/arch/powerpc/kernel/trace/ftrace_64_pg.c
+@@ -120,10 +120,8 @@ static struct module *ftrace_lookup_module(struct dyn_ftrace *rec)
+ {
+ 	struct module *mod;
+ 
+-	preempt_disable();
+-	mod = __module_text_address(rec->ip);
+-	preempt_enable();
+-
++	scoped_guard(rcu)
++		mod = __module_text_address(rec->ip);
+ 	if (!mod)
+ 		pr_err("No module loaded at addr=%lx\n", rec->ip);
+ 
 diff --git a/arch/powerpc/kernel/traps.c b/arch/powerpc/kernel/traps.c
 index edf5cabe5dfd..d6d77d92b335 100644
 --- a/arch/powerpc/kernel/traps.c
@@ -235,6 +444,19 @@ index dbfdc126bf14..82dd033cf796 100644
  	select HAVE_KVM_IRQCHIP
  	select HAVE_KVM_IRQ_ROUTING
  	select HAVE_KVM_MSI
+diff --git a/arch/powerpc/lib/vmx-helper.c b/arch/powerpc/lib/vmx-helper.c
+index d491da8d1838..58ed6bd613a6 100644
+--- a/arch/powerpc/lib/vmx-helper.c
++++ b/arch/powerpc/lib/vmx-helper.c
+@@ -45,7 +45,7 @@ int exit_vmx_usercopy(void)
+ 	 * set and we are preemptible. The hack here is to schedule a
+ 	 * decrementer to fire here and reschedule for us if necessary.
+ 	 */
+-	if (IS_ENABLED(CONFIG_PREEMPT) && need_resched())
++	if (IS_ENABLED(CONFIG_PREEMPTION) && need_resched())
+ 		set_dec(1);
+ 	return 0;
+ }
 diff --git a/arch/powerpc/platforms/pseries/Kconfig b/arch/powerpc/platforms/pseries/Kconfig
 index 42fc66e97539..e0d0b3ba9fb0 100644
 --- a/arch/powerpc/platforms/pseries/Kconfig
@@ -362,6 +584,23 @@ index 1ecd0580561f..7930fbab69db 100644
  	pr_cont("SMP ");
  	if (debug_pagealloc_enabled())
  		pr_cont("DEBUG_PAGEALLOC");
+diff --git a/arch/x86/kernel/callthunks.c b/arch/x86/kernel/callthunks.c
+index f17d16607882..276b5368ff6b 100644
+--- a/arch/x86/kernel/callthunks.c
++++ b/arch/x86/kernel/callthunks.c
+@@ -98,11 +98,10 @@ static inline bool within_module_coretext(void *addr)
+ #ifdef CONFIG_MODULES
+ 	struct module *mod;
+ 
+-	preempt_disable();
++	guard(rcu)();
+ 	mod = __module_address((unsigned long)addr);
+ 	if (mod && within_module_core((unsigned long)addr, mod))
+ 		ret = true;
+-	preempt_enable();
+ #endif
+ 	return ret;
+ }
 diff --git a/arch/x86/kernel/dumpstack.c b/arch/x86/kernel/dumpstack.c
 index a7d562697e50..064b23a93c6f 100644
 --- a/arch/x86/kernel/dumpstack.c
@@ -386,6 +625,34 @@ index a7d562697e50..064b23a93c6f 100644
  	       IS_ENABLED(CONFIG_SMP)     ? " SMP"             : "",
  	       debug_pagealloc_enabled()  ? " DEBUG_PAGEALLOC" : "",
  	       IS_ENABLED(CONFIG_KASAN)   ? " KASAN"           : "",
+diff --git a/arch/x86/kernel/unwind_orc.c b/arch/x86/kernel/unwind_orc.c
+index d4705a348a80..977ee75e047c 100644
+--- a/arch/x86/kernel/unwind_orc.c
++++ b/arch/x86/kernel/unwind_orc.c
+@@ -476,7 +476,7 @@ bool unwind_next_frame(struct unwind_state *state)
+ 		return false;
+ 
+ 	/* Don't let modules unload while we're reading their ORC data. */
+-	preempt_disable();
++	guard(rcu)();
+ 
+ 	/* End-of-stack check for user tasks: */
+ 	if (state->regs && user_mode(state->regs))
+@@ -669,14 +669,12 @@ bool unwind_next_frame(struct unwind_state *state)
+ 		goto err;
+ 	}
+ 
+-	preempt_enable();
+ 	return true;
+ 
+ err:
+ 	state->error = true;
+ 
+ the_end:
+-	preempt_enable();
+ 	state->stack_info.type = STACK_TYPE_UNKNOWN;
+ 	return false;
+ }
 diff --git a/arch/xtensa/kernel/traps.c b/arch/xtensa/kernel/traps.c
 index 38092d21acf8..0edba7d8df8c 100644
 --- a/arch/xtensa/kernel/traps.c
@@ -807,10 +1074,10 @@ index 5f9f06911795..ccf681de8670 100644
  	.data		= &serial8250_reg,
  };
 diff --git a/drivers/tty/serial/8250/8250_port.c b/drivers/tty/serial/8250/8250_port.c
-index 4d63d80e78a9..e886a93a8f11 100644
+index 649e74e9b52f..d335ddb2566a 100644
 --- a/drivers/tty/serial/8250/8250_port.c
 +++ b/drivers/tty/serial/8250/8250_port.c
-@@ -565,6 +565,13 @@ static int serial8250_em485_init(struct uart_8250_port *p)
+@@ -566,6 +566,13 @@ static int serial8250_em485_init(struct uart_8250_port *p)
  	if (!p->em485)
  		return -ENOMEM;
  
@@ -824,7 +1091,7 @@ index 4d63d80e78a9..e886a93a8f11 100644
  	hrtimer_init(&p->em485->stop_tx_timer, CLOCK_MONOTONIC,
  		     HRTIMER_MODE_REL);
  	hrtimer_init(&p->em485->start_tx_timer, CLOCK_MONOTONIC,
-@@ -710,7 +717,11 @@ static void serial8250_set_sleep(struct uart_8250_port *p, int sleep)
+@@ -711,7 +718,11 @@ static void serial8250_set_sleep(struct uart_8250_port *p, int sleep)
  	serial8250_rpm_put(p);
  }
  
@@ -837,7 +1104,7 @@ index 4d63d80e78a9..e886a93a8f11 100644
  {
  	if (up->capabilities & UART_CAP_UUE)
  		serial_out(up, UART_IER, UART_IER_UUE);
-@@ -718,6 +729,14 @@ static void serial8250_clear_IER(struct uart_8250_port *up)
+@@ -719,6 +730,14 @@ static void serial8250_clear_IER(struct uart_8250_port *up)
  		serial_out(up, UART_IER, 0);
  }
  
@@ -852,7 +1119,7 @@ index 4d63d80e78a9..e886a93a8f11 100644
  #ifdef CONFIG_SERIAL_8250_RSA
  /*
   * Attempts to turn on the RSA FIFO.  Returns zero on failure.
-@@ -3288,6 +3307,11 @@ static void serial8250_console_putchar(struct uart_port *port, unsigned char ch)
+@@ -3289,6 +3308,11 @@ static void serial8250_console_putchar(struct uart_port *port, unsigned char ch)
  
  	wait_for_xmitr(up, UART_LSR_THRE);
  	serial_port_out(port, UART_TX, ch);
@@ -864,7 +1131,7 @@ index 4d63d80e78a9..e886a93a8f11 100644
  }
  
  /*
-@@ -3316,6 +3340,7 @@ static void serial8250_console_restore(struct uart_8250_port *up)
+@@ -3317,6 +3341,7 @@ static void serial8250_console_restore(struct uart_8250_port *up)
  	serial8250_out_MCR(up, up->mcr | UART_MCR_DTR | UART_MCR_RTS);
  }
  
@@ -872,7 +1139,7 @@ index 4d63d80e78a9..e886a93a8f11 100644
  /*
   * Print a string to the serial port using the device FIFO
   *
-@@ -3374,7 +3399,7 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3375,7 +3400,7 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  	 *	First save the IER then disable the interrupts
  	 */
  	ier = serial_port_in(port, UART_IER);
@@ -881,7 +1148,7 @@ index 4d63d80e78a9..e886a93a8f11 100644
  
  	/* check scratch reg to see if port powered off during system sleep */
  	if (up->canary && (up->canary != serial_port_in(port, UART_SCR))) {
-@@ -3440,6 +3465,131 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3441,6 +3466,131 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  	if (locked)
  		uart_port_unlock_irqrestore(port, flags);
  }
@@ -1013,7 +1280,7 @@ index 4d63d80e78a9..e886a93a8f11 100644
  
  static unsigned int probe_baud(struct uart_port *port)
  {
-@@ -3458,6 +3608,7 @@ static unsigned int probe_baud(struct uart_port *port)
+@@ -3459,6 +3609,7 @@ static unsigned int probe_baud(struct uart_port *port)
  
  int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
  {
@@ -1021,7 +1288,7 @@ index 4d63d80e78a9..e886a93a8f11 100644
  	int baud = 9600;
  	int bits = 8;
  	int parity = 'n';
-@@ -3467,6 +3618,8 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
+@@ -3468,6 +3619,8 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
  	if (!port->iobase && !port->membase)
  		return -ENODEV;
  
@@ -1030,6 +1297,34 @@ index 4d63d80e78a9..e886a93a8f11 100644
  	if (options)
  		uart_parse_options(options, &baud, &parity, &bits, &flow);
  	else if (probe)
+diff --git a/include/linux/kallsyms.h b/include/linux/kallsyms.h
+index c3f075e8f60c..d5dd54c53ace 100644
+--- a/include/linux/kallsyms.h
++++ b/include/linux/kallsyms.h
+@@ -55,9 +55,8 @@ static inline void *dereference_symbol_descriptor(void *ptr)
+ 	if (is_ksym_addr((unsigned long)ptr))
+ 		return ptr;
+ 
+-	preempt_disable();
++	guard(rcu)();
+ 	mod = __module_address((unsigned long)ptr);
+-	preempt_enable();
+ 
+ 	if (mod)
+ 		ptr = dereference_module_function_descriptor(mod, ptr);
+diff --git a/include/linux/module.h b/include/linux/module.h
+index 94acbacdcdf1..5c1f7ea76c8c 100644
+--- a/include/linux/module.h
++++ b/include/linux/module.h
+@@ -663,7 +663,7 @@ static inline bool within_module(unsigned long addr, const struct module *mod)
+ 	return within_module_init(addr, mod) || within_module_core(addr, mod);
+ }
+ 
+-/* Search for module by name: must be in a RCU-sched critical section. */
++/* Search for module by name: must be in a RCU critical section. */
+ struct module *find_module(const char *name);
+ 
+ extern void __noreturn __module_put_and_kthread_exit(struct module *mod,
 diff --git a/include/linux/preempt.h b/include/linux/preempt.h
 index ca86235ac15c..3e9808f2b549 100644
 --- a/include/linux/preempt.h
@@ -1067,24 +1362,105 @@ index e0717c8393d7..a968e6941237 100644
  int serial8250_console_setup(struct uart_port *port, char *options, bool probe);
  int serial8250_console_exit(struct uart_port *port);
  
-diff --git a/include/linux/vermagic.h b/include/linux/vermagic.h
-index a54046bf37e5..939ceabcaf06 100644
---- a/include/linux/vermagic.h
-+++ b/include/linux/vermagic.h
-@@ -15,10 +15,10 @@
- #else
- #define MODULE_VERMAGIC_SMP ""
+diff --git a/kernel/cfi.c b/kernel/cfi.c
+index 08caad776717..abcd4d1f98ea 100644
+--- a/kernel/cfi.c
++++ b/kernel/cfi.c
+@@ -71,14 +71,11 @@ static bool is_module_cfi_trap(unsigned long addr)
+ 	struct module *mod;
+ 	bool found = false;
+ 
+-	rcu_read_lock_sched_notrace();
+-
++	guard(rcu)();
+ 	mod = __module_address(addr);
+ 	if (mod)
+ 		found = is_trap(addr, mod->kcfi_traps, mod->kcfi_traps_end);
+ 
+-	rcu_read_unlock_sched_notrace();
+-
+ 	return found;
+ }
+ #else /* CONFIG_MODULES */
+diff --git a/kernel/jump_label.c b/kernel/jump_label.c
+index 93a822d3c468..7cb19e601426 100644
+--- a/kernel/jump_label.c
++++ b/kernel/jump_label.c
+@@ -653,13 +653,12 @@ static int __jump_label_mod_text_reserved(void *start, void *end)
+ 	struct module *mod;
+ 	int ret;
+ 
+-	preempt_disable();
+-	mod = __module_text_address((unsigned long)start);
+-	WARN_ON_ONCE(__module_text_address((unsigned long)end) != mod);
+-	if (!try_module_get(mod))
+-		mod = NULL;
+-	preempt_enable();
+-
++	scoped_guard(rcu) {
++		mod = __module_text_address((unsigned long)start);
++		WARN_ON_ONCE(__module_text_address((unsigned long)end) != mod);
++		if (!try_module_get(mod))
++			mod = NULL;
++	}
+ 	if (!mod)
+ 		return 0;
+ 
+@@ -746,9 +745,9 @@ static int jump_label_add_module(struct module *mod)
+ 				kfree(jlm);
+ 				return -ENOMEM;
+ 			}
+-			preempt_disable();
+-			jlm2->mod = __module_address((unsigned long)key);
+-			preempt_enable();
++			scoped_guard(rcu)
++				jlm2->mod = __module_address((unsigned long)key);
++
+ 			jlm2->entries = static_key_entries(key);
+ 			jlm2->next = NULL;
+ 			static_key_set_mod(key, jlm2);
+@@ -906,13 +905,13 @@ static void jump_label_update(struct static_key *key)
+ 		return;
+ 	}
+ 
+-	preempt_disable();
+-	mod = __module_address((unsigned long)key);
+-	if (mod) {
+-		stop = mod->jump_entries + mod->num_jump_entries;
+-		init = mod->state == MODULE_STATE_COMING;
++	scoped_guard(rcu) {
++		mod = __module_address((unsigned long)key);
++		if (mod) {
++			stop = mod->jump_entries + mod->num_jump_entries;
++			init = mod->state == MODULE_STATE_COMING;
++		}
+ 	}
+-	preempt_enable();
  #endif
--#ifdef CONFIG_PREEMPT_BUILD
--#define MODULE_VERMAGIC_PREEMPT "preempt "
--#elif defined(CONFIG_PREEMPT_RT)
-+#ifdef CONFIG_PREEMPT_RT
- #define MODULE_VERMAGIC_PREEMPT "preempt_rt "
-+#elif defined(CONFIG_PREEMPT_BUILD)
-+#define MODULE_VERMAGIC_PREEMPT "preempt "
- #else
- #define MODULE_VERMAGIC_PREEMPT ""
- #endif
+ 	entry = static_key_entries(key);
+ 	/* if there are no users, entry can be NULL */
+diff --git a/kernel/kprobes.c b/kernel/kprobes.c
+index b027a4030976..22e47a27df4a 100644
+--- a/kernel/kprobes.c
++++ b/kernel/kprobes.c
+@@ -1566,7 +1566,7 @@ static int check_kprobe_address_safe(struct kprobe *p,
+ 	if (ret)
+ 		return ret;
+ 	jump_label_lock();
+-	preempt_disable();
++	rcu_read_lock();
+ 
+ 	/* Ensure the address is in a text area, and find a module if exists. */
+ 	*probed_mod = NULL;
+@@ -1612,7 +1612,7 @@ static int check_kprobe_address_safe(struct kprobe *p,
+ 	}
+ 
+ out:
+-	preempt_enable();
++	rcu_read_unlock();
+ 	jump_label_unlock();
+ 
+ 	return ret;
 diff --git a/kernel/ksysfs.c b/kernel/ksysfs.c
 index 1bab21b4718f..8d3bee77cacc 100644
 --- a/kernel/ksysfs.c
@@ -1115,6 +1491,28 @@ index 1bab21b4718f..8d3bee77cacc 100644
  #endif
  	NULL
  };
+diff --git a/kernel/livepatch/core.c b/kernel/livepatch/core.c
+index 3c21c31796db..f8932c63b08e 100644
+--- a/kernel/livepatch/core.c
++++ b/kernel/livepatch/core.c
+@@ -59,7 +59,7 @@ static void klp_find_object_module(struct klp_object *obj)
+ 	if (!klp_is_module(obj))
+ 		return;
+ 
+-	rcu_read_lock_sched();
++	guard(rcu)();
+ 	/*
+ 	 * We do not want to block removal of patched modules and therefore
+ 	 * we do not take a reference here. The patches are removed by
+@@ -75,8 +75,6 @@ static void klp_find_object_module(struct klp_object *obj)
+ 	 */
+ 	if (mod && mod->klp_alive)
+ 		obj->mod = mod;
+-
+-	rcu_read_unlock_sched();
+ }
+ 
+ static bool klp_initialized(void)
 diff --git a/kernel/module/internal.h b/kernel/module/internal.h
 index daef2be83902..030d2ed175fa 100644
 --- a/kernel/module/internal.h
@@ -1138,20 +1536,73 @@ index daef2be83902..030d2ed175fa 100644
  {
  #ifdef CONFIG_HAVE_ARCH_PREL32_RELOCATIONS
 diff --git a/kernel/module/kallsyms.c b/kernel/module/kallsyms.c
-index bf65e0c3c86f..d8e0a51ff996 100644
+index bf65e0c3c86f..00a60796327c 100644
 --- a/kernel/module/kallsyms.c
 +++ b/kernel/module/kallsyms.c
-@@ -179,8 +179,7 @@ void add_kallsyms(struct module *mod, const struct load_info *info)
+@@ -177,19 +177,15 @@ void add_kallsyms(struct module *mod, const struct load_info *info)
+ 	unsigned long strtab_size;
+ 	void *data_base = mod->mem[MOD_DATA].base;
  	void *init_data_base = mod->mem[MOD_INIT_DATA].base;
++	struct mod_kallsyms *kallsyms;
  
- 	/* Set up to point into init section. */
+-	/* Set up to point into init section. */
 -	mod->kallsyms = (void __rcu *)init_data_base +
 -		info->mod_kallsyms_init_off;
-+	rcu_assign_pointer(mod->kallsyms, init_data_base + info->mod_kallsyms_init_off);
++	kallsyms = init_data_base + info->mod_kallsyms_init_off;
  
- 	rcu_read_lock();
- 	/* The following is safe since this pointer cannot change */
-@@ -260,7 +259,7 @@ static const char *find_kallsyms_symbol(struct module *mod,
+-	rcu_read_lock();
+-	/* The following is safe since this pointer cannot change */
+-	rcu_dereference(mod->kallsyms)->symtab = (void *)symsec->sh_addr;
+-	rcu_dereference(mod->kallsyms)->num_symtab = symsec->sh_size / sizeof(Elf_Sym);
++	kallsyms->symtab = (void *)symsec->sh_addr;
++	kallsyms->num_symtab = symsec->sh_size / sizeof(Elf_Sym);
+ 	/* Make sure we get permanent strtab: don't use info->strtab. */
+-	rcu_dereference(mod->kallsyms)->strtab =
+-		(void *)info->sechdrs[info->index.str].sh_addr;
+-	rcu_dereference(mod->kallsyms)->typetab = init_data_base + info->init_typeoffs;
++	kallsyms->strtab = (void *)info->sechdrs[info->index.str].sh_addr;
++	kallsyms->typetab = init_data_base + info->init_typeoffs;
+ 
+ 	/*
+ 	 * Now populate the cut down core kallsyms for after init
+@@ -199,20 +195,19 @@ void add_kallsyms(struct module *mod, const struct load_info *info)
+ 	mod->core_kallsyms.strtab = s = data_base + info->stroffs;
+ 	mod->core_kallsyms.typetab = data_base + info->core_typeoffs;
+ 	strtab_size = info->core_typeoffs - info->stroffs;
+-	src = rcu_dereference(mod->kallsyms)->symtab;
+-	for (ndst = i = 0; i < rcu_dereference(mod->kallsyms)->num_symtab; i++) {
+-		rcu_dereference(mod->kallsyms)->typetab[i] = elf_type(src + i, info);
++	src = kallsyms->symtab;
++	for (ndst = i = 0; i < kallsyms->num_symtab; i++) {
++		kallsyms->typetab[i] = elf_type(src + i, info);
+ 		if (i == 0 || is_livepatch_module(mod) ||
+ 		    is_core_symbol(src + i, info->sechdrs, info->hdr->e_shnum,
+ 				   info->index.pcpu)) {
+ 			ssize_t ret;
+ 
+ 			mod->core_kallsyms.typetab[ndst] =
+-			    rcu_dereference(mod->kallsyms)->typetab[i];
++				kallsyms->typetab[i];
+ 			dst[ndst] = src[i];
+ 			dst[ndst++].st_name = s - mod->core_kallsyms.strtab;
+-			ret = strscpy(s,
+-				      &rcu_dereference(mod->kallsyms)->strtab[src[i].st_name],
++			ret = strscpy(s, &kallsyms->strtab[src[i].st_name],
+ 				      strtab_size);
+ 			if (ret < 0)
+ 				break;
+@@ -220,7 +215,9 @@ void add_kallsyms(struct module *mod, const struct load_info *info)
+ 			strtab_size -= ret + 1;
+ 		}
+ 	}
+-	rcu_read_unlock();
++
++	/* Set up to point into init section. */
++	rcu_assign_pointer(mod->kallsyms, kallsyms);
+ 	mod->core_kallsyms.num_symtab = ndst;
+ }
+ 
+@@ -260,7 +257,7 @@ static const char *find_kallsyms_symbol(struct module *mod,
  {
  	unsigned int i, best = 0;
  	unsigned long nextval, bestval;
@@ -1160,7 +1611,7 @@ index bf65e0c3c86f..d8e0a51ff996 100644
  	struct module_memory *mod_mem;
  
  	/* At worse, next value is at end of module */
-@@ -319,7 +318,7 @@ void * __weak dereference_module_function_descriptor(struct module *mod,
+@@ -319,7 +316,7 @@ void * __weak dereference_module_function_descriptor(struct module *mod,
  
  /*
   * For kallsyms to ask for address resolution.  NULL means not found.  Careful
@@ -1169,7 +1620,7 @@ index bf65e0c3c86f..d8e0a51ff996 100644
   */
  int module_address_lookup(unsigned long addr,
  			  unsigned long *size,
-@@ -332,7 +331,7 @@ int module_address_lookup(unsigned long addr,
+@@ -332,7 +329,7 @@ int module_address_lookup(unsigned long addr,
  	int ret = 0;
  	struct module *mod;
  
@@ -1178,15 +1629,16 @@ index bf65e0c3c86f..d8e0a51ff996 100644
  	mod = __module_address(addr);
  	if (mod) {
  		if (modname)
-@@ -350,7 +349,6 @@ int module_address_lookup(unsigned long addr,
+@@ -350,8 +347,6 @@ int module_address_lookup(unsigned long addr,
  		if (sym)
  			ret = strscpy(namebuf, sym, KSYM_NAME_LEN);
  	}
 -	preempt_enable();
- 
+-
  	return ret;
  }
-@@ -359,7 +357,7 @@ int lookup_module_symbol_name(unsigned long addr, char *symname)
+ 
+@@ -359,7 +354,7 @@ int lookup_module_symbol_name(unsigned long addr, char *symname)
  {
  	struct module *mod;
  
@@ -1195,7 +1647,7 @@ index bf65e0c3c86f..d8e0a51ff996 100644
  	list_for_each_entry_rcu(mod, &modules, list) {
  		if (mod->state == MODULE_STATE_UNFORMED)
  			continue;
-@@ -371,12 +369,10 @@ int lookup_module_symbol_name(unsigned long addr, char *symname)
+@@ -371,12 +366,10 @@ int lookup_module_symbol_name(unsigned long addr, char *symname)
  				goto out;
  
  			strscpy(symname, sym, KSYM_NAME_LEN);
@@ -1208,7 +1660,7 @@ index bf65e0c3c86f..d8e0a51ff996 100644
  	return -ERANGE;
  }
  
-@@ -385,13 +381,13 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
+@@ -385,13 +378,13 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
  {
  	struct module *mod;
  
@@ -1224,7 +1676,7 @@ index bf65e0c3c86f..d8e0a51ff996 100644
  		if (symnum < kallsyms->num_symtab) {
  			const Elf_Sym *sym = &kallsyms->symtab[symnum];
  
-@@ -400,12 +396,10 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
+@@ -400,12 +393,10 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
  			strscpy(name, kallsyms_symbol_name(kallsyms, symnum), KSYM_NAME_LEN);
  			strscpy(module_name, mod->name, MODULE_NAME_LEN);
  			*exported = is_exported(name, *value, mod);
@@ -1237,7 +1689,7 @@ index bf65e0c3c86f..d8e0a51ff996 100644
  	return -ERANGE;
  }
  
-@@ -413,7 +407,7 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
+@@ -413,7 +404,7 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
  static unsigned long __find_kallsyms_symbol_value(struct module *mod, const char *name)
  {
  	unsigned int i;
@@ -1246,7 +1698,7 @@ index bf65e0c3c86f..d8e0a51ff996 100644
  
  	for (i = 0; i < kallsyms->num_symtab; i++) {
  		const Elf_Sym *sym = &kallsyms->symtab[i];
-@@ -453,23 +447,15 @@ static unsigned long __module_kallsyms_lookup_name(const char *name)
+@@ -453,23 +444,15 @@ static unsigned long __module_kallsyms_lookup_name(const char *name)
  /* Look for this name: can be of form module:name. */
  unsigned long module_kallsyms_lookup_name(const char *name)
  {
@@ -1274,7 +1726,7 @@ index bf65e0c3c86f..d8e0a51ff996 100644
  }
  
  int module_kallsyms_on_each_symbol(const char *modname,
-@@ -490,11 +476,8 @@ int module_kallsyms_on_each_symbol(const char *modname,
+@@ -490,10 +473,8 @@ int module_kallsyms_on_each_symbol(const char *modname,
  		if (modname && strcmp(modname, mod->name))
  			continue;
  
@@ -1282,14 +1734,13 @@ index bf65e0c3c86f..d8e0a51ff996 100644
 -		preempt_disable();
 -		kallsyms = rcu_dereference_sched(mod->kallsyms);
 -		preempt_enable();
--
 +		kallsyms = rcu_dereference_check(mod->kallsyms,
 +						 lockdep_is_held(&module_mutex));
+ 
  		for (i = 0; i < kallsyms->num_symtab; i++) {
  			const Elf_Sym *sym = &kallsyms->symtab[i];
- 
 diff --git a/kernel/module/main.c b/kernel/module/main.c
-index 5399c182b3cb..073a8d57884d 100644
+index 5399c182b3cb..6a99076146cb 100644
 --- a/kernel/module/main.c
 +++ b/kernel/module/main.c
 @@ -67,7 +67,7 @@
@@ -1306,7 +1757,7 @@ index 5399c182b3cb..073a8d57884d 100644
  /*
   * Find an exported symbol and return it, along with, (optional) crc and
 - * (optional) module which owns it.  Needs preempt disabled or module_mutex.
-+ * (optional) module which owns it.  Needs RCU or module_mutex.
++ * (optional) module which owns it. Needs RCU or module_mutex.
   */
  bool find_symbol(struct find_symbol_arg *fsa)
  {
@@ -1374,14 +1825,13 @@ index 5399c182b3cb..073a8d57884d 100644
  }
  EXPORT_SYMBOL(__symbol_put);
  
-@@ -830,15 +821,10 @@ void symbol_put_addr(void *addr)
- 	if (core_kernel_text(a))
- 		return;
+@@ -832,13 +823,12 @@ void symbol_put_addr(void *addr)
  
--	/*
--	 * Even though we hold a reference on the module; we still need to
+ 	/*
+ 	 * Even though we hold a reference on the module; we still need to
 -	 * disable preemption in order to safely traverse the data structure.
--	 */
++	 * RCU read section in order to safely traverse the data structure.
+ 	 */
 -	preempt_disable();
 +	guard(rcu)();
  	modaddr = __module_text_address(a);
@@ -1391,7 +1841,7 @@ index 5399c182b3cb..073a8d57884d 100644
  }
  EXPORT_SYMBOL_GPL(symbol_put_addr);
  
-@@ -1348,7 +1334,7 @@ static void free_module(struct module *mod)
+@@ -1348,7 +1338,7 @@ static void free_module(struct module *mod)
  	mod_tree_remove(mod);
  	/* Remove this module from bug list, this uses list_del_rcu */
  	module_bug_cleanup(mod);
@@ -1400,25 +1850,31 @@ index 5399c182b3cb..073a8d57884d 100644
  	synchronize_rcu();
  	if (try_add_tainted_module(mod))
  		pr_err("%s: adding tainted module to the unloaded tainted modules list failed.\n",
-@@ -1371,21 +1357,17 @@ void *__symbol_get(const char *symbol)
+@@ -1371,21 +1361,18 @@ void *__symbol_get(const char *symbol)
  		.warn	= true,
  	};
  
 -	preempt_disable();
-+	guard(rcu)();
- 	if (!find_symbol(&fsa))
+-	if (!find_symbol(&fsa))
 -		goto fail;
-+		return NULL;
- 	if (fsa.license != GPL_ONLY) {
- 		pr_warn("failing symbol_get of non-GPLONLY symbol %s.\n",
- 			symbol);
+-	if (fsa.license != GPL_ONLY) {
+-		pr_warn("failing symbol_get of non-GPLONLY symbol %s.\n",
+-			symbol);
 -		goto fail;
-+		return NULL;
++	scoped_guard(rcu) {
++		if (!find_symbol(&fsa))
++			return NULL;
++		if (fsa.license != GPL_ONLY) {
++			pr_warn("failing symbol_get of non-GPLONLY symbol %s.\n",
++				symbol);
++			return NULL;
++		}
++		if (strong_try_module_get(fsa.owner))
++			return NULL;
  	}
- 	if (strong_try_module_get(fsa.owner))
+-	if (strong_try_module_get(fsa.owner))
 -		goto fail;
 -	preempt_enable();
-+		return NULL;
  	return (void *)kernel_symbol_value(fsa.sym);
 -fail:
 -	preempt_enable();
@@ -1426,7 +1882,7 @@ index 5399c182b3cb..073a8d57884d 100644
  }
  EXPORT_SYMBOL_GPL(__symbol_get);
  
-@@ -2965,7 +2947,7 @@ static noinline int do_init_module(struct module *mod)
+@@ -2965,7 +2952,7 @@ static noinline int do_init_module(struct module *mod)
  #endif
  	/*
  	 * We want to free module_init, but be aware that kallsyms may be
@@ -1435,36 +1891,60 @@ index 5399c182b3cb..073a8d57884d 100644
  	 * call synchronize_rcu(), but we don't want to slow down the success
  	 * path. execmem_free() cannot be called in an interrupt, so do the
  	 * work and call synchronize_rcu() in a work queue.
-@@ -3636,7 +3618,7 @@ const struct exception_table_entry *search_module_extables(unsigned long addr)
- 	const struct exception_table_entry *e = NULL;
+@@ -3633,28 +3620,23 @@ char *module_flags(struct module *mod, char *buf, bool show_state)
+ /* Given an address, look for it in the module exception tables. */
+ const struct exception_table_entry *search_module_extables(unsigned long addr)
+ {
+-	const struct exception_table_entry *e = NULL;
  	struct module *mod;
  
 -	preempt_disable();
 +	guard(rcu)();
  	mod = __module_address(addr);
  	if (!mod)
- 		goto out;
-@@ -3648,8 +3630,6 @@ const struct exception_table_entry *search_module_extables(unsigned long addr)
- 			   mod->num_exentries,
- 			   addr);
- out:
+-		goto out;
++		return NULL;
+ 
+ 	if (!mod->num_exentries)
+-		goto out;
+-
+-	e = search_extable(mod->extable,
+-			   mod->num_exentries,
+-			   addr);
+-out:
 -	preempt_enable();
 -
++		return NULL;
  	/*
- 	 * Now, if we found one, we are running inside it now, hence
- 	 * we cannot unload the module, hence no refcnt needed.
-@@ -3668,9 +3648,8 @@ bool is_module_address(unsigned long addr)
- {
- 	bool ret;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	ret = __module_address(addr) != NULL;
--	preempt_enable();
- 
- 	return ret;
+-	 * Now, if we found one, we are running inside it now, hence
+-	 * we cannot unload the module, hence no refcnt needed.
++	 * The address passed here belongs to a module that is currently
++	 * invoked (we are running inside it). Therefore its module::refcnt
++	 * needs already be >0 to ensure that it is not removed at this stage.
++	 * All other user need to invoke this function within a RCU read
++	 * section.
+ 	 */
+-	return e;
++	return search_extable(mod->extable, mod->num_exentries, addr);
  }
-@@ -3679,7 +3658,7 @@ bool is_module_address(unsigned long addr)
+ 
+ /**
+@@ -3666,20 +3648,15 @@ const struct exception_table_entry *search_module_extables(unsigned long addr)
+  */
+ bool is_module_address(unsigned long addr)
+ {
+-	bool ret;
+-
+-	preempt_disable();
+-	ret = __module_address(addr) != NULL;
+-	preempt_enable();
+-
+-	return ret;
++	guard(rcu)();
++	return __module_address(addr) != NULL;
+ }
+ 
+ /**
   * __module_address() - get the module which contains an address.
   * @addr: the address.
   *
@@ -1473,7 +1953,7 @@ index 5399c182b3cb..073a8d57884d 100644
   * module doesn't get freed during this.
   */
  struct module *__module_address(unsigned long addr)
-@@ -3697,8 +3676,6 @@ struct module *__module_address(unsigned long addr)
+@@ -3697,8 +3674,6 @@ struct module *__module_address(unsigned long addr)
  	return NULL;
  
  lookup:
@@ -1482,18 +1962,22 @@ index 5399c182b3cb..073a8d57884d 100644
  	mod = mod_find(addr, &mod_tree);
  	if (mod) {
  		BUG_ON(!within_module(addr, mod));
-@@ -3720,9 +3697,8 @@ bool is_module_text_address(unsigned long addr)
+@@ -3718,20 +3693,15 @@ struct module *__module_address(unsigned long addr)
+  */
+ bool is_module_text_address(unsigned long addr)
  {
- 	bool ret;
- 
+-	bool ret;
+-
 -	preempt_disable();
-+	guard(rcu)();
- 	ret = __module_text_address(addr) != NULL;
+-	ret = __module_text_address(addr) != NULL;
 -	preempt_enable();
- 
- 	return ret;
+-
+-	return ret;
++	guard(rcu)();
++	return __module_text_address(addr) != NULL;
  }
-@@ -3731,7 +3707,7 @@ bool is_module_text_address(unsigned long addr)
+ 
+ /**
   * __module_text_address() - get the module whose code contains an address.
   * @addr: the address.
   *
@@ -1502,17 +1986,16 @@ index 5399c182b3cb..073a8d57884d 100644
   * module doesn't get freed during this.
   */
  struct module *__module_text_address(unsigned long addr)
-@@ -3753,8 +3729,7 @@ void print_modules(void)
- 	char buf[MODULE_FLAGS_BUF_SIZE];
+@@ -3754,7 +3724,7 @@ void print_modules(void)
  
  	printk(KERN_DEFAULT "Modules linked in:");
--	/* Most callers should already have preempt disabled, but make sure */
+ 	/* Most callers should already have preempt disabled, but make sure */
 -	preempt_disable();
 +	guard(rcu)();
  	list_for_each_entry_rcu(mod, &modules, list) {
  		if (mod->state == MODULE_STATE_UNFORMED)
  			continue;
-@@ -3762,7 +3737,6 @@ void print_modules(void)
+@@ -3762,7 +3732,6 @@ void print_modules(void)
  	}
  
  	print_unloaded_tainted_modules();
@@ -1533,11 +2016,35 @@ index 16742d1c630c..4fefec5b683c 100644
  	if (!mod->taints)
  		goto out;
  
+diff --git a/kernel/module/tree_lookup.c b/kernel/module/tree_lookup.c
+index 277197977d43..d3204c5c74eb 100644
+--- a/kernel/module/tree_lookup.c
++++ b/kernel/module/tree_lookup.c
+@@ -12,11 +12,11 @@
+ 
+ /*
+  * Use a latched RB-tree for __module_address(); this allows us to use
+- * RCU-sched lookups of the address from any context.
++ * RCU lookups of the address from any context.
+  *
+- * This is conditional on PERF_EVENTS || TRACING because those can really hit
+- * __module_address() hard by doing a lot of stack unwinding; potentially from
+- * NMI context.
++ * This is conditional on PERF_EVENTS || TRACING || CFI_CLANG because those can
++ * really hit __module_address() hard by doing a lot of stack unwinding;
++ * potentially from NMI context.
+  */
+ 
+ static __always_inline unsigned long __mod_tree_val(struct latch_tree_node *n)
 diff --git a/kernel/module/version.c b/kernel/module/version.c
-index 53f43ac5a73e..0437eea1d209 100644
+index 53f43ac5a73e..65ef8f2a821d 100644
 --- a/kernel/module/version.c
 +++ b/kernel/module/version.c
-@@ -65,14 +65,13 @@ int check_modstruct_version(const struct load_info *info,
+@@ -62,17 +62,17 @@ int check_modstruct_version(const struct load_info *info,
+ 		.name	= "module_layout",
+ 		.gplok	= true,
+ 	};
++	bool have_symbol;
  
  	/*
  	 * Since this should be found in kernel (which can't be removed), no
@@ -1549,16 +2056,17 @@ index 53f43ac5a73e..0437eea1d209 100644
 -	if (!find_symbol(&fsa)) {
 -		preempt_enable();
 -		BUG();
-+	scoped_guard(rcu) {
-+		if (!find_symbol(&fsa))
-+			BUG();
- 	}
+-	}
 -	preempt_enable();
++	scoped_guard(rcu)
++		have_symbol = find_symbol(&fsa);
++	BUG_ON(!have_symbol);
++
  	return check_version(info, "module_layout", mod, fsa.crc);
  }
  
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 95e40895a519..8f5517dbe07d 100644
+index 3e5a6bf587f9..34aded1c697c 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -7642,6 +7642,30 @@ static inline void preempt_dynamic_init(void) { }
@@ -1592,11 +2100,75 @@ index 95e40895a519..8f5517dbe07d 100644
  int io_schedule_prepare(void)
  {
  	int old_iowait = current->in_iowait;
+diff --git a/kernel/static_call_inline.c b/kernel/static_call_inline.c
+index bb7d066a7c39..c2c59e6ef35d 100644
+--- a/kernel/static_call_inline.c
++++ b/kernel/static_call_inline.c
+@@ -325,13 +325,12 @@ static int __static_call_mod_text_reserved(void *start, void *end)
+ 	struct module *mod;
+ 	int ret;
+ 
+-	preempt_disable();
+-	mod = __module_text_address((unsigned long)start);
+-	WARN_ON_ONCE(__module_text_address((unsigned long)end) != mod);
+-	if (!try_module_get(mod))
+-		mod = NULL;
+-	preempt_enable();
+-
++	scoped_guard(rcu) {
++		mod = __module_text_address((unsigned long)start);
++		WARN_ON_ONCE(__module_text_address((unsigned long)end) != mod);
++		if (!try_module_get(mod))
++			mod = NULL;
++	}
+ 	if (!mod)
+ 		return 0;
+ 
+diff --git a/kernel/trace/bpf_trace.c b/kernel/trace/bpf_trace.c
+index 1b8db5aee9d3..020df7b6ff90 100644
+--- a/kernel/trace/bpf_trace.c
++++ b/kernel/trace/bpf_trace.c
+@@ -2336,10 +2336,9 @@ void bpf_put_raw_tracepoint(struct bpf_raw_event_map *btp)
+ {
+ 	struct module *mod;
+ 
+-	preempt_disable();
++	guard(rcu)();
+ 	mod = __module_address((unsigned long)btp);
+ 	module_put(mod);
+-	preempt_enable();
+ }
+ 
+ static __always_inline
+@@ -2907,16 +2906,14 @@ static int get_modules_for_addrs(struct module ***mods, unsigned long *addrs, u3
+ 	for (i = 0; i < addrs_cnt; i++) {
+ 		struct module *mod;
+ 
+-		preempt_disable();
+-		mod = __module_address(addrs[i]);
+-		/* Either no module or we it's already stored  */
+-		if (!mod || has_module(&arr, mod)) {
+-			preempt_enable();
+-			continue;
++		scoped_guard(rcu) {
++			mod = __module_address(addrs[i]);
++			/* Either no module or we it's already stored  */
++			if (!mod || has_module(&arr, mod))
++				continue;
++			if (!try_module_get(mod))
++				err = -EINVAL;
+ 		}
+-		if (!try_module_get(mod))
+-			err = -EINVAL;
+-		preempt_enable();
+ 		if (err)
+ 			break;
+ 		err = add_module(&arr, mod);
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index be62f0ea1814..3861f53f9a43 100644
+index f8aebcb01e62..1e82125d0c8d 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
-@@ -4266,11 +4266,7 @@ print_trace_header(struct seq_file *m, struct trace_iterator *iter)
+@@ -4119,11 +4119,7 @@ print_trace_header(struct seq_file *m, struct trace_iterator *iter)
  		   entries,
  		   total,
  		   buf->cpu,
@@ -1609,6 +2181,85 @@ index be62f0ea1814..3861f53f9a43 100644
  		   /* These are reserved for later use */
  		   0, 0, 0, 0);
  #ifdef CONFIG_SMP
+diff --git a/kernel/trace/trace_kprobe.c b/kernel/trace/trace_kprobe.c
+index 935a886af40c..37ff78ee17fe 100644
+--- a/kernel/trace/trace_kprobe.c
++++ b/kernel/trace/trace_kprobe.c
+@@ -123,9 +123,8 @@ static nokprobe_inline bool trace_kprobe_module_exist(struct trace_kprobe *tk)
+ 	if (!p)
+ 		return true;
+ 	*p = '\0';
+-	rcu_read_lock_sched();
+-	ret = !!find_module(tk->symbol);
+-	rcu_read_unlock_sched();
++	scoped_guard(rcu)
++		ret = !!find_module(tk->symbol);
+ 	*p = ':';
+ 
+ 	return ret;
+@@ -800,12 +799,10 @@ static struct module *try_module_get_by_name(const char *name)
+ {
+ 	struct module *mod;
+ 
+-	rcu_read_lock_sched();
++	guard(rcu)();
+ 	mod = find_module(name);
+ 	if (mod && !try_module_get(mod))
+ 		mod = NULL;
+-	rcu_read_unlock_sched();
+-
+ 	return mod;
+ }
+ #else
+diff --git a/lib/bug.c b/lib/bug.c
+index e0ff21989990..b1f07459c2ee 100644
+--- a/lib/bug.c
++++ b/lib/bug.c
+@@ -66,23 +66,19 @@ static LIST_HEAD(module_bug_list);
+ 
+ static struct bug_entry *module_find_bug(unsigned long bugaddr)
+ {
++	struct bug_entry *bug;
+ 	struct module *mod;
+-	struct bug_entry *bug = NULL;
+ 
+-	rcu_read_lock_sched();
++	guard(rcu)();
+ 	list_for_each_entry_rcu(mod, &module_bug_list, bug_list) {
+ 		unsigned i;
+ 
+ 		bug = mod->bug_table;
+ 		for (i = 0; i < mod->num_bugs; ++i, ++bug)
+ 			if (bugaddr == bug_addr(bug))
+-				goto out;
++				return bug;
+ 	}
+-	bug = NULL;
+-out:
+-	rcu_read_unlock_sched();
+-
+-	return bug;
++	return NULL;
+ }
+ 
+ void module_bug_finalize(const Elf_Ehdr *hdr, const Elf_Shdr *sechdrs,
+@@ -235,11 +231,11 @@ void generic_bug_clear_once(void)
+ #ifdef CONFIG_MODULES
+ 	struct module *mod;
+ 
+-	rcu_read_lock_sched();
+-	list_for_each_entry_rcu(mod, &module_bug_list, bug_list)
+-		clear_once_table(mod->bug_table,
+-				 mod->bug_table + mod->num_bugs);
+-	rcu_read_unlock_sched();
++	scoped_guard(rcu) {
++		list_for_each_entry_rcu(mod, &module_bug_list, bug_list)
++			clear_once_table(mod->bug_table,
++					 mod->bug_table + mod->num_bugs);
++	}
+ #endif
+ 
+ 	clear_once_table(__start___bug_table, __stop___bug_table);
 diff --git a/lib/dump_stack.c b/lib/dump_stack.c
 index 388da1aea14a..c3e59f899227 100644
 --- a/lib/dump_stack.c
