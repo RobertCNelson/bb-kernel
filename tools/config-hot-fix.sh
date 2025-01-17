@@ -245,7 +245,39 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 #10.00.05
 ./scripts/config --module CONFIG_RPMSG_PRU
 
+#new in v6.12.x
+./scripts/config --module CONFIG_RPMB
+./scripts/config --module CONFIG_ADXL380_SPI
+./scripts/config --module CONFIG_ADXL380_I2C
+./scripts/config --module CONFIG_AD4000
+./scripts/config --module CONFIG_AD4695
+./scripts/config --module CONFIG_PAC1921
+./scripts/config --module CONFIG_LTC2664
+./scripts/config --module CONFIG_ENS210
+./scripts/config --module CONFIG_BH1745
+./scripts/config --module CONFIG_SDP500
+./scripts/config --module CONFIG_HX9023S
+./scripts/config --module CONFIG_AW96103
+
+#debian 6.12~rc6-1~exp1
+./scripts/config --enable CONFIG_ZONE_DEVICE
+./scripts/config --module CONFIG_IP_VS_TWOS
+./scripts/config --module CONFIG_VIDEO_OV5648
+./scripts/config --enable CONFIG_DRM_DISPLAY_DP_AUX_CHARDEV
+./scripts/config --module CONFIG_TI_PRUSS
+
+#debian 6.12.6-1
+./scripts/config --enable CONFIG_ZRAM_BACKEND_LZ4
+./scripts/config --enable CONFIG_ZRAM_BACKEND_LZ4HC
+./scripts/config --enable CONFIG_ZRAM_BACKEND_ZSTD
+./scripts/config --enable CONFIG_ZRAM_BACKEND_DEFLATE
+./scripts/config --enable CONFIG_ZRAM_DEF_COMP_LZ4
+./scripts/config --set-str CONFIG_ZRAM_DEF_COMP "lz4"
+
 #configure CONFIG_EXTRA_FIRMWARE
 ./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin am43x-evm-scale-data.bin"
+./scripts/config --enable CONFIG_FW_LOADER_COMPRESS
+./scripts/config --enable CONFIG_FW_LOADER_COMPRESS_XZ
+./scripts/config --disable CONFIG_FW_LOADER_COMPRESS_ZSTD
 
 cd ${DIR}/
