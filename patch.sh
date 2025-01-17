@@ -96,14 +96,6 @@ cherrypick () {
 	num=$(($num+1))
 }
 
-copy_mainline_driver () {
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cp -v ./drivers/mmc/core/quirks.h ../patches/mainline/mmc/
-		exit 2
-	fi
-}
-
 external_git () {
 	git_tag=""
 	echo "pulling: ${git_tag}"
@@ -247,7 +239,7 @@ k3_makefile_patch_cleanup_overlays () {
 	echo "# Enable support for device-tree overlays" >> arch/arm64/boot/dts/ti/Makefile
 	cat arch/arm64/boot/dts/ti/Makefile.dtc >> arch/arm64/boot/dts/ti/Makefile
 	rm arch/arm64/boot/dts/ti/Makefile.dtc
-	echo "DTC_FLAGS_k3-am625-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
+	echo "DTC_FLAGS_k3-am6232-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
 	echo "DTC_FLAGS_k3-am67a-beagley-ai += -@" >> arch/arm64/boot/dts/ti/Makefile
 	echo "DTC_FLAGS_k3-j721e-beagleboneai64 += -@" >> arch/arm64/boot/dts/ti/Makefile
 }
@@ -301,7 +293,7 @@ beagleboard_dtbs () {
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
 
-		device="k3-am625-pocketbeagle2.dtb" ; k3_dtb_makefile_append
+		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
 
 		#ls src/arm64/overlays/ | grep beaglebone
 
@@ -342,7 +334,6 @@ local_patch () {
 	${git} "${DIR}/patches/dir/0001-patch.patch"
 }
 
-copy_mainline_driver
 #external_git
 mainline_patches
 rt
@@ -440,23 +431,6 @@ backports
 drivers
 
 packaging () {
-	echo "Update: package scripts"
-	#do_backport="enable"
-	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.8.9"
-
-		subsystem="bindeb-pkg"
-		#regenerate="enable"
-		if [ "x${regenerate}" = "xenable" ] ; then
-			pre_backports
-
-			cp -v ~/linux-src/scripts/package/* ./scripts/package/
-
-			post_backports
-		else
-			patch_backports
-		fi
-	fi
 	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
 }
 
