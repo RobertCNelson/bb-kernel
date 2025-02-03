@@ -239,7 +239,7 @@ k3_makefile_patch_cleanup_overlays () {
 	echo "# Enable support for device-tree overlays" >> arch/arm64/boot/dts/ti/Makefile
 	cat arch/arm64/boot/dts/ti/Makefile.dtc >> arch/arm64/boot/dts/ti/Makefile
 	rm arch/arm64/boot/dts/ti/Makefile.dtc
-	echo "DTC_FLAGS_k3-am625-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
+	echo "DTC_FLAGS_k3-am6232-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
 	echo "DTC_FLAGS_k3-am67a-beagley-ai += -@" >> arch/arm64/boot/dts/ti/Makefile
 	echo "DTC_FLAGS_k3-j721e-beagleboneai64 += -@" >> arch/arm64/boot/dts/ti/Makefile
 }
@@ -293,7 +293,7 @@ beagleboard_dtbs () {
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
 
-		device="k3-am625-pocketbeagle2.dtb" ; k3_dtb_makefile_append
+		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
 
 		#ls src/arm64/overlays/ | grep beaglebone
 
@@ -371,6 +371,11 @@ post_backports () {
 	exit 2
 }
 
+patch_backports () {
+	echo "dir: backports/${subsystem}"
+	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
+}
+
 pre_rpibackports () {
 	echo "dir: backports/${subsystem}"
 
@@ -397,11 +402,6 @@ post_rpibackports () {
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 	exit 2
-}
-
-patch_backports () {
-	echo "dir: backports/${subsystem}"
-	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 backports () {
