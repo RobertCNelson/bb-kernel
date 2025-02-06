@@ -182,8 +182,6 @@ config="CONFIG_UIO_PRUSS" ; config_module
 config="CONFIG_CHARGER_TPS65217" ; config_disable
 
 #2023.07.10
-config="CONFIG_KERNEL_LZO" ; config_disable
-config="CONFIG_KERNEL_LZ4" ; config_enable
 config="CONFIG_GCC_PLUGINS" ; config_disable
 
 #2023.07.14
@@ -284,6 +282,25 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --module CONFIG_BD79703
 ./scripts/config --module CONFIG_OPT4060
 ./scripts/config --enable CONFIG_FPROBE
+
+#TI: 11.00.01
+./scripts/config --enable CONFIG_SRAM_DMA_HEAP
+./scripts/config --module CONFIG_CC33XX
+./scripts/config --module CONFIG_CC33XX_SDIO
+./scripts/config --module CONFIG_VIDEO_IMX390
+./scripts/config --enable CONFIG_DMABUF_HEAPS
+./scripts/config --enable CONFIG_DMABUF_HEAPS_SYSTEM
+./scripts/config --enable CONFIG_DMABUF_HEAPS_CMA
+./scripts/config --enable CONFIG_DMABUF_HEAPS_CARVEOUT
+
+#debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
+#  LZ4     arch/arm/boot/compressed/piggy_data
+#Error : stdout won't be used ! Do you want multiple input files (-m) ?
+#make[3]: *** [arch/arm/boot/compressed/Makefile:156: arch/arm/boot/compressed/piggy_data] Error 1
+
+./scripts/config --disable CONFIG_KERNEL_LZO
+./scripts/config --disable CONFIG_KERNEL_LZ4
+./scripts/config --enable CONFIG_KERNEL_XZ
 
 #configure CONFIG_EXTRA_FIRMWARE
 ./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin am43x-evm-scale-data.bin"
