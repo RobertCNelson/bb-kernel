@@ -182,8 +182,6 @@ config="CONFIG_UIO_PRUSS" ; config_module
 config="CONFIG_CHARGER_TPS65217" ; config_disable
 
 #2023.07.10
-config="CONFIG_KERNEL_LZO" ; config_disable
-config="CONFIG_KERNEL_LZ4" ; config_enable
 config="CONFIG_GCC_PLUGINS" ; config_disable
 
 #2023.07.14
@@ -225,6 +223,10 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 #removed in 6.7-rc1
 ./scripts/config --disable CONFIG_DEV_APPLETALK
 
+#09.02.00.005
+./scripts/config --module CONFIG_VIDEO_TI_VIP
+./scripts/config --module CONFIG_VIDEO_OV1063X
+
 #20240305: regression on discord, some systemd can no longer load *.xz modules...
 ./scripts/config --disable CONFIG_MODULE_DECOMPRESS
 
@@ -236,11 +238,75 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_MODULE_COMPRESS_XZ
 ./scripts/config --disable CONFIG_MODULE_COMPRESS_ZSTD
 ./scripts/config --enable CONFIG_GPIO_AGGREGATOR
+./scripts/config --module CONFIG_PWM_GPIO
 
 #10.00.05
 ./scripts/config --module CONFIG_RPMSG_PRU
 
+#new in v6.12.x
+./scripts/config --enable CONFIG_RPMB
+./scripts/config --module CONFIG_ADXL380_SPI
+./scripts/config --module CONFIG_ADXL380_I2C
+./scripts/config --module CONFIG_AD4000
+./scripts/config --module CONFIG_AD4695
+./scripts/config --module CONFIG_PAC1921
+./scripts/config --module CONFIG_LTC2664
+./scripts/config --module CONFIG_ENS210
+./scripts/config --module CONFIG_BH1745
+./scripts/config --module CONFIG_SDP500
+./scripts/config --module CONFIG_HX9023S
+./scripts/config --module CONFIG_AW96103
+
+#debian 6.12~rc6-1~exp1
+./scripts/config --enable CONFIG_ZONE_DEVICE
+./scripts/config --module CONFIG_IP_VS_TWOS
+./scripts/config --module CONFIG_VIDEO_OV5648
+./scripts/config --enable CONFIG_DRM_DISPLAY_DP_AUX_CHARDEV
+./scripts/config --module CONFIG_TI_PRUSS
+
+#debian 6.12.6-1
+./scripts/config --enable CONFIG_ZRAM_BACKEND_LZ4
+./scripts/config --enable CONFIG_ZRAM_BACKEND_LZ4HC
+./scripts/config --enable CONFIG_ZRAM_BACKEND_ZSTD
+./scripts/config --enable CONFIG_ZRAM_BACKEND_DEFLATE
+./scripts/config --enable CONFIG_ZRAM_DEF_COMP_LZ4
+./scripts/config --set-str CONFIG_ZRAM_DEF_COMP "lz4"
+
+#new in v6.14
+./scripts/config --module CONFIG_NTSYNC
+./scripts/config --module CONFIG_PPS_GENERATOR
+./scripts/config --module CONFIG_SENSORS_CRPS
+./scripts/config --module CONFIG_SENSORS_TPS25990
+./scripts/config --module CONFIG_BD79703
+./scripts/config --module CONFIG_OPT4060
+./scripts/config --enable CONFIG_FPROBE
+
+#TI: 11.00.01
+./scripts/config --enable CONFIG_SRAM_DMA_HEAP
+./scripts/config --module CONFIG_CC33XX
+./scripts/config --module CONFIG_CC33XX_SDIO
+./scripts/config --module CONFIG_VIDEO_IMX390
+./scripts/config --enable CONFIG_DMABUF_HEAPS
+./scripts/config --enable CONFIG_DMABUF_HEAPS_SYSTEM
+./scripts/config --enable CONFIG_DMABUF_HEAPS_CMA
+./scripts/config --enable CONFIG_DMABUF_HEAPS_CARVEOUT
+
+#debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
+#  LZ4     arch/arm/boot/compressed/piggy_data
+#Error : stdout won't be used ! Do you want multiple input files (-m) ?
+#make[3]: *** [arch/arm/boot/compressed/Makefile:156: arch/arm/boot/compressed/piggy_data] Error 1
+
+./scripts/config --disable CONFIG_KERNEL_LZO
+./scripts/config --disable CONFIG_KERNEL_LZ4
+./scripts/config --enable CONFIG_KERNEL_XZ
+
 #configure CONFIG_EXTRA_FIRMWARE
 ./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin am43x-evm-scale-data.bin"
+./scripts/config --enable CONFIG_FW_LOADER_COMPRESS
+./scripts/config --enable CONFIG_FW_LOADER_COMPRESS_XZ
+./scripts/config --enable CONFIG_FW_LOADER_COMPRESS_ZSTD
+
+#BeagleBoard.org
+./scripts/config --enable CONFIG_MSPM0_I2C
 
 cd ${DIR}/
