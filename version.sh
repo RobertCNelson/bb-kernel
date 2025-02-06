@@ -46,12 +46,15 @@ toolchain="gcc_13_arm"
 #toolchain="gcc_14_riscv64"
 
 #Kernel
+linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
+#
 KERNEL_REL=6.4
 KERNEL_TAG=${KERNEL_REL}.16
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.4/
 kernel_rt=".6-rt8"
 #Kernel Build
-BUILD=${build_prefix}24
+BUILD=${build_prefix}24.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
