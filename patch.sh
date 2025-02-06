@@ -184,24 +184,27 @@ rt_cleanup () {
 }
 
 rt () {
-	rt_patch="${KERNEL_REL}${kernel_rt}"
+	#rt_enable="enable"
+	if [ "x${rt_enable}" = "xenable" ] ; then
+		rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+		#${git_bin} revert --no-edit xyz
 
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
-		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
-		rm -f patch-${rt_patch}.patch.xz
-		rm -f localversion-rt
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
-		${git_bin} format-patch -1 -o ../patches/external/rt/
-		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wget -c https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
+			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
+			rm -f patch-${rt_patch}.patch.xz
+			rm -f localversion-rt
+			${git_bin} add .
+			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
+			${git_bin} format-patch -1 -o ../patches/external/rt/
+			#echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
 
-		exit 2
+			exit 2
+		fi
+		dir 'external/rt'
 	fi
-	dir 'external/rt'
 }
 
 wireless_regdb () {
@@ -242,45 +245,6 @@ wireless_regdb () {
 		cleanup
 	fi
 	dir 'external/wireless_regdb'
-}
-
-ti_pm_firmware () {
-	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ -d ./ti-amx3-cm3-pm-firmware ] ; then
-			rm -rf ./ti-amx3-cm3-pm-firmware || true
-		fi
-
-		${git_bin} clone -b ti-v4.1.y git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
-		cd ./ti-amx3-cm3-pm-firmware
-			ti_amx3_cm3_hash=$(git rev-parse HEAD)
-		cd -
-
-		cd ./KERNEL/
-
-		mkdir -p ./firmware/ || true
-		cp -v ../ti-amx3-cm3-pm-firmware/bin/am* ./firmware/
-
-		${git_bin} add -f ./firmware/am*
-		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -m "http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
-		echo "TI_AMX3_CM3: http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" > ../patches/external/git/TI_AMX3_CM3
-
-		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
-
-		${git_bin} reset --hard HEAD^
-
-		start_cleanup
-
-		${git} "${DIR}/patches/drivers/ti/firmware/0001-Add-AM335x-CM3-Power-Managment-Firmware.patch"
-
-		wdir="drivers/ti/firmware"
-		number=1
-		cleanup
-	fi
-	dir 'drivers/ti/firmware'
 }
 
 cleanup_dts_builds () {
@@ -348,7 +312,6 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
-		device="AM57XX-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
@@ -393,9 +356,8 @@ local_patch () {
 #external_git
 wpanusb
 bcfserial
-#rt
+rt
 wireless_regdb
-ti_pm_firmware
 beagleboard_dtbs
 #local_patch
 
@@ -429,6 +391,11 @@ post_backports () {
 	exit 2
 }
 
+patch_backports () {
+	echo "dir: backports/${subsystem}"
+	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
+}
+
 pre_rpibackports () {
 	echo "dir: backports/${subsystem}"
 
@@ -457,11 +424,6 @@ post_rpibackports () {
 	exit 2
 }
 
-patch_backports () {
-	echo "dir: backports/${subsystem}"
-	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
-}
-
 backports () {
 	subsystem="uio"
 	#regenerate="enable"
@@ -471,7 +433,6 @@ backports () {
 		cp -v ../patches/drivers/ti/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
-		exit 2
 	else
 		patch_backports
 		dir 'drivers/ti/uio'
@@ -487,7 +448,6 @@ backports () {
 		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
 
 		post_rpibackports
-		exit 2
 	else
 		patch_backports
 	fi
@@ -496,13 +456,19 @@ backports () {
 }
 
 drivers () {
-	dir 'boris'
+	dir 'branding/boris'
+
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/ti/serial'
 	dir 'drivers/ti/tsc'
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/sdhci-omap'
-	dir 'mmc'
+
+	dir 'external/ti-amx3-cm3-pm-firmware'
+
+	#git revert --no-edit -s 3edf588e7fe00e90d1dc7fb9e599861b2c2cf442
+	#Breaking Kingston eMMC on new BBB's..
+	dir 'drivers/fixes/mmc'
 }
 
 ###
@@ -511,22 +477,6 @@ drivers
 
 packaging () {
 	echo "Update: package scripts"
-	#do_backport="enable"
-	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v6.6.25"
-
-		subsystem="bindeb-pkg"
-		#regenerate="enable"
-		if [ "x${regenerate}" = "xenable" ] ; then
-			pre_backports
-
-			cp -v ~/linux-src/scripts/package/* ./scripts/package/
-
-			post_backports
-		else
-			patch_backports
-		fi
-	fi
 	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
 }
 
