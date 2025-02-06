@@ -174,8 +174,6 @@ bcfserial () {
 		wdir="external/bcfserial"
 		number=1
 		cleanup
-
-		exit 2
 	fi
 	dir 'external/bcfserial'
 }
@@ -322,7 +320,6 @@ beagleboard_dtbs () {
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
-		device="AM57XX-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
@@ -435,6 +432,11 @@ post_backports () {
 	exit 2
 }
 
+patch_backports () {
+	echo "dir: backports/${subsystem}"
+	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
+}
+
 pre_rpibackports () {
 	echo "dir: backports/${subsystem}"
 
@@ -461,11 +463,6 @@ post_rpibackports () {
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
 	exit 2
-}
-
-patch_backports () {
-	echo "dir: backports/${subsystem}"
-	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 backports () {
@@ -506,6 +503,10 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
+
+	#git revert --no-edit -s 3edf588e7fe00e90d1dc7fb9e599861b2c2cf442
+	#Breaking Kingston eMMC on new BBB's..
+	dir 'drivers/fixes/mmc'
 }
 
 ###
@@ -514,6 +515,7 @@ backports
 drivers
 
 packaging () {
+	echo "Update: package scripts"
 	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
 }
 
