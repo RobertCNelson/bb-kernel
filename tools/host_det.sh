@@ -490,18 +490,23 @@ debian_regs () {
 			#14 forky: https://wiki.debian.org/DebianForky
 			deb_distro="sid"
 			;;
+		duke)
+			#15 duke: https://wiki.debian.org/DebianDuke
+			deb_distro="sid"
+			;;
 		esac
 
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		buster|bullseye|bookworm|trixie|forky|sid)
+		buster|bullseye|bookworm|trixie|forky|duke|sid)
 			#https://wiki.debian.org/LTS
 			#10 buster: 2024-06-30 https://wiki.debian.org/DebianBuster
 			#11 bullseye: 2026 https://wiki.debian.org/DebianBullseye
 			#12 bookworm: https://wiki.debian.org/DebianBookworm
 			#13 trixie: https://wiki.debian.org/DebianTrixie
 			#14 forky: https://wiki.debian.org/DebianForky
+			#15 duke: https://wiki.debian.org/DebianDuke
 			unset warn_eol_distro
 			;;
 		squeeze|wheezy|jessie|stretch)
