@@ -422,7 +422,6 @@ backports () {
 drivers () {
 	dir 'branding/boris'
 
-
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
@@ -434,9 +433,10 @@ drivers () {
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
-	dir 'drivers/mikrobus'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
+
+	dir 'drivers/mikrobus'
 }
 
 ###
