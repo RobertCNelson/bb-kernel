@@ -293,6 +293,16 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_DMABUF_HEAPS_CMA
 ./scripts/config --enable CONFIG_DMABUF_HEAPS_CARVEOUT
 
+#TI: 11.00.02
+./scripts/config --module CONFIG_REGULATOR_RASPBERRYPI_TOUCHSCREEN_ATTINY
+./scripts/config --module CONFIG_DRM_TOSHIBA_TC358762
+#./scripts/config --module CONFIG_DRM_CDNS_DSI
+#./scripts/config --module CONFIG_DRM_CDNS_DSI_J721E
+#./scripts/config --module CONFIG_HWSPINLOCK_OMAP
+#./scripts/config --module CONFIG_PWM_OMAP_DMTIMER
+#./scripts/config --module CONFIG_PHY_CADENCE_DPHY
+./scripts/config --module CONFIG_TI_ECAP_CAPTURE
+
 #debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
 #  LZ4     arch/arm/boot/compressed/piggy_data
 #Error : stdout won't be used ! Do you want multiple input files (-m) ?
