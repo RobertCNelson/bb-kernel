@@ -111,7 +111,7 @@ wpanusb () {
 			rm -rf ./wpanusb || true
 		fi
 
-		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/wpanusb --depth=1
+		${git_bin} clone https://openbeagle.org/beagleconnect/linux/wpanusb.git --depth=1
 		cd ./wpanusb
 			wpanusb_hash=$(git rev-parse HEAD)
 		cd -
@@ -122,9 +122,9 @@ wpanusb () {
 		cp -v ../wpanusb/wpanusb.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
+		${git_bin} commit -a -m 'merge: wpanusb: https://git.beagleboard.org/beagleconnect/linux/wpanusb' -m "https://openbeagle.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/external/wpanusb/
-		echo "WPANUSB: https://git.beagleboard.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/external/git/WPANUSB
+		echo "WPANUSB: https://openbeagle.org/beagleconnect/linux/wpanusb/-/commit/${wpanusb_hash}" > ../patches/external/git/WPANUSB
 
 		rm -rf ../wpanusb/ || true
 
@@ -137,8 +137,6 @@ wpanusb () {
 		wdir="external/wpanusb"
 		number=1
 		cleanup
-
-		exit 2
 	fi
 	dir 'external/wpanusb'
 }
@@ -151,7 +149,7 @@ bcfserial () {
 			rm -rf ./bcfserial || true
 		fi
 
-		${git_bin} clone https://git.beagleboard.org/beagleconnect/linux/bcfserial.git --depth=1
+		${git_bin} clone https://openbeagle.org/beagleconnect/linux/bcfserial.git --depth=1
 		cd ./bcfserial
 			bcfserial_hash=$(git rev-parse HEAD)
 		cd -
@@ -161,9 +159,9 @@ bcfserial () {
 		cp -v ../bcfserial/bcfserial.c drivers/net/ieee802154/
 
 		${git_bin} add .
-		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
+		${git_bin} commit -a -m 'merge: bcfserial: https://git.beagleboard.org/beagleconnect/linux/bcfserial.git' -m "https://openbeagle.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/external/bcfserial/
-		echo "BCFSERIAL: https://git.beagleboard.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/external/git/BCFSERIAL
+		echo "BCFSERIAL: https://openbeagle.org/beagleconnect/linux/bcfserial/-/commit/${bcfserial_hash}" > ../patches/external/git/BCFSERIAL
 
 		rm -rf ../bcfserial/ || true
 
@@ -176,8 +174,6 @@ bcfserial () {
 		wdir="external/bcfserial"
 		number=1
 		cleanup
-
-		exit 2
 	fi
 	dir 'external/bcfserial'
 }
@@ -251,45 +247,6 @@ wireless_regdb () {
 	dir 'external/wireless_regdb'
 }
 
-ti_pm_firmware () {
-	#https://git.ti.com/gitweb?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=shortlog;h=refs/heads/ti-v4.1.y
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		cd ../
-		if [ -d ./ti-amx3-cm3-pm-firmware ] ; then
-			rm -rf ./ti-amx3-cm3-pm-firmware || true
-		fi
-
-		${git_bin} clone -b ti-v4.1.y git://git.ti.com/processor-firmware/ti-amx3-cm3-pm-firmware.git --depth=1
-		cd ./ti-amx3-cm3-pm-firmware
-			ti_amx3_cm3_hash=$(git rev-parse HEAD)
-		cd -
-
-		cd ./KERNEL/
-
-		mkdir -p ./firmware/ || true
-		cp -v ../ti-amx3-cm3-pm-firmware/bin/am* ./firmware/
-
-		${git_bin} add -f ./firmware/am*
-		${git_bin} commit -a -m 'Add AM335x CM3 Power Managment Firmware' -m "http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/drivers/ti/firmware/
-		echo "TI_AMX3_CM3: http://git.ti.com/gitweb/?p=processor-firmware/ti-amx3-cm3-pm-firmware.git;a=commit;h=${ti_amx3_cm3_hash}" > ../patches/external/git/TI_AMX3_CM3
-
-		rm -rf ../ti-amx3-cm3-pm-firmware/ || true
-
-		${git_bin} reset --hard HEAD^
-
-		start_cleanup
-
-		${git} "${DIR}/patches/drivers/ti/firmware/0001-Add-AM335x-CM3-Power-Managment-Firmware.patch"
-
-		wdir="drivers/ti/firmware"
-		number=1
-		cleanup
-	fi
-	dir 'drivers/ti/firmware'
-}
-
 cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/modules.order || true
 	rm -rf arch/arm/boot/dts/.*cmd || true
@@ -351,9 +308,9 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
-		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
-		echo "BBDTBS: https://git.beagleboard.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
+		${git_bin} format-patch -1 -o ../patches/external/bbb.io/
+		echo "BBDTBS: https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -361,13 +318,13 @@ beagleboard_dtbs () {
 
 		start_cleanup
 
-		${git} "${DIR}/patches/soc/ti/beagleboard_dtbs/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
+		${git} "${DIR}/patches/external/bbb.io/0001-Add-BeagleBoard.org-Device-Tree-Changes.patch"
 
-		wdir="soc/ti/beagleboard_dtbs"
+		wdir="external/bbb.io"
 		number=1
 		cleanup
 	fi
-	dir 'soc/ti/beagleboard_dtbs'
+	dir 'external/bbb.io'
 }
 
 local_patch () {
@@ -380,7 +337,6 @@ wpanusb
 bcfserial
 rt
 wireless_regdb
-ti_pm_firmware
 beagleboard_dtbs
 #local_patch
 
@@ -401,17 +357,17 @@ pre_backports () {
 post_backports () {
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		cd ~/linux-src/
-		${git_bin} checkout master -f ; ${git_bin} branch -D tmp
+		${git_bin} checkout master -f
 		cd -
 	fi
 
-	rm -f arch/arm/boot/dts/overlays/*.dtbo || true
 	${git_bin} add .
 	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
+	exit 2
 }
 
 patch_backports () {
@@ -430,7 +386,6 @@ backports () {
 		cp -rv ~/linux-src/drivers/net/wireless/ti/* ./drivers/net/wireless/ti/
 
 		post_backports
-		exit 2
 	else
 		patch_backports
 	fi
@@ -662,11 +617,10 @@ drivers () {
 #	dir 'drivers/ti/mmc'
 	dir 'drivers/greybus'
 	dir 'drivers/bluetooth'
-}
 
-fixes () {
 	dir 'fixes/gcc'
-	dir 'fixes/gcc/13'
+
+	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 
 ###
@@ -674,13 +628,12 @@ backports
 brcmfmac
 reverts
 drivers
-fixes
 
 packaging () {
 	echo "Update: package scripts"
 	do_backport="enable"
 	if [ "x${do_backport}" = "xenable" ] ; then
-		backport_tag="v5.10.200"
+		backport_tag="v5.10.234"
 
 		subsystem="bindeb-pkg"
 		#regenerate="enable"
