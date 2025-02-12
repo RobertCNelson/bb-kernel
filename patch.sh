@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2023 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2024 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -188,52 +188,55 @@ rt_cleanup () {
 }
 
 rt () {
-	rt_patch="${KERNEL_REL}${kernel_rt}"
+	#rt_enable="enable"
+	if [ "x${rt_enable}" = "xenable" ] ; then
+		rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+		#${git_bin} revert --no-edit xyz
 
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
-		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
-		rm -f patch-${rt_patch}.patch.xz
-		rm -f localversion-rt
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
-		${git_bin} format-patch -1 -o ../patches/external/rt/
-		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wget -c https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
+			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
+			rm -f patch-${rt_patch}.patch.xz
+			rm -f localversion-rt
+			${git_bin} add .
+			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
+			${git_bin} format-patch -1 -o ../patches/external/rt/
+			echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
 
-		exit 2
+			exit 2
+		fi
+		dir 'external/rt'
 	fi
-	dir 'external/rt'
 }
 
 wireless_regdb () {
-	#https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/
+	#https://kernel.googlesource.com/pub/scm/linux/kernel/git/wens/wireless-regdb.git
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ -d ./wireless-regdb ] ; then
-			rm -rf ./wireless-regdb || true
+		if [ -d ./src ] ; then
+			rm -rf ./src || true
 		fi
 
-		${git_bin} clone git://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git --depth=1
-		cd ./wireless-regdb
+		${git_bin} clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/wens/wireless-regdb.git --depth=1 ./src/
+		cd ./src
 			wireless_regdb_hash=$(git rev-parse HEAD)
 		cd -
 
 		cd ./KERNEL/
 
 		mkdir -p ./firmware/ || true
-		cp -v ../wireless-regdb/regulatory.db ./firmware/
-		cp -v ../wireless-regdb/regulatory.db.p7s ./firmware/
+		cp -v ../src/regulatory.db ./firmware/
+		cp -v ../src/regulatory.db.p7s ./firmware/
 		${git_bin} add -f ./firmware/regulatory.*
-		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
 
 		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
-		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
 
-		rm -rf ../wireless-regdb/ || true
+		rm -rf ../src/ || true
 
 		${git_bin} reset --hard HEAD^
 
@@ -375,7 +378,7 @@ local_patch () {
 #external_git
 wpanusb
 bcfserial
-#rt
+rt
 wireless_regdb
 ti_pm_firmware
 beagleboard_dtbs
@@ -641,10 +644,11 @@ reverts () {
 }
 
 drivers () {
+	dir 'branding/boris'
+
 	#https://github.com/raspberrypi/linux/branches
 	#exit 2
 	dir 'RPi'
-	dir 'boris'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
 	dir 'drivers/spi'
