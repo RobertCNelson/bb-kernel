@@ -20,6 +20,7 @@ toolchain="gcc_8_arm"
 #toolchain="gcc_11_arm"
 #toolchain="gcc_12_arm"
 #toolchain="gcc_13_arm"
+#toolchain="gcc_14_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
