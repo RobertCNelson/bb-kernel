@@ -227,6 +227,11 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --module CONFIG_VIDEO_TI_VIP
 ./scripts/config --module CONFIG_VIDEO_OV1063X
 
+#enable MIKROBUS
+./scripts/config --enable CONFIG_SPI_OMAP24XX
+./scripts/config --enable CONFIG_W1
+./scripts/config --enable CONFIG_MIKROBUS
+
 #20240305: regression on discord, some systemd can no longer load *.xz modules...
 ./scripts/config --disable CONFIG_MODULE_DECOMPRESS
 
@@ -234,14 +239,23 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_FUNCTION_TRACER
 ./scripts/config --enable CONFIG_DYNAMIC_FTRACE
 
+./scripts/config --enable CONFIG_MODULE_COMPRESS
 ./scripts/config --disable CONFIG_MODULE_COMPRESS_GZIP
 ./scripts/config --enable CONFIG_MODULE_COMPRESS_XZ
 ./scripts/config --disable CONFIG_MODULE_COMPRESS_ZSTD
+./scripts/config --enable CONFIG_MODULE_COMPRESS_ALL
 ./scripts/config --enable CONFIG_GPIO_AGGREGATOR
 ./scripts/config --module CONFIG_PWM_GPIO
 
 #10.00.05
+#REMOTEPROC
+./scripts/config --module CONFIG_RPMSG
+./scripts/config --module CONFIG_RPMSG_NS
 ./scripts/config --module CONFIG_RPMSG_PRU
+./scripts/config --enable CONFIG_RPMSG_VIRTIO
+
+#TI: 10.00.04
+./scripts/config --enable CONFIG_FB_SIMPLE
 
 #new in v6.12.x
 ./scripts/config --enable CONFIG_RPMB
@@ -290,6 +304,16 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_DMABUF_HEAPS_SYSTEM
 ./scripts/config --enable CONFIG_DMABUF_HEAPS_CMA
 ./scripts/config --enable CONFIG_DMABUF_HEAPS_CARVEOUT
+
+#TI: 11.00.02
+./scripts/config --module CONFIG_REGULATOR_RASPBERRYPI_TOUCHSCREEN_ATTINY
+./scripts/config --module CONFIG_DRM_TOSHIBA_TC358762
+#./scripts/config --module CONFIG_DRM_CDNS_DSI
+#./scripts/config --module CONFIG_DRM_CDNS_DSI_J721E
+#./scripts/config --module CONFIG_HWSPINLOCK_OMAP
+#./scripts/config --module CONFIG_PWM_OMAP_DMTIMER
+#./scripts/config --module CONFIG_PHY_CADENCE_DPHY
+./scripts/config --module CONFIG_TI_ECAP_CAPTURE
 
 #debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
 #  LZ4     arch/arm/boot/compressed/piggy_data
