@@ -286,6 +286,15 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_ZRAM_DEF_COMP_LZ4
 ./scripts/config --set-str CONFIG_ZRAM_DEF_COMP "lz4"
 
+#debian 6.12.16-1
+./scripts/config --enable CONFIG_RCU_LAZY
+./scripts/config --module CONFIG_NSM
+./scripts/config --module CONFIG_NITRO_ENCLAVES
+./scripts/config --module CONFIG_USB_MASS_STORAGE
+
+#debian 6.13.5-1
+./scripts/config --enable CONFIG_UDMABUF
+
 #new in v6.14
 ./scripts/config --module CONFIG_NTSYNC
 ./scripts/config --module CONFIG_PPS_GENERATOR
