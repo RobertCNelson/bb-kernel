@@ -227,7 +227,7 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --module CONFIG_VIDEO_TI_VIP
 ./scripts/config --module CONFIG_VIDEO_OV1063X
 
-#enable MIKROBUS
+#enable SPI/W1
 ./scripts/config --enable CONFIG_SPI_OMAP24XX
 ./scripts/config --enable CONFIG_W1
 ./scripts/config --enable CONFIG_MIKROBUS
@@ -286,6 +286,19 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_ZRAM_DEF_COMP_LZ4
 ./scripts/config --set-str CONFIG_ZRAM_DEF_COMP "lz4"
 
+#debian 6.12.16-1
+./scripts/config --enable CONFIG_RCU_LAZY
+./scripts/config --module CONFIG_NSM
+./scripts/config --module CONFIG_NITRO_ENCLAVES
+./scripts/config --module CONFIG_USB_MASS_STORAGE
+
+#debian 6.13.5-1
+./scripts/config --enable CONFIG_UDMABUF
+
+#debian 6.13.7-1
+./scripts/config --module CONFIG_VIRTIO_IOMMU
+./scripts/config --enable CONFIG_CRYPTO_ECDSA
+
 #new in v6.14
 ./scripts/config --module CONFIG_NTSYNC
 ./scripts/config --module CONFIG_PPS_GENERATOR
@@ -314,6 +327,14 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 #./scripts/config --module CONFIG_PWM_OMAP_DMTIMER
 #./scripts/config --module CONFIG_PHY_CADENCE_DPHY
 ./scripts/config --module CONFIG_TI_ECAP_CAPTURE
+
+#TI: 11.00.04
+./scripts/config --enable CONFIG_MTD_SPI_NAND
+./scripts/config --enable CONFIG_MTD_UBI
+./scripts/config --enable CONFIG_TI_K3_UDMA_AM62L
+./scripts/config --enable CONFIG_UBIFS_FS
+./scripts/config --enable CONFIG_CRYPTO_ZSTD
+./scripts/config --enable CONFIG_ZSTD_COMPRESS
 
 #debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
 #  LZ4     arch/arm/boot/compressed/piggy_data
