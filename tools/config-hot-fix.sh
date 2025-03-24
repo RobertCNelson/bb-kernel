@@ -336,6 +336,18 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_CRYPTO_ZSTD
 ./scripts/config --enable CONFIG_ZSTD_COMPRESS
 
+#TI: 11.00.06
+./scripts/config --module CONFIG_CRYPTO_CRC64_ISO3309
+./scripts/config --enable CONFIG_CRYPTO_USER_API_HASH
+./scripts/config --enable CONFIG_CRYPTO_DEV_TI_MCRC64
+./scripts/config --enable CONFIG_CRYPTO_DEV_TI_DTHEV2
+./scripts/config --module CONFIG_TOUCHSCREEN_ILI210X
+
+#TI: 11.00.07
+./scripts/config --module CONFIG_SERIAL_8250_PRUSS
+./scripts/config --module CONFIG_VIDEO_IMX728
+./scripts/config --module CONFIG_VIDEO_OV2312
+
 #debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
 #  LZ4     arch/arm/boot/compressed/piggy_data
 #Error : stdout won't be used ! Do you want multiple input files (-m) ?
@@ -354,5 +366,6 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 #BeagleBoard.org
 ./scripts/config --enable CONFIG_MSPM0_I2C
 ./scripts/config --module CONFIG_SEG_LED_GPIO
+./scripts/config --module CONFIG_SND_SOC_TLV320AIC3X_I2C
 
 cd ${DIR}/
