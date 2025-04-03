@@ -1,10 +1,10 @@
 #!/bin/bash
 
 #
-#https://packages.debian.org/source/sid/linux
+#https://packages.debian.org/source/trixie/linux
 #
-abi="6.12.9"
-kernel="6.12.9-1"
+abi="6.12.20"
+kernel="6.12.20-1"
 #
 #abi="6.12-rc6"
 #kernel="6.12~rc6-1~exp1"
