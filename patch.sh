@@ -444,7 +444,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="rpi-6.14.y"
+	backport_tag="rpi-6.15.y"
 
 	subsystem="edt-ft5x06"
 	#regenerate="enable"
