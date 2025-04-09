@@ -223,9 +223,22 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 #removed in 6.7-rc1
 ./scripts/config --disable CONFIG_DEV_APPLETALK
 
-#09.02.00.005
+#TI delta 09.01.00.004:
+./scripts/config --enable CONFIG_APERTURE_HELPERS
+./scripts/config --enable CONFIG_FB_CFB_FILLRECT
+./scripts/config --enable CONFIG_FB_CFB_COPYAREA
+./scripts/config --enable CONFIG_FB_CFB_IMAGEBLIT
+./scripts/config --enable CONFIG_FB_SIMPLE
+./scripts/config --module CONFIG_TI_EQEP
+
 ./scripts/config --module CONFIG_VIDEO_TI_VIP
 ./scripts/config --module CONFIG_VIDEO_OV1063X
+./scripts/config --module CONFIG_VIDEO_OV2312
+./scripts/config --module CONFIG_VIDEO_OV5640
+./scripts/config --module CONFIG_VIDEO_OV5645
+./scripts/config --module CONFIG_VIDEO_IMX219
+./scripts/config --module CONFIG_VIDEO_IMX390
+./scripts/config --module CONFIG_VIDEO_OX05B1S
 
 #enable SPI/W1
 ./scripts/config --enable CONFIG_SPI_OMAP24XX
@@ -254,8 +267,8 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --module CONFIG_RPMSG_PRU
 ./scripts/config --enable CONFIG_RPMSG_VIRTIO
 
-#TI: 10.00.04
-./scripts/config --enable CONFIG_FB_SIMPLE
+#TI: 10.01.01
+./scripts/config --module CONFIG_OMAP2PLUS_MBOX
 
 #new in v6.12.x
 ./scripts/config --enable CONFIG_RPMB
@@ -291,6 +304,10 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --module CONFIG_NSM
 ./scripts/config --module CONFIG_NITRO_ENCLAVES
 ./scripts/config --module CONFIG_USB_MASS_STORAGE
+
+#debian 6.12.20-1
+./scripts/config --module CONFIG_VIDEO_OV5675
+./scripts/config --enable CONFIG_RPCSEC_GSS_KRB5_ENCTYPES_AES_SHA2
 
 #debian 6.13.5-1
 ./scripts/config --enable CONFIG_UDMABUF
@@ -348,6 +365,26 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --module CONFIG_VIDEO_IMX728
 ./scripts/config --module CONFIG_VIDEO_OV2312
 
+#TI: 11.00.08
+./scripts/config --module CONFIG_VIDEO_OX05B1S
+
+#new in v6.15
+./scripts/config --module CONFIG_FWCTL
+./scripts/config --module CONFIG_IWLMLD
+./scripts/config --module CONFIG_RTW88_8814AU
+./scripts/config --module CONFIG_SPI_OFFLOAD_TRIGGER_PWM
+./scripts/config --module CONFIG_SENSORS_HTU31
+./scripts/config --module CONFIG_SENSORS_INA233
+./scripts/config --module CONFIG_HID_UNIVERSAL_PIDFF
+./scripts/config --module CONFIG_AD4030
+./scripts/config --module CONFIG_AD4851
+./scripts/config --module CONFIG_AD7191
+./scripts/config --module CONFIG_TI_ADS7138
+./scripts/config --module CONFIG_ADIS16550
+./scripts/config --module CONFIG_AL3000A
+./scripts/config --module CONFIG_APDS9160
+./scripts/config --module CONFIG_SI7210
+
 #debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
 #  LZ4     arch/arm/boot/compressed/piggy_data
 #Error : stdout won't be used ! Do you want multiple input files (-m) ?
@@ -367,5 +404,7 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_MSPM0_I2C
 ./scripts/config --module CONFIG_SEG_LED_GPIO
 ./scripts/config --module CONFIG_SND_SOC_TLV320AIC3X_I2C
+./scripts/config --module CONFIG_WIZNET_W5100
+./scripts/config --module CONFIG_WIZNET_W5100_SPI
 
 cd ${DIR}/

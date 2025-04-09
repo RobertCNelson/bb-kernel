@@ -1,9 +1,9 @@
-From 4e462dc6d5006b5c03bb8f802c6b45c6f7fb2ff0 Mon Sep 17 00:00:00 2001
+From b260c696b9535c83c24cf45efe79fbb7f7f3dc51 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 4 Feb 2025 12:11:05 -0600
+Date: Wed, 9 Apr 2025 12:33:03 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.14-rc1-rt1.patch.xz
+patch-6.14-rt3.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -11,21 +11,24 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm/kernel/module-plts.c                 |   4 +-
  arch/arm/kernel/traps.c                       |  11 +-
  arch/arm/mm/fault.c                           |   6 +
+ arch/arm64/Kconfig                            |   1 +
+ arch/arm64/include/asm/thread_info.h          |  16 +-
+ arch/arm64/kernel/entry-common.c              |   2 +-
  arch/arm64/kernel/ftrace.c                    |   7 +-
- arch/arm64/kernel/traps.c                     |  12 +-
+ arch/arm64/kernel/traps.c                     |  10 +-
  arch/loongarch/kernel/ftrace_dyn.c            |   9 +-
  arch/loongarch/kernel/unwind_orc.c            |   4 +-
  arch/powerpc/Kconfig                          |   2 +
  arch/powerpc/include/asm/stackprotector.h     |   7 +-
  arch/powerpc/kernel/trace/ftrace.c            |   6 +-
  arch/powerpc/kernel/trace/ftrace_64_pg.c      |   6 +-
- arch/powerpc/kernel/traps.c                   |   4 +-
+ arch/powerpc/kernel/traps.c                   |   3 +-
  arch/powerpc/kvm/Kconfig                      |   1 +
  arch/powerpc/platforms/pseries/Kconfig        |   1 +
  arch/powerpc/platforms/pseries/iommu.c        |  31 +--
- arch/s390/kernel/dumpstack.c                  |   9 +-
+ arch/s390/kernel/dumpstack.c                  |   7 +-
  arch/x86/kernel/callthunks.c                  |   3 +-
- arch/x86/kernel/dumpstack.c                   |   7 +-
+ arch/x86/kernel/dumpstack.c                   |   9 +-
  arch/x86/kernel/unwind_orc.c                  |   4 +-
  arch/xtensa/kernel/traps.c                    |   6 +-
  drivers/gpu/drm/i915/Kconfig                  |   1 -
@@ -56,14 +59,16 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/module/tracking.c                      |   2 -
  kernel/module/tree_lookup.c                   |   8 +-
  kernel/module/version.c                       |  14 +-
- kernel/sched/core.c                           |  24 +++
+ kernel/sched/core.c                           |  47 +++++
+ kernel/sched/debug.c                          |  10 +-
+ kernel/sched/sched.h                          |   1 +
  kernel/static_call_inline.c                   |  13 +-
  kernel/trace/bpf_trace.c                      |  24 +--
  kernel/trace/trace.c                          |   7 +-
  kernel/trace/trace_kprobe.c                   |   9 +-
  lib/bug.c                                     |  22 +--
  lib/dump_stack.c                              |   4 +-
- 56 files changed, 495 insertions(+), 367 deletions(-)
+ 61 files changed, 534 insertions(+), 378 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index 835b5f100e92..97e64857c130 100644
@@ -121,7 +126,7 @@ index da2ee8d6ef1a..354ce16d83cb 100644
  	return ret;
  }
 diff --git a/arch/arm/kernel/traps.c b/arch/arm/kernel/traps.c
-index 6ea645939573..1254992184d2 100644
+index 6ea645939573..afbd2ebe5c39 100644
 --- a/arch/arm/kernel/traps.c
 +++ b/arch/arm/kernel/traps.c
 @@ -258,13 +258,6 @@ void show_stack(struct task_struct *tsk, unsigned long *sp, const char *loglvl)
@@ -144,8 +149,8 @@ index 6ea645939573..1254992184d2 100644
  
 -	pr_emerg("Internal error: %s: %x [#%d]" S_PREEMPT S_SMP S_ISA "\n",
 -	         str, err, ++die_counter);
-+	pr_emerg("Internal error: %s: %x [#%d] %s" S_SMP S_ISA "\n",
-+		 str, err, ++die_counter, preempt_model_str());
++	pr_emerg("Internal error: %s: %x [#%d]" S_SMP S_ISA "\n",
++		 str, err, ++die_counter);
  
  	/* trap and error numbers are mostly meaningless on ARM */
  	ret = notify_die(DIE_OOPS, str, regs, err, tsk->thread.trap_no, SIGSEGV);
@@ -173,6 +178,74 @@ index ab01b51de559..cd030e2734e5 100644
  	do_bad_area(addr, fsr, regs);
  	return 0;
  }
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index 940343beb3d4..ace21a07a00c 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -41,6 +41,7 @@ config ARM64
+ 	select ARCH_HAS_NMI_SAFE_THIS_CPU_OPS
+ 	select ARCH_HAS_NON_OVERLAPPING_ADDRESS_SPACE
+ 	select ARCH_HAS_NONLEAF_PMD_YOUNG if ARM64_HAFT
++	select ARCH_HAS_PREEMPT_LAZY
+ 	select ARCH_HAS_PTE_DEVMAP
+ 	select ARCH_HAS_PTE_SPECIAL
+ 	select ARCH_HAS_HW_PTE_YOUNG
+diff --git a/arch/arm64/include/asm/thread_info.h b/arch/arm64/include/asm/thread_info.h
+index 1114c1c3300a..4443ef278975 100644
+--- a/arch/arm64/include/asm/thread_info.h
++++ b/arch/arm64/include/asm/thread_info.h
+@@ -59,11 +59,12 @@ void arch_setup_new_exec(void);
+ 
+ #define TIF_SIGPENDING		0	/* signal pending */
+ #define TIF_NEED_RESCHED	1	/* rescheduling necessary */
+-#define TIF_NOTIFY_RESUME	2	/* callback before returning to user */
+-#define TIF_FOREIGN_FPSTATE	3	/* CPU's FP state is not current's */
+-#define TIF_UPROBE		4	/* uprobe breakpoint or singlestep */
+-#define TIF_MTE_ASYNC_FAULT	5	/* MTE Asynchronous Tag Check Fault */
+-#define TIF_NOTIFY_SIGNAL	6	/* signal notifications exist */
++#define TIF_NEED_RESCHED_LAZY	2	/* Lazy rescheduling needed */
++#define TIF_NOTIFY_RESUME	3	/* callback before returning to user */
++#define TIF_FOREIGN_FPSTATE	4	/* CPU's FP state is not current's */
++#define TIF_UPROBE		5	/* uprobe breakpoint or singlestep */
++#define TIF_MTE_ASYNC_FAULT	6	/* MTE Asynchronous Tag Check Fault */
++#define TIF_NOTIFY_SIGNAL	7	/* signal notifications exist */
+ #define TIF_SYSCALL_TRACE	8	/* syscall trace active */
+ #define TIF_SYSCALL_AUDIT	9	/* syscall auditing */
+ #define TIF_SYSCALL_TRACEPOINT	10	/* syscall tracepoint for ftrace */
+@@ -85,6 +86,7 @@ void arch_setup_new_exec(void);
+ 
+ #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
+ #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)
++#define _TIF_NEED_RESCHED_LAZY	(1 << TIF_NEED_RESCHED_LAZY)
+ #define _TIF_NOTIFY_RESUME	(1 << TIF_NOTIFY_RESUME)
+ #define _TIF_FOREIGN_FPSTATE	(1 << TIF_FOREIGN_FPSTATE)
+ #define _TIF_SYSCALL_TRACE	(1 << TIF_SYSCALL_TRACE)
+@@ -100,10 +102,10 @@ void arch_setup_new_exec(void);
+ #define _TIF_NOTIFY_SIGNAL	(1 << TIF_NOTIFY_SIGNAL)
+ #define _TIF_TSC_SIGSEGV	(1 << TIF_TSC_SIGSEGV)
+ 
+-#define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_SIGPENDING | \
++#define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY | \
+ 				 _TIF_NOTIFY_RESUME | _TIF_FOREIGN_FPSTATE | \
+ 				 _TIF_UPROBE | _TIF_MTE_ASYNC_FAULT | \
+-				 _TIF_NOTIFY_SIGNAL)
++				 _TIF_NOTIFY_SIGNAL | _TIF_SIGPENDING)
+ 
+ #define _TIF_SYSCALL_WORK	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | \
+ 				 _TIF_SYSCALL_TRACEPOINT | _TIF_SECCOMP | \
+diff --git a/arch/arm64/kernel/entry-common.c b/arch/arm64/kernel/entry-common.c
+index b260ddc4d3e9..7993fab0cab4 100644
+--- a/arch/arm64/kernel/entry-common.c
++++ b/arch/arm64/kernel/entry-common.c
+@@ -132,7 +132,7 @@ static void do_notify_resume(struct pt_regs *regs, unsigned long thread_flags)
+ 	do {
+ 		local_irq_enable();
+ 
+-		if (thread_flags & _TIF_NEED_RESCHED)
++		if (thread_flags & (_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY))
+ 			schedule();
+ 
+ 		if (thread_flags & _TIF_UPROBE)
 diff --git a/arch/arm64/kernel/ftrace.c b/arch/arm64/kernel/ftrace.c
 index d7c0d023dfe5..5a890714ee2e 100644
 --- a/arch/arm64/kernel/ftrace.c
@@ -196,7 +269,7 @@ index d7c0d023dfe5..5a890714ee2e 100644
  
  	if (WARN_ON(!mod))
 diff --git a/arch/arm64/kernel/traps.c b/arch/arm64/kernel/traps.c
-index 4e26bd356a48..0b6f92fcdb30 100644
+index 4e26bd356a48..529cff825531 100644
 --- a/arch/arm64/kernel/traps.c
 +++ b/arch/arm64/kernel/traps.c
 @@ -172,14 +172,6 @@ static void dump_kernel_instr(const char *lvl, struct pt_regs *regs)
@@ -214,17 +287,15 @@ index 4e26bd356a48..0b6f92fcdb30 100644
  #define S_SMP " SMP"
  
  static int __die(const char *str, long err, struct pt_regs *regs)
-@@ -187,8 +179,8 @@ static int __die(const char *str, long err, struct pt_regs *regs)
+@@ -187,7 +179,7 @@ static int __die(const char *str, long err, struct pt_regs *regs)
  	static int die_counter;
  	int ret;
  
 -	pr_emerg("Internal error: %s: %016lx [#%d]" S_PREEMPT S_SMP "\n",
--		 str, err, ++die_counter);
-+	pr_emerg("Internal error: %s: %016lx [#%d] %s" S_SMP "\n",
-+		 str, err, ++die_counter, preempt_model_str());
++	pr_emerg("Internal error: %s: %016lx [#%d] " S_SMP "\n",
+ 		 str, err, ++die_counter);
  
  	/* trap and error numbers are mostly meaningless on ARM */
- 	ret = notify_die(DIE_OOPS, str, regs, err, 0, SIGSEGV);
 diff --git a/arch/loongarch/kernel/ftrace_dyn.c b/arch/loongarch/kernel/ftrace_dyn.c
 index 25c9a4cfd5fa..d5d81d74034c 100644
 --- a/arch/loongarch/kernel/ftrace_dyn.c
@@ -350,19 +421,18 @@ index ac35015f04c6..5c6e545d1708 100644
  		pr_err("No module loaded at addr=%lx\n", rec->ip);
  
 diff --git a/arch/powerpc/kernel/traps.c b/arch/powerpc/kernel/traps.c
-index edf5cabe5dfd..d6d77d92b335 100644
+index edf5cabe5dfd..cb8e9357383e 100644
 --- a/arch/powerpc/kernel/traps.c
 +++ b/arch/powerpc/kernel/traps.c
-@@ -263,10 +263,10 @@ static int __die(const char *str, struct pt_regs *regs, long err)
+@@ -263,10 +263,9 @@ static int __die(const char *str, struct pt_regs *regs, long err)
  {
  	printk("Oops: %s, sig: %ld [#%d]\n", str, err, ++die_counter);
  
 -	printk("%s PAGE_SIZE=%luK%s%s%s%s%s%s %s\n",
-+	printk("%s PAGE_SIZE=%luK%s %s %s%s%s%s %s\n",
++	printk("%s PAGE_SIZE=%luK%s %s%s%s%s %s\n",
  	       IS_ENABLED(CONFIG_CPU_LITTLE_ENDIAN) ? "LE" : "BE",
  	       PAGE_SIZE / 1024, get_mmu_str(),
 -	       IS_ENABLED(CONFIG_PREEMPT) ? " PREEMPT" : "",
-+	       preempt_model_str(),
  	       IS_ENABLED(CONFIG_SMP) ? " SMP" : "",
  	       IS_ENABLED(CONFIG_SMP) ? (" NR_CPUS=" __stringify(NR_CPUS)) : "",
  	       debug_pagealloc_enabled() ? " DEBUG_PAGEALLOC" : "",
@@ -486,7 +556,7 @@ index ae6f7a235d8b..ae4d8d0194aa 100644
  }
  
 diff --git a/arch/s390/kernel/dumpstack.c b/arch/s390/kernel/dumpstack.c
-index 1ecd0580561f..7930fbab69db 100644
+index 1ecd0580561f..911b95cd57e5 100644
 --- a/arch/s390/kernel/dumpstack.c
 +++ b/arch/s390/kernel/dumpstack.c
 @@ -198,13 +198,8 @@ void __noreturn die(struct pt_regs *regs, const char *str)
@@ -494,14 +564,13 @@ index 1ecd0580561f..7930fbab69db 100644
  	spin_lock_irq(&die_lock);
  	bust_spinlocks(1);
 -	printk("%s: %04x ilc:%d [#%d] ", str, regs->int_code & 0xffff,
--	       regs->int_code >> 17, ++die_counter);
++	printk("%s: %04x ilc:%d [#%d]", str, regs->int_code & 0xffff,
+ 	       regs->int_code >> 17, ++die_counter);
 -#ifdef CONFIG_PREEMPT
 -	pr_cont("PREEMPT ");
 -#elif defined(CONFIG_PREEMPT_RT)
 -	pr_cont("PREEMPT_RT ");
 -#endif
-+	printk("%s: %04x ilc:%d [#%d] %s", str, regs->int_code & 0xffff,
-+	       regs->int_code >> 17, ++die_counter, preempt_model_str());
  	pr_cont("SMP ");
  	if (debug_pagealloc_enabled())
  		pr_cont("DEBUG_PAGEALLOC");
@@ -523,7 +592,7 @@ index 8418a892d195..251b65f2ab21 100644
  	return ret;
  }
 diff --git a/arch/x86/kernel/dumpstack.c b/arch/x86/kernel/dumpstack.c
-index a7d562697e50..064b23a93c6f 100644
+index a7d562697e50..91639d1e4ec2 100644
 --- a/arch/x86/kernel/dumpstack.c
 +++ b/arch/x86/kernel/dumpstack.c
 @@ -395,18 +395,13 @@ NOKPROBE_SYMBOL(oops_end);
@@ -540,9 +609,10 @@ index a7d562697e50..064b23a93c6f 100644
 -		pr = IS_ENABLED(CONFIG_PREEMPT_RT) ? " PREEMPT_RT" : " PREEMPT";
 -
  	printk(KERN_DEFAULT
- 	       "Oops: %s: %04lx [#%d]%s%s%s%s%s\n", str, err & 0xffff,
+-	       "Oops: %s: %04lx [#%d]%s%s%s%s%s\n", str, err & 0xffff,
 -	       ++die_counter, pr,
-+	       ++die_counter, preempt_model_str(),
++	       "Oops: %s: %04lx [#%d]%s%s%s%s\n", str, err & 0xffff,
++	       ++die_counter,
  	       IS_ENABLED(CONFIG_SMP)     ? " SMP"             : "",
  	       debug_pagealloc_enabled()  ? " DEBUG_PAGEALLOC" : "",
  	       IS_ENABLED(CONFIG_KASAN)   ? " KASAN"           : "",
@@ -575,7 +645,7 @@ index d4705a348a80..977ee75e047c 100644
  	return false;
  }
 diff --git a/arch/xtensa/kernel/traps.c b/arch/xtensa/kernel/traps.c
-index 38092d21acf8..0edba7d8df8c 100644
+index 38092d21acf8..44c07c4e0833 100644
 --- a/arch/xtensa/kernel/traps.c
 +++ b/arch/xtensa/kernel/traps.c
 @@ -629,15 +629,11 @@ DEFINE_SPINLOCK(die_lock);
@@ -591,7 +661,7 @@ index 38092d21acf8..0edba7d8df8c 100644
  	spin_lock_irq(&die_lock);
  
 -	pr_info("%s: sig: %ld [#%d]%s\n", str, err, ++die_counter, pr);
-+	pr_info("%s: sig: %ld [#%d]%s\n", str, err, ++die_counter, preempt_model_str());
++	pr_info("%s: sig: %ld [#%d]\n", str, err, ++die_counter);
  	show_regs(regs);
  	if (!user_mode(regs))
  		show_stack(NULL, (unsigned long *)regs->areg[1], KERN_INFO);
@@ -998,7 +1068,7 @@ index 6f676bb37ac3..3ab372b28cf3 100644
  	.data		= &serial8250_reg,
  };
 diff --git a/drivers/tty/serial/8250/8250_port.c b/drivers/tty/serial/8250/8250_port.c
-index d7976a21cca9..76a8d74f16e8 100644
+index 442967a6cd52..64430371bdc7 100644
 --- a/drivers/tty/serial/8250/8250_port.c
 +++ b/drivers/tty/serial/8250/8250_port.c
 @@ -711,7 +711,12 @@ static void serial8250_set_sleep(struct uart_8250_port *p, int sleep)
@@ -1057,7 +1127,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  			p->ier |= UART_IER_RLSI | UART_IER_RDI;
  			serial_port_out(&p->port, UART_IER, p->ier);
  		}
-@@ -3303,7 +3323,11 @@ EXPORT_SYMBOL_GPL(serial8250_set_defaults);
+@@ -3312,7 +3332,11 @@ EXPORT_SYMBOL_GPL(serial8250_set_defaults);
  
  static void serial8250_console_putchar(struct uart_port *port, unsigned char ch)
  {
@@ -1069,7 +1139,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  }
  
  static void serial8250_console_wait_putchar(struct uart_port *port, unsigned char ch)
-@@ -3340,11 +3364,22 @@ static void serial8250_console_restore(struct uart_8250_port *up)
+@@ -3349,11 +3373,22 @@ static void serial8250_console_restore(struct uart_8250_port *up)
  	serial8250_out_MCR(up, up->mcr | UART_MCR_DTR | UART_MCR_RTS);
  }
  
@@ -1093,7 +1163,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  		if (wait_for_lsr(up, UART_LSR_THRE))
  			return;
  	}
-@@ -3357,20 +3392,29 @@ static void fifo_wait_for_lsr(struct uart_8250_port *up, unsigned int count)
+@@ -3366,20 +3401,29 @@ static void fifo_wait_for_lsr(struct uart_8250_port *up, unsigned int count)
   * to get empty.
   */
  static void serial8250_console_fifo_write(struct uart_8250_port *up,
@@ -1126,7 +1196,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  			if (*s == '\n' && !cr_sent) {
  				serial8250_console_putchar(port, '\r');
  				cr_sent = true;
-@@ -3378,6 +3422,8 @@ static void serial8250_console_fifo_write(struct uart_8250_port *up,
+@@ -3387,6 +3431,8 @@ static void serial8250_console_fifo_write(struct uart_8250_port *up,
  				serial8250_console_putchar(port, *s++);
  				cr_sent = false;
  			}
@@ -1135,7 +1205,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  		}
  		tx_count = i;
  	}
-@@ -3386,39 +3432,57 @@ static void serial8250_console_fifo_write(struct uart_8250_port *up,
+@@ -3395,39 +3441,57 @@ static void serial8250_console_fifo_write(struct uart_8250_port *up,
  	 * Allow timeout for each byte written since the caller will only wait
  	 * for UART_LSR_BOTH_EMPTY using the timeout of a single character
  	 */
@@ -1213,7 +1283,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  
  	/* check scratch reg to see if port powered off during system sleep */
  	if (up->canary && (up->canary != serial_port_in(port, UART_SCR))) {
-@@ -3432,6 +3496,18 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3441,6 +3505,18 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  		mdelay(port->rs485.delay_rts_before_send);
  	}
  
@@ -1232,7 +1302,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  	use_fifo = (up->capabilities & UART_CAP_FIFO) &&
  		/*
  		 * BCM283x requires to check the fifo
-@@ -3452,10 +3528,23 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3461,10 +3537,23 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  		 */
  		!(up->port.flags & UPF_CONS_FLOW);
  
@@ -1258,7 +1328,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  
  	/*
  	 *	Finally, wait for transmitter to become empty
-@@ -3478,11 +3567,18 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3487,11 +3576,18 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  	 *	call it if we have saved something in the saved flags
  	 *	while processing with interrupts off.
  	 */
@@ -1281,7 +1351,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  }
  
  static unsigned int probe_baud(struct uart_port *port)
-@@ -3500,8 +3596,24 @@ static unsigned int probe_baud(struct uart_port *port)
+@@ -3509,8 +3605,24 @@ static unsigned int probe_baud(struct uart_port *port)
  	return (port->uartclk / 16) / quot;
  }
  
@@ -1306,7 +1376,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  	int baud = 9600;
  	int bits = 8;
  	int parity = 'n';
-@@ -3511,6 +3623,9 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
+@@ -3520,6 +3632,9 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
  	if (!port->iobase && !port->membase)
  		return -ENODEV;
  
@@ -1335,10 +1405,10 @@ index 1c6a6c1704d8..d5dd54c53ace 100644
  	return ptr;
  }
 diff --git a/include/linux/module.h b/include/linux/module.h
-index 23792d5d7b74..12f8a7d4fc1c 100644
+index 30e5b19bafa9..0516f5ea9153 100644
 --- a/include/linux/module.h
 +++ b/include/linux/module.h
-@@ -663,7 +663,7 @@ static inline bool within_module(unsigned long addr, const struct module *mod)
+@@ -666,7 +666,7 @@ static inline bool within_module(unsigned long addr, const struct module *mod)
  	return within_module_init(addr, mod) || within_module_core(addr, mod);
  }
  
@@ -2088,40 +2158,101 @@ index 3718a8868321..2beefeba82d9 100644
  }
  
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 165c90ba64ea..919db12f35c2 100644
+index 042351c7afce..f6557863e694 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
-@@ -7650,6 +7650,30 @@ static inline void preempt_dynamic_init(void) { }
+@@ -7647,10 +7647,57 @@ PREEMPT_MODEL_ACCESSOR(lazy);
+ 
+ #else /* !CONFIG_PREEMPT_DYNAMIC: */
+ 
++#define preempt_dynamic_mode -1
++
+ static inline void preempt_dynamic_init(void) { }
  
  #endif /* CONFIG_PREEMPT_DYNAMIC */
  
++const char *preempt_modes[] = {
++	"none", "voluntary", "full", "lazy", NULL,
++};
++
 +const char *preempt_model_str(void)
 +{
-+	if (IS_ENABLED(CONFIG_ARCH_HAS_PREEMPT_LAZY) && preempt_model_lazy()) {
-+		if (preempt_model_rt())
-+			return "PREEMPT_RT+LAZY";
-+		if (preempt_model_full())
-+			return "PREEMPT+LAZY";
-+		if (preempt_model_voluntary())
-+			return "VOLUNTARY+LAZY";
-+		if (preempt_model_none())
-+			return "NONE+LAZY";
-+	} else {
-+		if (preempt_model_rt())
-+			return "PREEMPT_RT";
-+		if (preempt_model_full())
-+			return "PREEMPT";
-+		if (preempt_model_voluntary())
-+			return "VOLUNTARY";
-+		if (preempt_model_none())
-+			return "NONE";
++	bool brace = IS_ENABLED(CONFIG_PREEMPT_RT) &&
++		(IS_ENABLED(CONFIG_PREEMPT_DYNAMIC) ||
++		 IS_ENABLED(CONFIG_PREEMPT_LAZY));
++	static char buf[128];
++
++	if (IS_ENABLED(CONFIG_PREEMPT_BUILD)) {
++		struct seq_buf s;
++
++		seq_buf_init(&s, buf, sizeof(buf));
++		seq_buf_puts(&s, "PREEMPT");
++
++		if (IS_ENABLED(CONFIG_PREEMPT_RT))
++			seq_buf_printf(&s, "%sRT%s",
++				       brace ? "_{" : "_",
++				       brace ? "," : "");
++
++		if (IS_ENABLED(CONFIG_PREEMPT_DYNAMIC)) {
++			seq_buf_printf(&s, "(%s)%s",
++				       preempt_dynamic_mode > 0 ?
++				       preempt_modes[preempt_dynamic_mode] : "undef",
++				       brace ? "}" : "");
++			return seq_buf_str(&s);
++		}
++
++		if (IS_ENABLED(CONFIG_PREEMPT_LAZY)) {
++			seq_buf_printf(&s, "LAZY%s",
++				       brace ? "}" : "");
++			return seq_buf_str(&s);
++		}
++
++		return seq_buf_str(&s);
 +	}
-+	return "UNKNOWN-PREEMPT";
++
++	if (IS_ENABLED(CONFIG_PREEMPT_VOLUNTARY_BUILD))
++		return "VOLUNTARY";
++
++	return "NONE";
 +}
 +
  int io_schedule_prepare(void)
  {
  	int old_iowait = current->in_iowait;
+diff --git a/kernel/sched/debug.c b/kernel/sched/debug.c
+index ef047add7f9e..39be73969d28 100644
+--- a/kernel/sched/debug.c
++++ b/kernel/sched/debug.c
+@@ -244,11 +244,13 @@ static ssize_t sched_dynamic_write(struct file *filp, const char __user *ubuf,
+ 
+ static int sched_dynamic_show(struct seq_file *m, void *v)
+ {
+-	static const char * preempt_modes[] = {
+-		"none", "voluntary", "full", "lazy",
+-	};
+-	int j = ARRAY_SIZE(preempt_modes) - !IS_ENABLED(CONFIG_ARCH_HAS_PREEMPT_LAZY);
+ 	int i = IS_ENABLED(CONFIG_PREEMPT_RT) * 2;
++	int j;
++
++	/* Count entries in NULL terminated preempt_modes */
++	for (j = 0; preempt_modes[j]; j++)
++		;
++	j -= !IS_ENABLED(CONFIG_ARCH_HAS_PREEMPT_LAZY);
+ 
+ 	for (; i < j; i++) {
+ 		if (preempt_dynamic_mode == i)
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 023b844159c9..1287c5789b7e 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -3619,6 +3619,7 @@ extern int preempt_dynamic_mode;
+ extern int sched_dynamic_mode(const char *str);
+ extern void sched_dynamic_update(int mode);
+ #endif
++extern const char *preempt_modes[];
+ 
+ #ifdef CONFIG_SCHED_MM_CID
+ 
 diff --git a/kernel/static_call_inline.c b/kernel/static_call_inline.c
 index bb7d066a7c39..c2c59e6ef35d 100644
 --- a/kernel/static_call_inline.c
@@ -2194,7 +2325,7 @@ index adc947587eb8..e6a17a60d878 100644
  			break;
  		err = add_module(&arr, mod);
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index 1496a5ac33ae..77271faab20e 100644
+index 0e6d517e74e0..fd3cb2b2ab82 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
 @@ -4100,12 +4100,7 @@ print_trace_header(struct seq_file *m, struct trace_iterator *iter)
@@ -2291,7 +2422,7 @@ index e0ff21989990..b1f07459c2ee 100644
  
  	clear_once_table(__start___bug_table, __stop___bug_table);
 diff --git a/lib/dump_stack.c b/lib/dump_stack.c
-index 388da1aea14a..c3e59f899227 100644
+index 388da1aea14a..b3a85fe8b673 100644
 --- a/lib/dump_stack.c
 +++ b/lib/dump_stack.c
 @@ -54,7 +54,7 @@ void __init dump_stack_set_arch_desc(const char *fmt, ...)
@@ -2299,7 +2430,7 @@ index 388da1aea14a..c3e59f899227 100644
  void dump_stack_print_info(const char *log_lvl)
  {
 -	printk("%sCPU: %d UID: %u PID: %d Comm: %.20s %s%s %s %.*s" BUILD_ID_FMT "\n",
-+	printk("%sCPU: %d UID: %u PID: %d Comm: %.20s %s%s %s %.*s %s" BUILD_ID_FMT "\n",
++	printk("%sCPU: %d UID: %u PID: %d Comm: %.20s %s%s %s %.*s %s " BUILD_ID_FMT "\n",
  	       log_lvl, raw_smp_processor_id(),
  	       __kuid_val(current_real_cred()->euid),
  	       current->pid, current->comm,
