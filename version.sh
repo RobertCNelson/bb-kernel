@@ -12,8 +12,6 @@ branch_postfix=""
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf
-#toolchain="gcc_6_arm"
-#toolchain="gcc_7_arm"
 #toolchain="gcc_8_arm"
 #toolchain="gcc_9_arm"
 #toolchain="gcc_10_arm"
@@ -24,8 +22,6 @@ toolchain="gcc_14_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
-#toolchain="gcc_6_aarch64"
-#toolchain="gcc_7_aarch64"
 #toolchain="gcc_8_aarch64"
 #toolchain="gcc_9_aarch64"
 #toolchain="gcc_10_aarch64"
@@ -36,7 +32,6 @@ toolchain="gcc_14_arm"
 #riscv64
 #KERNEL_ARCH=riscv
 #DEBARCH=riscv64
-#toolchain="gcc_7_riscv64"
 #toolchain="gcc_8_riscv64"
 #toolchain="gcc_9_riscv64"
 #toolchain="gcc_10_riscv64"
@@ -50,11 +45,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.15
-KERNEL_TAG=${KERNEL_REL}-rc1
+KERNEL_TAG=${KERNEL_REL}-rc2
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.15/
 kernel_rt="-rc1-rt1"
 #Kernel Build
-BUILD=${build_prefix}2
+BUILD=${build_prefix}2.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
