@@ -289,6 +289,7 @@ beagleboard_dtbs () {
 		device="BONE-ADC" ; arm_dtbo_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
+		device="am335x-boneblack-revd.dtb" ; arm_dtb_makefile_append
 
 		device="BONE-I2C1" ; k3_dtbo_makefile_append
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
