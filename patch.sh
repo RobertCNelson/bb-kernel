@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2024 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2025 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -462,6 +462,8 @@ backports () {
 
 drivers () {
 	dir 'branding/boris'
+
+	dir 'drivers/ite-it66121-hpd'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
