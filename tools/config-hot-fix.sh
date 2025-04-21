@@ -316,6 +316,14 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --module CONFIG_VIRTIO_IOMMU
 ./scripts/config --enable CONFIG_CRYPTO_ECDSA
 
+#debian 6.13.8-1
+./scripts/config --enable CONFIG_NVME_TARGET_PASSTHRU
+./scripts/config --module CONFIG_NVME_TARGET_LOOP
+./scripts/config --module CONFIG_NVME_TARGET_FCLOOP
+
+#debian 6.13.11-1
+./scripts/config --enable CONFIG_KALLSYMS_ALL
+
 #new in v6.14
 ./scripts/config --module CONFIG_NTSYNC
 ./scripts/config --module CONFIG_PPS_GENERATOR
@@ -403,8 +411,12 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 #BeagleBoard.org
 ./scripts/config --enable CONFIG_MSPM0_I2C
 ./scripts/config --module CONFIG_SEG_LED_GPIO
+./scripts/config --module CONFIG_INPUT_PWM_BEEPER
 ./scripts/config --module CONFIG_SND_SOC_TLV320AIC3X_I2C
 ./scripts/config --module CONFIG_WIZNET_W5100
 ./scripts/config --module CONFIG_WIZNET_W5100_SPI
+
+#Regressions:
+./scripts/config --enable CONFIG_MMC_BLOCK
 
 cd ${DIR}/
