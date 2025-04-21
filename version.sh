@@ -8,7 +8,7 @@ build_prefix="-bone"
 branch_prefix="am33x-v"
 branch_postfix=""
 
-#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.14-rc1
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.15-rc1
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf
@@ -45,11 +45,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.15
-KERNEL_TAG=${KERNEL_REL}-rc2
+KERNEL_TAG=${KERNEL_REL}-rc3
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.15/
 kernel_rt="-rc1-rt1"
 #Kernel Build
-BUILD=${build_prefix}5
+BUILD=${build_prefix}5.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
