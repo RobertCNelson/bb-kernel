@@ -105,7 +105,7 @@ external_git () {
 
 mainline_patches () {
 	#exit 2
-	dir 'rfc/mainline'
+	dir 'mainline/pocketbeagle2'
 	#exit 2
 }
 
@@ -295,7 +295,6 @@ beagleboard_dtbs () {
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
 
-		device="k3-am62-pocketbeagle2.dtb" ; k3_dtb_makefile_append
 		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
 
 		#ls src/arm64/overlays/ | grep pocketbeagle2
@@ -375,7 +374,7 @@ local_patch () {
 }
 
 #external_git
-#mainline_patches
+mainline_patches
 rt
 wireless_regdb
 beagleboard_dtbs
@@ -463,7 +462,7 @@ backports () {
 drivers () {
 	dir 'branding/boris'
 
-	dir 'drivers/ite-it66121-hpd'
+#	dir 'drivers/ite-it66121-hpd'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
