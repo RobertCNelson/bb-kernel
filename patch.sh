@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2024 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2025 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -105,7 +105,7 @@ external_git () {
 
 mainline_patches () {
 	#exit 2
-	dir 'rfc/mainline'
+	dir 'mainline/pocketbeagle2'
 	#exit 2
 }
 
@@ -288,6 +288,7 @@ beagleboard_dtbs () {
 		device="BONE-ADC" ; arm_dtbo_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
+		device="am335x-boneblack-revd.dtb" ; arm_dtb_makefile_append
 
 		device="BONE-I2C1" ; k3_dtbo_makefile_append
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
@@ -335,7 +336,7 @@ local_patch () {
 }
 
 #external_git
-mainline_patches
+#mainline_patches
 rt
 wireless_regdb
 beagleboard_dtbs
@@ -425,8 +426,6 @@ drivers () {
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
-	#git revert --no-edit -s 3edf588e7fe00e90d1dc7fb9e599861b2c2cf442
-	#Breaking Kingston eMMC on new BBB's..
 	dir 'drivers/fixes/mmc'
 }
 
