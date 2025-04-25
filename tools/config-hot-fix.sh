@@ -421,5 +421,6 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 
 #Rev D
 ./scripts/config --enable CONFIG_DRM_ITE_IT66121
+./scripts/config --enable CONFIG_SYSFB_SIMPLEFB
 
 cd ${DIR}/
