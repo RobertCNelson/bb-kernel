@@ -419,4 +419,7 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 #Regressions:
 ./scripts/config --enable CONFIG_MMC_BLOCK
 
+#Rev D
+./scripts/config --enable CONFIG_DRM_ITE_IT66121
+
 cd ${DIR}/
