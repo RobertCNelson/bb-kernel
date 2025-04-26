@@ -465,6 +465,9 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/sdhci-omap'
 
+	dir 'drivers/pre-ite-it66121'
+	dir 'drivers/ite-it66121'
+
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
 	dir 'drivers/fixes/mmc'
