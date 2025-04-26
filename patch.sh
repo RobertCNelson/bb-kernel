@@ -403,6 +403,21 @@ post_rpibackports () {
 }
 
 backports () {
+	#v6.6 is actually newer...
+	backport_tag="v6.6.85"
+
+	subsystem="it66121"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
+
+		post_backports
+	else
+		patch_backports
+	fi
+
 	subsystem="uio"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -433,6 +448,9 @@ backports () {
 
 drivers () {
 	dir 'branding/boris'
+
+	dir 'drivers/pre-ite-it66121'
+	dir 'drivers/ite-it66121'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
