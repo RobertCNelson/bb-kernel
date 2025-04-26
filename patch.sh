@@ -503,9 +503,10 @@ drivers () {
 	dir 'drivers/ti/tsc'
 	dir 'drivers/fb_ssd1306'
 
-	dir 'external/ti-amx3-cm3-pm-firmware'
+	dir 'drivers/pre-ite-it66121'
+	dir 'drivers/ite-it66121'
 
-	dir 'drivers/fixes/mmc'
+	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 
 ###
