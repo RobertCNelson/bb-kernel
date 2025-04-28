@@ -492,8 +492,8 @@ backports () {
 		post_backports
 	else
 		patch_backports
-		#v6.3
-		#git format-patch -11 drivers/gpu/drm/bridge/ite-it66121.c
+		#v6.5
+		#git format-patch -12 drivers/gpu/drm/bridge/ite-it66121.c
 		#
 		${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
@@ -506,6 +506,8 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0009-drm-bridge-it66121-Move-VID-PID-to-new-it66121_chip_.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0010-drm-bridge-it66121-Add-support-for-the-IT6610.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0011-drm-bridge-Remove-unnecessary-include-statements-for.patch"
+		#v6.5.x+
+		#${git} "${DIR}/patches/mainline/ite-it66121/0012-drm-Switch-i2c-drivers-back-to-use-.probe.patch"
 
 		#i2c
 		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
