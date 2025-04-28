@@ -512,7 +512,7 @@ backports () {
 
 		#v6.7.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0013-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
-		#${git} "${DIR}/patches/mainline/ite-it66121/0014-drm-bridge-it66121-Simplify-probe.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0014-drm-bridge-it66121-Simplify-probe.patch"
 		#${git} "${DIR}/patches/mainline/ite-it66121/0015-drm-bridge-it66121-Fix-invalid-connector-dereference.patch"
 		#${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
 
