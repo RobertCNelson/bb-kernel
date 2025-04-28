@@ -503,7 +503,7 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0006-drm-bridge-it66121-Don-t-use-DDC-error-IRQs.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0007-drm-bridge-it66121-Don-t-clear-DDC-FIFO-twice.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0008-drm-bridge-it66121-Set-DDC-preamble-only-once-before.patch"
-#		${git} "${DIR}/patches/mainline/ite-it66121/0009-drm-bridge-it66121-Move-VID-PID-to-new-it66121_chip_.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0009-drm-bridge-it66121-Move-VID-PID-to-new-it66121_chip_.patch"
 #		${git} "${DIR}/patches/mainline/ite-it66121/0010-drm-bridge-it66121-Add-support-for-the-IT6610.patch"
 #		${git} "${DIR}/patches/mainline/ite-it66121/0011-drm-bridge-Remove-unnecessary-include-statements-for.patch"
 	fi
@@ -535,7 +535,6 @@ drivers () {
 
 	${git} "${DIR}/patches/drivers/ite-it66121/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
 
-	${git} "${DIR}/patches/drivers/ite-it66121/0010-drm-bridge-it66121-Move-VID-PID-to-new-it66121_chip_.patch"
 	${git} "${DIR}/patches/drivers/ite-it66121/0011-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
 	${git} "${DIR}/patches/drivers/ite-it66121/0012-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
 	${git} "${DIR}/patches/drivers/ite-it66121/0013-dt-bindings-display-bridge-it66121-Add-compatible-st.patch"
