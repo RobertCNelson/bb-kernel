@@ -492,8 +492,8 @@ backports () {
 		post_backports
 	else
 		patch_backports
-		#v6.5
-		#git format-patch -12 drivers/gpu/drm/bridge/ite-it66121.c
+		#v6.7
+		#git format-patch -16 drivers/gpu/drm/bridge/ite-it66121.c
 		#
 		${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
@@ -506,8 +506,15 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0009-drm-bridge-it66121-Move-VID-PID-to-new-it66121_chip_.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0010-drm-bridge-it66121-Add-support-for-the-IT6610.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0011-drm-bridge-Remove-unnecessary-include-statements-for.patch"
+
 		#v6.5.x+
 		#${git} "${DIR}/patches/mainline/ite-it66121/0012-drm-Switch-i2c-drivers-back-to-use-.probe.patch"
+
+		#v6.7.x+
+		${git} "${DIR}/patches/mainline/ite-it66121/0013-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0014-drm-bridge-it66121-Simplify-probe.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0015-drm-bridge-it66121-Fix-invalid-connector-dereference.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
 
 		#i2c
 		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
@@ -539,7 +546,6 @@ drivers () {
 	dir 'drivers/it66121_drm_connector'
 
 	${git} "${DIR}/patches/drivers/ite-it66121/0011-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
-	${git} "${DIR}/patches/drivers/ite-it66121/0012-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
 	${git} "${DIR}/patches/drivers/ite-it66121/0013-dt-bindings-display-bridge-it66121-Add-compatible-st.patch"
 	${git} "${DIR}/patches/drivers/ite-it66121/0014-drm-bridge-it66121-Add-it66122-support.patch"
 	${git} "${DIR}/patches/drivers/ite-it66121/0015-HACK-drm-bridge-ite-it66121-Hack-hpd-back-in.patch"
