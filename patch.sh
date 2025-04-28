@@ -492,8 +492,8 @@ backports () {
 		post_backports
 	else
 		patch_backports
-		#v6.9
-		#git format-patch -17 drivers/gpu/drm/bridge/ite-it66121.c
+		#v6.10
+		#git format-patch -19 drivers/gpu/drm/bridge/ite-it66121.c
 		#
 		${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
@@ -518,6 +518,10 @@ backports () {
 
 		#v6.9.x+ (disable)
 		#${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
+
+		#v6.10.x+
+		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
 
 		#i2c
 		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
@@ -547,14 +551,8 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 
 	dir 'drivers/it66121_drm_connector'
-
-	${git} "${DIR}/patches/drivers/ite-it66121/0011-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
-	${git} "${DIR}/patches/drivers/ite-it66121/0013-dt-bindings-display-bridge-it66121-Add-compatible-st.patch"
-	${git} "${DIR}/patches/drivers/ite-it66121/0014-drm-bridge-it66121-Add-it66122-support.patch"
-	${git} "${DIR}/patches/drivers/ite-it66121/0015-HACK-drm-bridge-ite-it66121-Hack-hpd-back-in.patch"
-	${git} "${DIR}/patches/drivers/ite-it66121/0016-fix-it66122-hotplug.patch"
-
-	${git} "${DIR}/patches/drivers/it66121_kernel_specific_fixes/0001-ite-it66121-v6.1.x-needs-of_device_get_match_data.patch"
+	dir 'drivers/it66121_kernel_specific_fixes'
+	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
