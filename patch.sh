@@ -551,6 +551,8 @@ drivers () {
 	${git} "${DIR}/patches/drivers/ite-it66121/0015-HACK-drm-bridge-ite-it66121-Hack-hpd-back-in.patch"
 	${git} "${DIR}/patches/drivers/ite-it66121/0016-fix-it66122-hotplug.patch"
 
+	${git} "${DIR}/patches/drivers/it66121_kernel_specific_fixes/0001-ite-it66121-v6.1.x-needs-of_device_get_match_data.patch"
+
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 
