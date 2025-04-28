@@ -444,6 +444,63 @@ post_rpibackports () {
 }
 
 backports () {
+	backport_tag="v6.2"
+
+	subsystem="it66121"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
+
+		post_backports
+	else
+		patch_backports
+		#v6.15
+		#git format-patch -25 drivers/gpu/drm/bridge/ite-it66121.c
+		#
+		${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0003-drm-bridge-it66121-Use-regmap_noinc_read.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0004-drm-bridge-it66121-Write-AVI-infoframe-with-regmap_b.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0005-drm-bridge-it66121-Fix-wait-for-DDC-ready.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0006-drm-bridge-it66121-Don-t-use-DDC-error-IRQs.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0007-drm-bridge-it66121-Don-t-clear-DDC-FIFO-twice.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0008-drm-bridge-it66121-Set-DDC-preamble-only-once-before.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0009-drm-bridge-it66121-Move-VID-PID-to-new-it66121_chip_.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0010-drm-bridge-it66121-Add-support-for-the-IT6610.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0011-drm-bridge-Remove-unnecessary-include-statements-for.patch"
+
+		#v6.5.x+... (not v6.1.x/v6.2.x/v6.3.x/v6.4.x)
+		${git} "${DIR}/patches/mainline/ite-it66121/0012-drm-Switch-i2c-drivers-back-to-use-.probe.patch"
+
+		#v6.7.x+
+		${git} "${DIR}/patches/mainline/ite-it66121/0013-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
+		#v6.1.x-lts... (not v6.2.x/v6.3.x/v6.4.x)
+		${git} "${DIR}/patches/mainline/ite-it66121/0014-drm-bridge-it66121-Simplify-probe.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0015-drm-bridge-it66121-Fix-invalid-connector-dereference.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
+
+		#v6.9.x+ (disable)
+		#${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
+
+		#v6.10.x+
+		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
+
+		#v6.13.x+
+		${git} "${DIR}/patches/mainline/ite-it66121/0020-drm-bridge-ite-it66121-Drop-hdmi_avi_infoframe_init-.patch"
+
+		#v6.14.x+
+		#${git} "${DIR}/patches/mainline/ite-it66121/0021-drm-bridge-ite-it66121-use-eld_mutex-to-protect-acce.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0022-drm-Use-of_property_present-for-non-boolean-properti.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0023-ASoC-hdmi-codec-move-no_capture_mute-to-struct-hdmi_.patch"
+
+		#v6.15.x+
+		#${git} "${DIR}/patches/mainline/ite-it66121/0024-drm-bridge-Pass-full-state-to-atomic_enable.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0025-drm-bridge-Pass-full-state-to-atomic_disable.patch"
+	fi
+
 	backport_tag="rpi-6.15.y"
 
 	subsystem="edt-ft5x06"
@@ -461,6 +518,10 @@ backports () {
 
 drivers () {
 	dir 'branding/boris'
+
+	dir 'drivers/it66121_drm_connector'
+	dir 'drivers/it66121_reverts'
+	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }

@@ -1,0 +1,75 @@
+From e66856508746ba520dd5f87ac608c9a1ae547a17 Mon Sep 17 00:00:00 2001
+From: Paul Cercueil <paul@crapouillou.net>
+Date: Wed, 14 Dec 2022 13:58:19 +0100
+Subject: [PATCH 08/25] drm: bridge: it66121: Set DDC preamble only once before
+ reading EDID
+
+The DDC preamble and target address only need to be set once before
+reading the EDID, even if multiple segments have to be read.
+
+Signed-off-by: Paul Cercueil <paul@crapouillou.net>
+Reviewed-by: Robert Foss <robert.foss@linaro.org>
+Link: https://patchwork.freedesktop.org/patch/msgid/20221214125821.12489-9-paul@crapouillou.net
+---
+ drivers/gpu/drm/bridge/ite-it66121.c | 28 ++++++++++++++++------------
+ 1 file changed, 16 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/gpu/drm/bridge/ite-it66121.c b/drivers/gpu/drm/bridge/ite-it66121.c
+index 5335d4abd7c5..7972003d4776 100644
+--- a/drivers/gpu/drm/bridge/ite-it66121.c
++++ b/drivers/gpu/drm/bridge/ite-it66121.c
+@@ -506,9 +506,6 @@ static int it66121_get_edid_block(void *context, u8 *buf,
+ 	while (remain > 0) {
+ 		cnt = (remain > IT66121_EDID_FIFO_SIZE) ?
+ 				IT66121_EDID_FIFO_SIZE : remain;
+-		ret = it66121_preamble_ddc(ctx);
+-		if (ret)
+-			return ret;
+ 
+ 		ret = regmap_write(ctx->regmap, IT66121_DDC_COMMAND_REG,
+ 				   IT66121_DDC_COMMAND_FIFO_CLR);
+@@ -519,15 +516,6 @@ static int it66121_get_edid_block(void *context, u8 *buf,
+ 		if (ret)
+ 			return ret;
+ 
+-		ret = it66121_preamble_ddc(ctx);
+-		if (ret)
+-			return ret;
+-
+-		ret = regmap_write(ctx->regmap, IT66121_DDC_HEADER_REG,
+-				   IT66121_DDC_HEADER_EDID);
+-		if (ret)
+-			return ret;
+-
+ 		ret = regmap_write(ctx->regmap, IT66121_DDC_OFFSET_REG, offset);
+ 		if (ret)
+ 			return ret;
+@@ -842,9 +830,25 @@ static struct edid *it66121_bridge_get_edid(struct drm_bridge *bridge,
+ {
+ 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
+ 	struct edid *edid;
++	int ret;
+ 
+ 	mutex_lock(&ctx->lock);
++	ret = it66121_preamble_ddc(ctx);
++	if (ret) {
++		edid = ERR_PTR(ret);
++		goto out_unlock;
++	}
++
++	ret = regmap_write(ctx->regmap, IT66121_DDC_HEADER_REG,
++			   IT66121_DDC_HEADER_EDID);
++	if (ret) {
++		edid = ERR_PTR(ret);
++		goto out_unlock;
++	}
++
+ 	edid = drm_do_get_edid(connector, it66121_get_edid_block, ctx);
++
++out_unlock:
+ 	mutex_unlock(&ctx->lock);
+ 
+ 	return edid;
+-- 
+2.47.2
+
