@@ -532,7 +532,16 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 
 	dir 'drivers/it66121_drm_connector'
-	dir 'drivers/ite-it66121'
+
+	${git} "${DIR}/patches/drivers/ite-it66121/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
+	${git} "${DIR}/patches/drivers/ite-it66121/0009-drm-bridge-it66121-Set-DDC-preamble-only-once-before.patch"
+	${git} "${DIR}/patches/drivers/ite-it66121/0010-drm-bridge-it66121-Move-VID-PID-to-new-it66121_chip_.patch"
+	${git} "${DIR}/patches/drivers/ite-it66121/0011-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
+	${git} "${DIR}/patches/drivers/ite-it66121/0012-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
+	${git} "${DIR}/patches/drivers/ite-it66121/0013-dt-bindings-display-bridge-it66121-Add-compatible-st.patch"
+	${git} "${DIR}/patches/drivers/ite-it66121/0014-drm-bridge-it66121-Add-it66122-support.patch"
+	${git} "${DIR}/patches/drivers/ite-it66121/0015-HACK-drm-bridge-ite-it66121-Hack-hpd-back-in.patch"
+	${git} "${DIR}/patches/drivers/ite-it66121/0016-fix-it66122-hotplug.patch"
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
