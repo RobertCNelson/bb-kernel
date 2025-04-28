@@ -496,9 +496,9 @@ backports () {
 		#git format-patch -11 drivers/gpu/drm/bridge/ite-it66121.c
 		#
 		${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
-#		${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
-#		${git} "${DIR}/patches/mainline/ite-it66121/0003-drm-bridge-it66121-Use-regmap_noinc_read.patch"
-#		${git} "${DIR}/patches/mainline/ite-it66121/0004-drm-bridge-it66121-Write-AVI-infoframe-with-regmap_b.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0003-drm-bridge-it66121-Use-regmap_noinc_read.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0004-drm-bridge-it66121-Write-AVI-infoframe-with-regmap_b.patch"
 #		${git} "${DIR}/patches/mainline/ite-it66121/0005-drm-bridge-it66121-Fix-wait-for-DDC-ready.patch"
 #		${git} "${DIR}/patches/mainline/ite-it66121/0006-drm-bridge-it66121-Don-t-use-DDC-error-IRQs.patch"
 #		${git} "${DIR}/patches/mainline/ite-it66121/0007-drm-bridge-it66121-Don-t-clear-DDC-FIFO-twice.patch"
