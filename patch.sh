@@ -506,6 +506,9 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0009-drm-bridge-it66121-Move-VID-PID-to-new-it66121_chip_.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0010-drm-bridge-it66121-Add-support-for-the-IT6610.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0011-drm-bridge-Remove-unnecessary-include-statements-for.patch"
+
+		#i2c
+		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
 	fi
 
 	backport_tag="rpi-6.1.y"
@@ -532,8 +535,6 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 
 	dir 'drivers/it66121_drm_connector'
-
-	${git} "${DIR}/patches/drivers/ite-it66121/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
 
 	${git} "${DIR}/patches/drivers/ite-it66121/0011-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
 	${git} "${DIR}/patches/drivers/ite-it66121/0012-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
