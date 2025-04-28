@@ -497,8 +497,8 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0023-ASoC-hdmi-codec-move-no_capture_mute-to-struct-hdmi_.patch"
 
 		#v6.15.x+
-		#${git} "${DIR}/patches/mainline/ite-it66121/0024-drm-bridge-Pass-full-state-to-atomic_enable.patch"
-		#${git} "${DIR}/patches/mainline/ite-it66121/0025-drm-bridge-Pass-full-state-to-atomic_disable.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0024-drm-bridge-Pass-full-state-to-atomic_enable.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0025-drm-bridge-Pass-full-state-to-atomic_disable.patch"
 	fi
 
 	backport_tag="rpi-6.15.y"
