@@ -462,8 +462,6 @@ backports () {
 drivers () {
 	dir 'branding/boris'
 
-#	dir 'drivers/ite-it66121-hpd'
-
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 
