@@ -1,49 +1,36 @@
-From 3ae4b0d7e1b3b59498e25780e131bc4be9765589 Mon Sep 17 00:00:00 2001
+From 6ef720693c4637b06c4a2bc828a08f42ae224fd9 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 25 Apr 2025 16:46:04 -0500
+Date: Tue, 29 Apr 2025 10:29:40 -0500
 Subject: [PATCH] backports: edt-ft5x06: from: linux.git
 
-Reference: rpi-6.1.y
+Reference: rpi-6.0.y
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/input/touchscreen/edt-ft5x06.c | 128 ++++++++++++++++++++++---
- 1 file changed, 113 insertions(+), 15 deletions(-)
+ drivers/input/touchscreen/edt-ft5x06.c | 85 ++++++++++++++++++++++----
+ 1 file changed, 73 insertions(+), 12 deletions(-)
 
 diff --git a/drivers/input/touchscreen/edt-ft5x06.c b/drivers/input/touchscreen/edt-ft5x06.c
-index 9ac1378610bc..a78edbade8d7 100644
+index 82beddb28761..cae81b2fe800 100644
 --- a/drivers/input/touchscreen/edt-ft5x06.c
 +++ b/drivers/input/touchscreen/edt-ft5x06.c
-@@ -67,6 +67,7 @@
- #define TOUCH_EVENT_RESERVED		0x03
- 
- #define EDT_NAME_LEN			23
-+#define EDT_NAME_PREFIX_LEN		8
- #define EDT_SWITCH_MODE_RETRIES		10
- #define EDT_SWITCH_MODE_DELAY		5 /* msec */
- #define EDT_RAW_DATA_RETRIES		100
-@@ -75,6 +76,10 @@
+@@ -75,6 +75,8 @@
  #define EDT_DEFAULT_NUM_X		1024
  #define EDT_DEFAULT_NUM_Y		1024
  
-+#define RESET_DELAY_MS			300	/* reset deassert to I2C */
-+#define FIRST_POLL_DELAY_MS		300	/* in addition to the above */
 +#define POLL_INTERVAL_MS		17	/* 17ms = 60fps */
 +
  enum edt_pmode {
  	EDT_PMODE_NOT_SUPPORTED,
  	EDT_PMODE_HIBERNATE,
-@@ -128,14 +133,19 @@ struct edt_ft5x06_ts_data {
+@@ -128,6 +130,7 @@ struct edt_ft5x06_ts_data {
  	int offset_y;
  	int report_rate;
  	int max_support_points;
 +	unsigned int known_ids;
  
--	char name[EDT_NAME_LEN];
-+	char name[EDT_NAME_PREFIX_LEN + EDT_NAME_LEN];
+ 	char name[EDT_NAME_LEN];
  	char fw_version[EDT_NAME_LEN];
-+	int init_td_status;
- 
- 	struct edt_reg_addr reg_addr;
+@@ -136,6 +139,9 @@ struct edt_ft5x06_ts_data {
  	enum edt_ver version;
  	unsigned int crc_errors;
  	unsigned int header_errors;
@@ -53,7 +40,7 @@ index 9ac1378610bc..a78edbade8d7 100644
  };
  
  struct edt_i2c_chip_data {
-@@ -203,6 +213,10 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
+@@ -203,6 +209,10 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
  	int i, type, x, y, id;
  	int offset, tplen, datalen, crclen;
  	int error;
@@ -64,31 +51,7 @@ index 9ac1378610bc..a78edbade8d7 100644
  
  	switch (tsdata->version) {
  	case EDT_M06:
-@@ -210,6 +224,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
- 		offset = 5; /* where the actual touch data starts */
- 		tplen = 4;  /* data comes in so called frames */
- 		crclen = 1; /* length of the crc data */
-+		datalen = tplen * tsdata->max_support_points + offset + crclen;
- 		break;
- 
- 	case EDT_M09:
-@@ -220,6 +235,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
- 		offset = 3;
- 		tplen = 6;
- 		crclen = 0;
-+		datalen = 3;
- 		break;
- 
- 	default:
-@@ -227,7 +243,6 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
- 	}
- 
- 	memset(rdbuf, 0, sizeof(rdbuf));
--	datalen = tplen * tsdata->max_support_points + offset + crclen;
- 
- 	error = edt_ft5x06_ts_readwrite(tsdata->client,
- 					sizeof(cmd), &cmd,
-@@ -251,9 +266,43 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
+@@ -251,9 +261,15 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
  
  		if (!edt_ft5x06_ts_check_crc(tsdata, rdbuf, datalen))
  			goto out;
@@ -98,34 +61,6 @@ index 9ac1378610bc..a78edbade8d7 100644
 +		 * points.
 +		 */
 +		num_points = min(rdbuf[2] & 0xf, tsdata->max_support_points);
-+
-+		/* When polling FT5x06 without IRQ: initial register contents
-+		 * could be stale or undefined; discard all readings until
-+		 * TD_STATUS changes for the first time (or num_points is 0).
-+		 */
-+		if (tsdata->init_td_status) {
-+			if (tsdata->init_td_status < 0)
-+				tsdata->init_td_status = rdbuf[2];
-+
-+			if (num_points && rdbuf[2] == tsdata->init_td_status)
-+				goto out;
-+
-+			tsdata->init_td_status = 0;
-+		}
-+
-+		if (num_points) {
-+			datalen = tplen * num_points + crclen;
-+			cmd = offset;
-+			error = edt_ft5x06_ts_readwrite(tsdata->client,
-+							sizeof(cmd), &cmd,
-+							datalen, &rdbuf[offset]);
-+			if (error) {
-+				dev_err_ratelimited(dev,
-+						    "Unable to fetch data, error: %d\n",
-+						    error);
-+				goto out;
-+			}
-+		}
  	}
  
 -	for (i = 0; i < tsdata->max_support_points; i++) {
@@ -133,7 +68,7 @@ index 9ac1378610bc..a78edbade8d7 100644
  		u8 *buf = &rdbuf[i * tplen + offset];
  
  		type = buf[0] >> 6;
-@@ -275,11 +324,26 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
+@@ -275,10 +291,25 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
  
  		input_mt_slot(tsdata->input, id);
  		if (input_mt_report_slot_state(tsdata->input, MT_TOOL_FINGER,
@@ -145,8 +80,8 @@ index 9ac1378610bc..a78edbade8d7 100644
 +		} else {
 +			known_ids &= ~BIT(id);
 +		}
- 	}
- 
++	}
++
 +	/* One issue with the device is the TOUCH_UP message is not always
 +	 * returned. Instead track which ids we know about and report when they
 +	 * are no longer updated
@@ -155,13 +90,12 @@ index 9ac1378610bc..a78edbade8d7 100644
 +	for_each_set_bit_from(b, &released_ids, tsdata->max_support_points) {
 +		input_mt_slot(tsdata->input, b);
 +		input_mt_report_slot_inactive(tsdata->input);
-+	}
+ 	}
 +	tsdata->known_ids = active_ids;
-+
+ 
  	input_mt_report_pointer_emulation(tsdata->input, true);
  	input_sync(tsdata->input);
- 
-@@ -287,6 +351,22 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
+@@ -287,6 +318,22 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
  	return IRQ_HANDLED;
  }
  
@@ -184,26 +118,7 @@ index 9ac1378610bc..a78edbade8d7 100644
  static int edt_ft5x06_register_write(struct edt_ft5x06_ts_data *tsdata,
  				     u8 addr, u8 value)
  {
-@@ -886,6 +966,9 @@ static int edt_ft5x06_ts_identify(struct i2c_client *client,
- 	char *model_name = tsdata->name;
- 	char *fw_version = tsdata->fw_version;
- 
-+	snprintf(model_name, EDT_NAME_PREFIX_LEN + 1, "%s ", dev_name(&client->dev));
-+	model_name += strlen(model_name);
-+
- 	/* see what we find if we assume it is a M06 *
- 	 * if we get less than EDT_NAME_LEN, we don't want
- 	 * to have garbage in there
-@@ -1239,7 +1322,7 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
- 	if (tsdata->reset_gpio) {
- 		usleep_range(5000, 6000);
- 		gpiod_set_value_cansleep(tsdata->reset_gpio, 0);
--		msleep(300);
-+		msleep(RESET_DELAY_MS);
- 	}
- 
- 	input = devm_input_allocate_device(&client->dev);
-@@ -1314,17 +1397,28 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
+@@ -1314,17 +1361,27 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
  
  	i2c_set_clientdata(client, tsdata);
  
@@ -232,17 +147,16 @@ index 9ac1378610bc..a78edbade8d7 100644
 +			return error;
 +		}
 +	} else {
-+		tsdata->init_td_status = -1; /* filter bogus initial data */
 +		INIT_WORK(&tsdata->work_i2c_poll,
 +			  edt_ft5x06_ts_work_i2c_poll);
 +		timer_setup(&tsdata->timer, edt_ft5x06_ts_irq_poll_timer, 0);
-+		tsdata->timer.expires =
-+			jiffies + msecs_to_jiffies(FIRST_POLL_DELAY_MS);
++		tsdata->timer.expires = jiffies +
++					msecs_to_jiffies(POLL_INTERVAL_MS);
 +		add_timer(&tsdata->timer);
  	}
  
  	error = devm_device_add_group(&client->dev, &edt_ft5x06_attr_group);
-@@ -1350,6 +1444,10 @@ static void edt_ft5x06_ts_remove(struct i2c_client *client)
+@@ -1350,6 +1407,10 @@ static int edt_ft5x06_ts_remove(struct i2c_client *client)
  {
  	struct edt_ft5x06_ts_data *tsdata = i2c_get_clientdata(client);
  
@@ -251,8 +165,8 @@ index 9ac1378610bc..a78edbade8d7 100644
 +		cancel_work_sync(&tsdata->work_i2c_poll);
 +	}
  	edt_ft5x06_ts_teardown_debugfs(tsdata);
- }
  
+ 	return 0;
 -- 
 2.47.2
 

@@ -404,6 +404,34 @@ backports () {
 		patch_backports
 		dir 'drivers/ti/uio'
 	fi
+
+	backport_tag="v6.2"
+
+	subsystem="it66121"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
+
+		post_backports
+	else
+		patch_backports
+	fi
+
+	backport_tag="rpi-6.0.y"
+
+	subsystem="edt-ft5x06"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_rpibackports
+
+		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
+
+		post_rpibackports
+	else
+		patch_backports
+	fi
 }
 
 drivers () {

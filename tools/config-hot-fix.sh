@@ -82,10 +82,6 @@ config="CONFIG_WIMAX" ; config_disable
 config="CONFIG_WIMAX_I2400M" ; config_disable
 config="CONFIG_WIMAX_I2400M_USB" ; config_disable
 
-#Docker.io:
-config="CONFIG_CGROUP_HUGETLB" ; config_enable
-config="CONFIG_RT_GROUP_SCHED" ; config_enable
-
 #PHY: CONFIG_DP83867_PHY
 config="CONFIG_DP83867_PHY" ; config_enable
 
@@ -94,6 +90,29 @@ config="CONFIG_REMOTEPROC" ; config_enable
 config="CONFIG_REMOTEPROC_CDEV" ; config_enable
 config="CONFIG_WKUP_M3_RPROC" ; config_enable
 config="CONFIG_PRU_REMOTEPROC" ; config_module
+
+#Docker.io
+./scripts/config --enable CONFIG_NETFILTER_XT_MATCH_IPVS
+./scripts/config --enable CONFIG_CGROUP_BPF
+./scripts/config --enable CONFIG_BLK_DEV_THROTTLING
+./scripts/config --enable CONFIG_NET_CLS_CGROUP
+./scripts/config --enable CONFIG_CGROUP_NET_PRIO
+./scripts/config --enable CONFIG_IP_NF_TARGET_REDIRECT
+./scripts/config --enable CONFIG_IP_VS
+./scripts/config --enable CONFIG_IP_VS_NFCT
+./scripts/config --enable CONFIG_IP_VS_PROTO_TCP
+./scripts/config --enable CONFIG_IP_VS_PROTO_UDP
+./scripts/config --enable CONFIG_IP_VS_RR
+./scripts/config --enable CONFIG_SECURITY_SELINUX
+./scripts/config --enable CONFIG_SECURITY_APPARMOR
+./scripts/config --enable CONFIG_VXLAN
+./scripts/config --enable CONFIG_IPVLAN
+./scripts/config --enable CONFIG_DUMMY
+./scripts/config --enable CONFIG_NF_NAT_FTP
+./scripts/config --enable CONFIG_NF_CONNTRACK_FTP
+./scripts/config --enable CONFIG_NF_NAT_TFTP
+./scripts/config --enable CONFIG_NF_CONNTRACK_TFTP
+./scripts/config --enable CONFIG_DM_THIN_PROVISIONING
 
 #abi="5.13.0-trunk"
 #kernel="5.13.9-1~exp2"
@@ -163,8 +182,6 @@ config="CONFIG_UIO_PRUSS" ; config_module
 config="CONFIG_CHARGER_TPS65217" ; config_disable
 
 #2023.07.10
-config="CONFIG_KERNEL_LZO" ; config_disable
-config="CONFIG_KERNEL_LZ4" ; config_enable
 config="CONFIG_GCC_PLUGINS" ; config_disable
 
 #2023.07.14
@@ -206,9 +223,27 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 #removed in 6.7-rc1
 ./scripts/config --disable CONFIG_DEV_APPLETALK
 
-#09.02.00.005
+#TI delta 09.01.00.004:
+./scripts/config --enable CONFIG_APERTURE_HELPERS
+./scripts/config --enable CONFIG_FB_CFB_FILLRECT
+./scripts/config --enable CONFIG_FB_CFB_COPYAREA
+./scripts/config --enable CONFIG_FB_CFB_IMAGEBLIT
+./scripts/config --enable CONFIG_FB_SIMPLE
+./scripts/config --module CONFIG_TI_EQEP
+
 ./scripts/config --module CONFIG_VIDEO_TI_VIP
 ./scripts/config --module CONFIG_VIDEO_OV1063X
+./scripts/config --module CONFIG_VIDEO_OV2312
+./scripts/config --module CONFIG_VIDEO_OV5640
+./scripts/config --module CONFIG_VIDEO_OV5645
+./scripts/config --module CONFIG_VIDEO_IMX219
+./scripts/config --module CONFIG_VIDEO_IMX390
+./scripts/config --module CONFIG_VIDEO_OX05B1S
+
+#enable SPI/W1
+./scripts/config --enable CONFIG_SPI_OMAP24XX
+./scripts/config --enable CONFIG_W1
+./scripts/config --enable CONFIG_MIKROBUS
 
 #20240305: regression on discord, some systemd can no longer load *.xz modules...
 ./scripts/config --disable CONFIG_MODULE_DECOMPRESS
@@ -217,14 +252,45 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_FUNCTION_TRACER
 ./scripts/config --enable CONFIG_DYNAMIC_FTRACE
 
-./scripts/config --disable CONFIG_MODULE_COMPRESS_ZSTD
+./scripts/config --enable CONFIG_MODULE_COMPRESS
+./scripts/config --disable CONFIG_MODULE_COMPRESS_GZIP
 ./scripts/config --enable CONFIG_MODULE_COMPRESS_XZ
+./scripts/config --disable CONFIG_MODULE_COMPRESS_ZSTD
+./scripts/config --enable CONFIG_MODULE_COMPRESS_ALL
 ./scripts/config --enable CONFIG_GPIO_AGGREGATOR
+./scripts/config --module CONFIG_PWM_GPIO
 
 #10.00.05
 ./scripts/config --module CONFIG_RPMSG_PRU
 
+#debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
+#  LZ4     arch/arm/boot/compressed/piggy_data
+#Error : stdout won't be used ! Do you want multiple input files (-m) ?
+#make[3]: *** [arch/arm/boot/compressed/Makefile:156: arch/arm/boot/compressed/piggy_data] Error 1
+
+./scripts/config --disable CONFIG_KERNEL_LZO
+./scripts/config --disable CONFIG_KERNEL_LZ4
+./scripts/config --enable CONFIG_KERNEL_XZ
+
 #configure CONFIG_EXTRA_FIRMWARE
 ./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin am43x-evm-scale-data.bin"
+./scripts/config --enable CONFIG_FW_LOADER_COMPRESS
+./scripts/config --enable CONFIG_FW_LOADER_COMPRESS_XZ
+./scripts/config --enable CONFIG_FW_LOADER_COMPRESS_ZSTD
+
+#BeagleBoard.org
+./scripts/config --enable CONFIG_MSPM0_I2C
+./scripts/config --module CONFIG_SEG_LED_GPIO
+./scripts/config --module CONFIG_INPUT_PWM_BEEPER
+./scripts/config --module CONFIG_SND_SOC_TLV320AIC3X_I2C
+./scripts/config --module CONFIG_WIZNET_W5100
+./scripts/config --module CONFIG_WIZNET_W5100_SPI
+
+#Regressions:
+./scripts/config --enable CONFIG_MMC_BLOCK
+
+#Rev D
+./scripts/config --enable CONFIG_DRM_ITE_IT66121
+./scripts/config --enable CONFIG_SYSFB_SIMPLEFB
 
 cd ${DIR}/
