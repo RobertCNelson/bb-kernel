@@ -43,6 +43,9 @@ toolchain="gcc_linaro_gnueabihf_4_9"
 #toolchain="gcc_12_riscv64"
 
 #Kernel
+linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
+#
 KERNEL_REL=3.18
 KERNEL_TAG=${KERNEL_REL}.5
 kernel_rt=".X-rtY"
