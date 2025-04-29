@@ -37,6 +37,9 @@ toolchain="gcc_8_arm"
 #toolchain="gcc_11_riscv64"
 
 #Kernel
+linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
+#
 KERNEL_REL=5.3
 KERNEL_TAG=${KERNEL_REL}.18
 kernel_rt=".X-rtY"
