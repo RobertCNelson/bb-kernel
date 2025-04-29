@@ -416,7 +416,15 @@ backports () {
 
 		post_backports
 	else
-		patch_backports
+		#patch_backports
+
+		#i2c (v6.1.x)
+		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
+
+		#v6.15
+		#git format-patch -25 drivers/gpu/drm/bridge/ite-it66121.c
+		#
+		${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
 	fi
 
 	backport_tag="rpi-6.0.y"

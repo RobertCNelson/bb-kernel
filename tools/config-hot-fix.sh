@@ -261,7 +261,137 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --module CONFIG_PWM_GPIO
 
 #10.00.05
+#REMOTEPROC
+./scripts/config --module CONFIG_RPMSG
+./scripts/config --module CONFIG_RPMSG_NS
 ./scripts/config --module CONFIG_RPMSG_PRU
+./scripts/config --enable CONFIG_RPMSG_VIRTIO
+
+#TI: 10.01.01
+./scripts/config --module CONFIG_OMAP2PLUS_MBOX
+
+#new in v6.12.x
+./scripts/config --enable CONFIG_RPMB
+./scripts/config --module CONFIG_ADXL380_SPI
+./scripts/config --module CONFIG_ADXL380_I2C
+./scripts/config --module CONFIG_AD4000
+./scripts/config --module CONFIG_AD4695
+./scripts/config --module CONFIG_PAC1921
+./scripts/config --module CONFIG_LTC2664
+./scripts/config --module CONFIG_ENS210
+./scripts/config --module CONFIG_BH1745
+./scripts/config --module CONFIG_SDP500
+./scripts/config --module CONFIG_HX9023S
+./scripts/config --module CONFIG_AW96103
+
+#debian 6.12~rc6-1~exp1
+./scripts/config --enable CONFIG_ZONE_DEVICE
+./scripts/config --module CONFIG_IP_VS_TWOS
+./scripts/config --module CONFIG_VIDEO_OV5648
+./scripts/config --enable CONFIG_DRM_DISPLAY_DP_AUX_CHARDEV
+./scripts/config --module CONFIG_TI_PRUSS
+
+#debian 6.12.6-1
+./scripts/config --enable CONFIG_ZRAM_BACKEND_LZ4
+./scripts/config --enable CONFIG_ZRAM_BACKEND_LZ4HC
+./scripts/config --enable CONFIG_ZRAM_BACKEND_ZSTD
+./scripts/config --enable CONFIG_ZRAM_BACKEND_DEFLATE
+./scripts/config --enable CONFIG_ZRAM_DEF_COMP_LZ4
+./scripts/config --set-str CONFIG_ZRAM_DEF_COMP "lz4"
+
+#debian 6.12.16-1
+./scripts/config --enable CONFIG_RCU_LAZY
+./scripts/config --module CONFIG_NSM
+./scripts/config --module CONFIG_NITRO_ENCLAVES
+./scripts/config --module CONFIG_USB_MASS_STORAGE
+
+#debian 6.12.20-1
+./scripts/config --module CONFIG_VIDEO_OV5675
+./scripts/config --enable CONFIG_RPCSEC_GSS_KRB5_ENCTYPES_AES_SHA2
+
+#debian 6.13.5-1
+./scripts/config --enable CONFIG_UDMABUF
+
+#debian 6.13.7-1
+./scripts/config --module CONFIG_VIRTIO_IOMMU
+./scripts/config --enable CONFIG_CRYPTO_ECDSA
+
+#debian 6.13.8-1
+./scripts/config --enable CONFIG_NVME_TARGET_PASSTHRU
+./scripts/config --module CONFIG_NVME_TARGET_LOOP
+./scripts/config --module CONFIG_NVME_TARGET_FCLOOP
+
+#debian 6.13.11-1
+./scripts/config --enable CONFIG_KALLSYMS_ALL
+
+#new in v6.14
+./scripts/config --module CONFIG_NTSYNC
+./scripts/config --module CONFIG_PPS_GENERATOR
+./scripts/config --module CONFIG_SENSORS_CRPS
+./scripts/config --module CONFIG_SENSORS_TPS25990
+./scripts/config --module CONFIG_BD79703
+./scripts/config --module CONFIG_OPT4060
+./scripts/config --enable CONFIG_FPROBE
+
+#TI: 11.00.01
+./scripts/config --enable CONFIG_SRAM_DMA_HEAP
+./scripts/config --module CONFIG_CC33XX
+./scripts/config --module CONFIG_CC33XX_SDIO
+./scripts/config --module CONFIG_VIDEO_IMX390
+./scripts/config --enable CONFIG_DMABUF_HEAPS
+./scripts/config --enable CONFIG_DMABUF_HEAPS_SYSTEM
+./scripts/config --enable CONFIG_DMABUF_HEAPS_CMA
+./scripts/config --enable CONFIG_DMABUF_HEAPS_CARVEOUT
+
+#TI: 11.00.02
+./scripts/config --module CONFIG_REGULATOR_RASPBERRYPI_TOUCHSCREEN_ATTINY
+./scripts/config --module CONFIG_DRM_TOSHIBA_TC358762
+#./scripts/config --module CONFIG_DRM_CDNS_DSI
+#./scripts/config --module CONFIG_DRM_CDNS_DSI_J721E
+#./scripts/config --module CONFIG_HWSPINLOCK_OMAP
+#./scripts/config --module CONFIG_PWM_OMAP_DMTIMER
+#./scripts/config --module CONFIG_PHY_CADENCE_DPHY
+./scripts/config --module CONFIG_TI_ECAP_CAPTURE
+
+#TI: 11.00.04
+./scripts/config --enable CONFIG_MTD_SPI_NAND
+./scripts/config --enable CONFIG_MTD_UBI
+./scripts/config --enable CONFIG_TI_K3_UDMA_AM62L
+./scripts/config --enable CONFIG_UBIFS_FS
+./scripts/config --enable CONFIG_CRYPTO_ZSTD
+./scripts/config --enable CONFIG_ZSTD_COMPRESS
+
+#TI: 11.00.06
+./scripts/config --module CONFIG_CRYPTO_CRC64_ISO3309
+./scripts/config --enable CONFIG_CRYPTO_USER_API_HASH
+./scripts/config --enable CONFIG_CRYPTO_DEV_TI_MCRC64
+./scripts/config --enable CONFIG_CRYPTO_DEV_TI_DTHEV2
+./scripts/config --module CONFIG_TOUCHSCREEN_ILI210X
+
+#TI: 11.00.07
+./scripts/config --module CONFIG_SERIAL_8250_PRUSS
+./scripts/config --module CONFIG_VIDEO_IMX728
+./scripts/config --module CONFIG_VIDEO_OV2312
+
+#TI: 11.00.08
+./scripts/config --module CONFIG_VIDEO_OX05B1S
+
+#new in v6.15
+./scripts/config --module CONFIG_FWCTL
+./scripts/config --module CONFIG_IWLMLD
+./scripts/config --module CONFIG_RTW88_8814AU
+./scripts/config --module CONFIG_SPI_OFFLOAD_TRIGGER_PWM
+./scripts/config --module CONFIG_SENSORS_HTU31
+./scripts/config --module CONFIG_SENSORS_INA233
+./scripts/config --module CONFIG_HID_UNIVERSAL_PIDFF
+./scripts/config --module CONFIG_AD4030
+./scripts/config --module CONFIG_AD4851
+./scripts/config --module CONFIG_AD7191
+./scripts/config --module CONFIG_TI_ADS7138
+./scripts/config --module CONFIG_ADIS16550
+./scripts/config --module CONFIG_AL3000A
+./scripts/config --module CONFIG_APDS9160
+./scripts/config --module CONFIG_SI7210
 
 #debian Trixie has fubared lz4/lz4c, back to xz for stabilty...
 #  LZ4     arch/arm/boot/compressed/piggy_data
