@@ -456,8 +456,8 @@ backports () {
 		post_backports
 	else
 		patch_backports
-		#v6.14
-		#git format-patch -23 drivers/gpu/drm/bridge/ite-it66121.c
+		#v6.15
+		#git format-patch -25 drivers/gpu/drm/bridge/ite-it66121.c
 		#
 		${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
@@ -495,6 +495,10 @@ backports () {
 		#${git} "${DIR}/patches/mainline/ite-it66121/0021-drm-bridge-ite-it66121-use-eld_mutex-to-protect-acce.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0022-drm-Use-of_property_present-for-non-boolean-properti.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0023-ASoC-hdmi-codec-move-no_capture_mute-to-struct-hdmi_.patch"
+
+		#v6.15.x+
+		#${git} "${DIR}/patches/mainline/ite-it66121/0024-drm-bridge-Pass-full-state-to-atomic_enable.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0025-drm-bridge-Pass-full-state-to-atomic_disable.patch"
 	fi
 
 	backport_tag="rpi-6.14.y"
