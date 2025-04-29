@@ -1,0 +1,65 @@
+From 66bb0a7c612e0cd82ffda8c4fe42f2f404132000 Mon Sep 17 00:00:00 2001
+From: Paul Cercueil <paul@crapouillou.net>
+Date: Wed, 14 Dec 2022 13:58:16 +0100
+Subject: [PATCH 05/25] drm: bridge: it66121: Fix wait for DDC ready
+
+The function it66121_wait_ddc_ready() would previously read the status
+register until "true", which means it never actually polled anything and
+would just read the register once.
+
+Now, it will properly wait until the DDC hardware is ready or until it
+reported an error.
+
+The 'busy' variable was also renamed to 'error' since these bits are set
+on error and not when the DDC hardware is busy.
+
+Since the DDC ready function is now working properly, the msleep(20) can
+be removed.
+
+Signed-off-by: Paul Cercueil <paul@crapouillou.net>
+Reviewed-by: Robert Foss <robert.foss@linaro.org>
+Link: https://patchwork.freedesktop.org/patch/msgid/20221214125821.12489-6-paul@crapouillou.net
+---
+ drivers/gpu/drm/bridge/ite-it66121.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/bridge/ite-it66121.c b/drivers/gpu/drm/bridge/ite-it66121.c
+index 0a4fdfd7af44..bfb9c87a7019 100644
+--- a/drivers/gpu/drm/bridge/ite-it66121.c
++++ b/drivers/gpu/drm/bridge/ite-it66121.c
+@@ -440,15 +440,17 @@ static int it66121_configure_afe(struct it66121_ctx *ctx,
+ static inline int it66121_wait_ddc_ready(struct it66121_ctx *ctx)
+ {
+ 	int ret, val;
+-	u32 busy = IT66121_DDC_STATUS_NOACK | IT66121_DDC_STATUS_WAIT_BUS |
+-		   IT66121_DDC_STATUS_ARBI_LOSE;
++	u32 error = IT66121_DDC_STATUS_NOACK | IT66121_DDC_STATUS_WAIT_BUS |
++		    IT66121_DDC_STATUS_ARBI_LOSE;
++	u32 done = IT66121_DDC_STATUS_TX_DONE;
+ 
+-	ret = regmap_read_poll_timeout(ctx->regmap, IT66121_DDC_STATUS_REG, val, true,
+-				       IT66121_EDID_SLEEP_US, IT66121_EDID_TIMEOUT_US);
++	ret = regmap_read_poll_timeout(ctx->regmap, IT66121_DDC_STATUS_REG, val,
++				       val & (error | done), IT66121_EDID_SLEEP_US,
++				       IT66121_EDID_TIMEOUT_US);
+ 	if (ret)
+ 		return ret;
+ 
+-	if (val & busy)
++	if (val & error)
+ 		return -EAGAIN;
+ 
+ 	return 0;
+@@ -582,9 +584,6 @@ static int it66121_get_edid_block(void *context, u8 *buf,
+ 		offset += cnt;
+ 		remain -= cnt;
+ 
+-		/* Per programming manual, sleep here before emptying the FIFO */
+-		msleep(20);
+-
+ 		ret = it66121_wait_ddc_ready(ctx);
+ 		if (ret)
+ 			return ret;
+-- 
+2.47.2
+
