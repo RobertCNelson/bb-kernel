@@ -19,6 +19,8 @@ toolchain="gcc_7_arm"
 #toolchain="gcc_10_arm"
 #toolchain="gcc_11_arm"
 #toolchain="gcc_12_arm"
+#toolchain="gcc_13_arm"
+#toolchain="gcc_14_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
@@ -29,6 +31,8 @@ toolchain="gcc_7_arm"
 #toolchain="gcc_10_aarch64"
 #toolchain="gcc_11_aarch64"
 #toolchain="gcc_12_aarch64"
+#toolchain="gcc_13_aarch64"
+#toolchain="gcc_14_aarch64"
 #riscv64
 #KERNEL_ARCH=riscv
 #DEBARCH=riscv64
@@ -38,6 +42,8 @@ toolchain="gcc_7_arm"
 #toolchain="gcc_10_riscv64"
 #toolchain="gcc_11_riscv64"
 #toolchain="gcc_12_riscv64"
+#toolchain="gcc_13_riscv64"
+#toolchain="gcc_14_riscv64"
 
 #Kernel
 linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
