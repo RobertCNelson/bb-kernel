@@ -39,11 +39,15 @@ toolchain="gcc_6_arm"
 #toolchain="gcc_11_riscv64"
 #toolchain="gcc_12_riscv64"
 
-#Kernel/Build
+#Kernel
+linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
+#
 KERNEL_REL=4.11
 KERNEL_TAG=${KERNEL_REL}.12
-BUILD=${build_prefix}3.1
 kernel_rt=".9-rt7"
+#Kernel Build
+BUILD=${build_prefix}3.1
 
 #v4.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
