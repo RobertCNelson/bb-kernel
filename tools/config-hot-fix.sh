@@ -125,7 +125,7 @@ cd ${DIR}/KERNEL/
 #2023.07.14
 # MUSB DMA mode
 ./scripts/config --enable CONFIG_MUSB_PIO_ONLY
-./scripts/config --enable CONFIG_USB_TI_CPPI41_DMA
+./scripts/config --disable CONFIG_USB_TI_CPPI41_DMA
 
 # We recommend to turn off Real-Time group scheduling in the
 # kernel when using systemd. RT group scheduling effectively
