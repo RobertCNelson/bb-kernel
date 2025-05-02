@@ -482,7 +482,7 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
 
 		#v6.9.x+ (disable)
-		#${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
 
 		#v6.10.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
@@ -520,7 +520,6 @@ drivers () {
 	dir 'branding/boris'
 
 	dir 'drivers/it66121_drm_connector'
-	dir 'drivers/it66121_reverts'
 	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
