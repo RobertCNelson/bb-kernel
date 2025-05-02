@@ -499,6 +499,7 @@ backports () {
 		#v6.14.x+
 		#${git} "${DIR}/patches/mainline/ite-it66121/0021-drm-bridge-ite-it66121-use-eld_mutex-to-protect-acce.patch"
 		#${git} "${DIR}/patches/mainline/ite-it66121/0022-drm-Use-of_property_present-for-non-boolean-properti.patch"
+		#(not v6.13.x)
 		#${git} "${DIR}/patches/mainline/ite-it66121/0023-ASoC-hdmi-codec-move-no_capture_mute-to-struct-hdmi_.patch"
 
 		#v6.15.x+
@@ -525,7 +526,6 @@ drivers () {
 	dir 'branding/boris'
 
 	dir 'drivers/it66121_drm_connector'
-	dir 'drivers/it66121_kernel_specific_fixes'
 	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
