@@ -483,18 +483,19 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
 
 		#v6.9.x+ (disable)
-		#${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
 
 		#v6.10.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
 
 		#v6.13.x+
-		#${git} "${DIR}/patches/mainline/ite-it66121/0020-drm-bridge-ite-it66121-Drop-hdmi_avi_infoframe_init-.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0020-drm-bridge-ite-it66121-Drop-hdmi_avi_infoframe_init-.patch"
 
 		#v6.14.x+
-		#${git} "${DIR}/patches/mainline/ite-it66121/0021-drm-bridge-ite-it66121-use-eld_mutex-to-protect-acce.patch"
-		#${git} "${DIR}/patches/mainline/ite-it66121/0022-drm-Use-of_property_present-for-non-boolean-properti.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0021-drm-bridge-ite-it66121-use-eld_mutex-to-protect-acce.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0022-drm-Use-of_property_present-for-non-boolean-properti.patch"
+		#(not v6.13.x)
 		#${git} "${DIR}/patches/mainline/ite-it66121/0023-ASoC-hdmi-codec-move-no_capture_mute-to-struct-hdmi_.patch"
 
 		#v6.15.x+
@@ -521,7 +522,6 @@ drivers () {
 	dir 'branding/boris'
 
 	dir 'drivers/it66121_drm_connector'
-	dir 'drivers/it66121_reverts'
 	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
