@@ -293,6 +293,36 @@ beagleboard_dtbs () {
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
 
+		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
+
+		#ls src/arm64/overlays/ | grep pocketbeagle2
+
+		device="k3-am6232-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+
+		#ls src/arm64/overlays/ | grep beagley
+
+		device="k3-am67a-beagley-ai-pwm-ecap0-gpio12" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap1-gpio16" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap1-gpio21" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap2-gpio17" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap2-gpio18" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio12" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio14" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio15" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio15-gpio12" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio15-gpio14" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio5" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio5-gpio12" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio5-gpio14" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio13" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio20" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio21" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio21-gpio13" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio21-gpio20" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6-gpio13" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6-gpio20" ; k3_dtbo_makefile_append
+
 		#ls src/arm64/overlays/ | grep beaglebone
 
 		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
