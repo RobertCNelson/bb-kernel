@@ -105,6 +105,7 @@ external_git () {
 
 mainline_patches () {
 	#exit 2
+	dir 'rfc/mainline'
 	dir 'mainline/pocketbeagle2'
 	#exit 2
 }
