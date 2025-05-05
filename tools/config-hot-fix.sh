@@ -271,6 +271,9 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_UBSAN_ENUM
 ./scripts/config --enable CONFIG_FPROBE
 
+#debian 6.14.5-1~exp1
+./scripts/config --disable CONFIG_UBSAN_SIGNED_WRAP
+
 #new in v6.14
 ./scripts/config --module CONFIG_NTSYNC
 ./scripts/config --module CONFIG_PPS_GENERATOR
