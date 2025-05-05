@@ -520,7 +520,7 @@ drivers () {
 	dir 'branding/boris'
 
 	dir 'drivers/it66121_drm_connector'
-	#dir 'drivers/it66122'
+	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
