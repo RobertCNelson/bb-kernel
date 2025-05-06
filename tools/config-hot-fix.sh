@@ -262,18 +262,6 @@ cd ${DIR}/KERNEL/
 #debian 6.13.11-1
 ./scripts/config --enable CONFIG_KALLSYMS_ALL
 
-#debian 6.14.3-1~exp1
-./scripts/config --enable CONFIG_UBSAN
-./scripts/config --enable CONFIG_UBSAN_BOUNDS
-./scripts/config --enable CONFIG_UBSAN_BOUNDS_STRICT
-./scripts/config --enable CONFIG_UBSAN_SHIFT
-./scripts/config --disable CONFIG_UBSAN_BOOL
-./scripts/config --disable CONFIG_UBSAN_ENUM
-./scripts/config --enable CONFIG_FPROBE
-
-#debian 6.14.5-1~exp1
-./scripts/config --disable CONFIG_UBSAN_SIGNED_WRAP
-
 #new in v6.14
 ./scripts/config --module CONFIG_NTSYNC
 ./scripts/config --module CONFIG_PPS_GENERATOR
@@ -372,5 +360,8 @@ cd ${DIR}/KERNEL/
 #Rev D
 ./scripts/config --enable CONFIG_DRM_ITE_IT66121
 ./scripts/config --enable CONFIG_SYSFB_SIMPLEFB
+
+#Cool for debugging, little noisy on production...
+./scripts/config --disable CONFIG_UBSAN
 
 cd ${DIR}/
