@@ -364,4 +364,34 @@ cd ${DIR}/KERNEL/
 #Cool for debugging, little noisy on production...
 ./scripts/config --disable CONFIG_UBSAN
 
+#Debugging Defaults
+./scripts/config --enable CONFIG_BPF_JIT_ALWAYS_ON
+./scripts/config --enable CONFIG_BPF_PRELOAD
+./scripts/config --enable CONFIG_BPF_PRELOAD_UMD
+./scripts/config --enable CONFIG_IDLE_PAGE_TRACKING
+./scripts/config --enable CONFIG_ANON_VMA_NAME
+./scripts/config --enable CONFIG_USERFAULTFD
+./scripts/config --enable CONFIG_LRU_GEN
+./scripts/config --enable CONFIG_LRU_GEN_ENABLED
+./scripts/config --enable CONFIG_HEADERS_INSTALL
+./scripts/config --enable CONFIG_DEBUG_SECTION_MISMATCH
+./scripts/config --enable CONFIG_PAGE_OWNER
+./scripts/config --enable CONFIG_DEBUG_SHIRQ
+./scripts/config --enable CONFIG_WQ_CPU_INTENSIVE_REPORT
+./scripts/config --enable CONFIG_RCU_CPU_STALL_CPUTIME
+./scripts/config --enable CONFIG_BOOTTIME_TRACING
+./scripts/config --enable CONFIG_FUNCTION_PROFILER
+./scripts/config --enable CONFIG_STACK_TRACER
+./scripts/config --enable CONFIG_SCHED_TRACER
+./scripts/config --enable CONFIG_HWLAT_TRACER
+./scripts/config --enable CONFIG_TIMERLAT_TRACER
+./scripts/config --enable CONFIG_FUNCTION_ERROR_INJECTION
+./scripts/config --enable CONFIG_MEMTEST
+
+./scripts/config --enable CONFIG_VIRT_CPU_ACCOUNTING_GEN
+./scripts/config --enable CONFIG_PSI_DEFAULT_DISABLED
+./scripts/config --enable CONFIG_PRINTK_INDEX
+./scripts/config --enable CONFIG_MEMCG_V1
+./scripts/config --enable CONFIG_CGROUP_DMEM
+
 cd ${DIR}/
