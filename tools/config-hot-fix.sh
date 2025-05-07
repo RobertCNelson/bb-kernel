@@ -394,4 +394,9 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_MEMCG_V1
 ./scripts/config --enable CONFIG_CGROUP_DMEM
 
+#This should have been AM33xx only...
+./scripts/config --disable CONFIG_SMP
+./scripts/config --disable CONFIG_SOC_OMAP5
+./scripts/config --disable CONFIG_SOC_DRA7XX
+
 cd ${DIR}/
