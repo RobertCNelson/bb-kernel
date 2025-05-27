@@ -156,6 +156,8 @@ debian_regs () {
 	check_dpkg
 	pkg="zstd"
 	check_dpkg
+	pkg="libdw-dev"
+	check_dpkg
 
 	unset stop_pkg_search
 	#lsb_release might not be installed...
