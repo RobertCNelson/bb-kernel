@@ -1,33 +1,22 @@
-From 4e462dc6d5006b5c03bb8f802c6b45c6f7fb2ff0 Mon Sep 17 00:00:00 2001
+From 6cd9094ba19f50850abe7c1df5a6543d402bc97b Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 4 Feb 2025 12:11:05 -0600
+Date: Thu, 29 May 2025 16:58:04 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.14-rc1-rt1.patch.xz
+patch-6.15-rt2.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  arch/arm/Kconfig                              |   6 +-
- arch/arm/kernel/module-plts.c                 |   4 +-
- arch/arm/kernel/traps.c                       |  11 +-
  arch/arm/mm/fault.c                           |   6 +
- arch/arm64/kernel/ftrace.c                    |   7 +-
- arch/arm64/kernel/traps.c                     |  12 +-
- arch/loongarch/kernel/ftrace_dyn.c            |   9 +-
- arch/loongarch/kernel/unwind_orc.c            |   4 +-
+ arch/arm64/Kconfig                            |   1 +
+ arch/arm64/include/asm/thread_info.h          |  16 +-
+ arch/arm64/kernel/entry-common.c              |   2 +-
  arch/powerpc/Kconfig                          |   2 +
  arch/powerpc/include/asm/stackprotector.h     |   7 +-
- arch/powerpc/kernel/trace/ftrace.c            |   6 +-
- arch/powerpc/kernel/trace/ftrace_64_pg.c      |   6 +-
- arch/powerpc/kernel/traps.c                   |   4 +-
  arch/powerpc/kvm/Kconfig                      |   1 +
  arch/powerpc/platforms/pseries/Kconfig        |   1 +
  arch/powerpc/platforms/pseries/iommu.c        |  31 +--
- arch/s390/kernel/dumpstack.c                  |   9 +-
- arch/x86/kernel/callthunks.c                  |   3 +-
- arch/x86/kernel/dumpstack.c                   |   7 +-
- arch/x86/kernel/unwind_orc.c                  |   4 +-
- arch/xtensa/kernel/traps.c                    |   6 +-
  drivers/gpu/drm/i915/Kconfig                  |   1 -
  drivers/gpu/drm/i915/display/intel_crtc.c     |   9 +-
  drivers/gpu/drm/i915/display/intel_cursor.c   |   9 +-
@@ -41,32 +30,12 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/gpu/drm/i915/intel_uncore_trace.h     |   4 +
  drivers/tty/serial/8250/8250_core.c           |  35 +++-
  drivers/tty/serial/8250/8250_port.c           | 183 ++++++++++++++----
- include/linux/kallsyms.h                      |   3 +-
- include/linux/module.h                        |   2 +-
- include/linux/preempt.h                       |   2 +
  include/linux/serial_8250.h                   |  13 +-
- kernel/cfi.c                                  |   5 +-
- kernel/jump_label.c                           |  31 ++-
- kernel/kprobes.c                              |   2 +-
  kernel/ksysfs.c                               |  12 ++
- kernel/livepatch/core.c                       |   4 +-
- kernel/module/internal.h                      |  11 --
- kernel/module/kallsyms.c                      |  73 +++----
- kernel/module/main.c                          | 103 ++++------
- kernel/module/tracking.c                      |   2 -
- kernel/module/tree_lookup.c                   |   8 +-
- kernel/module/version.c                       |  14 +-
- kernel/sched/core.c                           |  24 +++
- kernel/static_call_inline.c                   |  13 +-
- kernel/trace/bpf_trace.c                      |  24 +--
- kernel/trace/trace.c                          |   7 +-
- kernel/trace/trace_kprobe.c                   |   9 +-
- lib/bug.c                                     |  22 +--
- lib/dump_stack.c                              |   4 +-
- 56 files changed, 495 insertions(+), 367 deletions(-)
+ 25 files changed, 327 insertions(+), 99 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
-index 835b5f100e92..97e64857c130 100644
+index 25ed6f1a7c7a..89466636d460 100644
 --- a/arch/arm/Kconfig
 +++ b/arch/arm/Kconfig
 @@ -43,6 +43,7 @@ config ARM
@@ -103,52 +72,6 @@ index 835b5f100e92..97e64857c130 100644
  	select MMU_GATHER_RCU_TABLE_FREE if SMP && ARM_LPAE
  	select HAVE_REGS_AND_STACK_ACCESS_API
  	select HAVE_RSEQ
-diff --git a/arch/arm/kernel/module-plts.c b/arch/arm/kernel/module-plts.c
-index da2ee8d6ef1a..354ce16d83cb 100644
---- a/arch/arm/kernel/module-plts.c
-+++ b/arch/arm/kernel/module-plts.c
-@@ -285,11 +285,9 @@ bool in_module_plt(unsigned long loc)
- 	struct module *mod;
- 	bool ret;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	mod = __module_text_address(loc);
- 	ret = mod && (loc - (u32)mod->arch.core.plt_ent < mod->arch.core.plt_count * PLT_ENT_SIZE ||
- 		      loc - (u32)mod->arch.init.plt_ent < mod->arch.init.plt_count * PLT_ENT_SIZE);
--	preempt_enable();
--
- 	return ret;
- }
-diff --git a/arch/arm/kernel/traps.c b/arch/arm/kernel/traps.c
-index 6ea645939573..1254992184d2 100644
---- a/arch/arm/kernel/traps.c
-+++ b/arch/arm/kernel/traps.c
-@@ -258,13 +258,6 @@ void show_stack(struct task_struct *tsk, unsigned long *sp, const char *loglvl)
- 	barrier();
- }
- 
--#ifdef CONFIG_PREEMPT
--#define S_PREEMPT " PREEMPT"
--#elif defined(CONFIG_PREEMPT_RT)
--#define S_PREEMPT " PREEMPT_RT"
--#else
--#define S_PREEMPT ""
--#endif
- #ifdef CONFIG_SMP
- #define S_SMP " SMP"
- #else
-@@ -282,8 +275,8 @@ static int __die(const char *str, int err, struct pt_regs *regs)
- 	static int die_counter;
- 	int ret;
- 
--	pr_emerg("Internal error: %s: %x [#%d]" S_PREEMPT S_SMP S_ISA "\n",
--	         str, err, ++die_counter);
-+	pr_emerg("Internal error: %s: %x [#%d] %s" S_SMP S_ISA "\n",
-+		 str, err, ++die_counter, preempt_model_str());
- 
- 	/* trap and error numbers are mostly meaningless on ARM */
- 	ret = notify_die(DIE_OOPS, str, regs, err, tsk->thread.trap_no, SIGSEGV);
 diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
 index ab01b51de559..cd030e2734e5 100644
 --- a/arch/arm/mm/fault.c
@@ -173,114 +96,79 @@ index ab01b51de559..cd030e2734e5 100644
  	do_bad_area(addr, fsr, regs);
  	return 0;
  }
-diff --git a/arch/arm64/kernel/ftrace.c b/arch/arm64/kernel/ftrace.c
-index d7c0d023dfe5..5a890714ee2e 100644
---- a/arch/arm64/kernel/ftrace.c
-+++ b/arch/arm64/kernel/ftrace.c
-@@ -320,14 +320,13 @@ static bool ftrace_find_callable_addr(struct dyn_ftrace *rec,
- 	 * dealing with an out-of-range condition, we can assume it
- 	 * is due to a module being loaded far away from the kernel.
- 	 *
--	 * NOTE: __module_text_address() must be called with preemption
--	 * disabled, but we can rely on ftrace_lock to ensure that 'mod'
-+	 * NOTE: __module_text_address() must be called within a RCU read
-+	 * section, but we can rely on ftrace_lock to ensure that 'mod'
- 	 * retains its validity throughout the remainder of this code.
- 	 */
- 	if (!mod) {
--		preempt_disable();
-+		guard(rcu)();
- 		mod = __module_text_address(pc);
--		preempt_enable();
- 	}
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index a182295e6f08..84e3094b00ef 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -42,6 +42,7 @@ config ARM64
+ 	select ARCH_HAS_NMI_SAFE_THIS_CPU_OPS
+ 	select ARCH_HAS_NON_OVERLAPPING_ADDRESS_SPACE
+ 	select ARCH_HAS_NONLEAF_PMD_YOUNG if ARM64_HAFT
++	select ARCH_HAS_PREEMPT_LAZY
+ 	select ARCH_HAS_PTDUMP
+ 	select ARCH_HAS_PTE_DEVMAP
+ 	select ARCH_HAS_PTE_SPECIAL
+diff --git a/arch/arm64/include/asm/thread_info.h b/arch/arm64/include/asm/thread_info.h
+index 1114c1c3300a..4443ef278975 100644
+--- a/arch/arm64/include/asm/thread_info.h
++++ b/arch/arm64/include/asm/thread_info.h
+@@ -59,11 +59,12 @@ void arch_setup_new_exec(void);
  
- 	if (WARN_ON(!mod))
-diff --git a/arch/arm64/kernel/traps.c b/arch/arm64/kernel/traps.c
-index 4e26bd356a48..0b6f92fcdb30 100644
---- a/arch/arm64/kernel/traps.c
-+++ b/arch/arm64/kernel/traps.c
-@@ -172,14 +172,6 @@ static void dump_kernel_instr(const char *lvl, struct pt_regs *regs)
- 	printk("%sCode: %s\n", lvl, str);
- }
+ #define TIF_SIGPENDING		0	/* signal pending */
+ #define TIF_NEED_RESCHED	1	/* rescheduling necessary */
+-#define TIF_NOTIFY_RESUME	2	/* callback before returning to user */
+-#define TIF_FOREIGN_FPSTATE	3	/* CPU's FP state is not current's */
+-#define TIF_UPROBE		4	/* uprobe breakpoint or singlestep */
+-#define TIF_MTE_ASYNC_FAULT	5	/* MTE Asynchronous Tag Check Fault */
+-#define TIF_NOTIFY_SIGNAL	6	/* signal notifications exist */
++#define TIF_NEED_RESCHED_LAZY	2	/* Lazy rescheduling needed */
++#define TIF_NOTIFY_RESUME	3	/* callback before returning to user */
++#define TIF_FOREIGN_FPSTATE	4	/* CPU's FP state is not current's */
++#define TIF_UPROBE		5	/* uprobe breakpoint or singlestep */
++#define TIF_MTE_ASYNC_FAULT	6	/* MTE Asynchronous Tag Check Fault */
++#define TIF_NOTIFY_SIGNAL	7	/* signal notifications exist */
+ #define TIF_SYSCALL_TRACE	8	/* syscall trace active */
+ #define TIF_SYSCALL_AUDIT	9	/* syscall auditing */
+ #define TIF_SYSCALL_TRACEPOINT	10	/* syscall tracepoint for ftrace */
+@@ -85,6 +86,7 @@ void arch_setup_new_exec(void);
  
--#ifdef CONFIG_PREEMPT
--#define S_PREEMPT " PREEMPT"
--#elif defined(CONFIG_PREEMPT_RT)
--#define S_PREEMPT " PREEMPT_RT"
--#else
--#define S_PREEMPT ""
--#endif
--
- #define S_SMP " SMP"
+ #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
+ #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)
++#define _TIF_NEED_RESCHED_LAZY	(1 << TIF_NEED_RESCHED_LAZY)
+ #define _TIF_NOTIFY_RESUME	(1 << TIF_NOTIFY_RESUME)
+ #define _TIF_FOREIGN_FPSTATE	(1 << TIF_FOREIGN_FPSTATE)
+ #define _TIF_SYSCALL_TRACE	(1 << TIF_SYSCALL_TRACE)
+@@ -100,10 +102,10 @@ void arch_setup_new_exec(void);
+ #define _TIF_NOTIFY_SIGNAL	(1 << TIF_NOTIFY_SIGNAL)
+ #define _TIF_TSC_SIGSEGV	(1 << TIF_TSC_SIGSEGV)
  
- static int __die(const char *str, long err, struct pt_regs *regs)
-@@ -187,8 +179,8 @@ static int __die(const char *str, long err, struct pt_regs *regs)
- 	static int die_counter;
- 	int ret;
+-#define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_SIGPENDING | \
++#define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY | \
+ 				 _TIF_NOTIFY_RESUME | _TIF_FOREIGN_FPSTATE | \
+ 				 _TIF_UPROBE | _TIF_MTE_ASYNC_FAULT | \
+-				 _TIF_NOTIFY_SIGNAL)
++				 _TIF_NOTIFY_SIGNAL | _TIF_SIGPENDING)
  
--	pr_emerg("Internal error: %s: %016lx [#%d]" S_PREEMPT S_SMP "\n",
--		 str, err, ++die_counter);
-+	pr_emerg("Internal error: %s: %016lx [#%d] %s" S_SMP "\n",
-+		 str, err, ++die_counter, preempt_model_str());
+ #define _TIF_SYSCALL_WORK	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | \
+ 				 _TIF_SYSCALL_TRACEPOINT | _TIF_SECCOMP | \
+diff --git a/arch/arm64/kernel/entry-common.c b/arch/arm64/kernel/entry-common.c
+index b260ddc4d3e9..7993fab0cab4 100644
+--- a/arch/arm64/kernel/entry-common.c
++++ b/arch/arm64/kernel/entry-common.c
+@@ -132,7 +132,7 @@ static void do_notify_resume(struct pt_regs *regs, unsigned long thread_flags)
+ 	do {
+ 		local_irq_enable();
  
- 	/* trap and error numbers are mostly meaningless on ARM */
- 	ret = notify_die(DIE_OOPS, str, regs, err, 0, SIGSEGV);
-diff --git a/arch/loongarch/kernel/ftrace_dyn.c b/arch/loongarch/kernel/ftrace_dyn.c
-index 25c9a4cfd5fa..d5d81d74034c 100644
---- a/arch/loongarch/kernel/ftrace_dyn.c
-+++ b/arch/loongarch/kernel/ftrace_dyn.c
-@@ -85,14 +85,13 @@ static bool ftrace_find_callable_addr(struct dyn_ftrace *rec, struct module *mod
- 	 * dealing with an out-of-range condition, we can assume it
- 	 * is due to a module being loaded far away from the kernel.
- 	 *
--	 * NOTE: __module_text_address() must be called with preemption
--	 * disabled, but we can rely on ftrace_lock to ensure that 'mod'
-+	 * NOTE: __module_text_address() must be called within a RCU read
-+	 * section, but we can rely on ftrace_lock to ensure that 'mod'
- 	 * retains its validity throughout the remainder of this code.
- 	 */
- 	if (!mod) {
--		preempt_disable();
--		mod = __module_text_address(pc);
--		preempt_enable();
-+		scoped_guard(rcu)
-+			mod = __module_text_address(pc);
- 	}
+-		if (thread_flags & _TIF_NEED_RESCHED)
++		if (thread_flags & (_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY))
+ 			schedule();
  
- 	if (WARN_ON(!mod))
-diff --git a/arch/loongarch/kernel/unwind_orc.c b/arch/loongarch/kernel/unwind_orc.c
-index b25722876331..d623935a7547 100644
---- a/arch/loongarch/kernel/unwind_orc.c
-+++ b/arch/loongarch/kernel/unwind_orc.c
-@@ -399,7 +399,7 @@ bool unwind_next_frame(struct unwind_state *state)
- 		return false;
- 
- 	/* Don't let modules unload while we're reading their ORC data. */
--	preempt_disable();
-+	guard(rcu)();
- 
- 	if (is_entry_func(state->pc))
- 		goto end;
-@@ -514,14 +514,12 @@ bool unwind_next_frame(struct unwind_state *state)
- 	if (!__kernel_text_address(state->pc))
- 		goto err;
- 
--	preempt_enable();
- 	return true;
- 
- err:
- 	state->error = true;
- 
- end:
--	preempt_enable();
- 	state->stack_info.type = STACK_TYPE_UNKNOWN;
- 	return false;
- }
+ 		if (thread_flags & _TIF_UPROBE)
 diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
-index 424f188e62d9..93497424e05a 100644
+index 6722625a406a..5f1b8d31cbf5 100644
 --- a/arch/powerpc/Kconfig
 +++ b/arch/powerpc/Kconfig
-@@ -171,6 +171,7 @@ config PPC
+@@ -173,6 +173,7 @@ config PPC
  	select ARCH_STACKWALK
  	select ARCH_SUPPORTS_ATOMIC_RMW
  	select ARCH_SUPPORTS_DEBUG_PAGEALLOC	if PPC_BOOK3S || PPC_8xx
@@ -288,7 +176,7 @@ index 424f188e62d9..93497424e05a 100644
  	select ARCH_USE_BUILTIN_BSWAP
  	select ARCH_USE_CMPXCHG_LOCKREF		if PPC64
  	select ARCH_USE_MEMTEST
-@@ -275,6 +276,7 @@ config PPC
+@@ -277,6 +278,7 @@ config PPC
  	select HAVE_PERF_EVENTS_NMI		if PPC64
  	select HAVE_PERF_REGS
  	select HAVE_PERF_USER_STACK_DUMP
@@ -315,57 +203,6 @@ index 283c34647856..4727f40052dd 100644
  	current->stack_canary = canary;
  #ifdef CONFIG_PPC64
  	get_paca()->canary = canary;
-diff --git a/arch/powerpc/kernel/trace/ftrace.c b/arch/powerpc/kernel/trace/ftrace.c
-index 2f776f137a89..6dca92d5a6e8 100644
---- a/arch/powerpc/kernel/trace/ftrace.c
-+++ b/arch/powerpc/kernel/trace/ftrace.c
-@@ -115,10 +115,8 @@ static unsigned long ftrace_lookup_module_stub(unsigned long ip, unsigned long a
- {
- 	struct module *mod = NULL;
- 
--	preempt_disable();
--	mod = __module_text_address(ip);
--	preempt_enable();
--
-+	scoped_guard(rcu)
-+		mod = __module_text_address(ip);
- 	if (!mod)
- 		pr_err("No module loaded at addr=%lx\n", ip);
- 
-diff --git a/arch/powerpc/kernel/trace/ftrace_64_pg.c b/arch/powerpc/kernel/trace/ftrace_64_pg.c
-index ac35015f04c6..5c6e545d1708 100644
---- a/arch/powerpc/kernel/trace/ftrace_64_pg.c
-+++ b/arch/powerpc/kernel/trace/ftrace_64_pg.c
-@@ -120,10 +120,8 @@ static struct module *ftrace_lookup_module(struct dyn_ftrace *rec)
- {
- 	struct module *mod;
- 
--	preempt_disable();
--	mod = __module_text_address(rec->ip);
--	preempt_enable();
--
-+	scoped_guard(rcu)
-+		mod = __module_text_address(rec->ip);
- 	if (!mod)
- 		pr_err("No module loaded at addr=%lx\n", rec->ip);
- 
-diff --git a/arch/powerpc/kernel/traps.c b/arch/powerpc/kernel/traps.c
-index edf5cabe5dfd..d6d77d92b335 100644
---- a/arch/powerpc/kernel/traps.c
-+++ b/arch/powerpc/kernel/traps.c
-@@ -263,10 +263,10 @@ static int __die(const char *str, struct pt_regs *regs, long err)
- {
- 	printk("Oops: %s, sig: %ld [#%d]\n", str, err, ++die_counter);
- 
--	printk("%s PAGE_SIZE=%luK%s%s%s%s%s%s %s\n",
-+	printk("%s PAGE_SIZE=%luK%s %s %s%s%s%s %s\n",
- 	       IS_ENABLED(CONFIG_CPU_LITTLE_ENDIAN) ? "LE" : "BE",
- 	       PAGE_SIZE / 1024, get_mmu_str(),
--	       IS_ENABLED(CONFIG_PREEMPT) ? " PREEMPT" : "",
-+	       preempt_model_str(),
- 	       IS_ENABLED(CONFIG_SMP) ? " SMP" : "",
- 	       IS_ENABLED(CONFIG_SMP) ? (" NR_CPUS=" __stringify(NR_CPUS)) : "",
- 	       debug_pagealloc_enabled() ? " DEBUG_PAGEALLOC" : "",
 diff --git a/arch/powerpc/kvm/Kconfig b/arch/powerpc/kvm/Kconfig
 index dbfdc126bf14..82dd033cf796 100644
 --- a/arch/powerpc/kvm/Kconfig
@@ -379,7 +216,7 @@ index dbfdc126bf14..82dd033cf796 100644
  	select HAVE_KVM_IRQ_ROUTING
  	select HAVE_KVM_MSI
 diff --git a/arch/powerpc/platforms/pseries/Kconfig b/arch/powerpc/platforms/pseries/Kconfig
-index 42fc66e97539..e0d0b3ba9fb0 100644
+index fa3c2fff082a..ea4f42cfe825 100644
 --- a/arch/powerpc/platforms/pseries/Kconfig
 +++ b/arch/powerpc/platforms/pseries/Kconfig
 @@ -2,6 +2,7 @@
@@ -391,7 +228,7 @@ index 42fc66e97539..e0d0b3ba9fb0 100644
  	select MPIC
  	select OF_DYNAMIC
 diff --git a/arch/powerpc/platforms/pseries/iommu.c b/arch/powerpc/platforms/pseries/iommu.c
-index ae6f7a235d8b..ae4d8d0194aa 100644
+index d6ebc19fb99c..34657e0288e9 100644
 --- a/arch/powerpc/platforms/pseries/iommu.c
 +++ b/arch/powerpc/platforms/pseries/iommu.c
 @@ -26,6 +26,7 @@
@@ -402,7 +239,7 @@ index ae6f7a235d8b..ae4d8d0194aa 100644
  #include <asm/io.h>
  #include <asm/prom.h>
  #include <asm/rtas.h>
-@@ -244,7 +245,13 @@ static int tce_build_pSeriesLP(unsigned long liobn, long tcenum, long tceshift,
+@@ -245,7 +246,13 @@ static int tce_build_pSeriesLP(unsigned long liobn, long tcenum, long tceshift,
  	return ret;
  }
  
@@ -417,7 +254,7 @@ index ae6f7a235d8b..ae4d8d0194aa 100644
  
  static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
  				     long npages, unsigned long uaddr,
-@@ -267,9 +274,10 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+@@ -268,9 +275,10 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
  		                           direction, attrs);
  	}
  
@@ -430,7 +267,7 @@ index ae6f7a235d8b..ae4d8d0194aa 100644
  
  	/* This is safe to do since interrupts are off when we're called
  	 * from iommu_alloc{,_sg}()
-@@ -278,12 +286,12 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+@@ -279,12 +287,12 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
  		tcep = (__be64 *)__get_free_page(GFP_ATOMIC);
  		/* If allocation fails, fall back to the loop implementation */
  		if (!tcep) {
@@ -445,7 +282,7 @@ index ae6f7a235d8b..ae4d8d0194aa 100644
  	}
  
  	rpn = __pa(uaddr) >> tceshift;
-@@ -313,7 +321,7 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
+@@ -314,7 +322,7 @@ static int tce_buildmulti_pSeriesLP(struct iommu_table *tbl, long tcenum,
  		tcenum += limit;
  	} while (npages > 0 && !rc);
  
@@ -454,7 +291,7 @@ index ae6f7a235d8b..ae4d8d0194aa 100644
  
  	if (unlikely(rc == H_NOT_ENOUGH_RESOURCES)) {
  		ret = (int)rc;
-@@ -497,16 +505,17 @@ static int tce_setrange_multi_pSeriesLP(unsigned long start_pfn,
+@@ -498,16 +506,17 @@ static int tce_setrange_multi_pSeriesLP(unsigned long start_pfn,
  				DMA_BIDIRECTIONAL, 0);
  	}
  
@@ -476,7 +313,7 @@ index ae6f7a235d8b..ae4d8d0194aa 100644
  	}
  
  	proto_tce = TCE_PCI_READ | TCE_PCI_WRITE;
-@@ -549,7 +558,7 @@ static int tce_setrange_multi_pSeriesLP(unsigned long start_pfn,
+@@ -550,7 +559,7 @@ static int tce_setrange_multi_pSeriesLP(unsigned long start_pfn,
  
  	/* error cleanup: caller will clear whole range */
  
@@ -485,116 +322,6 @@ index ae6f7a235d8b..ae4d8d0194aa 100644
  	return rc;
  }
  
-diff --git a/arch/s390/kernel/dumpstack.c b/arch/s390/kernel/dumpstack.c
-index 1ecd0580561f..7930fbab69db 100644
---- a/arch/s390/kernel/dumpstack.c
-+++ b/arch/s390/kernel/dumpstack.c
-@@ -198,13 +198,8 @@ void __noreturn die(struct pt_regs *regs, const char *str)
- 	console_verbose();
- 	spin_lock_irq(&die_lock);
- 	bust_spinlocks(1);
--	printk("%s: %04x ilc:%d [#%d] ", str, regs->int_code & 0xffff,
--	       regs->int_code >> 17, ++die_counter);
--#ifdef CONFIG_PREEMPT
--	pr_cont("PREEMPT ");
--#elif defined(CONFIG_PREEMPT_RT)
--	pr_cont("PREEMPT_RT ");
--#endif
-+	printk("%s: %04x ilc:%d [#%d] %s", str, regs->int_code & 0xffff,
-+	       regs->int_code >> 17, ++die_counter, preempt_model_str());
- 	pr_cont("SMP ");
- 	if (debug_pagealloc_enabled())
- 		pr_cont("DEBUG_PAGEALLOC");
-diff --git a/arch/x86/kernel/callthunks.c b/arch/x86/kernel/callthunks.c
-index 8418a892d195..251b65f2ab21 100644
---- a/arch/x86/kernel/callthunks.c
-+++ b/arch/x86/kernel/callthunks.c
-@@ -98,11 +98,10 @@ static inline bool within_module_coretext(void *addr)
- #ifdef CONFIG_MODULES
- 	struct module *mod;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	mod = __module_address((unsigned long)addr);
- 	if (mod && within_module_core((unsigned long)addr, mod))
- 		ret = true;
--	preempt_enable();
- #endif
- 	return ret;
- }
-diff --git a/arch/x86/kernel/dumpstack.c b/arch/x86/kernel/dumpstack.c
-index a7d562697e50..064b23a93c6f 100644
---- a/arch/x86/kernel/dumpstack.c
-+++ b/arch/x86/kernel/dumpstack.c
-@@ -395,18 +395,13 @@ NOKPROBE_SYMBOL(oops_end);
- 
- static void __die_header(const char *str, struct pt_regs *regs, long err)
- {
--	const char *pr = "";
--
- 	/* Save the regs of the first oops for the executive summary later. */
- 	if (!die_counter)
- 		exec_summary_regs = *regs;
- 
--	if (IS_ENABLED(CONFIG_PREEMPTION))
--		pr = IS_ENABLED(CONFIG_PREEMPT_RT) ? " PREEMPT_RT" : " PREEMPT";
--
- 	printk(KERN_DEFAULT
- 	       "Oops: %s: %04lx [#%d]%s%s%s%s%s\n", str, err & 0xffff,
--	       ++die_counter, pr,
-+	       ++die_counter, preempt_model_str(),
- 	       IS_ENABLED(CONFIG_SMP)     ? " SMP"             : "",
- 	       debug_pagealloc_enabled()  ? " DEBUG_PAGEALLOC" : "",
- 	       IS_ENABLED(CONFIG_KASAN)   ? " KASAN"           : "",
-diff --git a/arch/x86/kernel/unwind_orc.c b/arch/x86/kernel/unwind_orc.c
-index d4705a348a80..977ee75e047c 100644
---- a/arch/x86/kernel/unwind_orc.c
-+++ b/arch/x86/kernel/unwind_orc.c
-@@ -476,7 +476,7 @@ bool unwind_next_frame(struct unwind_state *state)
- 		return false;
- 
- 	/* Don't let modules unload while we're reading their ORC data. */
--	preempt_disable();
-+	guard(rcu)();
- 
- 	/* End-of-stack check for user tasks: */
- 	if (state->regs && user_mode(state->regs))
-@@ -669,14 +669,12 @@ bool unwind_next_frame(struct unwind_state *state)
- 		goto err;
- 	}
- 
--	preempt_enable();
- 	return true;
- 
- err:
- 	state->error = true;
- 
- the_end:
--	preempt_enable();
- 	state->stack_info.type = STACK_TYPE_UNKNOWN;
- 	return false;
- }
-diff --git a/arch/xtensa/kernel/traps.c b/arch/xtensa/kernel/traps.c
-index 38092d21acf8..0edba7d8df8c 100644
---- a/arch/xtensa/kernel/traps.c
-+++ b/arch/xtensa/kernel/traps.c
-@@ -629,15 +629,11 @@ DEFINE_SPINLOCK(die_lock);
- void __noreturn die(const char * str, struct pt_regs * regs, long err)
- {
- 	static int die_counter;
--	const char *pr = "";
--
--	if (IS_ENABLED(CONFIG_PREEMPTION))
--		pr = IS_ENABLED(CONFIG_PREEMPT_RT) ? " PREEMPT_RT" : " PREEMPT";
- 
- 	console_verbose();
- 	spin_lock_irq(&die_lock);
- 
--	pr_info("%s: sig: %ld [#%d]%s\n", str, err, ++die_counter, pr);
-+	pr_info("%s: sig: %ld [#%d]%s\n", str, err, ++die_counter, preempt_model_str());
- 	show_regs(regs);
- 	if (!user_mode(regs))
- 		show_stack(NULL, (unsigned long *)regs->areg[1], KERN_INFO);
 diff --git a/drivers/gpu/drm/i915/Kconfig b/drivers/gpu/drm/i915/Kconfig
 index 5e939004b646..40a9234e6e5d 100644
 --- a/drivers/gpu/drm/i915/Kconfig
@@ -608,10 +335,10 @@ index 5e939004b646..40a9234e6e5d 100644
  	select INTERVAL_TREE
  	# we need shmfs for the swappable backing store, and in particular
 diff --git a/drivers/gpu/drm/i915/display/intel_crtc.c b/drivers/gpu/drm/i915/display/intel_crtc.c
-index c910168602d2..d462a6b7e009 100644
+index 5b2603ef2ff7..6e9145ff4a7c 100644
 --- a/drivers/gpu/drm/i915/display/intel_crtc.c
 +++ b/drivers/gpu/drm/i915/display/intel_crtc.c
-@@ -556,7 +556,8 @@ void intel_pipe_update_start(struct intel_atomic_state *state,
+@@ -560,7 +560,8 @@ void intel_pipe_update_start(struct intel_atomic_state *state,
  	 */
  	intel_psr_wait_for_idle_locked(new_crtc_state);
  
@@ -621,7 +348,7 @@ index c910168602d2..d462a6b7e009 100644
  
  	crtc->debug.min_vbl = evade.min;
  	crtc->debug.max_vbl = evade.max;
-@@ -574,7 +575,8 @@ void intel_pipe_update_start(struct intel_atomic_state *state,
+@@ -578,7 +579,8 @@ void intel_pipe_update_start(struct intel_atomic_state *state,
  	return;
  
  irq_disable:
@@ -631,9 +358,9 @@ index c910168602d2..d462a6b7e009 100644
  }
  
  #if IS_ENABLED(CONFIG_DRM_I915_DEBUG_VBLANK_EVADE)
-@@ -716,7 +718,8 @@ void intel_pipe_update_end(struct intel_atomic_state *state,
- 	 */
- 	intel_vrr_send_push(new_crtc_state);
+@@ -724,7 +726,8 @@ void intel_pipe_update_end(struct intel_atomic_state *state,
+ 	if (!state->base.legacy_cursor_update)
+ 		intel_vrr_send_push(NULL, new_crtc_state);
  
 -	local_irq_enable();
 +	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
@@ -642,10 +369,10 @@ index c910168602d2..d462a6b7e009 100644
  	if (intel_vgpu_active(dev_priv))
  		goto out;
 diff --git a/drivers/gpu/drm/i915/display/intel_cursor.c b/drivers/gpu/drm/i915/display/intel_cursor.c
-index 57cf8f46a458..5fe8396b44b9 100644
+index 3276a5b4a9b0..48bf07df28e5 100644
 --- a/drivers/gpu/drm/i915/display/intel_cursor.c
 +++ b/drivers/gpu/drm/i915/display/intel_cursor.c
-@@ -901,13 +901,15 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
+@@ -929,13 +929,15 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
  		 */
  		intel_psr_wait_for_idle_locked(crtc_state);
  
@@ -663,7 +390,7 @@ index 57cf8f46a458..5fe8396b44b9 100644
  	}
  
  	if (new_plane_state->uapi.visible) {
-@@ -917,7 +919,8 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
+@@ -945,7 +947,8 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
  		intel_plane_disable_arm(NULL, plane, crtc_state);
  	}
  
@@ -674,10 +401,10 @@ index 57cf8f46a458..5fe8396b44b9 100644
  	intel_psr_unlock(crtc_state);
  
 diff --git a/drivers/gpu/drm/i915/display/intel_display_trace.h b/drivers/gpu/drm/i915/display/intel_display_trace.h
-index 338b9f7b20b8..910bb39a1235 100644
+index 27ebc32cb61a..a519d94700c3 100644
 --- a/drivers/gpu/drm/i915/display/intel_display_trace.h
 +++ b/drivers/gpu/drm/i915/display/intel_display_trace.h
-@@ -9,6 +9,10 @@
+@@ -13,6 +13,10 @@
  #if !defined(__INTEL_DISPLAY_TRACE_H__) || defined(TRACE_HEADER_MULTI_READ)
  #define __INTEL_DISPLAY_TRACE_H__
  
@@ -689,10 +416,10 @@ index 338b9f7b20b8..910bb39a1235 100644
  #include <linux/string_helpers.h>
  #include <linux/types.h>
 diff --git a/drivers/gpu/drm/i915/display/intel_vblank.c b/drivers/gpu/drm/i915/display/intel_vblank.c
-index a95fb3349eba..d0995cbb0457 100644
+index 7b240ce681a0..c37364613353 100644
 --- a/drivers/gpu/drm/i915/display/intel_vblank.c
 +++ b/drivers/gpu/drm/i915/display/intel_vblank.c
-@@ -309,6 +309,20 @@ static void intel_vblank_section_exit(struct intel_display *display)
+@@ -311,6 +311,20 @@ static void intel_vblank_section_exit(struct intel_display *display)
  	struct drm_i915_private *i915 = to_i915(display->drm);
  	spin_unlock(&i915->uncore.lock);
  }
@@ -713,7 +440,7 @@ index a95fb3349eba..d0995cbb0457 100644
  #else
  static void intel_vblank_section_enter(struct intel_display *display)
  {
-@@ -317,6 +331,17 @@ static void intel_vblank_section_enter(struct intel_display *display)
+@@ -319,6 +333,17 @@ static void intel_vblank_section_enter(struct intel_display *display)
  static void intel_vblank_section_exit(struct intel_display *display)
  {
  }
@@ -731,7 +458,7 @@ index a95fb3349eba..d0995cbb0457 100644
  #endif
  
  static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
-@@ -353,10 +378,10 @@ static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
+@@ -355,10 +380,10 @@ static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
  	 * timing critical raw register reads, potentially with
  	 * preemption disabled, so the following code must not block.
  	 */
@@ -745,7 +472,7 @@ index a95fb3349eba..d0995cbb0457 100644
  
  	/* Get optional system timestamp before query. */
  	if (stime)
-@@ -420,10 +445,10 @@ static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
+@@ -422,10 +447,10 @@ static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
  	if (etime)
  		*etime = ktime_get();
  
@@ -759,7 +486,7 @@ index a95fb3349eba..d0995cbb0457 100644
  
  	/*
  	 * While in vblank, position will be negative
-@@ -461,13 +486,11 @@ int intel_get_crtc_scanline(struct intel_crtc *crtc)
+@@ -463,13 +488,11 @@ int intel_get_crtc_scanline(struct intel_crtc *crtc)
  	unsigned long irqflags;
  	int position;
  
@@ -775,7 +502,7 @@ index a95fb3349eba..d0995cbb0457 100644
  
  	return position;
  }
-@@ -689,11 +712,13 @@ int intel_vblank_evade(struct intel_vblank_evade_ctx *evade)
+@@ -729,11 +752,13 @@ int intel_vblank_evade(struct intel_vblank_evade_ctx *evade)
  			break;
  		}
  
@@ -792,7 +519,7 @@ index a95fb3349eba..d0995cbb0457 100644
  
  	finish_wait(wq, &wait);
 diff --git a/drivers/gpu/drm/i915/gt/intel_execlists_submission.c b/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
-index 4a80ffa1b962..6c4939ef61a4 100644
+index 03baa7fa0a27..799e943d9fac 100644
 --- a/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
 +++ b/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
 @@ -1294,7 +1294,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
@@ -855,7 +582,7 @@ index 4a80ffa1b962..6c4939ef61a4 100644
  	}
  
 diff --git a/drivers/gpu/drm/i915/gt/uc/intel_guc.h b/drivers/gpu/drm/i915/gt/uc/intel_guc.h
-index 57b903132776..ff213b79ba83 100644
+index 053780f562c1..b25fa8f4dc4b 100644
 --- a/drivers/gpu/drm/i915/gt/uc/intel_guc.h
 +++ b/drivers/gpu/drm/i915/gt/uc/intel_guc.h
 @@ -362,7 +362,7 @@ static inline int intel_guc_send_busy_loop(struct intel_guc *guc,
@@ -868,10 +595,10 @@ index 57b903132776..ff213b79ba83 100644
  	/*
  	 * FIXME: Have caller pass in if we are in an atomic context to avoid
 diff --git a/drivers/gpu/drm/i915/i915_request.c b/drivers/gpu/drm/i915/i915_request.c
-index 8f62cfa23fb7..d8b8ce3a6602 100644
+index c3d27eadc0a7..4705d6d6db14 100644
 --- a/drivers/gpu/drm/i915/i915_request.c
 +++ b/drivers/gpu/drm/i915/i915_request.c
-@@ -609,7 +609,6 @@ bool __i915_request_submit(struct i915_request *request)
+@@ -608,7 +608,6 @@ bool __i915_request_submit(struct i915_request *request)
  
  	RQ_TRACE(request, "\n");
  
@@ -879,7 +606,7 @@ index 8f62cfa23fb7..d8b8ce3a6602 100644
  	lockdep_assert_held(&engine->sched_engine->lock);
  
  	/*
-@@ -718,7 +717,6 @@ void __i915_request_unsubmit(struct i915_request *request)
+@@ -717,7 +716,6 @@ void __i915_request_unsubmit(struct i915_request *request)
  	 */
  	RQ_TRACE(request, "\n");
  
@@ -938,7 +665,7 @@ index f13ff71edf2d..3c67e267fb60 100644
  
  #include <linux/types.h>
 diff --git a/drivers/tty/serial/8250/8250_core.c b/drivers/tty/serial/8250/8250_core.c
-index 6f676bb37ac3..3ab372b28cf3 100644
+index 5a56f853cf6d..1f4916e53cc3 100644
 --- a/drivers/tty/serial/8250/8250_core.c
 +++ b/drivers/tty/serial/8250/8250_core.c
 @@ -388,12 +388,34 @@ void __init serial8250_register_ports(struct uart_driver *drv, struct device *de
@@ -998,10 +725,10 @@ index 6f676bb37ac3..3ab372b28cf3 100644
  	.data		= &serial8250_reg,
  };
 diff --git a/drivers/tty/serial/8250/8250_port.c b/drivers/tty/serial/8250/8250_port.c
-index d7976a21cca9..76a8d74f16e8 100644
+index 8ac452cea36c..22b3f7a19307 100644
 --- a/drivers/tty/serial/8250/8250_port.c
 +++ b/drivers/tty/serial/8250/8250_port.c
-@@ -711,7 +711,12 @@ static void serial8250_set_sleep(struct uart_8250_port *p, int sleep)
+@@ -709,7 +709,12 @@ static void serial8250_set_sleep(struct uart_8250_port *p, int sleep)
  	serial8250_rpm_put(p);
  }
  
@@ -1015,7 +742,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  {
  	if (up->capabilities & UART_CAP_UUE)
  		serial_out(up, UART_IER, UART_IER_UUE);
-@@ -719,6 +724,14 @@ static void serial8250_clear_IER(struct uart_8250_port *up)
+@@ -717,6 +722,14 @@ static void serial8250_clear_IER(struct uart_8250_port *up)
  		serial_out(up, UART_IER, 0);
  }
  
@@ -1030,7 +757,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  #ifdef CONFIG_SERIAL_8250_RSA
  /*
   * Attempts to turn on the RSA FIFO.  Returns zero on failure.
-@@ -1406,9 +1419,6 @@ void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier)
+@@ -1404,9 +1417,6 @@ void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier)
  {
  	unsigned char mcr = serial8250_in_MCR(p);
  
@@ -1040,7 +767,7 @@ index d7976a21cca9..76a8d74f16e8 100644
  	if (p->port.rs485.flags & SER_RS485_RTS_AFTER_SEND)
  		mcr |= UART_MCR_RTS;
  	else
-@@ -1424,6 +1434,16 @@ void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier)
+@@ -1422,6 +1432,16 @@ void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier)
  		serial8250_clear_and_reinit_fifos(p);
  
  		if (toggle_ier) {
@@ -1316,50 +1043,6 @@ index d7976a21cca9..76a8d74f16e8 100644
  	if (options)
  		uart_parse_options(options, &baud, &parity, &bits, &flow);
  	else if (probe)
-diff --git a/include/linux/kallsyms.h b/include/linux/kallsyms.h
-index 1c6a6c1704d8..d5dd54c53ace 100644
---- a/include/linux/kallsyms.h
-+++ b/include/linux/kallsyms.h
-@@ -55,12 +55,11 @@ static inline void *dereference_symbol_descriptor(void *ptr)
- 	if (is_ksym_addr((unsigned long)ptr))
- 		return ptr;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	mod = __module_address((unsigned long)ptr);
- 
- 	if (mod)
- 		ptr = dereference_module_function_descriptor(mod, ptr);
--	preempt_enable();
- #endif
- 	return ptr;
- }
-diff --git a/include/linux/module.h b/include/linux/module.h
-index 23792d5d7b74..12f8a7d4fc1c 100644
---- a/include/linux/module.h
-+++ b/include/linux/module.h
-@@ -663,7 +663,7 @@ static inline bool within_module(unsigned long addr, const struct module *mod)
- 	return within_module_init(addr, mod) || within_module_core(addr, mod);
- }
- 
--/* Search for module by name: must be in a RCU-sched critical section. */
-+/* Search for module by name: must be in a RCU critical section. */
- struct module *find_module(const char *name);
- 
- extern void __noreturn __module_put_and_kthread_exit(struct module *mod,
-diff --git a/include/linux/preempt.h b/include/linux/preempt.h
-index ca86235ac15c..3e9808f2b549 100644
---- a/include/linux/preempt.h
-+++ b/include/linux/preempt.h
-@@ -515,6 +515,8 @@ static inline bool preempt_model_rt(void)
- 	return IS_ENABLED(CONFIG_PREEMPT_RT);
- }
- 
-+extern const char *preempt_model_str(void);
-+
- /*
-  * Does the preemption model allow non-cooperative preemption?
-  *
 diff --git a/include/linux/serial_8250.h b/include/linux/serial_8250.h
 index 144de7a7948d..57875c37023a 100644
 --- a/include/linux/serial_8250.h
@@ -1393,96 +1076,6 @@ index 144de7a7948d..57875c37023a 100644
  int serial8250_console_setup(struct uart_port *port, char *options, bool probe);
  int serial8250_console_exit(struct uart_port *port);
  
-diff --git a/kernel/cfi.c b/kernel/cfi.c
-index 08caad776717..abcd4d1f98ea 100644
---- a/kernel/cfi.c
-+++ b/kernel/cfi.c
-@@ -71,14 +71,11 @@ static bool is_module_cfi_trap(unsigned long addr)
- 	struct module *mod;
- 	bool found = false;
- 
--	rcu_read_lock_sched_notrace();
--
-+	guard(rcu)();
- 	mod = __module_address(addr);
- 	if (mod)
- 		found = is_trap(addr, mod->kcfi_traps, mod->kcfi_traps_end);
- 
--	rcu_read_unlock_sched_notrace();
--
- 	return found;
- }
- #else /* CONFIG_MODULES */
-diff --git a/kernel/jump_label.c b/kernel/jump_label.c
-index 93a822d3c468..7cb19e601426 100644
---- a/kernel/jump_label.c
-+++ b/kernel/jump_label.c
-@@ -653,13 +653,12 @@ static int __jump_label_mod_text_reserved(void *start, void *end)
- 	struct module *mod;
- 	int ret;
- 
--	preempt_disable();
--	mod = __module_text_address((unsigned long)start);
--	WARN_ON_ONCE(__module_text_address((unsigned long)end) != mod);
--	if (!try_module_get(mod))
--		mod = NULL;
--	preempt_enable();
--
-+	scoped_guard(rcu) {
-+		mod = __module_text_address((unsigned long)start);
-+		WARN_ON_ONCE(__module_text_address((unsigned long)end) != mod);
-+		if (!try_module_get(mod))
-+			mod = NULL;
-+	}
- 	if (!mod)
- 		return 0;
- 
-@@ -746,9 +745,9 @@ static int jump_label_add_module(struct module *mod)
- 				kfree(jlm);
- 				return -ENOMEM;
- 			}
--			preempt_disable();
--			jlm2->mod = __module_address((unsigned long)key);
--			preempt_enable();
-+			scoped_guard(rcu)
-+				jlm2->mod = __module_address((unsigned long)key);
-+
- 			jlm2->entries = static_key_entries(key);
- 			jlm2->next = NULL;
- 			static_key_set_mod(key, jlm2);
-@@ -906,13 +905,13 @@ static void jump_label_update(struct static_key *key)
- 		return;
- 	}
- 
--	preempt_disable();
--	mod = __module_address((unsigned long)key);
--	if (mod) {
--		stop = mod->jump_entries + mod->num_jump_entries;
--		init = mod->state == MODULE_STATE_COMING;
-+	scoped_guard(rcu) {
-+		mod = __module_address((unsigned long)key);
-+		if (mod) {
-+			stop = mod->jump_entries + mod->num_jump_entries;
-+			init = mod->state == MODULE_STATE_COMING;
-+		}
- 	}
--	preempt_enable();
- #endif
- 	entry = static_key_entries(key);
- 	/* if there are no users, entry can be NULL */
-diff --git a/kernel/kprobes.c b/kernel/kprobes.c
-index 88aeac84e4c0..ffe0c3d52306 100644
---- a/kernel/kprobes.c
-+++ b/kernel/kprobes.c
-@@ -1547,7 +1547,7 @@ static int check_kprobe_address_safe(struct kprobe *p,
- 	/* Ensure the address is in a text area, and find a module if exists. */
- 	*probed_mod = NULL;
- 	if (!core_kernel_text((unsigned long) p->addr)) {
--		guard(preempt)();
-+		guard(rcu)();
- 		*probed_mod = __module_text_address((unsigned long) p->addr);
- 		if (!(*probed_mod))
- 			return -EINVAL;
 diff --git a/kernel/ksysfs.c b/kernel/ksysfs.c
 index eefb67d9883c..20ac8a5ac27d 100644
 --- a/kernel/ksysfs.c
@@ -1513,805 +1106,6 @@ index eefb67d9883c..20ac8a5ac27d 100644
  #endif
  	NULL
  };
-diff --git a/kernel/livepatch/core.c b/kernel/livepatch/core.c
-index 0cd39954d5a1..abea193977d2 100644
---- a/kernel/livepatch/core.c
-+++ b/kernel/livepatch/core.c
-@@ -59,7 +59,7 @@ static void klp_find_object_module(struct klp_object *obj)
- 	if (!klp_is_module(obj))
- 		return;
- 
--	rcu_read_lock_sched();
-+	guard(rcu)();
- 	/*
- 	 * We do not want to block removal of patched modules and therefore
- 	 * we do not take a reference here. The patches are removed by
-@@ -75,8 +75,6 @@ static void klp_find_object_module(struct klp_object *obj)
- 	 */
- 	if (mod && mod->klp_alive)
- 		obj->mod = mod;
--
--	rcu_read_unlock_sched();
- }
- 
- static bool klp_initialized(void)
-diff --git a/kernel/module/internal.h b/kernel/module/internal.h
-index d09b46ef032f..626cf8668a7e 100644
---- a/kernel/module/internal.h
-+++ b/kernel/module/internal.h
-@@ -124,17 +124,6 @@ char *module_next_tag_pair(char *string, unsigned long *secsize);
- #define for_each_modinfo_entry(entry, info, name) \
- 	for (entry = get_modinfo(info, name); entry; entry = get_next_modinfo(info, name, entry))
- 
--static inline void module_assert_mutex_or_preempt(void)
--{
--#ifdef CONFIG_LOCKDEP
--	if (unlikely(!debug_locks))
--		return;
--
--	WARN_ON_ONCE(!rcu_read_lock_sched_held() &&
--		     !lockdep_is_held(&module_mutex));
--#endif
--}
--
- static inline unsigned long kernel_symbol_value(const struct kernel_symbol *sym)
- {
- #ifdef CONFIG_HAVE_ARCH_PREL32_RELOCATIONS
-diff --git a/kernel/module/kallsyms.c b/kernel/module/kallsyms.c
-index bf65e0c3c86f..00a60796327c 100644
---- a/kernel/module/kallsyms.c
-+++ b/kernel/module/kallsyms.c
-@@ -177,19 +177,15 @@ void add_kallsyms(struct module *mod, const struct load_info *info)
- 	unsigned long strtab_size;
- 	void *data_base = mod->mem[MOD_DATA].base;
- 	void *init_data_base = mod->mem[MOD_INIT_DATA].base;
-+	struct mod_kallsyms *kallsyms;
- 
--	/* Set up to point into init section. */
--	mod->kallsyms = (void __rcu *)init_data_base +
--		info->mod_kallsyms_init_off;
-+	kallsyms = init_data_base + info->mod_kallsyms_init_off;
- 
--	rcu_read_lock();
--	/* The following is safe since this pointer cannot change */
--	rcu_dereference(mod->kallsyms)->symtab = (void *)symsec->sh_addr;
--	rcu_dereference(mod->kallsyms)->num_symtab = symsec->sh_size / sizeof(Elf_Sym);
-+	kallsyms->symtab = (void *)symsec->sh_addr;
-+	kallsyms->num_symtab = symsec->sh_size / sizeof(Elf_Sym);
- 	/* Make sure we get permanent strtab: don't use info->strtab. */
--	rcu_dereference(mod->kallsyms)->strtab =
--		(void *)info->sechdrs[info->index.str].sh_addr;
--	rcu_dereference(mod->kallsyms)->typetab = init_data_base + info->init_typeoffs;
-+	kallsyms->strtab = (void *)info->sechdrs[info->index.str].sh_addr;
-+	kallsyms->typetab = init_data_base + info->init_typeoffs;
- 
- 	/*
- 	 * Now populate the cut down core kallsyms for after init
-@@ -199,20 +195,19 @@ void add_kallsyms(struct module *mod, const struct load_info *info)
- 	mod->core_kallsyms.strtab = s = data_base + info->stroffs;
- 	mod->core_kallsyms.typetab = data_base + info->core_typeoffs;
- 	strtab_size = info->core_typeoffs - info->stroffs;
--	src = rcu_dereference(mod->kallsyms)->symtab;
--	for (ndst = i = 0; i < rcu_dereference(mod->kallsyms)->num_symtab; i++) {
--		rcu_dereference(mod->kallsyms)->typetab[i] = elf_type(src + i, info);
-+	src = kallsyms->symtab;
-+	for (ndst = i = 0; i < kallsyms->num_symtab; i++) {
-+		kallsyms->typetab[i] = elf_type(src + i, info);
- 		if (i == 0 || is_livepatch_module(mod) ||
- 		    is_core_symbol(src + i, info->sechdrs, info->hdr->e_shnum,
- 				   info->index.pcpu)) {
- 			ssize_t ret;
- 
- 			mod->core_kallsyms.typetab[ndst] =
--			    rcu_dereference(mod->kallsyms)->typetab[i];
-+				kallsyms->typetab[i];
- 			dst[ndst] = src[i];
- 			dst[ndst++].st_name = s - mod->core_kallsyms.strtab;
--			ret = strscpy(s,
--				      &rcu_dereference(mod->kallsyms)->strtab[src[i].st_name],
-+			ret = strscpy(s, &kallsyms->strtab[src[i].st_name],
- 				      strtab_size);
- 			if (ret < 0)
- 				break;
-@@ -220,7 +215,9 @@ void add_kallsyms(struct module *mod, const struct load_info *info)
- 			strtab_size -= ret + 1;
- 		}
- 	}
--	rcu_read_unlock();
-+
-+	/* Set up to point into init section. */
-+	rcu_assign_pointer(mod->kallsyms, kallsyms);
- 	mod->core_kallsyms.num_symtab = ndst;
- }
- 
-@@ -260,7 +257,7 @@ static const char *find_kallsyms_symbol(struct module *mod,
- {
- 	unsigned int i, best = 0;
- 	unsigned long nextval, bestval;
--	struct mod_kallsyms *kallsyms = rcu_dereference_sched(mod->kallsyms);
-+	struct mod_kallsyms *kallsyms = rcu_dereference(mod->kallsyms);
- 	struct module_memory *mod_mem;
- 
- 	/* At worse, next value is at end of module */
-@@ -319,7 +316,7 @@ void * __weak dereference_module_function_descriptor(struct module *mod,
- 
- /*
-  * For kallsyms to ask for address resolution.  NULL means not found.  Careful
-- * not to lock to avoid deadlock on oopses, simply disable preemption.
-+ * not to lock to avoid deadlock on oopses, RCU is enough.
-  */
- int module_address_lookup(unsigned long addr,
- 			  unsigned long *size,
-@@ -332,7 +329,7 @@ int module_address_lookup(unsigned long addr,
- 	int ret = 0;
- 	struct module *mod;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	mod = __module_address(addr);
- 	if (mod) {
- 		if (modname)
-@@ -350,8 +347,6 @@ int module_address_lookup(unsigned long addr,
- 		if (sym)
- 			ret = strscpy(namebuf, sym, KSYM_NAME_LEN);
- 	}
--	preempt_enable();
--
- 	return ret;
- }
- 
-@@ -359,7 +354,7 @@ int lookup_module_symbol_name(unsigned long addr, char *symname)
- {
- 	struct module *mod;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	list_for_each_entry_rcu(mod, &modules, list) {
- 		if (mod->state == MODULE_STATE_UNFORMED)
- 			continue;
-@@ -371,12 +366,10 @@ int lookup_module_symbol_name(unsigned long addr, char *symname)
- 				goto out;
- 
- 			strscpy(symname, sym, KSYM_NAME_LEN);
--			preempt_enable();
- 			return 0;
- 		}
- 	}
- out:
--	preempt_enable();
- 	return -ERANGE;
- }
- 
-@@ -385,13 +378,13 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
- {
- 	struct module *mod;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	list_for_each_entry_rcu(mod, &modules, list) {
- 		struct mod_kallsyms *kallsyms;
- 
- 		if (mod->state == MODULE_STATE_UNFORMED)
- 			continue;
--		kallsyms = rcu_dereference_sched(mod->kallsyms);
-+		kallsyms = rcu_dereference(mod->kallsyms);
- 		if (symnum < kallsyms->num_symtab) {
- 			const Elf_Sym *sym = &kallsyms->symtab[symnum];
- 
-@@ -400,12 +393,10 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
- 			strscpy(name, kallsyms_symbol_name(kallsyms, symnum), KSYM_NAME_LEN);
- 			strscpy(module_name, mod->name, MODULE_NAME_LEN);
- 			*exported = is_exported(name, *value, mod);
--			preempt_enable();
- 			return 0;
- 		}
- 		symnum -= kallsyms->num_symtab;
- 	}
--	preempt_enable();
- 	return -ERANGE;
- }
- 
-@@ -413,7 +404,7 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
- static unsigned long __find_kallsyms_symbol_value(struct module *mod, const char *name)
- {
- 	unsigned int i;
--	struct mod_kallsyms *kallsyms = rcu_dereference_sched(mod->kallsyms);
-+	struct mod_kallsyms *kallsyms = rcu_dereference(mod->kallsyms);
- 
- 	for (i = 0; i < kallsyms->num_symtab; i++) {
- 		const Elf_Sym *sym = &kallsyms->symtab[i];
-@@ -453,23 +444,15 @@ static unsigned long __module_kallsyms_lookup_name(const char *name)
- /* Look for this name: can be of form module:name. */
- unsigned long module_kallsyms_lookup_name(const char *name)
- {
--	unsigned long ret;
--
- 	/* Don't lock: we're in enough trouble already. */
--	preempt_disable();
--	ret = __module_kallsyms_lookup_name(name);
--	preempt_enable();
--	return ret;
-+	guard(rcu)();
-+	return __module_kallsyms_lookup_name(name);
- }
- 
- unsigned long find_kallsyms_symbol_value(struct module *mod, const char *name)
- {
--	unsigned long ret;
--
--	preempt_disable();
--	ret = __find_kallsyms_symbol_value(mod, name);
--	preempt_enable();
--	return ret;
-+	guard(rcu)();
-+	return __find_kallsyms_symbol_value(mod, name);
- }
- 
- int module_kallsyms_on_each_symbol(const char *modname,
-@@ -490,10 +473,8 @@ int module_kallsyms_on_each_symbol(const char *modname,
- 		if (modname && strcmp(modname, mod->name))
- 			continue;
- 
--		/* Use rcu_dereference_sched() to remain compliant with the sparse tool */
--		preempt_disable();
--		kallsyms = rcu_dereference_sched(mod->kallsyms);
--		preempt_enable();
-+		kallsyms = rcu_dereference_check(mod->kallsyms,
-+						 lockdep_is_held(&module_mutex));
- 
- 		for (i = 0; i < kallsyms->num_symtab; i++) {
- 			const Elf_Sym *sym = &kallsyms->symtab[i];
-diff --git a/kernel/module/main.c b/kernel/module/main.c
-index 1fb9ad289a6f..81ecb9d3a935 100644
---- a/kernel/module/main.c
-+++ b/kernel/module/main.c
-@@ -67,7 +67,7 @@
- 
- /*
-  * Mutex protects:
-- * 1) List of modules (also safely readable with preempt_disable),
-+ * 1) List of modules (also safely readable within RCU read section),
-  * 2) module_use links,
-  * 3) mod_tree.addr_min/mod_tree.addr_max.
-  * (delete and add uses RCU list operations).
-@@ -331,7 +331,7 @@ static bool find_exported_symbol_in_section(const struct symsearch *syms,
- 
- /*
-  * Find an exported symbol and return it, along with, (optional) crc and
-- * (optional) module which owns it.  Needs preempt disabled or module_mutex.
-+ * (optional) module which owns it. Needs RCU or module_mutex.
-  */
- bool find_symbol(struct find_symbol_arg *fsa)
- {
-@@ -345,8 +345,6 @@ bool find_symbol(struct find_symbol_arg *fsa)
- 	struct module *mod;
- 	unsigned int i;
- 
--	module_assert_mutex_or_preempt();
--
- 	for (i = 0; i < ARRAY_SIZE(arr); i++)
- 		if (find_exported_symbol_in_section(&arr[i], NULL, fsa))
- 			return true;
-@@ -374,16 +372,14 @@ bool find_symbol(struct find_symbol_arg *fsa)
- }
- 
- /*
-- * Search for module by name: must hold module_mutex (or preempt disabled
-- * for read-only access).
-+ * Search for module by name: must hold module_mutex (or RCU for read-only
-+ * access).
-  */
- struct module *find_module_all(const char *name, size_t len,
- 			       bool even_unformed)
- {
- 	struct module *mod;
- 
--	module_assert_mutex_or_preempt();
--
- 	list_for_each_entry_rcu(mod, &modules, list,
- 				lockdep_is_held(&module_mutex)) {
- 		if (!even_unformed && mod->state == MODULE_STATE_UNFORMED)
-@@ -454,8 +450,7 @@ bool __is_module_percpu_address(unsigned long addr, unsigned long *can_addr)
- 	struct module *mod;
- 	unsigned int cpu;
- 
--	preempt_disable();
--
-+	guard(rcu)();
- 	list_for_each_entry_rcu(mod, &modules, list) {
- 		if (mod->state == MODULE_STATE_UNFORMED)
- 			continue;
-@@ -472,13 +467,10 @@ bool __is_module_percpu_address(unsigned long addr, unsigned long *can_addr)
- 						per_cpu_ptr(mod->percpu,
- 							    get_boot_cpu_id());
- 				}
--				preempt_enable();
- 				return true;
- 			}
- 		}
- 	}
--
--	preempt_enable();
- 	return false;
- }
- 
-@@ -814,10 +806,9 @@ void __symbol_put(const char *symbol)
- 		.gplok	= true,
- 	};
- 
--	preempt_disable();
-+	guard(rcu)();
- 	BUG_ON(!find_symbol(&fsa));
- 	module_put(fsa.owner);
--	preempt_enable();
- }
- EXPORT_SYMBOL(__symbol_put);
- 
-@@ -832,13 +823,12 @@ void symbol_put_addr(void *addr)
- 
- 	/*
- 	 * Even though we hold a reference on the module; we still need to
--	 * disable preemption in order to safely traverse the data structure.
-+	 * RCU read section in order to safely traverse the data structure.
- 	 */
--	preempt_disable();
-+	guard(rcu)();
- 	modaddr = __module_text_address(a);
- 	BUG_ON(!modaddr);
- 	module_put(modaddr);
--	preempt_enable();
- }
- EXPORT_SYMBOL_GPL(symbol_put_addr);
- 
-@@ -1348,7 +1338,7 @@ static void free_module(struct module *mod)
- 	mod_tree_remove(mod);
- 	/* Remove this module from bug list, this uses list_del_rcu */
- 	module_bug_cleanup(mod);
--	/* Wait for RCU-sched synchronizing before releasing mod->list and buglist. */
-+	/* Wait for RCU synchronizing before releasing mod->list and buglist. */
- 	synchronize_rcu();
- 	if (try_add_tainted_module(mod))
- 		pr_err("%s: adding tainted module to the unloaded tainted modules list failed.\n",
-@@ -1371,21 +1361,18 @@ void *__symbol_get(const char *symbol)
- 		.warn	= true,
- 	};
- 
--	preempt_disable();
--	if (!find_symbol(&fsa))
--		goto fail;
--	if (fsa.license != GPL_ONLY) {
--		pr_warn("failing symbol_get of non-GPLONLY symbol %s.\n",
--			symbol);
--		goto fail;
-+	scoped_guard(rcu) {
-+		if (!find_symbol(&fsa))
-+			return NULL;
-+		if (fsa.license != GPL_ONLY) {
-+			pr_warn("failing symbol_get of non-GPLONLY symbol %s.\n",
-+				symbol);
-+			return NULL;
-+		}
-+		if (strong_try_module_get(fsa.owner))
-+			return NULL;
- 	}
--	if (strong_try_module_get(fsa.owner))
--		goto fail;
--	preempt_enable();
- 	return (void *)kernel_symbol_value(fsa.sym);
--fail:
--	preempt_enable();
--	return NULL;
- }
- EXPORT_SYMBOL_GPL(__symbol_get);
- 
-@@ -3049,7 +3036,7 @@ static noinline int do_init_module(struct module *mod)
- #endif
- 	/*
- 	 * We want to free module_init, but be aware that kallsyms may be
--	 * walking this with preempt disabled.  In all the failure paths, we
-+	 * walking this within an RCU read section. In all the failure paths, we
- 	 * call synchronize_rcu(), but we don't want to slow down the success
- 	 * path. execmem_free() cannot be called in an interrupt, so do the
- 	 * work and call synchronize_rcu() in a work queue.
-@@ -3715,28 +3702,23 @@ char *module_flags(struct module *mod, char *buf, bool show_state)
- /* Given an address, look for it in the module exception tables. */
- const struct exception_table_entry *search_module_extables(unsigned long addr)
- {
--	const struct exception_table_entry *e = NULL;
- 	struct module *mod;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	mod = __module_address(addr);
- 	if (!mod)
--		goto out;
-+		return NULL;
- 
- 	if (!mod->num_exentries)
--		goto out;
--
--	e = search_extable(mod->extable,
--			   mod->num_exentries,
--			   addr);
--out:
--	preempt_enable();
--
-+		return NULL;
- 	/*
--	 * Now, if we found one, we are running inside it now, hence
--	 * we cannot unload the module, hence no refcnt needed.
-+	 * The address passed here belongs to a module that is currently
-+	 * invoked (we are running inside it). Therefore its module::refcnt
-+	 * needs already be >0 to ensure that it is not removed at this stage.
-+	 * All other user need to invoke this function within a RCU read
-+	 * section.
- 	 */
--	return e;
-+	return search_extable(mod->extable, mod->num_exentries, addr);
- }
- 
- /**
-@@ -3748,20 +3730,15 @@ const struct exception_table_entry *search_module_extables(unsigned long addr)
-  */
- bool is_module_address(unsigned long addr)
- {
--	bool ret;
--
--	preempt_disable();
--	ret = __module_address(addr) != NULL;
--	preempt_enable();
--
--	return ret;
-+	guard(rcu)();
-+	return __module_address(addr) != NULL;
- }
- 
- /**
-  * __module_address() - get the module which contains an address.
-  * @addr: the address.
-  *
-- * Must be called with preempt disabled or module mutex held so that
-+ * Must be called within RCU read section or module mutex held so that
-  * module doesn't get freed during this.
-  */
- struct module *__module_address(unsigned long addr)
-@@ -3779,8 +3756,6 @@ struct module *__module_address(unsigned long addr)
- 	return NULL;
- 
- lookup:
--	module_assert_mutex_or_preempt();
--
- 	mod = mod_find(addr, &mod_tree);
- 	if (mod) {
- 		BUG_ON(!within_module(addr, mod));
-@@ -3800,20 +3775,15 @@ struct module *__module_address(unsigned long addr)
-  */
- bool is_module_text_address(unsigned long addr)
- {
--	bool ret;
--
--	preempt_disable();
--	ret = __module_text_address(addr) != NULL;
--	preempt_enable();
--
--	return ret;
-+	guard(rcu)();
-+	return __module_text_address(addr) != NULL;
- }
- 
- /**
-  * __module_text_address() - get the module whose code contains an address.
-  * @addr: the address.
-  *
-- * Must be called with preempt disabled or module mutex held so that
-+ * Must be called within RCU read section or module mutex held so that
-  * module doesn't get freed during this.
-  */
- struct module *__module_text_address(unsigned long addr)
-@@ -3836,7 +3806,7 @@ void print_modules(void)
- 
- 	printk(KERN_DEFAULT "Modules linked in:");
- 	/* Most callers should already have preempt disabled, but make sure */
--	preempt_disable();
-+	guard(rcu)();
- 	list_for_each_entry_rcu(mod, &modules, list) {
- 		if (mod->state == MODULE_STATE_UNFORMED)
- 			continue;
-@@ -3844,7 +3814,6 @@ void print_modules(void)
- 	}
- 
- 	print_unloaded_tainted_modules();
--	preempt_enable();
- 	if (last_unloaded_module.name[0])
- 		pr_cont(" [last unloaded: %s%s]", last_unloaded_module.name,
- 			last_unloaded_module.taints);
-diff --git a/kernel/module/tracking.c b/kernel/module/tracking.c
-index 16742d1c630c..4fefec5b683c 100644
---- a/kernel/module/tracking.c
-+++ b/kernel/module/tracking.c
-@@ -21,8 +21,6 @@ int try_add_tainted_module(struct module *mod)
- {
- 	struct mod_unload_taint *mod_taint;
- 
--	module_assert_mutex_or_preempt();
--
- 	if (!mod->taints)
- 		goto out;
- 
-diff --git a/kernel/module/tree_lookup.c b/kernel/module/tree_lookup.c
-index 277197977d43..d3204c5c74eb 100644
---- a/kernel/module/tree_lookup.c
-+++ b/kernel/module/tree_lookup.c
-@@ -12,11 +12,11 @@
- 
- /*
-  * Use a latched RB-tree for __module_address(); this allows us to use
-- * RCU-sched lookups of the address from any context.
-+ * RCU lookups of the address from any context.
-  *
-- * This is conditional on PERF_EVENTS || TRACING because those can really hit
-- * __module_address() hard by doing a lot of stack unwinding; potentially from
-- * NMI context.
-+ * This is conditional on PERF_EVENTS || TRACING || CFI_CLANG because those can
-+ * really hit __module_address() hard by doing a lot of stack unwinding;
-+ * potentially from NMI context.
-  */
- 
- static __always_inline unsigned long __mod_tree_val(struct latch_tree_node *n)
-diff --git a/kernel/module/version.c b/kernel/module/version.c
-index 3718a8868321..2beefeba82d9 100644
---- a/kernel/module/version.c
-+++ b/kernel/module/version.c
-@@ -79,17 +79,17 @@ int check_modstruct_version(const struct load_info *info,
- 		.name	= "module_layout",
- 		.gplok	= true,
- 	};
-+	bool have_symbol;
- 
- 	/*
- 	 * Since this should be found in kernel (which can't be removed), no
--	 * locking is necessary -- use preempt_disable() to placate lockdep.
-+	 * locking is necessary. Regardless use a RCU read section to keep
-+	 * lockdep happy.
- 	 */
--	preempt_disable();
--	if (!find_symbol(&fsa)) {
--		preempt_enable();
--		BUG();
--	}
--	preempt_enable();
-+	scoped_guard(rcu)
-+		have_symbol = find_symbol(&fsa);
-+	BUG_ON(!have_symbol);
-+
- 	return check_version(info, "module_layout", mod, fsa.crc);
- }
- 
-diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 165c90ba64ea..919db12f35c2 100644
---- a/kernel/sched/core.c
-+++ b/kernel/sched/core.c
-@@ -7650,6 +7650,30 @@ static inline void preempt_dynamic_init(void) { }
- 
- #endif /* CONFIG_PREEMPT_DYNAMIC */
- 
-+const char *preempt_model_str(void)
-+{
-+	if (IS_ENABLED(CONFIG_ARCH_HAS_PREEMPT_LAZY) && preempt_model_lazy()) {
-+		if (preempt_model_rt())
-+			return "PREEMPT_RT+LAZY";
-+		if (preempt_model_full())
-+			return "PREEMPT+LAZY";
-+		if (preempt_model_voluntary())
-+			return "VOLUNTARY+LAZY";
-+		if (preempt_model_none())
-+			return "NONE+LAZY";
-+	} else {
-+		if (preempt_model_rt())
-+			return "PREEMPT_RT";
-+		if (preempt_model_full())
-+			return "PREEMPT";
-+		if (preempt_model_voluntary())
-+			return "VOLUNTARY";
-+		if (preempt_model_none())
-+			return "NONE";
-+	}
-+	return "UNKNOWN-PREEMPT";
-+}
-+
- int io_schedule_prepare(void)
- {
- 	int old_iowait = current->in_iowait;
-diff --git a/kernel/static_call_inline.c b/kernel/static_call_inline.c
-index bb7d066a7c39..c2c59e6ef35d 100644
---- a/kernel/static_call_inline.c
-+++ b/kernel/static_call_inline.c
-@@ -325,13 +325,12 @@ static int __static_call_mod_text_reserved(void *start, void *end)
- 	struct module *mod;
- 	int ret;
- 
--	preempt_disable();
--	mod = __module_text_address((unsigned long)start);
--	WARN_ON_ONCE(__module_text_address((unsigned long)end) != mod);
--	if (!try_module_get(mod))
--		mod = NULL;
--	preempt_enable();
--
-+	scoped_guard(rcu) {
-+		mod = __module_text_address((unsigned long)start);
-+		WARN_ON_ONCE(__module_text_address((unsigned long)end) != mod);
-+		if (!try_module_get(mod))
-+			mod = NULL;
-+	}
- 	if (!mod)
- 		return 0;
- 
-diff --git a/kernel/trace/bpf_trace.c b/kernel/trace/bpf_trace.c
-index adc947587eb8..e6a17a60d878 100644
---- a/kernel/trace/bpf_trace.c
-+++ b/kernel/trace/bpf_trace.c
-@@ -2345,10 +2345,9 @@ void bpf_put_raw_tracepoint(struct bpf_raw_event_map *btp)
- {
- 	struct module *mod;
- 
--	preempt_disable();
-+	guard(rcu)();
- 	mod = __module_address((unsigned long)btp);
- 	module_put(mod);
--	preempt_enable();
- }
- 
- static __always_inline
-@@ -2932,18 +2931,21 @@ static int get_modules_for_addrs(struct module ***mods, unsigned long *addrs, u3
- 	u32 i, err = 0;
- 
- 	for (i = 0; i < addrs_cnt; i++) {
-+		bool skip_add = false;
- 		struct module *mod;
- 
--		preempt_disable();
--		mod = __module_address(addrs[i]);
--		/* Either no module or we it's already stored  */
--		if (!mod || has_module(&arr, mod)) {
--			preempt_enable();
--			continue;
-+		scoped_guard(rcu) {
-+			mod = __module_address(addrs[i]);
-+			/* Either no module or it's already stored  */
-+			if (!mod || has_module(&arr, mod)) {
-+				skip_add = true;
-+				break; /* scoped_guard */
-+			}
-+			if (!try_module_get(mod))
-+				err = -EINVAL;
- 		}
--		if (!try_module_get(mod))
--			err = -EINVAL;
--		preempt_enable();
-+		if (skip_add)
-+			continue;
- 		if (err)
- 			break;
- 		err = add_module(&arr, mod);
-diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index 1496a5ac33ae..77271faab20e 100644
---- a/kernel/trace/trace.c
-+++ b/kernel/trace/trace.c
-@@ -4100,12 +4100,7 @@ print_trace_header(struct seq_file *m, struct trace_iterator *iter)
- 		   entries,
- 		   total,
- 		   buf->cpu,
--		   preempt_model_none()      ? "server" :
--		   preempt_model_voluntary() ? "desktop" :
--		   preempt_model_full()      ? "preempt" :
--		   preempt_model_lazy()	     ? "lazy"    :
--		   preempt_model_rt()        ? "preempt_rt" :
--		   "unknown",
-+		   preempt_model_str(),
- 		   /* These are reserved for later use */
- 		   0, 0, 0, 0);
- #ifdef CONFIG_SMP
-diff --git a/kernel/trace/trace_kprobe.c b/kernel/trace/trace_kprobe.c
-index d8d5f18a141a..48057531ee4e 100644
---- a/kernel/trace/trace_kprobe.c
-+++ b/kernel/trace/trace_kprobe.c
-@@ -124,9 +124,8 @@ static nokprobe_inline bool trace_kprobe_module_exist(struct trace_kprobe *tk)
- 	if (!p)
- 		return true;
- 	*p = '\0';
--	rcu_read_lock_sched();
--	ret = !!find_module(tk->symbol);
--	rcu_read_unlock_sched();
-+	scoped_guard(rcu)
-+		ret = !!find_module(tk->symbol);
- 	*p = ':';
- 
- 	return ret;
-@@ -796,12 +795,10 @@ static struct module *try_module_get_by_name(const char *name)
- {
- 	struct module *mod;
- 
--	rcu_read_lock_sched();
-+	guard(rcu)();
- 	mod = find_module(name);
- 	if (mod && !try_module_get(mod))
- 		mod = NULL;
--	rcu_read_unlock_sched();
--
- 	return mod;
- }
- #else
-diff --git a/lib/bug.c b/lib/bug.c
-index e0ff21989990..b1f07459c2ee 100644
---- a/lib/bug.c
-+++ b/lib/bug.c
-@@ -66,23 +66,19 @@ static LIST_HEAD(module_bug_list);
- 
- static struct bug_entry *module_find_bug(unsigned long bugaddr)
- {
-+	struct bug_entry *bug;
- 	struct module *mod;
--	struct bug_entry *bug = NULL;
- 
--	rcu_read_lock_sched();
-+	guard(rcu)();
- 	list_for_each_entry_rcu(mod, &module_bug_list, bug_list) {
- 		unsigned i;
- 
- 		bug = mod->bug_table;
- 		for (i = 0; i < mod->num_bugs; ++i, ++bug)
- 			if (bugaddr == bug_addr(bug))
--				goto out;
-+				return bug;
- 	}
--	bug = NULL;
--out:
--	rcu_read_unlock_sched();
--
--	return bug;
-+	return NULL;
- }
- 
- void module_bug_finalize(const Elf_Ehdr *hdr, const Elf_Shdr *sechdrs,
-@@ -235,11 +231,11 @@ void generic_bug_clear_once(void)
- #ifdef CONFIG_MODULES
- 	struct module *mod;
- 
--	rcu_read_lock_sched();
--	list_for_each_entry_rcu(mod, &module_bug_list, bug_list)
--		clear_once_table(mod->bug_table,
--				 mod->bug_table + mod->num_bugs);
--	rcu_read_unlock_sched();
-+	scoped_guard(rcu) {
-+		list_for_each_entry_rcu(mod, &module_bug_list, bug_list)
-+			clear_once_table(mod->bug_table,
-+					 mod->bug_table + mod->num_bugs);
-+	}
- #endif
- 
- 	clear_once_table(__start___bug_table, __stop___bug_table);
-diff --git a/lib/dump_stack.c b/lib/dump_stack.c
-index 388da1aea14a..c3e59f899227 100644
---- a/lib/dump_stack.c
-+++ b/lib/dump_stack.c
-@@ -54,7 +54,7 @@ void __init dump_stack_set_arch_desc(const char *fmt, ...)
-  */
- void dump_stack_print_info(const char *log_lvl)
- {
--	printk("%sCPU: %d UID: %u PID: %d Comm: %.20s %s%s %s %.*s" BUILD_ID_FMT "\n",
-+	printk("%sCPU: %d UID: %u PID: %d Comm: %.20s %s%s %s %.*s %s" BUILD_ID_FMT "\n",
- 	       log_lvl, raw_smp_processor_id(),
- 	       __kuid_val(current_real_cred()->euid),
- 	       current->pid, current->comm,
-@@ -62,7 +62,7 @@ void dump_stack_print_info(const char *log_lvl)
- 	       print_tainted(),
- 	       init_utsname()->release,
- 	       (int)strcspn(init_utsname()->version, " "),
--	       init_utsname()->version, BUILD_ID_VAL);
-+	       init_utsname()->version, preempt_model_str(), BUILD_ID_VAL);
- 
- 	if (get_taint())
- 		printk("%s%s\n", log_lvl, print_tainted_verbose());
 -- 
 2.47.2
 
