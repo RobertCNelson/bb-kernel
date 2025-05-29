@@ -156,6 +156,8 @@ debian_regs () {
 	check_dpkg
 	pkg="zstd"
 	check_dpkg
+	pkg="libdw-dev"
+	check_dpkg
 
 	unset stop_pkg_search
 	#lsb_release might not be installed...
@@ -323,6 +325,11 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="bookworm"
 			;;
+		gigi)
+			#LMDE 7
+			#http://packages.linuxmint.com/index.php
+			deb_distro="trixie"
+			;;
 		debian)
 			deb_distro="jessie"
 			;;
@@ -461,6 +468,11 @@ debian_regs () {
 			;;
 		xia)
 			#22.1
+			#http://packages.linuxmint.com/index.php
+			deb_distro="noble"
+			;;
+		zara)
+			#22.2
 			#http://packages.linuxmint.com/index.php
 			deb_distro="noble"
 			;;
