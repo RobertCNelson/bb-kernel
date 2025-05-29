@@ -21,7 +21,7 @@ DEBARCH=armhf
 #toolchain="gcc_12_arm"
 #toolchain="gcc_13_arm"
 toolchain="gcc_14_arm"
-toolchain="gcc_15_arm"
+#toolchain="gcc_15_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
@@ -54,7 +54,7 @@ KERNEL_TAG=${KERNEL_REL}.28
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.12/
 kernel_rt=".16-rt9"
 #Kernel Build
-BUILD=${build_prefix}25
+BUILD=${build_prefix}25.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
