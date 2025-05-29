@@ -300,6 +300,7 @@ beagleboard_dtbs () {
 		#ls src/arm64/overlays/ | grep pocketbeagle2
 
 		device="k3-am6232-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
 
 		#ls src/arm64/overlays/ | grep beagley
 
