@@ -115,7 +115,7 @@ rt_cleanup () {
 }
 
 rt () {
-	#rt_enable="enable"
+	rt_enable="enable"
 	if [ "x${rt_enable}" = "xenable" ] ; then
 		rt_patch="${KERNEL_REL}${kernel_rt}"
 
@@ -130,7 +130,7 @@ rt () {
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
-			#echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
+			echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
 
 			exit 2
 		fi

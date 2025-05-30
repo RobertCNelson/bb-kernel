@@ -30,7 +30,7 @@ dl_deb () {
 }
 
 dpkg_arch="armhf"
-image="armmp"
+image="rt-armmp"
 unsigned=""
 dl_deb
 

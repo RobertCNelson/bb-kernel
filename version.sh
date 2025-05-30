@@ -4,8 +4,8 @@ ARCH=$(uname -m)
 
 config="omap2plus_defconfig"
 
-build_prefix="-bone"
-branch_prefix="am33x-v"
+build_prefix="-bone-rt-r"
+branch_prefix="am33x-rt-v"
 branch_postfix=""
 
 #Changes
@@ -55,7 +55,7 @@ KERNEL_TAG=${KERNEL_REL}.28
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.12/
 kernel_rt=".28-rt10"
 #Kernel Build
-BUILD=${build_prefix}26.1
+BUILD=${build_prefix}26.2
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
