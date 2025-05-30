@@ -10,6 +10,7 @@ branch_postfix=""
 
 #Changes
 #https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.12-rc1#
+#
 #Cross Compilers
 #arm
 KERNEL_ARCH=arm
@@ -52,9 +53,9 @@ linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stab
 KERNEL_REL=6.12
 KERNEL_TAG=${KERNEL_REL}.28
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.12/
-kernel_rt=".16-rt9"
+kernel_rt=".28-rt10"
 #Kernel Build
-BUILD=${build_prefix}26
+BUILD=${build_prefix}26.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
