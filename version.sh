@@ -55,7 +55,7 @@ KERNEL_TAG=${KERNEL_REL}.32
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.12/
 kernel_rt=".28-rt10"
 #Kernel Build
-BUILD=${build_prefix}27.1
+BUILD=${build_prefix}28
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
