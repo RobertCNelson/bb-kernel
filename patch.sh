@@ -246,7 +246,7 @@ k3_makefile_patch_cleanup_overlays () {
 }
 
 beagleboard_dtbs () {
-	branch="v6.15.x"
+	branch="v6.16.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -376,7 +376,7 @@ local_patch () {
 }
 
 #external_git
-mainline_patches
+#mainline_patches
 rt
 wireless_regdb
 beagleboard_dtbs
@@ -459,7 +459,7 @@ backports () {
 	else
 		patch_backports
 		#v6.15
-		#git format-patch -25 drivers/gpu/drm/bridge/ite-it66121.c
+		#git format-patch -26 drivers/gpu/drm/bridge/ite-it66121.c
 		#
 		${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
@@ -501,6 +501,9 @@ backports () {
 		#v6.15.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0024-drm-bridge-Pass-full-state-to-atomic_enable.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0025-drm-bridge-Pass-full-state-to-atomic_disable.patch"
+
+		#v6.16.x+
+		#${git} "${DIR}/patches/mainline/ite-it66121/0026-drm-bridge-Add-encoder-parameter-to-drm_bridge_funcs.patch"
 	fi
 
 	backport_tag="rpi-6.15.y"

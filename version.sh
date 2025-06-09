@@ -9,7 +9,7 @@ branch_prefix="am33x-v"
 branch_postfix=""
 
 #Changes
-#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.15-rc1
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.16-rc1
 #
 #Cross Compilers
 #arm
@@ -50,12 +50,12 @@ toolchain="gcc_15_arm"
 linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
-KERNEL_REL=6.15
-KERNEL_TAG=${KERNEL_REL}.1
+KERNEL_REL=6.16
+KERNEL_TAG=${KERNEL_REL}-rc1
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.15/
 kernel_rt="-rt2"
 #Kernel Build
-BUILD=${build_prefix}15
+BUILD=${build_prefix}0.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
