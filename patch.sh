@@ -503,7 +503,7 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0025-drm-bridge-Pass-full-state-to-atomic_disable.patch"
 
 		#v6.16.x+
-		#${git} "${DIR}/patches/mainline/ite-it66121/0026-drm-bridge-Add-encoder-parameter-to-drm_bridge_funcs.patch"
+		${git} "${DIR}/patches/mainline/ite-it66121/0026-drm-bridge-Add-encoder-parameter-to-drm_bridge_funcs.patch"
 	fi
 
 	backport_tag="rpi-6.15.y"
@@ -524,8 +524,8 @@ backports () {
 drivers () {
 	dir 'branding/boris'
 
-	dir 'drivers/it66121_drm_connector'
-	dir 'drivers/it66122'
+#	dir 'drivers/it66121_drm_connector'
+#	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
