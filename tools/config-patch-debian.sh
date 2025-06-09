@@ -13,6 +13,15 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_IKCONFIG
 ./scripts/config --enable CONFIG_IKCONFIG_PROC
 ./scripts/config --module CONFIG_IKHEADERS
+./scripts/config --enable CONFIG_PRINTK_INDEX
+
+./scripts/config --enable CONFIG_MEMCG_V1
+./scripts/config --enable CONFIG_CGROUP_DMEM
+
+#
+# Kexec and crash features
+#
+./scripts/config --disable CONFIG_KEXEC
 
 #
 # CPU Core family selection
@@ -46,6 +55,7 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --disable CONFIG_SMP
 ./scripts/config --enable CONFIG_THUMB2_KERNEL
+./scripts/config --disable CONFIG_XEN
 
 #
 # CPU Frequency scaling
@@ -54,12 +64,44 @@ cd ${DIR}/KERNEL/
 
 ./scripts/config --disable CONFIG_MODULE_SIG
 ./scripts/config --disable CONFIG_MODULE_DECOMPRESS
+./scripts/config --enable CONFIG_BLK_CGROUP_IOPRIO
 
 #
 # CPU frequency scaling drivers
 #
 ./scripts/config --enable CONFIG_CPUFREQ_DT
 ./scripts/config --disable CONFIG_ARM_OMAP2PLUS_CPUFREQ
+
+#
+# Networking options
+#
+./scripts/config --enable CONFIG_IP_PNP
+./scripts/config --enable CONFIG_IP_PNP_DHCP
+./scripts/config --enable CONFIG_IP_PNP_BOOTP
+./scripts/config --enable CONFIG_IP_PNP_RARP
+./scripts/config --enable CONFIG_NET_IP_TUNNEL
+./scripts/config --enable CONFIG_NET_UDP_TUNNEL
+
+#
+# Core Netfilter Configuration
+#
+./scripts/config --enable CONFIG_NETFILTER_XTABLES
+
+#
+# IP: Netfilter Configuration
+#
+./scripts/config --enable CONFIG_IP_NF_IPTABLES
+
+#
+# Classification
+#
+./scripts/config --enable CONFIG_NET_CLS_CGROUP
+./scripts/config --enable CONFIG_DNS_RESOLVER
+
+./scripts/config --disable CONFIG_CFG80211_DEFAULT_PS
+
+./scripts/config --enable CONFIG_RFKILL
+./scripts/config --enable CONFIG_RFKILL_GPIO
 
 ./scripts/config --disable CONFIG_NET_DSA
 
@@ -69,12 +111,18 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_PCI
 
 #
+# Generic Driver Options
+#
+./scripts/config --enable CONFIG_DEVTMPFS_MOUNT
+
+#
 # Firmware loader
 #
 ./scripts/config --enable CONFIG_FW_LOADER_SYSFS
 ./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin"
 ./scripts/config --set-str CONFIG_EXTRA_FIRMWARE_DIR "firmware"
 ./scripts/config --enable CONFIG_FW_LOADER_USER_HELPER
+./scripts/config --disable CONFIG_FW_LOADER_USER_HELPER_FALLBACK
 ./scripts/config --enable CONFIG_FW_UPLOAD
 
 ./scripts/config --enable CONFIG_OF_OVERLAY
@@ -85,6 +133,20 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_NVME_FC
 ./scripts/config --disable CONFIG_NVME_TCP
 ./scripts/config --disable CONFIG_NVME_TARGET
+
+#
+# Controllers with non-SFF native interface
+#
+./scripts/config --disable CONFIG_SATA_AHCI_PLATFORM
+./scripts/config --disable CONFIG_AHCI_DWC
+./scripts/config --disable CONFIG_ATA_SFF
+./scripts/config --disable CONFIG_MD_RAID456
+./scripts/config --disable CONFIG_DM_CLONE
+./scripts/config --disable CONFIG_DM_RAID
+
+./scripts/config --enable CONFIG_MII
+./scripts/config --enable CONFIG_IPVLAN
+./scripts/config --enable CONFIG_VXLAN
 
 #
 # Layout Types
@@ -115,6 +177,13 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --enable CONFIG_CONFIGFS_FS
 
+./scripts/config --enable CONFIG_UBIFS_FS
+
+./scripts/config --enable CONFIG_NFS_FS
+./scripts/config --enable CONFIG_NFS_V2
+./scripts/config --enable CONFIG_NFS_V3
+./scripts/config --enable CONFIG_NFS_V4
+./scripts/config --enable CONFIG_ROOT_NFS
 
 ./scripts/config --enable CONFIG_NLS_CODEPAGE_437
 ./scripts/config --enable CONFIG_NLS_ASCII
@@ -128,6 +197,16 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_SECURITY_IPE
 ./scripts/config --disable CONFIG_IMA_BLACKLIST_KEYRING
 ./scripts/config --disable CONFIG_IMA_LOAD_X509
+
+#
+# Library routines
+#
+./scripts/config --disable CONFIG_RAID6_PQ_BENCHMARK
+
+#
+# Compile-time checks and compiler options
+#
+./scripts/config --enable CONFIG_DEBUG_INFO_NONE
 
 cd ${DIR}/
 
