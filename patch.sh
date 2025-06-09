@@ -515,8 +515,8 @@ backports () {
 
 		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
 
-		post_rpibackports
-	else
+#		post_rpibackports
+#	else
 		patch_backports
 	fi
 }
