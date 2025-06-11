@@ -4,19 +4,32 @@ DIR=$PWD
 
 cd ${DIR}/KERNEL/
 
+#
+# Timers subsystem
+#
+./scripts/config --enable CONFIG_NO_HZ_IDLE
+./scripts/config --enable CONFIG_CONTEXT_TRACKING_USER_FORCE
 
+#
+# BPF subsystem
+#
+./scripts/config --enable CONFIG_BPF_PRELOAD
+./scripts/config --enable CONFIG_BPF_JIT_ALWAYS_ON
+./scripts/config --enable CONFIG_BPF_PRELOAD_UMD
+
+# end of BPF subsystem
 ./scripts/config --enable CONFIG_PREEMPT
 
-#
-# RCU Subsystem
-#
+# end of RCU Subsystem
 ./scripts/config --enable CONFIG_IKCONFIG
 ./scripts/config --enable CONFIG_IKCONFIG_PROC
 ./scripts/config --module CONFIG_IKHEADERS
 ./scripts/config --enable CONFIG_PRINTK_INDEX
 
+# end of Scheduler features
 ./scripts/config --enable CONFIG_MEMCG_V1
 ./scripts/config --enable CONFIG_CGROUP_DMEM
+./scripts/config --enable CONFIG_KALLSYMS_ALL
 
 #
 # Kexec and crash features
@@ -51,6 +64,15 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_ARCH_WM8850
 
 #
+# Processor Features
+#
+./scripts/config --disable CONFIG_CACHE_L2X0
+#Cortex-A9 720789, 754322, 775420
+./scripts/config --disable CONFIG_ARM_ERRATA_720789
+./scripts/config --disable CONFIG_ARM_ERRATA_754322
+./scripts/config --disable CONFIG_ARM_ERRATA_775420
+
+#
 # Kernel Features
 #
 ./scripts/config --disable CONFIG_SMP
@@ -62,15 +84,34 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --enable CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE
 
-./scripts/config --disable CONFIG_MODULE_SIG
-./scripts/config --disable CONFIG_MODULE_DECOMPRESS
-./scripts/config --enable CONFIG_BLK_CGROUP_IOPRIO
-
 #
 # CPU frequency scaling drivers
 #
 ./scripts/config --enable CONFIG_CPUFREQ_DT
 ./scripts/config --disable CONFIG_ARM_OMAP2PLUS_CPUFREQ
+
+#
+# CPU Idle
+#
+./scripts/config --enable CONFIG_CPU_IDLE
+./scripts/config --enable CONFIG_CPU_IDLE_GOV_MENU
+
+#
+# ARM CPU Idle Drivers
+#
+./scripts/config --enable CONFIG_ARM_CPUIDLE
+./scripts/config --enable CONFIG_ARM_PSCI_CPUIDLE
+
+#
+# Power management options
+#
+./scripts/config --enable CONFIG_PM_AUTOSLEEP
+./scripts/config --enable CONFIG_PM_WAKELOCKS
+
+# end of General architecture-dependent options
+./scripts/config --disable CONFIG_MODULE_SIG
+./scripts/config --disable CONFIG_MODULE_DECOMPRESS
+./scripts/config --enable CONFIG_BLK_CGROUP_IOPRIO
 
 #
 # Networking options
@@ -125,7 +166,24 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_FW_LOADER_USER_HELPER_FALLBACK
 ./scripts/config --enable CONFIG_FW_UPLOAD
 
+#
+# Bus devices
+#
+./scripts/config --disable CONFIG_OMAP_OCP2SCP
+./scripts/config --disable CONFIG_VEXPRESS_CONFIG
+./scripts/config --disable CONFIG_MHI_BUS
+
+# end of ARM System Control and Management Interface Protocol
+./scripts/config --enable CONFIG_SYSFB_SIMPLEFB
+./scripts/config --disable CONFIG_GOOGLE_FIRMWARE
+
+# end of Firmware Drivers
+./scripts/config --module CONFIG_FWCTL
+
+# end of LPDDR & LPDDR2 PCM memory drivers
 ./scripts/config --enable CONFIG_OF_OVERLAY
+./scripts/config --disable CONFIG_PARPORT
+./scripts/config --enable CONFIG_ZRAM_BACKEND_LZO
 
 #
 # NVME Support
@@ -133,6 +191,25 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_NVME_FC
 ./scripts/config --disable CONFIG_NVME_TCP
 ./scripts/config --disable CONFIG_NVME_TARGET
+
+#
+# Misc devices
+#
+./scripts/config --enable CONFIG_RPMB
+./scripts/config --disable CONFIG_ENCLOSURE_SERVICES
+./scripts/config --module CONFIG_NTSYNC
+./scripts/config --module CONFIG_NSM
+./scripts/config --disable CONFIG_C2PORT
+
+#
+# EEPROM support
+#
+./scripts/config --module CONFIG_EEPROM_93XX46
+
+# end of EEPROM support
+./scripts/config --disable CONFIG_SENSORS_LIS3_I2C
+./scripts/config --disable CONFIG_ALTERA_STAPL
+./scripts/config --disable CONFIG_MISC_RTSX_USB
 
 #
 # Controllers with non-SFF native interface
@@ -147,6 +224,67 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_MII
 ./scripts/config --enable CONFIG_IPVLAN
 ./scripts/config --enable CONFIG_VXLAN
+
+./scripts/config --disable CONFIG_NET_VENDOR_ALACRITECH
+./scripts/config --disable CONFIG_NET_VENDOR_AMAZON
+./scripts/config --disable CONFIG_NET_VENDOR_AQUANTIA
+./scripts/config --disable CONFIG_NET_VENDOR_BROADCOM
+./scripts/config --disable CONFIG_NET_VENDOR_CADENCE
+./scripts/config --disable CONFIG_NET_VENDOR_CAVIUM
+./scripts/config --disable CONFIG_NET_VENDOR_CIRRUS
+./scripts/config --disable CONFIG_NET_VENDOR_CORTINA
+./scripts/config --disable CONFIG_NET_VENDOR_EZCHIP
+./scripts/config --disable CONFIG_NET_VENDOR_FARADAY
+./scripts/config --disable CONFIG_NET_VENDOR_GOOGLE
+./scripts/config --disable CONFIG_NET_VENDOR_HISILICON
+./scripts/config --disable CONFIG_NET_VENDOR_HUAWEI
+./scripts/config --disable CONFIG_NET_VENDOR_INTEL
+./scripts/config --disable CONFIG_NET_VENDOR_MARVELL
+./scripts/config --disable CONFIG_NET_VENDOR_MELLANOX
+./scripts/config --disable CONFIG_NET_VENDOR_NI
+./scripts/config --disable CONFIG_NET_VENDOR_NATSEMI
+./scripts/config --disable CONFIG_NET_VENDOR_NETRONOME
+./scripts/config --disable CONFIG_NET_VENDOR_PENSANDO
+./scripts/config --disable CONFIG_NET_VENDOR_QUALCOMM
+./scripts/config --disable CONFIG_NET_VENDOR_RENESAS
+./scripts/config --disable CONFIG_NET_VENDOR_ROCKER
+./scripts/config --disable CONFIG_NET_VENDOR_SAMSUNG
+./scripts/config --disable CONFIG_NET_VENDOR_SOLARFLARE
+./scripts/config --disable CONFIG_NET_VENDOR_SOCIONEXT
+./scripts/config --disable CONFIG_NET_VENDOR_STMICRO
+./scripts/config --disable CONFIG_NET_VENDOR_SYNOPSYS
+./scripts/config --disable CONFIG_NET_VENDOR_VIA
+./scripts/config --disable CONFIG_NET_VENDOR_XILINX
+
+./scripts/config --module CONFIG_KS8851
+./scripts/config --enable CONFIG_ENC28J60
+./scripts/config --enable CONFIG_ENCX24J600
+
+./scripts/config --enable CONFIG_TI_DAVINCI_MDIO
+./scripts/config --enable CONFIG_TI_CPSW_PHY_SEL
+./scripts/config --enable CONFIG_TI_CPSW
+./scripts/config --enable CONFIG_TI_CPSW_SWITCHDEV
+
+./scripts/config --module CONFIG_WIZNET_W5100
+./scripts/config --enable CONFIG_WIZNET_BUS_ANY
+./scripts/config --module CONFIG_WIZNET_W5100_SPI
+
+./scripts/config --enable CONFIG_PHYLIB
+./scripts/config --enable CONFIG_FIXED_PHY
+./scripts/config --disable CONFIG_SFP
+
+./scripts/config --disable CONFIG_AMD_PHY
+./scripts/config --disable CONFIG_ADIN_PHY
+./scripts/config --disable CONFIG_AQUANTIA_PHY
+./scripts/config --disable CONFIG_BROADCOM_PHY
+
+./scripts/config --disable CONFIG_BCM7XXX_PHY
+./scripts/config --disable CONFIG_BCM87XX_PHY
+./scripts/config --disable CONFIG_CICADA_PHY
+./scripts/config --disable CONFIG_CORTINA_PHY
+./scripts/config --disable CONFIG_DAVICOM_PHY
+./scripts/config --disable CONFIG_ICPLUS_PHY
+./scripts/config --disable CONFIG_LXT_PHY
 
 #
 # Layout Types
