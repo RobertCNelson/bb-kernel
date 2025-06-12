@@ -85,6 +85,12 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_XEN
 
 #
+# Power management options
+#
+./scripts/config --enable CONFIG_PM_AUTOSLEEP
+./scripts/config --enable CONFIG_PM_WAKELOCKS
+
+#
 # CPU Frequency scaling
 #
 ./scripts/config --enable CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE
@@ -107,12 +113,6 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --enable CONFIG_ARM_CPUIDLE
 ./scripts/config --enable CONFIG_ARM_PSCI_CPUIDLE
-
-#
-# Power management options
-#
-./scripts/config --enable CONFIG_PM_AUTOSLEEP
-./scripts/config --enable CONFIG_PM_WAKELOCKS
 
 # end of General architecture-dependent options
 ./scripts/config --disable CONFIG_MODULE_SIG
@@ -143,15 +143,23 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --enable CONFIG_IP_NF_IPTABLES
 
+./scripts/config --disable CONFIG_NET_DSA
+
 #
 # Classification
 #
 ./scripts/config --enable CONFIG_NET_CLS_CGROUP
 ./scripts/config --enable CONFIG_DNS_RESOLVER
+
+#
+# Bluetooth device drivers
+#
+./scripts/config --disable CONFIG_BT_HCIBTUSB_AUTOSUSPEND
+
+# end of Bluetooth device drivers
 ./scripts/config --disable CONFIG_CFG80211_DEFAULT_PS
 ./scripts/config --enable CONFIG_RFKILL
 ./scripts/config --enable CONFIG_RFKILL_GPIO
-./scripts/config --disable CONFIG_NET_DSA
 
 #
 # Device Drivers
@@ -162,11 +170,6 @@ cd ${DIR}/KERNEL/
 # Generic Driver Options
 #
 ./scripts/config --enable CONFIG_DEVTMPFS_MOUNT
-
-#
-# Bluetooth device drivers
-#
-./scripts/config --disable CONFIG_BT_HCIBTUSB_AUTOSUSPEND
 
 #
 # Firmware loader
@@ -1001,6 +1004,7 @@ cd ${DIR}/KERNEL/
 # end of USB Physical Layer drivers
 ./scripts/config --enable CONFIG_USB_GADGET
 ./scripts/config --set-val CONFIG_USB_GADGET_VBUS_DRAW 500
+
 #
 # USB Peripheral Controller
 #
