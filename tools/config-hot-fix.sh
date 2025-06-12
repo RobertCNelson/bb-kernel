@@ -1268,6 +1268,11 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_HWSPINLOCK_OMAP
 
 #
+# Generic IOMMU Pagetable Support
+#
+./scripts/config --disable CONFIG_IOMMU_IO_PGTABLE_LPAE
+
+#
 # Clock Source drivers
 #
 ./scripts/config --disable CONFIG_ARM_TIMER_SP804
