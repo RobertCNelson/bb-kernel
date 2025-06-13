@@ -236,14 +236,7 @@ cd ${DIR}/KERNEL/
 
 # end of SCSI device support
 ./scripts/config --disable CONFIG_ATA
-./scripts/config --disable CONFIG_ATA_FORCE
 
-#
-# Controllers with non-SFF native interface
-#
-./scripts/config --disable CONFIG_SATA_AHCI_PLATFORM
-./scripts/config --disable CONFIG_AHCI_DWC
-./scripts/config --disable CONFIG_ATA_SFF
 ./scripts/config --disable CONFIG_MD_RAID456
 ./scripts/config --disable CONFIG_DM_CLONE
 ./scripts/config --disable CONFIG_DM_RAID
@@ -287,6 +280,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_ENC28J60
 ./scripts/config --enable CONFIG_ENCX24J600
 
+./scripts/config --enable CONFIG_NET_VENDOR_TI
 ./scripts/config --enable CONFIG_TI_DAVINCI_MDIO
 ./scripts/config --enable CONFIG_TI_CPSW_PHY_SEL
 ./scripts/config --enable CONFIG_TI_CPSW
@@ -299,6 +293,10 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_PHYLIB
 ./scripts/config --enable CONFIG_FIXED_PHY
 ./scripts/config --disable CONFIG_SFP
+
+#
+# MII PHY device drivers
+#
 
 ./scripts/config --disable CONFIG_AMD_PHY
 ./scripts/config --disable CONFIG_ADIN_PHY
@@ -441,7 +439,6 @@ cd ${DIR}/KERNEL/
 #
 # Serial drivers
 #
-
 ./scripts/config --disable CONFIG_SERIAL_8250_16550A_VARIANTS
 ./scripts/config --disable CONFIG_SERIAL_8250_DMA
 ./scripts/config --set-val CONFIG_SERIAL_8250_NR_UARTS 6
@@ -458,6 +455,8 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_SERIAL_MAX3100
 ./scripts/config --module CONFIG_SERIAL_MAX310X
 ./scripts/config --disable CONFIG_SERIAL_ARC
+
+# end of Serial drivers
 ./scripts/config --enable CONFIG_HW_RANDOM_OMAP
 ./scripts/config --disable CONFIG_HW_RANDOM_ARM_SMCCC_TRNG
 
@@ -466,6 +465,10 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --enable CONFIG_I2C_CHARDEV
 ./scripts/config --enable CONFIG_I2C_MUX
+
+#
+# Multiplexer I2C Chip support
+#
 ./scripts/config --enable CONFIG_I2C_MUX_GPIO
 ./scripts/config --enable CONFIG_I2C_MUX_PINCTRL
 ./scripts/config --module CONFIG_I2C_MUX_REG
@@ -496,6 +499,7 @@ cd ${DIR}/KERNEL/
 # SPI Protocol Masters
 #
 ./scripts/config --module CONFIG_SPI_SPIDEV
+./scripts/config --enable CONFIG_SPI_SLAVE
 ./scripts/config --module CONFIG_SPI_SLAVE_TIME
 ./scripts/config --module CONFIG_SPI_SLAVE_SYSTEM_CONTROL
 
@@ -531,6 +535,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_GPIO_MAX7300
 ./scripts/config --module CONFIG_GPIO_MAX732X
 ./scripts/config --module CONFIG_GPIO_PCA9570
+./scripts/config --module CONFIG_GPIO_PCF857X
 ./scripts/config --module CONFIG_GPIO_TPIC2810
 
 #
@@ -564,7 +569,6 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_W1_SLAVE_DS250X
 
 # end of 1-wire Slaves
-
 ./scripts/config --enable CONFIG_POWER_SEQUENCING
 ./scripts/config --enable CONFIG_GENERIC_ADC_BATTERY
 
@@ -599,6 +603,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_SENSORS_F71805F
 ./scripts/config --module CONFIG_SENSORS_GL518SM
 ./scripts/config --module CONFIG_SENSORS_GL520SM
+./scripts/config --enable CONFIG_SENSORS_GPIO_FAN
 ./scripts/config --module CONFIG_SENSORS_HIH6130
 ./scripts/config --module CONFIG_SENSORS_HTU31
 ./scripts/config --module CONFIG_SENSORS_ISL28022
@@ -712,6 +717,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_SENSORS_SBTSI
 ./scripts/config --module CONFIG_SENSORS_SHT15
 ./scripts/config --module CONFIG_SENSORS_SHTC1
+./scripts/config --module CONFIG_SENSORS_SIS5595
 ./scripts/config --module CONFIG_SENSORS_EMC2305
 ./scripts/config --module CONFIG_SENSORS_SMSC47M1
 ./scripts/config --module CONFIG_SENSORS_SMSC47B397
@@ -736,7 +742,6 @@ cd ${DIR}/KERNEL/
 # Texas Instruments thermal drivers
 #
 ./scripts/config --module CONFIG_GENERIC_ADC_THERMAL
-
 
 #
 # Watchdog Device Drivers
