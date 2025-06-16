@@ -3,8 +3,8 @@
 #
 #https://packages.debian.org/source/sid/linux
 #
-#abi="6.12.30"
-#kernel="6.12.30-1"
+#abi="6.12.32"
+#kernel="6.12.32-1"
 #
 abi="6.15"
 kernel="6.15.2-1~exp1"
