@@ -484,6 +484,7 @@ cd ${DIR}/KERNEL/
 
 # end of I2C Hardware Bus support
 ./scripts/config --disable CONFIG_I2C_FSI
+./scripts/config --module CONFIG_I2C_STUB
 ./scripts/config --enable CONFIG_I2C_SLAVE_EEPROM
 
 #
