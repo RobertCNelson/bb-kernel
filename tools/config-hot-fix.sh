@@ -297,7 +297,6 @@ cd ${DIR}/KERNEL/
 #
 # MII PHY device drivers
 #
-
 ./scripts/config --disable CONFIG_AMD_PHY
 ./scripts/config --disable CONFIG_ADIN_PHY
 ./scripts/config --disable CONFIG_AQUANTIA_PHY
@@ -339,14 +338,12 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_DP83867_PHY
 ./scripts/config --enable CONFIG_VITESSE_PHY
 
-./scripts/config --disable CONFIG_CAN_CAN327
 ./scripts/config --disable CONFIG_CAN_FLEXCAN
 ./scripts/config --disable CONFIG_CAN_SJA1000
 ./scripts/config --disable CONFIG_CAN_SJA1000_ISA
 ./scripts/config --disable CONFIG_CAN_SOFTING
 
 # end of CAN USB interfaces
-
 ./scripts/config --disable CONFIG_MDIO_BCM_UNIMAC
 ./scripts/config --enable CONFIG_MDIO_GPIO
 
