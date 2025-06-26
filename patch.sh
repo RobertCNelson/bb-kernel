@@ -106,6 +106,7 @@ external_git () {
 mainline_patches () {
 	#exit 2
 	dir 'mainline/pocketbeagle2'
+	dir 'mainline/greenecho'
 	#exit 2
 }
 
