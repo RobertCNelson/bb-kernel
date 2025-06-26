@@ -873,6 +873,9 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_TINYDRM_ILI9486
 ./scripts/config --module CONFIG_TINYDRM_MI0283QT
 ./scripts/config --module CONFIG_TINYDRM_REPAPER
+./scripts/config --module CONFIG_TINYDRM_SHARP_MEMORY
+./scripts/config --module CONFIG_TINYDRM_ST7586
+./scripts/config --module CONFIG_TINYDRM_ST7735R
 
 ./scripts/config --disable CONFIG_DRM_LIMA
 ./scripts/config --disable CONFIG_DRM_PANFROST
