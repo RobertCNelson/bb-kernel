@@ -410,6 +410,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_INPUT_GPIO_DECODER
 
 ./scripts/config --enable CONFIG_INPUT_TPS65218_PWRBUTTON
+./scripts/config --enable CONFIG_INPUT_TPS65219_PWRBUTTON
 
 ./scripts/config --disable CONFIG_INPUT_AXP20X_PEK
 ./scripts/config --disable CONFIG_INPUT_TWL4030_PWRBUTTON
@@ -550,6 +551,11 @@ cd ${DIR}/KERNEL/
 # USB GPIO expanders
 #
 ./scripts/config --disable CONFIG_GPIO_MPSSE
+
+#
+# MFD GPIO expanders
+#
+./scripts/config --enable CONFIG_GPIO_TPS65219
 
 #
 # Virtual GPIO drivers
@@ -780,6 +786,7 @@ cd ${DIR}/KERNEL/
 
 ./scripts/config --enable CONFIG_MFD_TI_AM335X_TSCADC
 ./scripts/config --enable CONFIG_MFD_TPS65217
+./scripts/config --enable CONFIG_MFD_TPS65219
 
 # end of Multifunction device drivers
 ./scripts/config --disable CONFIG_REGULATOR_ACT8865
@@ -800,6 +807,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_REGULATOR_RASPBERRYPI_TOUCHSCREEN_ATTINY
 ./scripts/config --enable CONFIG_REGULATOR_TI_ABB
 ./scripts/config --enable CONFIG_REGULATOR_TPS65217
+./scripts/config --enable CONFIG_REGULATOR_TPS65219
 
 #
 # CEC support

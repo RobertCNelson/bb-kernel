@@ -105,7 +105,8 @@ external_git () {
 
 mainline_patches () {
 	#exit 2
-	dir 'mainline/pocketbeagle2'
+	#dir 'mainline/pocketbeagle2'
+	dir 'mainline/greenecho'
 	#exit 2
 }
 
@@ -376,7 +377,7 @@ local_patch () {
 }
 
 #external_git
-#mainline_patches
+mainline_patches
 rt
 wireless_regdb
 beagleboard_dtbs
@@ -528,6 +529,8 @@ drivers () {
 #	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
+
+	dir 'fixes'
 }
 
 ###
