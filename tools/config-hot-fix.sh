@@ -783,6 +783,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_TWL6040_CORE
 ./scripts/config --disable CONFIG_MFD_WM8994
 ./scripts/config --disable CONFIG_MFD_STPMIC1
+./scripts/config --disable CONFIG_MFD_SEC_CORE
 
 ./scripts/config --enable CONFIG_MFD_TI_AM335X_TSCADC
 ./scripts/config --enable CONFIG_MFD_TPS65217
