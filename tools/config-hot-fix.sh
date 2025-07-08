@@ -1695,7 +1695,7 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --enable CONFIG_VALIDATE_FS_PARSER
 ./scripts/config --enable CONFIG_EXT4_FS
-./scripts/config --disable CONFIG_XFS_FS
+./scripts/config --enable CONFIG_XFS_FS
 ./scripts/config --disable CONFIG_OCFS2_FS
 ./scripts/config --enable CONFIG_BTRFS_FS
 ./scripts/config --disable CONFIG_NILFS2_FS

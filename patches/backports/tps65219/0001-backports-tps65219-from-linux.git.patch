@@ -1,16 +1,16 @@
-From 9eec06d9f3a40d523b65db8b1ed3c275116bf846 Mon Sep 17 00:00:00 2001
+From 88bf0a6acceeca0845cde449f3a8488fc0ebb562 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 27 Jun 2025 14:08:44 -0500
+Date: Tue, 8 Jul 2025 15:28:12 -0500
 Subject: [PATCH] backports: tps65219: from: linux.git
 
-Reference: v6.16-rc3
+Reference: v6.16-rc5
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/regulator/tps65219-regulator.c | 242 ++++++++++++++++++++-----
- 1 file changed, 193 insertions(+), 49 deletions(-)
+ drivers/regulator/tps65219-regulator.c | 250 +++++++++++++++++++------
+ 1 file changed, 197 insertions(+), 53 deletions(-)
 
 diff --git a/drivers/regulator/tps65219-regulator.c b/drivers/regulator/tps65219-regulator.c
-index aa65077f9d41..b16b300d7f45 100644
+index aa65077f9d41..5e67fdc88f49 100644
 --- a/drivers/regulator/tps65219-regulator.c
 +++ b/drivers/regulator/tps65219-regulator.c
 @@ -1,10 +1,9 @@
@@ -192,13 +192,11 @@ index aa65077f9d41..b16b300d7f45 100644
 +	 *  configurable as load switch and bypass-mode.
 +	 *  TPS65215's LDO2 is the same as TPS65219's LDO3
 +	 */
- 	TPS65219_REGULATOR("LDO1", "ldo1", TPS65219_LDO_1,
--			   REGULATOR_VOLTAGE, tps65219_ldos_1_2_ops, 64,
++	TPS65219_REGULATOR("LDO1", "ldo1", TPS65219_LDO_1,
 +			   REGULATOR_VOLTAGE, ldos_1_2_ops, 64,
- 			   TPS65219_REG_LDO1_VOUT,
- 			   TPS65219_BUCKS_LDOS_VOUT_VSET_MASK,
- 			   TPS65219_REG_ENABLE_CTRL,
--			   TPS65219_ENABLE_LDO1_EN_MASK, 0, 0, ldos_1_2_ranges,
++			   TPS65219_REG_LDO1_VOUT,
++			   TPS65219_BUCKS_LDOS_VOUT_VSET_MASK,
++			   TPS65219_REG_ENABLE_CTRL,
 +			   TPS65219_ENABLE_LDO1_EN_MASK, 0, 0, ldo_1_range,
 +			   2, 0, 0, NULL, 0, TPS65219_LDOS_BYP_CONFIG_MASK),
 +	TPS65219_REGULATOR("LDO2", "ldo2", TPS65215_LDO_2,
@@ -211,11 +209,13 @@ index aa65077f9d41..b16b300d7f45 100644
 +};
 +
 +static const struct regulator_desc tps65219_regs[] = {
-+	TPS65219_REGULATOR("LDO1", "ldo1", TPS65219_LDO_1,
+ 	TPS65219_REGULATOR("LDO1", "ldo1", TPS65219_LDO_1,
+-			   REGULATOR_VOLTAGE, tps65219_ldos_1_2_ops, 64,
 +			   REGULATOR_VOLTAGE, ldos_1_2_ops, 64,
-+			   TPS65219_REG_LDO1_VOUT,
-+			   TPS65219_BUCKS_LDOS_VOUT_VSET_MASK,
-+			   TPS65219_REG_ENABLE_CTRL,
+ 			   TPS65219_REG_LDO1_VOUT,
+ 			   TPS65219_BUCKS_LDOS_VOUT_VSET_MASK,
+ 			   TPS65219_REG_ENABLE_CTRL,
+-			   TPS65219_ENABLE_LDO1_EN_MASK, 0, 0, ldos_1_2_ranges,
 +			   TPS65219_ENABLE_LDO1_EN_MASK, 0, 0, ldo_1_range,
  			   2, 0, 0, NULL, 0, TPS65219_LDOS_BYP_CONFIG_MASK),
  	TPS65219_REGULATOR("LDO2", "ldo2", TPS65219_LDO_2,
@@ -346,54 +346,58 @@ index aa65077f9d41..b16b300d7f45 100644
 -				ARRAY_SIZE(tps65219_regulator_irq_types) *
 -				sizeof(struct tps65219_regulator_irq_data),
 -				GFP_KERNEL);
-+	irq_data = devm_kmalloc(tps->dev, pmic->common_irq_size, GFP_KERNEL);
- 	if (!irq_data)
- 		return -ENOMEM;
+-	if (!irq_data)
+-		return -ENOMEM;
++	for (i = 0; i < pmic->common_irq_size; ++i) {
++		irq_type = &pmic->common_irq_types[i];
++		irq = platform_get_irq_byname(pdev, irq_type->irq_name);
++		if (irq < 0)
++			return -EINVAL;
++
++		irq_data = devm_kmalloc(tps->dev, sizeof(*irq_data), GFP_KERNEL);
++		if (!irq_data)
++			return -ENOMEM;
  
 -	for (i = 0; i < ARRAY_SIZE(tps65219_regulator_irq_types); ++i) {
 -		irq_type = &tps65219_regulator_irq_types[i];
--
-+	for (i = 0; i < pmic->common_irq_size; ++i) {
-+		irq_type = &pmic->common_irq_types[i];
- 		irq = platform_get_irq_byname(pdev, irq_type->irq_name);
- 		if (irq < 0)
- 			return -EINVAL;
- 
- 		irq_data[i].dev = tps->dev;
- 		irq_data[i].type = irq_type;
++		irq_data->dev = tps->dev;
++		irq_data->type = irq_type;
 +		error = devm_request_threaded_irq(tps->dev, irq, NULL,
 +						  tps65219_regulator_irq_handler,
 +						  IRQF_ONESHOT,
 +						  irq_type->irq_name,
-+						  &irq_data[i]);
++						  irq_data);
 +		if (error)
 +			return dev_err_probe(tps->dev, PTR_ERR(rdev),
 +					     "Failed to request %s IRQ %d: %d\n",
 +					     irq_type->irq_name, irq, error);
 +	}
-+
-+	irq_data = devm_kmalloc(tps->dev, pmic->dev_irq_size, GFP_KERNEL);
-+	if (!irq_data)
-+		return -ENOMEM;
  
 +	for (i = 0; i < pmic->dev_irq_size; ++i) {
 +		irq_type = &pmic->irq_types[i];
-+		irq = platform_get_irq_byname(pdev, irq_type->irq_name);
-+		if (irq < 0)
-+			return -EINVAL;
-+
-+		irq_data[i].dev = tps->dev;
-+		irq_data[i].type = irq_type;
+ 		irq = platform_get_irq_byname(pdev, irq_type->irq_name);
+ 		if (irq < 0)
+ 			return -EINVAL;
+ 
+-		irq_data[i].dev = tps->dev;
+-		irq_data[i].type = irq_type;
++		irq_data = devm_kmalloc(tps->dev, sizeof(*irq_data), GFP_KERNEL);
++		if (!irq_data)
++			return -ENOMEM;
+ 
++		irq_data->dev = tps->dev;
++		irq_data->type = irq_type;
  		error = devm_request_threaded_irq(tps->dev, irq, NULL,
  						  tps65219_regulator_irq_handler,
  						  IRQF_ONESHOT,
  						  irq_type->irq_name,
- 						  &irq_data[i]);
+-						  &irq_data[i]);
 -		if (error) {
 -			dev_err(tps->dev, "failed to request %s IRQ %d: %d\n",
 -				irq_type->irq_name, irq, error);
 -			return error;
 -		}
++						  irq_data);
 +		if (error)
 +			return dev_err_probe(tps->dev, PTR_ERR(rdev),
 +					     "Failed to request %s IRQ %d: %d\n",

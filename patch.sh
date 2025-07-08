@@ -300,12 +300,30 @@ beagleboard_dtbs () {
 
 		#ls src/arm64/overlays/ | grep pocketbeagle2
 
-		device="k3-am6232-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
-		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-ardupilot-cape" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+		device="k3-am6232-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+
+		#ls src/arm64/overlays/ | grep beagleplay
+
+		device="k3-am625-beagleplay-bcfserial-no-firmware" ; k3_dtbo_makefile_append
 
 		#ls src/arm64/overlays/ | grep beagley
 
+		device="k3-am67a-beagley-ai-csi0-imx219" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-csi0-ov5640" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-csi1-imx219" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-dsi-rpi-7inch-panel" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-hdmi-dss0-dpi1" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-i2c1-400000" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-i2c1-ads1115" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-i2c1-rtc-rv3028" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-i2c1-ssd1306" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-lincolntech-185lcd-panel" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-mikroe-eth" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-mikroe-microsd" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pps-gpio18" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-pwm-ecap0-gpio12" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-pwm-ecap1-gpio16" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-pwm-ecap1-gpio21" ; k3_dtbo_makefile_append
@@ -327,6 +345,10 @@ beagleboard_dtbs () {
 		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6-gpio13" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6-gpio20" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-spi0-1cs" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-spi0-2cs" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-spidev0" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-uart-ttyama0" ; k3_dtbo_makefile_append
 
 		#ls src/arm64/overlays/ | grep beaglebone
 
@@ -447,7 +469,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="v6.16-rc3"
+	backport_tag="v6.16-rc5"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -546,7 +568,7 @@ drivers () {
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
-	dir 'fixes'
+	dir 'drivers/tps65219'
 }
 
 ###
