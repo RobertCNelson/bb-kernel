@@ -376,10 +376,6 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_RTW88_8723CS
 ./scripts/config --disable CONFIG_RTW88_8821CS
 
-./scripts/config --module CONFIG_RTW88_8821AU
-./scripts/config --module CONFIG_RTW88_8812AU
-./scripts/config --module CONFIG_RTW88_8814AU
-
 ./scripts/config --module CONFIG_WFX
 
 ./scripts/config --disable CONFIG_IEEE802154_FAKELB
