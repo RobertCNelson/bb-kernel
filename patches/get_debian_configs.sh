@@ -3,14 +3,14 @@
 #
 #https://packages.debian.org/source/sid/linux
 #
-#abi="6.12.35"
-#kernel="6.12.35-1"
+#abi="6.12.38"
+#kernel="6.12.38-1"
 #
-abi="6.15"
-kernel="6.15.6-1~exp1"
+#abi="6.15"
+#kernel="6.15.6-1~exp1"
 #
-#abi="6.15-rc7"
-#kernel="6.15~rc7-1~exp1"
+abi="6.16-rc7"
+kernel="6.16~rc7-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"

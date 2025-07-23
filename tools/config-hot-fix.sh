@@ -18,6 +18,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_BPF_PRELOAD_UMD
 
 # end of BPF subsystem
+
 ./scripts/config --enable CONFIG_PREEMPT
 
 #
@@ -26,12 +27,14 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_PSI_DEFAULT_DISABLED
 
 # end of RCU Subsystem
+
 ./scripts/config --enable CONFIG_IKCONFIG
 ./scripts/config --enable CONFIG_IKCONFIG_PROC
 ./scripts/config --module CONFIG_IKHEADERS
 ./scripts/config --enable CONFIG_PRINTK_INDEX
 
 # end of Scheduler features
+
 ./scripts/config --enable CONFIG_MEMCG_V1
 ./scripts/config --enable CONFIG_CGROUP_DMEM
 ./scripts/config --enable CONFIG_KALLSYMS_ALL
@@ -41,9 +44,8 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --disable CONFIG_KEXEC
 
-#
-# CPU Core family selection
-#
+# end of Platform selection
+
 ./scripts/config --disable CONFIG_ARCH_VIRT
 ./scripts/config --disable CONFIG_ARCH_ASPEED
 ./scripts/config --disable CONFIG_ARCH_BCM
@@ -54,11 +56,15 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_ARCH_MMP
 ./scripts/config --disable CONFIG_ARCH_MVEBU
 
-# AM33XX only!
+#
+# TI OMAP/AM/DM/DRA Family
+#
 ./scripts/config --disable CONFIG_ARCH_OMAP3
 ./scripts/config --disable CONFIG_ARCH_OMAP4
 ./scripts/config --disable CONFIG_SOC_OMAP5
 ./scripts/config --disable CONFIG_SOC_DRA7XX
+
+# end of TI OMAP/AM/DM/DRA Family
 
 ./scripts/config --disable CONFIG_ARCH_ROCKCHIP
 ./scripts/config --disable CONFIG_ARCH_INTEL_SOCFPGA
@@ -85,12 +91,6 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_XEN
 
 #
-# Power management options
-#
-./scripts/config --enable CONFIG_PM_AUTOSLEEP
-./scripts/config --enable CONFIG_PM_WAKELOCKS
-
-#
 # CPU Frequency scaling
 #
 ./scripts/config --enable CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE
@@ -112,14 +112,21 @@ cd ${DIR}/KERNEL/
 # ARM CPU Idle Drivers
 #
 ./scripts/config --enable CONFIG_ARM_CPUIDLE
-./scripts/config --enable CONFIG_ARM_PSCI_CPUIDLE
+
+#
+# Power management options
+#
+./scripts/config --enable CONFIG_PM_AUTOSLEEP
+./scripts/config --enable CONFIG_PM_WAKELOCKS
 
 # end of General architecture-dependent options
+
 ./scripts/config --disable CONFIG_MODULE_SIG
 ./scripts/config --disable CONFIG_MODULE_DECOMPRESS
 ./scripts/config --enable CONFIG_BLK_CGROUP_IOPRIO
 
 # end of Slab allocator options
+
 ./scripts/config --enable CONFIG_IDLE_PAGE_TRACKING
 ./scripts/config --enable CONFIG_ANON_VMA_NAME
 
@@ -143,6 +150,8 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --enable CONFIG_IP_NF_IPTABLES
 
+# end of IPv6: Netfilter Configuration
+
 ./scripts/config --disable CONFIG_NET_DSA
 
 #
@@ -157,6 +166,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_BT_HCIBTUSB_AUTOSUSPEND
 
 # end of Bluetooth device drivers
+
 ./scripts/config --disable CONFIG_CFG80211_DEFAULT_PS
 ./scripts/config --enable CONFIG_RFKILL
 ./scripts/config --enable CONFIG_RFKILL_GPIO
@@ -189,14 +199,17 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_MHI_BUS
 
 # end of ARM System Control and Management Interface Protocol
+
 ./scripts/config --enable CONFIG_SYSFB_SIMPLEFB
 ./scripts/config --disable CONFIG_FW_CS_DSP
 ./scripts/config --disable CONFIG_GOOGLE_FIRMWARE
 
 # end of Firmware Drivers
+
 ./scripts/config --module CONFIG_FWCTL
 
 # end of LPDDR & LPDDR2 PCM memory drivers
+
 ./scripts/config --enable CONFIG_OF_OVERLAY
 ./scripts/config --disable CONFIG_PARPORT
 ./scripts/config --enable CONFIG_ZRAM_BACKEND_LZO
@@ -230,20 +243,29 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_EEPROM_93XX46
 
 # end of EEPROM support
+
 ./scripts/config --disable CONFIG_SENSORS_LIS3_I2C
 ./scripts/config --disable CONFIG_ALTERA_STAPL
 ./scripts/config --disable CONFIG_MISC_RTSX_USB
 
 # end of SCSI device support
+
 ./scripts/config --disable CONFIG_ATA
 
+#
+# Generic fallback / legacy drivers
+#
 ./scripts/config --disable CONFIG_MD_RAID456
 ./scripts/config --disable CONFIG_DM_CLONE
 ./scripts/config --disable CONFIG_DM_RAID
 
+# end of IEEE 1394 (FireWire) support
+
 ./scripts/config --enable CONFIG_MII
 ./scripts/config --enable CONFIG_IPVLAN
 ./scripts/config --enable CONFIG_VXLAN
+
+# end of Distributed Switch Architecture drivers
 
 ./scripts/config --disable CONFIG_NET_VENDOR_ALACRITECH
 ./scripts/config --disable CONFIG_NET_VENDOR_AMAZON
@@ -344,6 +366,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_CAN_SOFTING
 
 # end of CAN USB interfaces
+
 ./scripts/config --disable CONFIG_MDIO_BCM_UNIMAC
 ./scripts/config --enable CONFIG_MDIO_GPIO
 
@@ -353,6 +376,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_PCS_XPCS
 
 # end of PCS device drivers
+
 ./scripts/config --enable CONFIG_USB_NET_DRIVERS
 ./scripts/config --enable CONFIG_USB_USBNET
 ./scripts/config --enable CONFIG_USB_NET_SMSC95XX
@@ -360,24 +384,18 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_B43
 ./scripts/config --disable CONFIG_B43LEGACY
 ./scripts/config --disable CONFIG_BRCMSMAC
-./scripts/config --disable CONFIG_LIBERTAS_SDIO
+./scripts/config --disable CONFIG_BRCMFMAC_SDIO
 
-./scripts/config --disable CONFIG_MWIFIEX_SDIO
+#
+# Debugging Options
+#
 ./scripts/config --module CONFIG_MWIFIEX_USB
 ./scripts/config --module CONFIG_WILC1000_SDIO
 ./scripts/config --module CONFIG_WILC1000_SPI
 
 ./scripts/config --module CONFIG_RTL8192DU
 
-./scripts/config --disable CONFIG_RTW88_SDIO
-./scripts/config --disable CONFIG_RTW88_8822BS
-./scripts/config --disable CONFIG_RTW88_8822CS
-./scripts/config --disable CONFIG_RTW88_8723DS
-./scripts/config --disable CONFIG_RTW88_8723CS
-./scripts/config --disable CONFIG_RTW88_8821CS
-
-./scripts/config --module CONFIG_WFX
-
+./scripts/config --disable CONFIG_MAC80211_HWSIM
 ./scripts/config --disable CONFIG_IEEE802154_FAKELB
 
 #
@@ -390,6 +408,9 @@ cd ${DIR}/KERNEL/
 #
 ./scripts/config --disable CONFIG_INPUT_MOUSEDEV
 
+#
+# Input Device Drivers
+#
 ./scripts/config --disable CONFIG_KEYBOARD_ATKBD
 ./scripts/config --disable CONFIG_KEYBOARD_OPENCORES
 ./scripts/config --disable CONFIG_KEYBOARD_OMAP4
@@ -397,6 +418,8 @@ cd ${DIR}/KERNEL/
 
 ./scripts/config --module CONFIG_TOUCHSCREEN_AR1021_I2C
 ./scripts/config --module CONFIG_TOUCHSCREEN_ILI210X
+./scripts/config --module CONFIG_TOUCHSCREEN_EDT_FT5X06
+./scripts/config --module CONFIG_TOUCHSCREEN_TI_AM335X_TSC
 
 ./scripts/config --module CONFIG_INPUT_AD714X
 ./scripts/config --module CONFIG_INPUT_AD714X_I2C
@@ -451,6 +474,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_SERIAL_ARC
 
 # end of Serial drivers
+
 ./scripts/config --enable CONFIG_HW_RANDOM_OMAP
 ./scripts/config --disable CONFIG_HW_RANDOM_ARM_SMCCC_TRNG
 
@@ -477,6 +501,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_I2C_SIMTEC
 
 # end of I2C Hardware Bus support
+
 ./scripts/config --disable CONFIG_I2C_FSI
 ./scripts/config --module CONFIG_I2C_STUB
 ./scripts/config --enable CONFIG_I2C_SLAVE_EEPROM
@@ -510,6 +535,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_PPS_GENERATOR
 
 # end of PTP clock support
+
 ./scripts/config --disable CONFIG_PINCTRL_AS3722
 ./scripts/config --disable CONFIG_PINCTRL_AXP209
 ./scripts/config --disable CONFIG_PINCTRL_PALMAS
@@ -559,6 +585,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_GPIO_AGGREGATOR
 
 # end of GPIO Debugging utilities
+
 ./scripts/config --enable CONFIG_W1
 
 #
@@ -569,6 +596,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_W1_SLAVE_DS250X
 
 # end of 1-wire Slaves
+
 ./scripts/config --enable CONFIG_POWER_SEQUENCING
 ./scripts/config --enable CONFIG_GENERIC_ADC_BATTERY
 
@@ -780,6 +808,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_MFD_WM8994
 ./scripts/config --disable CONFIG_MFD_STPMIC1
 ./scripts/config --disable CONFIG_MFD_SEC_CORE
+./scripts/config --disable CONFIG_MFD_SEC_I2C
 
 ./scripts/config --enable CONFIG_MFD_TI_AM335X_TSCADC
 ./scripts/config --enable CONFIG_MFD_TPS65217
@@ -826,9 +855,13 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_HT16K33
 ./scripts/config --module CONFIG_SEG_LED_GPIO
 ./scripts/config --enable CONFIG_DRM
+
+# end of DRM debugging options
+
 ./scripts/config --enable CONFIG_DRM_KMS_HELPER
 
 # end of Supported DRM clients
+
 ./scripts/config --enable CONFIG_DRM_DISPLAY_DP_AUX_BUS
 ./scripts/config --enable CONFIG_DRM_DISPLAY_HELPER
 ./scripts/config --enable CONFIG_DRM_GEM_DMA_HELPER
@@ -860,6 +893,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_DRM_TI_TFP410
 
 # end of Display Interface Bridges
+
 ./scripts/config --disable CONFIG_DRM_ETNAVIV
 
 ./scripts/config --module CONFIG_DRM_GM12U320
@@ -871,8 +905,12 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_TINYDRM_MI0283QT
 ./scripts/config --module CONFIG_TINYDRM_REPAPER
 ./scripts/config --module CONFIG_TINYDRM_SHARP_MEMORY
-./scripts/config --module CONFIG_TINYDRM_ST7586
-./scripts/config --module CONFIG_TINYDRM_ST7735R
+./scripts/config --module CONFIG_DRM_ST7571_I2C
+./scripts/config --module CONFIG_DRM_ST7586
+./scripts/config --module CONFIG_DRM_ST7735R
+./scripts/config --module CONFIG_DRM_SSD130X
+./scripts/config --module CONFIG_DRM_SSD130X_I2C
+./scripts/config --module CONFIG_DRM_SSD130X_SPI
 
 ./scripts/config --disable CONFIG_DRM_LIMA
 ./scripts/config --disable CONFIG_DRM_PANFROST
@@ -897,6 +935,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_FRAMEBUFFER_CONSOLE_LEGACY_ACCELERATION
 
 # end of Console display driver support
+
 ./scripts/config --enable CONFIG_LOGO
 ./scripts/config --enable CONFIG_LOGO_LINUX_MONO
 ./scripts/config --enable CONFIG_LOGO_LINUX_VGA16
@@ -904,6 +943,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_LOGO_BEAGLE_CLUT224
 
 # end of Graphics support
+
 ./scripts/config --enable CONFIG_SOUND_OSS_CORE_PRECLAIM
 ./scripts/config --module CONFIG_SND_DUMMY
 ./scripts/config --module CONFIG_SND_VIRMIDI
@@ -945,11 +985,13 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_SND_SOC_WM8960
 
 # end of CODEC drivers
+
 ./scripts/config --enable CONFIG_HID
 ./scripts/config --enable CONFIG_UHID
 ./scripts/config --enable CONFIG_HID_GENERIC
 
 # end of HID-BPF support
+
 ./scripts/config --enable CONFIG_I2C_HID
 
 #
@@ -958,6 +1000,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_USB_HID
 
 # end of USB HID support
+
 ./scripts/config --enable CONFIG_USB_COMMON
 ./scripts/config --disable CONFIG_USB_ULPI_BUS
 ./scripts/config --disable CONFIG_USB_CONN_GPIO
@@ -997,6 +1040,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_USB_DWC3
 ./scripts/config --disable CONFIG_USB_DWC2
 ./scripts/config --disable CONFIG_USB_CHIPIDEA
+./scripts/config --disable CONFIG_USB_ISP1760
 
 #
 # USB Miscellaneous drivers
@@ -1013,6 +1057,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_USB_ULPI
 
 # end of USB Physical Layer drivers
+
 ./scripts/config --enable CONFIG_USB_GADGET
 ./scripts/config --set-val CONFIG_USB_GADGET_VBUS_DRAW 500
 
@@ -1038,6 +1083,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_USB_CONFIGFS
 
 # end of USB Gadget precomposed configurations
+
 ./scripts/config --disable CONFIG_TYPEC
 ./scripts/config --disable CONFIG_USB_ROLE_SWITCH
 ./scripts/config --disable CONFIG_PWRSEQ_SD8787
@@ -1085,8 +1131,10 @@ cd ${DIR}/KERNEL/
 # Simatic LED drivers
 #
 ./scripts/config --disable CONFIG_ACCESSIBILITY
-./scripts/config --disable CONFIG_INFINIBAND
 
+# end of Speakup console speech
+
+./scripts/config --disable CONFIG_INFINIBAND
 
 #
 # I2C RTC drivers
@@ -1184,11 +1232,14 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_DMABUF_HEAPS_CMA
 
 # end of DMABUF options
+
 ./scripts/config --module CONFIG_UIO_PDRV_GENIRQ
+./scripts/config --module CONFIG_UIO_DMEM_GENIRQ
 ./scripts/config --disable CONFIG_VFIO
 ./scripts/config --disable CONFIG_VDPA
 
 # end of Microsoft Hyper-V guest support
+
 ./scripts/config --module CONFIG_GREYBUS
 ./scripts/config --module CONFIG_GREYBUS_ES2
 
@@ -1300,6 +1351,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_PRU_REMOTEPROC
 
 # end of Rpmsg drivers
+
 ./scripts/config --disable CONFIG_SOUNDWIRE
 
 # end of Qualcomm SoC drivers
@@ -1382,8 +1434,10 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_MAX11410
 ./scripts/config --module CONFIG_MAX34408
 ./scripts/config --module CONFIG_MCP3564
+./scripts/config --module CONFIG_NCT7201
 ./scripts/config --module CONFIG_PAC1921
 ./scripts/config --module CONFIG_PAC1934
+./scripts/config --module CONFIG_ROHM_BD79124
 ./scripts/config --module CONFIG_RICHTEK_RTQ6056
 ./scripts/config --module CONFIG_SD_ADC_MODULATOR
 ./scripts/config --module CONFIG_TI_ADS1100
@@ -1396,6 +1450,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_TI_ADS8344
 ./scripts/config --module CONFIG_TI_ADS8688
 ./scripts/config --enable CONFIG_TI_AM335X_ADC
+./scripts/config --module CONFIG_TI_LMP92064
 ./scripts/config --module CONFIG_TI_TLC4541
 ./scripts/config --module CONFIG_TI_TSC2046
 
@@ -1437,13 +1492,13 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_ENS160_I2C
 ./scripts/config --module CONFIG_ENS160_SPI
 ./scripts/config --module CONFIG_IAQCORE
-
+./scripts/config --module CONFIG_MHZ19B
 ./scripts/config --module CONFIG_PMS7003
 ./scripts/config --module CONFIG_SCD30_CORE
 ./scripts/config --module CONFIG_SCD30_I2C
 ./scripts/config --module CONFIG_SCD30_SERIAL
 ./scripts/config --module CONFIG_SCD4X
-
+./scripts/config --module CONFIG_SEN0322
 ./scripts/config --module CONFIG_SENSIRION_SGP30
 ./scripts/config --module CONFIG_SENSIRION_SGP40
 ./scripts/config --module CONFIG_SPS30
@@ -1455,6 +1510,7 @@ cd ${DIR}/KERNEL/
 #
 # Digital to analog converters
 #
+./scripts/config --module CONFIG_AD3530R
 ./scripts/config --module CONFIG_AD3552R_HS
 ./scripts/config --module CONFIG_AD3552R_LIB
 ./scripts/config --module CONFIG_AD3552R
@@ -1472,6 +1528,11 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_MCP4821
 
 #
+# Filters
+#
+./scripts/config --module CONFIG_ADMV8818
+
+#
 # Clock Generator/Distribution
 #
 ./scripts/config --module CONFIG_AD9523
@@ -1484,8 +1545,13 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_ADF4377
 ./scripts/config --module CONFIG_ADMFM2000
 ./scripts/config --module CONFIG_ADMV1013
+./scripts/config --module CONFIG_ADMV1014
 ./scripts/config --module CONFIG_ADMV4420
 ./scripts/config --module CONFIG_ADRF6780
+
+#
+# Digital gyroscope sensors
+#
 
 #
 # Heart Rate Monitors
@@ -1567,6 +1633,7 @@ cd ${DIR}/KERNEL/
 #
 # Triggers - standalone
 #
+./scripts/config --module CONFIG_IIO_INTERRUPT_TRIGGER
 ./scripts/config --module CONFIG_IIO_TIGHTLOOP_TRIGGER
 
 #
@@ -1641,13 +1708,15 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_MCP9600
 
 # end of Temperature sensors
+
 ./scripts/config --module CONFIG_PWM_GPIO
 ./scripts/config --enable CONFIG_PWM_OMAP_DMTIMER
-./scripts/config --enable CONFIG_PWM_PCA9685
+./scripts/config --module CONFIG_PWM_PCA9685
 ./scripts/config --enable CONFIG_PWM_TIECAP
 ./scripts/config --enable CONFIG_PWM_TIEHRPWM
 
 # end of IRQ chip support
+
 ./scripts/config --enable CONFIG_RESET_TI_SYSCON
 
 #
@@ -1711,6 +1780,9 @@ cd ${DIR}/KERNEL/
 # Pseudo filesystems
 #
 ./scripts/config --enable CONFIG_CONFIGFS_FS
+
+# end of Pseudo filesystems
+
 ./scripts/config --disable CONFIG_ORANGEFS_FS
 ./scripts/config --disable CONFIG_ADFS_FS
 ./scripts/config --disable CONFIG_AFFS_FS
@@ -1744,8 +1816,12 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_SECURITY_DMESG_RESTRICT
 ./scripts/config --disable CONFIG_SECURITY_LOCKDOWN_LSM
 ./scripts/config --disable CONFIG_SECURITY_IPE
-./scripts/config --disable CONFIG_IMA_BLACKLIST_KEYRING
-./scripts/config --disable CONFIG_IMA_LOAD_X509
+
+#
+# Crypto core or helper
+#
+./scripts/config --disable CONFIG_CRYPTO_SELFTESTS
+./scripts/config --disable CONFIG_CRYPTO_BENCHMARK
 
 #
 # Certificates for signature checking
@@ -1780,6 +1856,7 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_DEBUG_SECTION_MISMATCH
 
 # end of RCU Debugging
+
 ./scripts/config --disable CONFIG_STRICT_DEVMEM
 
 #
