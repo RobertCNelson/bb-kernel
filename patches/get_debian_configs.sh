@@ -3,14 +3,14 @@
 #
 #https://packages.debian.org/source/sid/linux
 #
-#abi="6.12.35"
-#kernel="6.12.35-1"
+#abi="6.12.38"
+#kernel="6.12.38-1"
 #
-abi="6.15"
-kernel="6.15.6-1~exp1"
+#abi="6.15"
+#kernel="6.15.6-1~exp1"
 #
-#abi="6.15-rc7"
-#kernel="6.15~rc7-1~exp1"
+abi="6.16-rc7"
+kernel="6.16~rc7-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
@@ -30,7 +30,7 @@ dl_deb () {
 
 	if [ -f ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ] ; then
 		dpkg -x ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ./dl/tmp/
-		cp -v ./dl/tmp/boot/config-${abi}-${image} ./debian
+		cp -v ./dl/tmp/boot/config-${abi}-${image} ./debian.config
 		rm -rf ./dl/tmp/ || true
 	fi
 }
