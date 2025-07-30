@@ -469,7 +469,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="v6.16-rc5"
+	backport_tag="v6.16"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -569,8 +569,6 @@ drivers () {
 
 	dir 'drivers/wkup_m3_ipc'
 	dir 'external/ti-amx3-cm3-pm-firmware'
-
-	dir 'drivers/tps65219'
 }
 
 ###
