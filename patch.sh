@@ -241,6 +241,7 @@ k3_makefile_patch_cleanup_overlays () {
 	cat arch/arm64/boot/dts/ti/Makefile.dtc >> arch/arm64/boot/dts/ti/Makefile
 	rm arch/arm64/boot/dts/ti/Makefile.dtc
 	echo "DTC_FLAGS_k3-am62-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
+	echo "DTC_FLAGS_k3-am6232-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
 	echo "DTC_FLAGS_k3-am67a-beagley-ai += -@" >> arch/arm64/boot/dts/ti/Makefile
 	echo "DTC_FLAGS_k3-j721e-beagleboneai64 += -@" >> arch/arm64/boot/dts/ti/Makefile
 }
@@ -294,6 +295,60 @@ beagleboard_dtbs () {
 		device="BONE-I2C1" ; k3_dtbo_makefile_append
 		device="BONE-I2C2" ; k3_dtbo_makefile_append
 		device="BONE-I2C3" ; k3_dtbo_makefile_append
+
+		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
+
+		#ls src/arm64/overlays/ | grep pocketbeagle2
+
+		device="k3-am62-pocketbeagle2-ardupilot-cape" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+		device="k3-am6232-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+
+		#ls src/arm64/overlays/ | grep beagleplay
+
+		device="k3-am625-beagleplay-bcfserial-no-firmware" ; k3_dtbo_makefile_append
+
+		#ls src/arm64/overlays/ | grep beagley
+
+		device="k3-am67a-beagley-ai-csi0-imx219" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-csi0-ov5640" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-csi1-imx219" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-dsi-rpi-7inch-panel" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-hdmi-dss0-dpi1" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-i2c1-400000" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-i2c1-ads1115" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-i2c1-rtc-rv3028" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-i2c1-ssd1306" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-lincolntech-185lcd-panel" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-mikroe-eth" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-mikroe-microsd" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pps-gpio18" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap0-gpio12" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap1-gpio16" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap1-gpio21" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap2-gpio17" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-ecap2-gpio18" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio12" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio14" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio15" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio15-gpio12" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio15-gpio14" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio5" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio5-gpio12" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm0-gpio5-gpio14" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio13" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio20" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio21" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio21-gpio13" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio21-gpio20" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6-gpio13" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-pwm-epwm1-gpio6-gpio20" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-spi0-1cs" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-spi0-2cs" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-spidev0" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-uart-ttyama0" ; k3_dtbo_makefile_append
 
 		#ls src/arm64/overlays/ | grep beaglebone
 
