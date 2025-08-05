@@ -3,8 +3,8 @@
 #
 #https://packages.debian.org/source/bookworm/linux
 #
-abi="6.1.0-18"
-kernel="6.1.76-1"
+abi="6.1.0-37"
+kernel="6.1.140-1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
@@ -24,7 +24,7 @@ dl_deb () {
 
 	if [ -f ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ] ; then
 		dpkg -x ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ./dl/tmp/
-		cp -v ./dl/tmp/boot/config-${abi}-${image} ./debian
+		cp -v ./dl/tmp/boot/config-${abi}-${image} ./debian.config
 		rm -rf ./dl/tmp/ || true
 	fi
 }
