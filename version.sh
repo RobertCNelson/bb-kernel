@@ -48,11 +48,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=5.15
-KERNEL_TAG=${KERNEL_REL}.177
+KERNEL_TAG=${KERNEL_REL}.189
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/5.15/
-kernel_rt=".177-rt83"
+kernel_rt=".189-rt87"
 #Kernel Build
-BUILD=${build_prefix}43
+BUILD=${build_prefix}43.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
