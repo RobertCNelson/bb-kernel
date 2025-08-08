@@ -15,6 +15,7 @@ if [ -f ${DIR}/KERNEL/Makefile ] ; then
 	ARCH=${KERNEL_ARCH} ./scripts/kconfig/merge_config.sh -m -r .config beagle.config
 	make ARCH=${KERNEL_ARCH} CROSS_COMPILE="${CC}" olddefconfig
 	cp -v .config "${DIR}/patches/defconfig"
+	rm beagle.config || true
 
 	cd ${DIR}/
 fi

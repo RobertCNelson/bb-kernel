@@ -284,6 +284,10 @@ beagleboard_dtbs () {
 
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 
+		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART4-00A0" ; arm_dtbo_makefile_append
+
 		device="BBORG_COMMS-00A2" ; arm_dtbo_makefile_append
 		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
 
