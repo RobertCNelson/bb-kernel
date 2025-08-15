@@ -103,7 +103,7 @@ gcc_toolchain () {
 	gcc12="12.5.0"
 	gcc13="13.4.0"
 	gcc14="14.3.0"
-	gcc15="15.1.0"
+	gcc15="15.2.0"
 
 	case "${toolchain}" in
 	gcc_arm_gnueabihf_8|gcc_arm_eabi_8|gcc_8_arm)
