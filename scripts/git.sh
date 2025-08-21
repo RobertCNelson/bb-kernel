@@ -1,6 +1,6 @@
 #!/bin/sh -e
 #
-# Copyright (c) 2009-2023 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2025 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,35 +30,11 @@ debian_stable_git="2.20.1"
 #git: --no-edit
 #git: --no-rebase
 
-build_git () {
+git_is_old () {
 	echo "-----------------------------"
-	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`], building and installing: [${debian_stable_git}] to /usr/local/"
-
-	wget --quiet -c --directory-prefix="${DIR}/ignore/" https://mirrors.edge.kernel.org/pub/software/scm/git/git-${debian_stable_git}.tar.gz
-	if [ -f "${DIR}/ignore/git-${debian_stable_git}.tar.gz" ] ; then
-		cd "${DIR}/ignore/" || true
-		tar xf git-${debian_stable_git}.tar.gz
-		if [ -d git-${debian_stable_git} ] ; then
-			cd ./git-${debian_stable_git}/ || true
-			echo "scripts/git: building: [${debian_stable_git}]"
-
-			echo "scripts/git: [make -j${CORES} prefix=/usr/local all]"
-			make -j${CORES} prefix=/usr/local all
-
-			echo "scripts/git: [sudo make prefix=/usr/local install]"
-			sudo make prefix=/usr/local install
-
-			cd "${DIR}/ignore/" || true
-			rm -rf git-${debian_stable_git}/ || true
-			git_bin=$(which git)
-		else
-			echo "scripts/git: failure to build: git-${debian_stable_git}.tar.gz"
-			exit 2
-		fi
-	else
-		echo "scripts/git: failure to download: git-${debian_stable_git}.tar.gz"
-		exit 2
-	fi
+	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`]; Please Install atleast [${debian_stable_git}] [https://git-scm.com/]"
+	echo "-----------------------------"
+	exit 2
 }
 
 git_kernel_stable () {
@@ -271,25 +247,27 @@ git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
 git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
 
 #debian Stable:
-#https://packages.debian.org/stretch/git -> 2.11.0
-#https://packages.debian.org/buster/git -> 2.20.1
-#https://packages.debian.org/bullseye/git -> 2.30.2
+#https://packages.debian.org/stretch/git (9) -> 2.11.0
+#https://packages.debian.org/buster/git (10) -> 2.20.1
+#https://packages.debian.org/bullseye/git (11) -> 2.30.2
+#https://packages.debian.org/bookworm/git (12) -> 2.39.5
 #https://packages.ubuntu.com/bionic/git (18.04) -> 2.17.1
 #https://packages.ubuntu.com/focal/git (20.04) -> 2.25.1
 #https://packages.ubuntu.com/jammy/git (22.04) -> 2.34.1
+#https://packages.ubuntu.com/noble/git (24.04) -> 2.43.0
 
 compare_major="2"
 compare_minor="20"
 compare_sub="1"
 
 if [ "${git_major}" -lt "${compare_major}" ] ; then
-	build_git
+	git_is_old
 elif [ "${git_major}" -eq "${compare_major}" ] ; then
 	if [ "${git_minor}" -lt "${compare_minor}" ] ; then
-		build_git
+		git_is_old
 	elif [ "${git_minor}" -eq "${compare_minor}" ] ; then
 		if [ "${git_sub}" -lt "${compare_sub}" ] ; then
-			build_git
+			git_is_old
 		fi
 	fi
 fi
