@@ -100,10 +100,10 @@ gcc_toolchain () {
 	gcc9="9.5.0"
 	gcc10="10.5.0"
 	gcc11="11.5.0"
-	gcc12="12.4.0"
-	gcc13="13.3.0"
-	gcc14="14.2.0"
-	gcc15="15.1.0"
+	gcc12="12.5.0"
+	gcc13="13.4.0"
+	gcc14="14.3.0"
+	gcc15="15.2.0"
 
 	case "${toolchain}" in
 	gcc_arm_gnueabihf_8|gcc_arm_eabi_8|gcc_8_arm)
