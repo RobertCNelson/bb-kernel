@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2024 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2025 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -111,7 +111,7 @@ wpanusb () {
 			rm -rf ./wpanusb || true
 		fi
 
-		${git_bin} clone https://openbeagle.org/beagleconnect/linux/wpanusb --depth=1
+		${git_bin} clone https://openbeagle.org/beagleconnect/linux/wpanusb.git --depth=1
 		cd ./wpanusb
 			wpanusb_hash=$(git rev-parse HEAD)
 		cd -
@@ -137,8 +137,6 @@ wpanusb () {
 		wdir="external/wpanusb"
 		number=1
 		cleanup
-
-		exit 2
 	fi
 	dir 'external/wpanusb'
 }
@@ -176,8 +174,6 @@ bcfserial () {
 		wdir="external/bcfserial"
 		number=1
 		cleanup
-
-		exit 2
 	fi
 	dir 'external/bcfserial'
 }
@@ -188,52 +184,55 @@ rt_cleanup () {
 }
 
 rt () {
-	rt_patch="${KERNEL_REL}${kernel_rt}"
+	#rt_enable="enable"
+	if [ "x${rt_enable}" = "xenable" ] ; then
+		rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+		#${git_bin} revert --no-edit xyz
 
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
-		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
-		rm -f patch-${rt_patch}.patch.xz
-		rm -f localversion-rt
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
-		${git_bin} format-patch -1 -o ../patches/external/rt/
-		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wget -c https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/older/patch-${rt_patch}.patch.xz
+			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
+			rm -f patch-${rt_patch}.patch.xz
+			rm -f localversion-rt
+			${git_bin} add .
+			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
+			${git_bin} format-patch -1 -o ../patches/external/rt/
+			#echo "RT: patch-${rt_patch}.patch.xz" > ../patches/external/git/RT
 
-		exit 2
+			exit 2
+		fi
+		dir 'external/rt'
 	fi
-	dir 'external/rt'
 }
 
 wireless_regdb () {
-	#https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/
+	#https://kernel.googlesource.com/pub/scm/linux/kernel/git/wens/wireless-regdb.git
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
-		if [ -d ./wireless-regdb ] ; then
-			rm -rf ./wireless-regdb || true
+		if [ -d ./src ] ; then
+			rm -rf ./src || true
 		fi
 
-		${git_bin} clone https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git --depth=1
-		cd ./wireless-regdb
+		${git_bin} clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/wens/wireless-regdb.git --depth=1 ./src/
+		cd ./src
 			wireless_regdb_hash=$(git rev-parse HEAD)
 		cd -
 
 		cd ./KERNEL/
 
 		mkdir -p ./firmware/ || true
-		cp -v ../wireless-regdb/regulatory.db ./firmware/
-		cp -v ../wireless-regdb/regulatory.db.p7s ./firmware/
+		cp -v ../src/regulatory.db ./firmware/
+		cp -v ../src/regulatory.db.p7s ./firmware/
 		${git_bin} add -f ./firmware/regulatory.*
 		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
 
 		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
 		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
 
-		rm -rf ../wireless-regdb/ || true
+		rm -rf ../src/ || true
 
 		${git_bin} reset --hard HEAD^
 
@@ -300,7 +299,7 @@ dtb_makefile_append () {
 
 beagleboard_dtbs () {
 	branch="v5.18.x"
-	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
+	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -333,9 +332,9 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://github.com/beagleboard/BeagleBoard-DeviceTrees/tree/${branch}" -m "https://github.com/beagleboard/BeagleBoard-DeviceTrees/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
-		echo "BBDTBS: https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
+		echo "BBDTBS: https://github.com/beagleboard/BeagleBoard-DeviceTrees/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -370,9 +369,9 @@ pre_backports () {
 	echo "dir: backports/${subsystem}"
 
 	cd ~/linux-src/
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git master --tags
-	${git_bin} pull --no-edit https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git master
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git master --tags
+	${git_bin} pull --no-edit https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git master --tags
 	if [ ! "x${backport_tag}" = "x" ] ; then
 		echo "${git_bin} checkout ${backport_tag} -f"
 		${git_bin} checkout ${backport_tag} -f
@@ -393,6 +392,12 @@ post_backports () {
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
+	exit 2
+}
+
+patch_backports () {
+	echo "dir: backports/${subsystem}"
+	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
 }
 
 pre_rpibackports () {
@@ -420,11 +425,7 @@ post_rpibackports () {
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
-}
-
-patch_backports () {
-	echo "dir: backports/${subsystem}"
-	${git} "${DIR}/patches/backports/${subsystem}/0001-backports-${subsystem}-from-linux.git.patch"
+	exit 2
 }
 
 backports () {
@@ -438,7 +439,6 @@ backports () {
 		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
-		exit 2
 	else
 		patch_backports
 		dir 'drivers/ti/uio'
@@ -454,7 +454,6 @@ backports () {
 		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
 
 		post_backports
-		exit 2
 	else
 		patch_backports
 	fi
