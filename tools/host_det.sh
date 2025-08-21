@@ -47,17 +47,13 @@ redhat_reqs () {
 	check_rpm
 	pkg="gcc"
 	check_rpm
-	pkg="lzop"
+	pkg="lz4"
 	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
 	pkg="wget"
 	check_rpm
 	pkg="fakeroot"
-	check_rpm
-	pkg="xz"
-	check_rpm
-	pkg="lzop"
 	check_rpm
 	pkg="bison"
 	check_rpm
@@ -129,13 +125,13 @@ debian_regs () {
 	check_dpkg
 	pkg="build-essential"
 	check_dpkg
+	pkg="cpio"
+	check_dpkg
 	pkg="fakeroot"
 	check_dpkg
 	pkg="lsb-release"
 	check_dpkg
-	pkg="lzma"
-	check_dpkg
-	pkg="lzop"
+	pkg="lz4"
 	check_dpkg
 	pkg="man-db"
 	check_dpkg
@@ -155,6 +151,12 @@ debian_regs () {
 	check_dpkg
 	#"mkimage" command not found - U-Boot images will not be built
 	pkg="u-boot-tools"
+	check_dpkg
+	pkg="xz-utils"
+	check_dpkg
+	pkg="zstd"
+	check_dpkg
+	pkg="libdw-dev"
 	check_dpkg
 
 	unset stop_pkg_search
@@ -318,6 +320,16 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="bullseye"
 			;;
+		faye)
+			#LMDE 6
+			#http://packages.linuxmint.com/index.php
+			deb_distro="bookworm"
+			;;
+		gigi)
+			#LMDE 7
+			#http://packages.linuxmint.com/index.php
+			deb_distro="trixie"
+			;;
 		debian)
 			deb_distro="jessie"
 			;;
@@ -439,6 +451,31 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="jammy"
 			;;
+		victoria)
+			#21.2
+			#http://packages.linuxmint.com/index.php
+			deb_distro="jammy"
+			;;
+		virginia)
+			#21.3
+			#http://packages.linuxmint.com/index.php
+			deb_distro="jammy"
+			;;
+		wilma)
+			#22
+			#http://packages.linuxmint.com/index.php
+			deb_distro="noble"
+			;;
+		xia)
+			#22.1
+			#http://packages.linuxmint.com/index.php
+			deb_distro="noble"
+			;;
+		zara)
+			#22.2
+			#http://packages.linuxmint.com/index.php
+			deb_distro="noble"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix
@@ -456,16 +493,19 @@ debian_regs () {
 		excalibur)
 			deb_distro="trixie"
 			;;
+		freia)
+			deb_distro="forky"
+			;;
 		esac
 
 		#Future Debian Code names:
 		case "${deb_distro}" in
-		trixie)
-			#13 trixie: https://wiki.debian.org/DebianTrixie
-			deb_distro="sid"
-			;;
 		forky)
 			#14 forky: https://wiki.debian.org/DebianForky
+			deb_distro="sid"
+			;;
+		duke)
+			#15 duke: https://wiki.debian.org/DebianDuke
 			deb_distro="sid"
 			;;
 		esac
@@ -473,30 +513,34 @@ debian_regs () {
 		#https://wiki.ubuntu.com/Releases
 		unset error_unknown_deb_distro
 		case "${deb_distro}" in
-		stretch|buster|bullseye|bookworm|sid)
+		bullseye|bookworm|trixie|forky|duke|sid)
 			#https://wiki.debian.org/LTS
-			#9 stretch: https://wiki.debian.org/DebianStretch
-			#10 buster: https://wiki.debian.org/DebianBuster
-			#11 bullseye: https://wiki.debian.org/DebianBullseye
-			#12 bookworm: https://wiki.debian.org/DebianBookworm
+			#https://www.debian.org/releases/
+			#11 bullseye: 2026-08-31 https://wiki.debian.org/DebianBullseye
+			#12 bookworm: 2028-06-30 https://wiki.debian.org/DebianBookworm
+			#13 trixie: https://wiki.debian.org/DebianTrixie
+			#14 forky: https://wiki.debian.org/DebianForky
+			#15 duke: https://wiki.debian.org/DebianDuke
 			unset warn_eol_distro
 			;;
-		squeeze|wheezy|jessie)
+		squeeze|wheezy|jessie|stretch)
 			#https://wiki.debian.org/LTS
 			#6 squeeze: 2016-02-29 https://wiki.debian.org/DebianSqueeze
 			#7 wheezy: 2018-05-31 https://wiki.debian.org/DebianWheezy
 			#8 jessie: 2020-06-30 https://wiki.debian.org/DebianJessie
+			#9 stretch: 2022-07-01 https://wiki.debian.org/DebianStretch
+			#10 buster: 2024-06-30 https://wiki.debian.org/DebianBuster
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		bionic|focal|jammy|kinetic)
-			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
-			#20.04 focal:  (EOL: April 2025) lts: focal -> jammy
-			#22.04 jammy:  (EOL: April 2027) lts: jammy -> xyz
-			#22.10 kinetic: (EOL: July 2023)
+		jammy|noble|plucky|questing)
+			#22.04 jammy: (EOL: April 2027) lts: jammy -> noble
+			#24.04 noble: (EOL: June 2029) lts: noble -> xyz
+			#25.04 plucky: (EOL: January 2026)
+			#25.10 questing: (EOL: July 2026)
 			unset warn_eol_distro
 			;;
-		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|cosmic|disco|eoan|groovy|hirsute|impish)
+		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|focal|groovy|hirsute|impish|kinetic|lunar|mantic|oracular)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
@@ -514,12 +558,18 @@ debian_regs () {
 			#16.10 yakkety: (EOL: July 20, 2017)
 			#17.04 zesty: (EOL: January 2018)
 			#17.10 artful: (EOL: July 2018)
+			#18.04 bionic: (EOL: April 2023) lts: bionic -> focal
 			#18.10 cosmic: (EOL: July 18, 2019)
 			#19.04 disco: (EOL: January 23, 2020)
 			#19.10 eoan: (EOL: July 2020)
+			#20.04 focal: (EOL: April 2025) lts: focal -> jammy
 			#20.10 groovy: (EOL: July 2021)
 			#21.04 hirsute: (EOL: January 2022)
 			#21.10 impish: (EOL: July 2022)
+			#22.10 kinetic: (EOL: July 2023)
+			#23.04 lunar: (EOL: January 2024)
+			#23.10 mantic: (EOL: July 2024)
+			#24.10 oracular: (EOL: July 2025)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -534,20 +584,10 @@ debian_regs () {
 	if [ "$(which lsb_release)" ] && [ ! "${stop_pkg_search}" ] ; then
 		deb_arch=$(LC_ALL=C dpkg --print-architecture)
 
-		pkg="libncurses5-dev:${deb_arch}"
+		pkg="libncurses-dev:${deb_arch}"
 		check_dpkg
 		pkg="libssl-dev:${deb_arch}"
 		check_dpkg
-
-		if [ "x${build_git}" = "xtrue" ] ; then
-			#git
-			pkg="libcurl4-gnutls-dev:${deb_arch}"
-			check_dpkg
-			pkg="libelf-dev:${deb_arch}"
-			check_dpkg
-			pkg="libexpat1-dev:${deb_arch}"
-			check_dpkg
-		fi
 	fi
 
 	if [ "${warn_eol_distro}" ] ; then
@@ -605,38 +645,6 @@ fi
 
 ARCH=$(uname -m)
 
-git_bin=$(which git)
-
-git_major=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f1)
-git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
-git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
-
-#debian Stable:
-#https://packages.debian.org/stretch/git -> 2.11.0
-#https://packages.debian.org/buster/git -> 2.20.1
-#https://packages.debian.org/bullseye/git -> 2.30.2
-#https://packages.ubuntu.com/bionic/git (18.04) -> 2.17.1
-#https://packages.ubuntu.com/focal/git (20.04) -> 2.25.1
-#https://packages.ubuntu.com/jammy/git (22.04) -> 2.34.1
-
-compare_major="2"
-compare_minor="20"
-compare_sub="1"
-
-unset build_git
-
-if [ "${git_major}" -lt "${compare_major}" ] ; then
-	build_git="true"
-elif [ "${git_major}" -eq "${compare_major}" ] ; then
-	if [ "${git_minor}" -lt "${compare_minor}" ] ; then
-		build_git="true"
-	elif [ "${git_minor}" -eq "${compare_minor}" ] ; then
-		if [ "${git_sub}" -lt "${compare_sub}" ] ; then
-			build_git="true"
-		fi
-	fi
-fi
-
 echo "-----------------------------"
 unset NEEDS_COMMAND
 check_for_command () {
@@ -650,8 +658,7 @@ check_for_command () {
 }
 
 unset NEEDS_COMMAND
-check_for_command cpio --version
-check_for_command lzop --version
+check_for_command xz --version
 
 if [ "${NEEDS_COMMAND}" ] ; then
 	echo "Please install missing commands"

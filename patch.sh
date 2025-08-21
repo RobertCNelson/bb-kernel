@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2009-2022 Robert Nelson <robertcnelson@gmail.com>
+# Copyright (c) 2009-2025 Robert Nelson <robertcnelson@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -238,25 +238,27 @@ rt_cleanup () {
 }
 
 rt () {
-	rt_patch="${KERNEL_REL}${kernel_rt}"
+	#rt_enable="enable"
+	if [ "x${rt_enable}" = "xenable" ] ; then
+		rt_patch="${KERNEL_REL}${kernel_rt}"
 
-	#${git_bin} revert --no-edit xyz
+		#${git_bin} revert --no-edit xyz
 
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
-		xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
-		rm -f patch-${rt_patch}.patch.xz
-		rm -f localversion-rt
-		${git_bin} add .
-		${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
-		${git_bin} format-patch -1 -o ../patches/rt/
-		echo "RT: patch-${rt_patch}.patch.xz" > ../patches/git/RT
+		#regenerate="enable"
+		if [ "x${regenerate}" = "xenable" ] ; then
+			wget -c https://www.kernel.org/pub/linux/kernel/projects/rt/${KERNEL_REL}/patch-${rt_patch}.patch.xz
+			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
+			rm -f patch-${rt_patch}.patch.xz
+			rm -f localversion-rt
+			${git_bin} add .
+			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
+			${git_bin} format-patch -1 -o ../patches/rt/
+			#echo "RT: patch-${rt_patch}.patch.xz" > ../patches/git/RT
 
-		exit 2
+			exit 2
+		fi
+		dir 'rt'
 	fi
-
-	dir 'rt'
 }
 
 wireguard_fail () {
@@ -387,7 +389,6 @@ ti_pm_firmware () {
 		number=1
 		cleanup
 	fi
-
 	dir 'drivers/ti/firmware'
 }
 
@@ -412,7 +413,7 @@ dtb_makefile_append () {
 
 beagleboard_dtbs () {
 	branch="v5.2.x"
-	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees"
+	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -450,9 +451,9 @@ beagleboard_dtbs () {
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "${https_repo}/tree/${branch}" -m "${https_repo}/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://github.com/beagleboard/BeagleBoard-DeviceTrees/tree/${branch}" -m "https://github.com/beagleboard/BeagleBoard-DeviceTrees/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/soc/ti/beagleboard_dtbs/
-		echo "BBDTBS: ${https_repo}/commit/${git_hash}" > ../patches/git/BBDTBS
+		echo "BBDTBS: https://github.com/beagleboard/BeagleBoard-DeviceTrees/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
@@ -466,7 +467,6 @@ beagleboard_dtbs () {
 		number=1
 		cleanup
 	fi
-
 	dir 'soc/ti/beagleboard_dtbs'
 }
 
@@ -622,7 +622,6 @@ packaging () {
 			patch_backports
 		fi
 	fi
-
 	${git} "${DIR}/patches/backports/bindeb-pkg/0002-builddeb-Install-our-dtbs-under-boot-dtbs-version.patch"
 }
 
