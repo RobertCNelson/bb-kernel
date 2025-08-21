@@ -4,7 +4,7 @@ Script Bugs: "robertcnelson+bugs@gmail.com"
 
 Note, for older git tag's please use: https://github.com/RobertCNelson/yakbuild
 
-Dependencies: GCC ARM Cross ToolChain
+Dependencies: GCC Cross ToolChain
 
 https://mirrors.edge.kernel.org/pub/tools/crosstool/
 
@@ -36,7 +36,16 @@ Optional: Build Debian Package:
 
 Development/Hacking:
 
-first run (to setup baseline tree): ./build_kernel.sh
+first run (to setup baseline tree):
+
+```
+./build_kernel.sh
+```
+
 then modify files under KERNEL directory
-then run (to rebuild with your changes): ./tools/rebuild.sh
+then run (to rebuild with your changes):
+
+```
+./tools/rebuild.sh
+```
 
