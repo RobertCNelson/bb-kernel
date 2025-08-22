@@ -54,7 +54,7 @@ dl_gcc_generic () {
 		fi
 	fi
 
-	if [ "x${ARCH}" = "xarmv7l" ] ; then
+	if [ "x${ARCH}" = "xarmv7l" ] || [ "x${ARCH}" = "xaarch64" ] ; then
 		#using native gcc
 		CC=
 	else
