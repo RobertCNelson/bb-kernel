@@ -40,24 +40,23 @@ else
 fi
 
 dl_gcc_generic () {
-	WGET="wget -c --directory-prefix=${gcc_dir}/"
-	if [ ! -f "${gcc_dir}/${directory}/${datestamp}" ] ; then
-		echo "Installing: ${toolchain_name}"
-		echo "-----------------------------"
-		${WGET} "${site}/${version}/${filename}" || ${WGET} "${archive_site}/${version}/${filename}"
-		if [ -d "${gcc_dir}/${directory}" ] ; then
-			rm -rf "${gcc_dir}/${directory}" || true
-		fi
-		tar -xf "${gcc_dir}/${filename}" -C "${gcc_dir}/"
-		if [ -f "${gcc_dir}/${directory}/${binary}gcc" ] ; then
-			touch "${gcc_dir}/${directory}/${datestamp}"
-		fi
-	fi
-
 	if [ "x${ARCH}" = "xarmv7l" ] || [ "x${ARCH}" = "xaarch64" ] ; then
 		#using native gcc
 		CC=
 	else
+		WGET="wget -c --directory-prefix=${gcc_dir}/"
+		if [ ! -f "${gcc_dir}/${directory}/${datestamp}" ] ; then
+			echo "Installing: ${toolchain_name}"
+			echo "-----------------------------"
+			${WGET} "${site}/${version}/${filename}" || ${WGET} "${archive_site}/${version}/${filename}"
+			if [ -d "${gcc_dir}/${directory}" ] ; then
+				rm -rf "${gcc_dir}/${directory}" || true
+			fi
+			tar -xf "${gcc_dir}/${filename}" -C "${gcc_dir}/"
+			if [ -f "${gcc_dir}/${directory}/${binary}gcc" ] ; then
+				touch "${gcc_dir}/${directory}/${datestamp}"
+			fi
+		fi
 		CC="${gcc_dir}/${directory}/${binary}"
 	fi
 }
