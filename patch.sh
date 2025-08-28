@@ -1315,6 +1315,10 @@ more_fixes () {
 	fi
 }
 
+revd () {
+	${git} "${DIR}/patches/revd/0001-gpu-drm-i2c-suppot-it66121-hdmi-chip.patch"
+}
+
 am33x
 arm
 omap
@@ -1336,6 +1340,7 @@ touchscreens
 more_boards
 sirius
 more_fixes
+revd
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
