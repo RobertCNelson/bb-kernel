@@ -54,7 +54,7 @@ cat_files () {
 DIR=$PWD
 git_bin=$(which git)
 
-repo="git@github.com:RobertCNelson/linux-stable-rcn-ee.git"
+repo="ssh://git@forgejo.gfnd.rcn-ee.org:222/Production/linux-stable-rcn-ee.git"
 example="rcn-ee"
 
 if [ -e ${DIR}/version.sh ]; then
