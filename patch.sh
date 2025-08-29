@@ -492,7 +492,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.5"
+	backport_tag="v6.7"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -528,14 +528,15 @@ backports () {
 		#${git} "${DIR}/patches/mainline/ite-it66121/0012-drm-Switch-i2c-drivers-back-to-use-.probe.patch"
 
 		#v6.5.x
-
+		#v6.6.x
 		#v6.7.x+
-		${git} "${DIR}/patches/mainline/ite-it66121/0013-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0013-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
 		#v6.1.x-lts... (not v6.2.x/v6.3.x/v6.4.x)
-		${git} "${DIR}/patches/mainline/ite-it66121/0014-drm-bridge-it66121-Simplify-probe.patch"
-		${git} "${DIR}/patches/mainline/ite-it66121/0015-drm-bridge-it66121-Fix-invalid-connector-dereference.patch"
-		${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0014-drm-bridge-it66121-Simplify-probe.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0015-drm-bridge-it66121-Fix-invalid-connector-dereference.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
 
+		#v6.7.x
 		#v6.9.x+ (disable)
 		${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
 
