@@ -1317,6 +1317,7 @@ more_fixes () {
 
 revd () {
 	${git} "${DIR}/patches/revd/0001-gpu-drm-i2c-suppot-it66121-hdmi-chip.patch"
+	${git} "${DIR}/patches/revd/0002-drivers-base-provide-an-infrastructure-for-component.patch"
 }
 
 am33x
