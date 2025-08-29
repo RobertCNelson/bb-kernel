@@ -492,7 +492,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.7"
+	backport_tag="v6.9"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -537,9 +537,11 @@ backports () {
 		#${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
 
 		#v6.7.x
+		#v6.8.x
 		#v6.9.x+ (disable)
-		${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
 
+		#v6.9.x
 		#v6.10.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
