@@ -492,7 +492,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.3"
+	backport_tag="v6.5"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -508,7 +508,7 @@ backports () {
 		#git format-patch -25 drivers/gpu/drm/bridge/ite-it66121.c
 		#
 
-		#v6.2.x+
+		#v6.1.x
 		#${git} "${DIR}/patches/mainline/ite-it66121/0001-drm-bridge-it66121-Convert-to-i2c-s-.probe_new.patch"
 		#${git} "${DIR}/patches/mainline/ite-it66121/0002-drm-bridge-it66121-Use-devm_regulator_bulk_get_enabl.patch"
 		#${git} "${DIR}/patches/mainline/ite-it66121/0003-drm-bridge-it66121-Use-regmap_noinc_read.patch"
@@ -521,8 +521,13 @@ backports () {
 		#${git} "${DIR}/patches/mainline/ite-it66121/0010-drm-bridge-it66121-Add-support-for-the-IT6610.patch"
 		#${git} "${DIR}/patches/mainline/ite-it66121/0011-drm-bridge-Remove-unnecessary-include-statements-for.patch"
 
+		#v6.2.x
+		#v6.3.x
+		#v6.4.x
 		#v6.5.x+... (not v6.1.x/v6.2.x/v6.3.x/v6.4.x)
-		${git} "${DIR}/patches/mainline/ite-it66121/0012-drm-Switch-i2c-drivers-back-to-use-.probe.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0012-drm-Switch-i2c-drivers-back-to-use-.probe.patch"
+
+		#v6.5.x
 
 		#v6.7.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0013-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
