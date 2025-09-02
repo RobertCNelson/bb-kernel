@@ -3,18 +3,19 @@
 #
 #https://packages.debian.org/source/sid/linux
 #
-#abi="6.12.38"
-#kernel="6.12.38-1"
+abi="6.16.3+deb14"
+kernel="6.16.3-1"
 #
-abi="6.16"
-kernel="6.16-1~exp1"
+#abi="6.16"
+#kernel="6.16.1-1~exp1"
 #
 #abi="6.16-rc7"
 #kernel="6.16~rc7-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
-debian_site="http://ftp.us.debian.org/debian/pool/main/l/linux"
+debian_site="http://deb.debian.org/debian/pool/main/l/linux"
+debian_security_site="http://deb.debian.org/debian-security/pool/main/l/linux"
 incoming_site="http://incoming.debian.org/debian-buildd/pool/main/l/linux"
 
 dl_deb () {
@@ -26,6 +27,10 @@ dl_deb () {
 
 	if [ ! -f ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ] ; then
 		wget -c --directory-prefix=./dl/ ${incoming_site}/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb
+	fi
+
+	if [ ! -f ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ] ; then
+		wget -c --directory-prefix=./dl/ ${debian_security_site}/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb
 	fi
 
 	if [ -f ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ] ; then
