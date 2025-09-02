@@ -473,7 +473,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="v6.16.1"
+	backport_tag="v6.16.4"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -492,7 +492,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.10"
+	backport_tag="v6.13"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -547,9 +547,12 @@ backports () {
 		#${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
 
 		#v6.10.x
+		#v6.11.x
+		#v6.12.x
 		#v6.13.x+
-		${git} "${DIR}/patches/mainline/ite-it66121/0020-drm-bridge-ite-it66121-Drop-hdmi_avi_infoframe_init-.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0020-drm-bridge-ite-it66121-Drop-hdmi_avi_infoframe_init-.patch"
 
+		#v6.13.x
 		#v6.14.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0021-drm-bridge-ite-it66121-use-eld_mutex-to-protect-acce.patch"
 		${git} "${DIR}/patches/mainline/ite-it66121/0022-drm-Use-of_property_present-for-non-boolean-properti.patch"
