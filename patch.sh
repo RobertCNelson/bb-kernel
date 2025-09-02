@@ -492,7 +492,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.9"
+	backport_tag="v6.10"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -543,9 +543,10 @@ backports () {
 
 		#v6.9.x
 		#v6.10.x+
-		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
-		${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
+		#${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
 
+		#v6.10.x
 		#v6.13.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0020-drm-bridge-ite-it66121-Drop-hdmi_avi_infoframe_init-.patch"
 
