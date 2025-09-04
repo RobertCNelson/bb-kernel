@@ -499,7 +499,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v6.5"
+	backport_tag="v6.7.12"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -511,23 +511,7 @@ backports () {
 		post_backports
 	else
 		patch_backports
-		#v6.15
-		#git format-patch -25 drivers/gpu/drm/bridge/ite-it66121.c
-		#
-
-		#v6.7.x+
-		${git} "${DIR}/patches/mainline/ite-it66121/0013-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
-		#v6.1.x-lts... (not v6.2.x/v6.3.x/v6.4.x)
-		${git} "${DIR}/patches/mainline/ite-it66121/0014-drm-bridge-it66121-Simplify-probe.patch"
-		${git} "${DIR}/patches/mainline/ite-it66121/0015-drm-bridge-it66121-Fix-invalid-connector-dereference.patch"
-		${git} "${DIR}/patches/mainline/ite-it66121/0016-drm-bridge-it66121-get_edid-callback-must-not-return.patch"
-
-		#v6.9.x+ (disable)
-		#${git} "${DIR}/patches/mainline/ite-it66121/0017-drm-bridge-it66121-switch-to-edid_read-callback.patch"
-
-		#v6.10.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
-		#${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
 	fi
 
 	backport_tag="rpi-6.6.y"
