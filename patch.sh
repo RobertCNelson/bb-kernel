@@ -499,7 +499,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v6.8.12"
+	backport_tag="v6.11.11"
 
 	subsystem="tps65219"
 	#regenerate="enable"
