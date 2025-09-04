@@ -499,7 +499,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v6.7.12"
+	backport_tag="v6.8.12"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -518,7 +518,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.7.12"
+	backport_tag="v6.8.12"
 
 	subsystem="it66121"
 	#regenerate="enable"
