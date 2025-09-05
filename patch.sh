@@ -489,7 +489,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v6.3"
+	backport_tag="v6.5"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -504,9 +504,6 @@ backports () {
 
 		#i2c (v6.1.x)
 		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
-
-		#v6.5.x+... (not v6.1.x/v6.2.x/v6.3.x/v6.4.x)
-		#${git} "${DIR}/patches/mainline/ite-it66121/0012-drm-Switch-i2c-drivers-back-to-use-.probe.patch"
 
 		#v6.7.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0013-drm-bridge-it66121-Extend-match-support-for-OF-table.patch"
