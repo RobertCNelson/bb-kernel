@@ -277,9 +277,9 @@ arm_dtb_makefile_append () {
 }
 
 arm_dtbo_makefile_append () {
-	if [ -f ../${work_dir}/src/arm/overlays/${device}.dts ] ; then
+	if [ -f ../${work_dir}/src/arm/overlays/${device}.dtso ] ; then
 		sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device'.dtbo \\:g' arch/arm/boot/dts/Makefile
-		cp -v ../${work_dir}/src/arm/overlays/${device}.dts arch/arm/boot/dts/${device}.dtso
+		cp -v ../${work_dir}/src/arm/overlays/${device}.dtso arch/arm/boot/dts/${device}.dtso
 	else
 		echo "Missing [${device}]"
 	fi
@@ -319,17 +319,23 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
+		#ls src/arm/overlays/ | grep dtso
+
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="AM57XX-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-4D4C-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-4D5R-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
-		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAPE-DISP-CT4-00A0" ; arm_dtbo_makefile_append
+		device="BB-EHRPWM1-P9_14-P9_16" ; arm_dtbo_makefile_append
+		device="BB-EHRPWM2-P8_13-P8_19" ; arm_dtbo_makefile_append
+		device="BB-HDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-MCP7940X-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-RTC-DS3231" ; arm_dtbo_makefile_append
@@ -337,17 +343,19 @@ beagleboard_dtbs () {
 		device="BB-I2C2-BME680" ; arm_dtbo_makefile_append
 		device="BB-I2C2-MPU6050" ; arm_dtbo_makefile_append
 		device="BB-LCD-ADAFRUIT-24-SPI1-00A0" ; arm_dtbo_makefile_append
+		device="BB-NHDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
+		device="BBORG_COMMS-00A2" ; arm_dtbo_makefile_append
+		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
+		device="BBORG_RELAY-00A2" ; arm_dtbo_makefile_append
 		device="BB-SPIDEV0-00A0" ; arm_dtbo_makefile_append
 		device="BB-SPIDEV1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART4-00A0" ; arm_dtbo_makefile_append
 		device="BB-W1-P9.12-00A0" ; arm_dtbo_makefile_append
-		device="BBORG_COMMS-00A2" ; arm_dtbo_makefile_append
-		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
-		device="BBORG_RELAY-00A2" ; arm_dtbo_makefile_append
 		device="BONE-ADC" ; arm_dtbo_makefile_append
+		device="BONE-LED-P9-42" ; arm_dtbo_makefile_append
 		device="M-BB-BBG-00A0" ; arm_dtbo_makefile_append
 		device="M-BB-BBGG-00A0" ; arm_dtbo_makefile_append
 		device="PB-MIKROBUS-0" ; arm_dtbo_makefile_append
@@ -355,6 +363,7 @@ beagleboard_dtbs () {
 
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 		device="am335x-boneblack-revd.dtb" ; arm_dtb_makefile_append
+		device="am335x-bonegreen-eco.dtb" ; arm_dtb_makefile_append
 
 		#device="am335x-sancloud-bbe-uboot.dtb" ; arm_dtb_makefile_append
 		#device="am335x-sancloud-bbe-lite-uboot.dtb" ; arm_dtb_makefile_append
