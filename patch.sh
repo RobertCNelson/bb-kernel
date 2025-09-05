@@ -535,20 +535,6 @@ backports () {
 
 		#v6.10.x+
 		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
-		#${git} "${DIR}/patches/mainline/ite-it66121/0019-drm-bridge-it66121-Remove-a-duplicated-invoke-of-of_.patch"
-
-		#v6.13.x+
-		#${git} "${DIR}/patches/mainline/ite-it66121/0020-drm-bridge-ite-it66121-Drop-hdmi_avi_infoframe_init-.patch"
-
-		#v6.14.x+
-		#${git} "${DIR}/patches/mainline/ite-it66121/0021-drm-bridge-ite-it66121-use-eld_mutex-to-protect-acce.patch"
-		#${git} "${DIR}/patches/mainline/ite-it66121/0022-drm-Use-of_property_present-for-non-boolean-properti.patch"
-		#(not v6.13.x)
-		#${git} "${DIR}/patches/mainline/ite-it66121/0023-ASoC-hdmi-codec-move-no_capture_mute-to-struct-hdmi_.patch"
-
-		#v6.15.x+
-		#${git} "${DIR}/patches/mainline/ite-it66121/0024-drm-bridge-Pass-full-state-to-atomic_enable.patch"
-		#${git} "${DIR}/patches/mainline/ite-it66121/0025-drm-bridge-Pass-full-state-to-atomic_disable.patch"
 	fi
 
 	backport_tag="rpi-6.1.y"
