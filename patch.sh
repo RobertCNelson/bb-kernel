@@ -1342,7 +1342,7 @@ touchscreens
 more_boards
 sirius
 more_fixes
-revd
+#revd
 
 #element14_bb_view: breaks lcd4
 #bb_view_lcd
