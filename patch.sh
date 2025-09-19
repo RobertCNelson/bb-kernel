@@ -283,6 +283,8 @@ beagleboard_dtbs () {
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
+		device="BB-EHRPWM1-P9_14-P9_16" ; arm_dtbo_makefile_append
+		device="BB-EHRPWM2-P8_13-P8_19" ; arm_dtbo_makefile_append
 		device="BB-HDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-MCP7940X-00A0" ; arm_dtbo_makefile_append
@@ -482,7 +484,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="v6.17-rc4"
+	backport_tag="v6.17-rc6"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -491,7 +493,7 @@ backports () {
 
 		cp -v ~/linux-src/drivers/input/misc/tps65219-pwrbutton.c ./drivers/input/misc/
 		cp -v ~/linux-src/drivers/mfd/tps65219.c ./drivers/mfd/
-		#cp -v ~/linux-src/drivers/gpio/gpio-tps65219.c ./drivers/gpio/
+		cp -v ~/linux-src/drivers/gpio/gpio-tps65219.c ./drivers/gpio/
 		cp -v ~/linux-src/drivers/regulator/tps65219-regulator.c ./drivers/regulator/
 		cp -v ~/linux-src/Documentation/devicetree/bindings/regulator/ti,tps65219.yaml ./Documentation/devicetree/bindings/regulator/
 		cp -v ~/linux-src/include/linux/mfd/tps65219.h ./include/linux/mfd/
@@ -501,7 +503,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.17-rc4"
+	backport_tag="v6.17-rc6"
 
 	subsystem="it66121"
 	#regenerate="enable"
