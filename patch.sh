@@ -254,8 +254,40 @@ cleanup_dts_builds () {
 	rm -rf arch/arm/boot/dts/*dtb || true
 }
 
-dtb_makefile_append () {
+arm_makefile_patch_of_overlays () {
+	echo "# Overlays for the BeagleBone platform" > arch/arm/boot/dts/overlays/Makefile
+	echo "" >> arch/arm/boot/dts/overlays/Makefile
+	echo "dtbo-\$(CONFIG_ARCH_OMAP2PLUS) += \\" >> arch/arm/boot/dts/overlays/Makefile
+}
+
+arm_dtb_makefile_append () {
 	sed -i -e 's:am335x-boneblack.dtb \\:am335x-boneblack.dtb \\\n\t'$device' \\:g' arch/arm/boot/dts/Makefile
+}
+
+arm_dtbo_makefile_append () {
+	if [ -f ../${work_dir}/src/arm/overlays/${device}.dtso ] ; then
+		cp -v ../${work_dir}/src/arm/overlays/${device}.dtso arch/arm/boot/dts/overlays/${device}.dts
+		echo -e "\t${device}.dtbo\t\\" >> arch/arm/boot/dts/overlays/Makefile
+	else
+		echo "Missing [${device}]"
+	fi
+}
+
+arm_dtbo_makefile_append_last () {
+	if [ -f ../${work_dir}/src/arm/overlays/${device}.dtso ] ; then
+		cp -v ../${work_dir}/src/arm/overlays/${device}.dtso arch/arm/boot/dts/overlays/${device}.dts
+		echo -e "\t${device}.dtbo" >> arch/arm/boot/dts/overlays/Makefile
+
+		echo "" >> arch/arm/boot/dts/overlays/Makefile
+		echo "targets += dtbs dtbs_install" >> arch/arm/boot/dts/overlays/Makefile
+		echo "targets += \$(dtbo-y)" >> arch/arm/boot/dts/overlays/Makefile
+		echo "" >> arch/arm/boot/dts/overlays/Makefile
+		echo -e "always-y\t:= \$(dtbo-y)" >> arch/arm/boot/dts/overlays/Makefile
+		echo -e "clean-files\t:= *.dtbo" >> arch/arm/boot/dts/overlays/Makefile
+
+	else
+		echo "Missing [${device}]"
+	fi
 }
 
 beagleboard_dtbs () {
@@ -280,16 +312,55 @@ beagleboard_dtbs () {
 		rm -rf arch/arm/boot/dts/overlays/ || true
 
 		mkdir -p arch/arm/boot/dts/overlays/
-		cp -vr ../${work_dir}/src/arm/* arch/arm/boot/dts/
+		arm_makefile_patch_of_overlays
+
+		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/
+		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		device="am335x-bonegreen-gateway.dtb" ; dtb_makefile_append
+		#ls src/arm/overlays/ | grep dtso
 
-		device="am335x-boneblack-uboot.dtb" ; dtb_makefile_append
+		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-4D5R-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
+		device="BB-CAPE-DISP-CT4-00A0" ; arm_dtbo_makefile_append
+		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C1-MCP7940X-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C1-RTC-DS3231" ; arm_dtbo_makefile_append
+		device="BB-I2C1-RTC-PCF8563" ; arm_dtbo_makefile_append
+		device="BB-I2C2-BME680" ; arm_dtbo_makefile_append
+		device="BB-I2C2-MPU6050" ; arm_dtbo_makefile_append
+		device="BB-LCD-ADAFRUIT-24-SPI1-00A0" ; arm_dtbo_makefile_append
+		device="BB-NHDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
+		device="BBORG_COMMS-00A2" ; arm_dtbo_makefile_append
+		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
+		device="BBORG_RELAY-00A2" ; arm_dtbo_makefile_append
+		device="BB-SPIDEV0-00A0" ; arm_dtbo_makefile_append
+		device="BB-SPIDEV1-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART4-00A0" ; arm_dtbo_makefile_append
+		device="BB-W1-P9.12-00A0" ; arm_dtbo_makefile_append
+		device="BONE-ADC" ; arm_dtbo_makefile_append
+		device="M-BB-BBG-00A0" ; arm_dtbo_makefile_append
+		device="M-BB-BBGG-00A0" ; arm_dtbo_makefile_append
+		device="PB-MIKROBUS-0" ; arm_dtbo_makefile_append
+		device="PB-MIKROBUS-1" ; arm_dtbo_makefile_append_last
 
-		device="am335x-bone-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-boneblack-uboot-univ.dtb" ; dtb_makefile_append
-		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; dtb_makefile_append
+		device="am335x-bonegreen-gateway.dtb" ; arm_dtb_makefile_append
+
+		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
+		device="am335x-boneblack-revd.dtb" ; arm_dtb_makefile_append
+
+		device="am335x-bone-uboot-univ.dtb" ; arm_dtb_makefile_append
+		device="am335x-boneblack-uboot-univ.dtb" ; arm_dtb_makefile_append
+		device="am335x-bonegreen-wireless-uboot-univ.dtb" ; arm_dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f include/dt-bindings/
@@ -404,7 +475,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v5.19.17"
+	backport_tag="v6.8.12"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -416,6 +487,12 @@ backports () {
 		post_backports
 	else
 		patch_backports
+
+		#i2c (v6.1.x)
+		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
+
+		#v6.10.x+
+		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
 	fi
 }
 
@@ -433,6 +510,11 @@ drivers () {
 	dir 'drivers/greybus'
 	dir 'drivers/serdev'
 	dir 'drivers/fb_ssd1306'
+
+	dir 'drivers/it66121_drm_connector'
+	dir 'drivers/it66121_kernel_specific_fixes'
+	dir 'drivers/it66122'
+	dir 'drivers/it66121_v5.15.x_fixes'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
