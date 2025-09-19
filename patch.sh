@@ -499,7 +499,7 @@ backports () {
 		dir 'drivers/ti/uio'
 	fi
 
-	backport_tag="v6.8.12"
+	backport_tag="v6.11.11"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -557,6 +557,7 @@ drivers () {
 	dir 'drivers/it66121_kernel_specific_fixes'
 	dir 'drivers/it66122'
 
+	dir 'drivers/wkup_m3_ipc'
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 
