@@ -1,0 +1,105 @@
+From 60e09a5cff0d3642ffdc8a09f34ca6e1d38bd2b4 Mon Sep 17 00:00:00 2001
+From: Douglas Anderson <dianders@chromium.org>
+Date: Tue, 26 Jul 2022 10:38:23 -0700
+Subject: [PATCH 2/3] regulator: core: Allow drivers to define their init data
+ as const
+
+Drivers tend to want to define the names of their regulators somewhere
+in their source file as "static const". This means, inevitable, that
+every driver out there open codes something like this:
+
+static const char * const supply_names[] = {
+ "vcc", "vccl",
+};
+
+static int get_regulators(struct my_data *data)
+{
+  int i;
+
+  data->supplies = devm_kzalloc(...)
+  if (!data->supplies)
+    return -ENOMEM;
+
+  for (i = 0; i < ARRAY_SIZE(supply_names); i++)
+    data->supplies[i].supply = supply_names[i];
+
+  return devm_regulator_bulk_get(data->dev,
+                                 ARRAY_SIZE(supply_names),
+				 data->supplies);
+}
+
+Let's make this more convenient by doing providing a helper that does
+the copy.
+
+I have chosen to have the "const" input structure here be the exact
+same structure as the normal one passed to
+devm_regulator_bulk_get(). This is slightly inefficent since the input
+data can't possibly have anything useful for "ret" or consumer and
+thus we waste 8 bytes per structure. This seems an OK tradeoff for not
+introducing an extra structure.
+
+Signed-off-by: Douglas Anderson <dianders@chromium.org>
+Link: https://lore.kernel.org/r/20220726103631.v2.6.I38fc508a73135a5c1b873851f3553ff2a3a625f5@changeid
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/regulator/devres.c         | 28 ++++++++++++++++++++++++++++
+ include/linux/regulator/consumer.h |  4 ++++
+ 2 files changed, 32 insertions(+)
+
+diff --git a/drivers/regulator/devres.c b/drivers/regulator/devres.c
+index 9113233f41cd..32823a87fd40 100644
+--- a/drivers/regulator/devres.c
++++ b/drivers/regulator/devres.c
+@@ -166,6 +166,34 @@ int devm_regulator_bulk_get(struct device *dev, int num_consumers,
+ }
+ EXPORT_SYMBOL_GPL(devm_regulator_bulk_get);
+ 
++/**
++ * devm_regulator_bulk_get_const - devm_regulator_bulk_get() w/ const data
++ *
++ * @dev:           device to supply
++ * @num_consumers: number of consumers to register
++ * @in_consumers:  const configuration of consumers
++ * @out_consumers: in_consumers is copied here and this is passed to
++ *		   devm_regulator_bulk_get().
++ *
++ * This is a convenience function to allow bulk regulator configuration
++ * to be stored "static const" in files.
++ *
++ * Return: 0 on success, an errno on failure.
++ */
++int devm_regulator_bulk_get_const(struct device *dev, int num_consumers,
++				  const struct regulator_bulk_data *in_consumers,
++				  struct regulator_bulk_data **out_consumers)
++{
++	*out_consumers = devm_kmemdup(dev, in_consumers,
++				      num_consumers * sizeof(*in_consumers),
++				      GFP_KERNEL);
++	if (*out_consumers == NULL)
++		return -ENOMEM;
++
++	return devm_regulator_bulk_get(dev, num_consumers, *out_consumers);
++}
++EXPORT_SYMBOL_GPL(devm_regulator_bulk_get_const);
++
+ static void devm_rdev_release(struct device *dev, void *res)
+ {
+ 	regulator_unregister(*(struct regulator_dev **)res);
+diff --git a/include/linux/regulator/consumer.h b/include/linux/regulator/consumer.h
+index 5779f4466e62..bc6cda706d1f 100644
+--- a/include/linux/regulator/consumer.h
++++ b/include/linux/regulator/consumer.h
+@@ -244,6 +244,10 @@ int __must_check regulator_bulk_get(struct device *dev, int num_consumers,
+ 				    struct regulator_bulk_data *consumers);
+ int __must_check devm_regulator_bulk_get(struct device *dev, int num_consumers,
+ 					 struct regulator_bulk_data *consumers);
++int __must_check devm_regulator_bulk_get_const(
++	struct device *dev, int num_consumers,
++	const struct regulator_bulk_data *in_consumers,
++	struct regulator_bulk_data **out_consumers);
+ int __must_check regulator_bulk_enable(int num_consumers,
+ 				       struct regulator_bulk_data *consumers);
+ int regulator_bulk_disable(int num_consumers,
+-- 
+2.51.0
+

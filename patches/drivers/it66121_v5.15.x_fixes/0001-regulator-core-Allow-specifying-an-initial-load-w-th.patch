@@ -1,0 +1,99 @@
+From 790e1889e53e8c0e3492fe7afc4ae332f9443382 Mon Sep 17 00:00:00 2001
+From: Douglas Anderson <dianders@chromium.org>
+Date: Tue, 26 Jul 2022 10:38:21 -0700
+Subject: [PATCH 1/3] regulator: core: Allow specifying an initial load w/ the
+ bulk API
+
+There are a number of drivers that follow a pattern that looks like
+this:
+1. Use the regulator bulk API to get a bunch of regulators.
+2. Set the load on each of the regulators to use whenever the
+   regulators are enabled.
+
+Let's make this easier by just allowing the drivers to pass the load
+in.
+
+As part of this change we need to move the error printing in
+regulator_bulk_get() around; let's switch to the new dev_err_probe()
+to simplify it.
+
+Signed-off-by: Douglas Anderson <dianders@chromium.org>
+Link: https://lore.kernel.org/r/20220726103631.v2.4.Ie85f68215ada39f502a96dcb8a1f3ad977e3f68a@changeid
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/regulator/core.c           | 20 ++++++++++++--------
+ include/linux/regulator/consumer.h | 12 ++++++++----
+ 2 files changed, 20 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/regulator/core.c b/drivers/regulator/core.c
+index 18f13b9601b5..d9571c8b41ee 100644
+--- a/drivers/regulator/core.c
++++ b/drivers/regulator/core.c
+@@ -4866,22 +4866,26 @@ int regulator_bulk_get(struct device *dev, int num_consumers,
+ 		consumers[i].consumer = regulator_get(dev,
+ 						      consumers[i].supply);
+ 		if (IS_ERR(consumers[i].consumer)) {
+-			ret = PTR_ERR(consumers[i].consumer);
+ 			consumers[i].consumer = NULL;
++			ret = dev_err_probe(dev, PTR_ERR(consumers[i].consumer),
++					    "Failed to get supply '%s'",
++					    consumers[i].supply);
+ 			goto err;
+ 		}
++
++		if (consumers[i].init_load_uA > 0) {
++			ret = regulator_set_load(consumers[i].consumer,
++						 consumers[i].init_load_uA);
++			if (ret) {
++				i++;
++				goto err;
++			}
++		}
+ 	}
+ 
+ 	return 0;
+ 
+ err:
+-	if (ret != -EPROBE_DEFER)
+-		dev_err(dev, "Failed to get supply '%s': %pe\n",
+-			consumers[i].supply, ERR_PTR(ret));
+-	else
+-		dev_dbg(dev, "Failed to get supply '%s', deferring\n",
+-			consumers[i].supply);
+-
+ 	while (--i >= 0)
+ 		regulator_put(consumers[i].consumer);
+ 
+diff --git a/include/linux/regulator/consumer.h b/include/linux/regulator/consumer.h
+index bbf6590a6dec..5779f4466e62 100644
+--- a/include/linux/regulator/consumer.h
++++ b/include/linux/regulator/consumer.h
+@@ -171,10 +171,13 @@ struct regulator;
+ /**
+  * struct regulator_bulk_data - Data used for bulk regulator operations.
+  *
+- * @supply:   The name of the supply.  Initialised by the user before
+- *            using the bulk regulator APIs.
+- * @consumer: The regulator consumer for the supply.  This will be managed
+- *            by the bulk API.
++ * @supply:       The name of the supply.  Initialised by the user before
++ *                using the bulk regulator APIs.
++ * @init_load_uA: After getting the regulator, regulator_set_load() will be
++ *                called with this load.  Initialised by the user before
++ *                using the bulk regulator APIs.
++ * @consumer:     The regulator consumer for the supply.  This will be managed
++ *                by the bulk API.
+  *
+  * The regulator APIs provide a series of regulator_bulk_() API calls as
+  * a convenience to consumers which require multiple supplies.  This
+@@ -182,6 +185,7 @@ struct regulator;
+  */
+ struct regulator_bulk_data {
+ 	const char *supply;
++	int init_load_uA;
+ 	struct regulator *consumer;
+ 
+ 	/* private: Internal use */
+-- 
+2.51.0
+
