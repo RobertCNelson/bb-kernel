@@ -536,6 +536,7 @@ drivers () {
 	dir 'drivers/it66121_kernel_specific_fixes'
 	dir 'drivers/it66122'
 
+	dir 'drivers/wkup_m3_ipc'
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 

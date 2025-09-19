@@ -3,12 +3,13 @@
 #
 #https://packages.debian.org/source/bookworm/linux
 #
-abi="6.1.0-37"
-kernel="6.1.140-1"
+abi="6.1.0-39"
+kernel="6.1.148-1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
-debian_site="http://ftp.us.debian.org/debian/pool/main/l/linux"
+debian_site="http://deb.debian.org/debian/pool/main/l/linux"
+debian_security_site="http://deb.debian.org/debian-security/pool/main/l/linux"
 incoming_site="http://incoming.debian.org/debian-buildd/pool/main/l/linux"
 
 dl_deb () {
@@ -20,6 +21,10 @@ dl_deb () {
 
 	if [ ! -f ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ] ; then
 		wget -c --directory-prefix=./dl/ ${incoming_site}/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb
+	fi
+
+	if [ ! -f ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ] ; then
+		wget -c --directory-prefix=./dl/ ${debian_security_site}/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb
 	fi
 
 	if [ -f ./dl/linux-image-${abi}-${image}${unsigned}_${kernel}_${dpkg_arch}.deb ] ; then
