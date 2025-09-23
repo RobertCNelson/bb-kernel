@@ -493,7 +493,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v5.19.17"
+	backport_tag="v6.0.19"
 
 	subsystem="it66121"
 	#regenerate="enable"
