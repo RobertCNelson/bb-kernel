@@ -464,6 +464,12 @@ post_rpibackports () {
 	exit 2
 }
 
+overlays () {
+	#https://github.com/raspberrypi/linux/branches
+	#exit 2
+	dir 'RPi'
+}
+
 backports () {
 	backport_tag="v5.13.19"
 
@@ -493,7 +499,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.1.19"
+	backport_tag="v6.3.13"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -515,9 +521,6 @@ backports () {
 drivers () {
 	dir 'branding/boris'
 
-	#https://github.com/raspberrypi/linux/branches
-	#exit 2
-	dir 'RPi'
 	dir 'drivers/ar1021_i2c'
 	dir 'drivers/sound'
 	dir 'drivers/spi'
@@ -542,6 +545,7 @@ drivers () {
 }
 
 ###
+overlays
 backports
 omap
 drivers
