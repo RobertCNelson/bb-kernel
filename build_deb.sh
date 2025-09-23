@@ -78,7 +78,7 @@ make_deb () {
 	build_opts="${build_opts} KBUILD_DEBARCH=${DEBARCH}"
 	build_opts="${build_opts} LOCALVERSION=${BUILD}"
 	build_opts="${build_opts} KDEB_CHANGELOG_DIST=${deb_distro}"
-	build_opts="${build_opts} KDEB_PKGVERSION=1${DISTRO}"
+	build_opts="${build_opts} KDEB_PKGVERSION=${KERNEL_TAG}${BUILD}"
 	#Just use "linux-upstream"...
 	#https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/scripts/package/builddeb?id=3716001bcb7f5822382ac1f2f54226b87312cc6b
 	build_opts="${build_opts} KDEB_SOURCENAME=linux-upstream"
