@@ -223,6 +223,10 @@ config="CONFIG_PRU_REMOTEPROC" ; config_module
 #removed in 6.7-rc1
 ./scripts/config --disable CONFIG_DEV_APPLETALK
 
+#09.02.00.005
+./scripts/config --module CONFIG_VIDEO_TI_VIP
+./scripts/config --module CONFIG_VIDEO_OV1063X
+
 #20240305: regression on discord, some systemd can no longer load *.xz modules...
 ./scripts/config --disable CONFIG_MODULE_DECOMPRESS
 
@@ -304,5 +308,20 @@ config="CONFIG_PRU_REMOTEPROC" ; config_module
 
 #BeagleBoard.org
 ./scripts/config --enable CONFIG_MSPM0_I2C
+./scripts/config --module CONFIG_SEG_LED_GPIO
+./scripts/config --module CONFIG_INPUT_PWM_BEEPER
+./scripts/config --module CONFIG_SND_SOC_TLV320AIC3X_I2C
+./scripts/config --module CONFIG_WIZNET_W5100
+./scripts/config --module CONFIG_WIZNET_W5100_SPI
+
+#Regressions:
+./scripts/config --enable CONFIG_MMC_BLOCK
+
+#Rev D
+./scripts/config --enable CONFIG_DRM_ITE_IT66121
+./scripts/config --enable CONFIG_SYSFB_SIMPLEFB
+
+#Cool for debugging, little noisy on production...
+./scripts/config --disable CONFIG_UBSAN
 
 cd ${DIR}/
