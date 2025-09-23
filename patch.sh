@@ -499,7 +499,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.7.12"
+	backport_tag="v6.8.12"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -515,6 +515,9 @@ backports () {
 
 		#i2c (v6.1.x)
 		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
+
+		#v6.10.x+
+		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
 	fi
 }
 
@@ -539,7 +542,9 @@ drivers () {
 	dir 'drivers/bluetooth'
 	dir 'fixes'
 
+	dir 'drivers/it66121_drm_connector'
 	dir 'drivers/it66121_kernel_specific_fixes'
+	dir 'drivers/it66122'
 	dir 'drivers/it66121_v5.15.x_fixes'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
