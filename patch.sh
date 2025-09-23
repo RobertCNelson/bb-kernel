@@ -499,7 +499,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.3.13"
+	backport_tag="v6.5.13"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -539,6 +539,7 @@ drivers () {
 	dir 'drivers/bluetooth'
 	dir 'fixes'
 
+	dir 'drivers/it66121_kernel_specific_fixes'
 	dir 'drivers/it66121_v5.15.x_fixes'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
