@@ -493,7 +493,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.0.19"
+	backport_tag="v6.1.19"
 
 	subsystem="it66121"
 	#regenerate="enable"
@@ -506,6 +506,9 @@ backports () {
 	else
 		patch_backports
 		${git} "${DIR}/patches/backports/${subsystem}/0002-wire-up-it66121.patch"
+
+		#i2c (v6.1.x)
+		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"
 	fi
 }
 
@@ -532,6 +535,8 @@ drivers () {
 	dir 'drivers/fb_ssd1306'
 	dir 'drivers/bluetooth'
 	dir 'fixes'
+
+	dir 'drivers/it66121_v5.15.x_fixes'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
