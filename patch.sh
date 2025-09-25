@@ -530,6 +530,7 @@ backports () {
 		post_backports
 	else
 		patch_backports
+
 		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
 	fi
 
