@@ -261,7 +261,7 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#ls ../${work_dir}/src/arm/overlays/ | grep dtso
+		ls ../${work_dir}/src/arm/overlays/ | grep dtso
 
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
@@ -290,6 +290,7 @@ beagleboard_dtbs () {
 		device="BB-W1-P9.12-00A0" ; arm_dtbo_makefile_append
 		device="BONE-ADC" ; arm_dtbo_makefile_append
 		device="BONE-LED-P8-37" ; arm_dtbo_makefile_append
+		device="BONE-LED-P9-19" ; arm_dtbo_makefile_append
 		device="BONE-LED-P9-42" ; arm_dtbo_makefile_append
 		device="M-BB-BBG-00A0" ; arm_dtbo_makefile_append
 		device="M-BB-BBGG-00A0" ; arm_dtbo_makefile_append
