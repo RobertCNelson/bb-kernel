@@ -58,7 +58,7 @@ KERNEL_TAG=${KERNEL_REL}-rc1
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.18/
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}0
+BUILD=${build_prefix}1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
