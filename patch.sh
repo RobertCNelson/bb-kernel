@@ -148,21 +148,20 @@ wireless_regdb () {
 			rm -rf ./src || true
 		fi
 
-		${git_bin} clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/wens/wireless-regdb.git --depth=1 ./src/
-		cd ./src
-			wireless_regdb_hash=$(git rev-parse HEAD)
-		cd -
+		wget -c https://mirrors.edge.kernel.org/pub/software/network/wireless-regdb/wireless-regdb-${WIRELESS_REGDB}.tar.xz
+		mkdir ./src/
+		tar xf wireless-regdb-${WIRELESS_REGDB}.tar.xz -C ./src/
 
 		cd ./KERNEL/
 
 		mkdir -p ./firmware/ || true
-		cp -v ../src/regulatory.db ./firmware/
-		cp -v ../src/regulatory.db.p7s ./firmware/
+		cp -v ../src/wireless-regdb-${WIRELESS_REGDB}/regulatory.db ./firmware/
+		cp -v ../src/wireless-regdb-${WIRELESS_REGDB}/regulatory.db.p7s ./firmware/
 		${git_bin} add -f ./firmware/regulatory.*
-		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${WIRELESS_REGDB}" -s
 
 		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
-		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${WIRELESS_REGDB}" > ../patches/external/git/WIRELESS_REGDB
 
 		rm -rf ../src/ || true
 
@@ -232,7 +231,7 @@ k3_dtbo_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v6.17.x"
+	branch="v6.18.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -528,7 +527,7 @@ drivers () {
 }
 
 ###
-backports
+#backports
 drivers
 
 packaging () {
