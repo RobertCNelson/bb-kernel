@@ -151,6 +151,8 @@ wireless_regdb () {
 		wget -c https://mirrors.edge.kernel.org/pub/software/network/wireless-regdb/wireless-regdb-${WIRELESS_REGDB}.tar.xz
 		mkdir ./src/
 		tar xf wireless-regdb-${WIRELESS_REGDB}.tar.xz -C ./src/
+		sync
+		rm -rf wireless-regdb-${WIRELESS_REGDB}.tar.xz
 
 		cd ./KERNEL/
 
@@ -158,10 +160,13 @@ wireless_regdb () {
 		cp -v ../src/wireless-regdb-${WIRELESS_REGDB}/regulatory.db ./firmware/
 		cp -v ../src/wireless-regdb-${WIRELESS_REGDB}/regulatory.db.p7s ./firmware/
 		${git_bin} add -f ./firmware/regulatory.*
-		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${WIRELESS_REGDB}" -s
+
+		commit_regdb=$(echo "$WIRELESS_REGDB" | sed 's/\./-/g')
+
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${commit_regdb}" -s
 
 		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
-		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${WIRELESS_REGDB}" > ../patches/external/git/WIRELESS_REGDB
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${commit_regdb}" > ../patches/external/git/WIRELESS_REGDB
 
 		rm -rf ../src/ || true
 
