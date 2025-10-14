@@ -1,17 +1,14 @@
-From 6cd9094ba19f50850abe7c1df5a6543d402bc97b Mon Sep 17 00:00:00 2001
+From d4a6f5b4cc034fd59c6d5b08aa470e15a798e8bf Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 29 May 2025 16:58:04 -0500
+Date: Tue, 14 Oct 2025 16:31:10 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.15-rt2.patch.xz
+patch-6.17.1-rt5.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  arch/arm/Kconfig                              |   6 +-
  arch/arm/mm/fault.c                           |   6 +
- arch/arm64/Kconfig                            |   1 +
- arch/arm64/include/asm/thread_info.h          |  16 +-
- arch/arm64/kernel/entry-common.c              |   2 +-
  arch/powerpc/Kconfig                          |   2 +
  arch/powerpc/include/asm/stackprotector.h     |   7 +-
  arch/powerpc/kvm/Kconfig                      |   1 +
@@ -22,6 +19,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/gpu/drm/i915/display/intel_cursor.c   |   9 +-
  .../drm/i915/display/intel_display_trace.h    |   4 +
  drivers/gpu/drm/i915/display/intel_vblank.c   |  49 +++--
+ drivers/gpu/drm/i915/gt/intel_engine_cs.c     |   2 +-
  .../drm/i915/gt/intel_execlists_submission.c  |  17 +-
  drivers/gpu/drm/i915/gt/uc/intel_guc.h        |   2 +-
  drivers/gpu/drm/i915/i915_request.c           |   2 -
@@ -31,14 +29,23 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/8250/8250_core.c           |  35 +++-
  drivers/tty/serial/8250/8250_port.c           | 183 ++++++++++++++----
  include/linux/serial_8250.h                   |  13 +-
+ kernel/Kconfig.preempt                        |  13 ++
  kernel/ksysfs.c                               |  12 ++
- 25 files changed, 327 insertions(+), 99 deletions(-)
+ kernel/softirq.c                              | 145 +++++++++++---
+ kernel/workqueue.c                            |  50 ++++-
+ net/core/gro_cells.c                          |  10 +
+ net/netfilter/nf_conntrack_netlink.c          |  39 +---
+ net/netfilter/nft_set_pipapo.c                |  97 ++++++----
+ net/netfilter/nft_set_pipapo.h                |   8 +-
+ net/netfilter/nft_set_pipapo_avx2.c           | 140 +++++++++-----
+ net/netfilter/nft_set_pipapo_avx2.h           |   4 +
+ 32 files changed, 662 insertions(+), 253 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
-index 25ed6f1a7c7a..89466636d460 100644
+index b1f3df39ed40..bf7cc612852c 100644
 --- a/arch/arm/Kconfig
 +++ b/arch/arm/Kconfig
-@@ -43,6 +43,7 @@ config ARM
+@@ -41,6 +41,7 @@ config ARM
  	select ARCH_SUPPORTS_CFI_CLANG
  	select ARCH_SUPPORTS_HUGETLBFS if ARM_LPAE
  	select ARCH_SUPPORTS_PER_VMA_LOCK
@@ -46,7 +53,7 @@ index 25ed6f1a7c7a..89466636d460 100644
  	select ARCH_USE_BUILTIN_BSWAP
  	select ARCH_USE_CMPXCHG_LOCKREF
  	select ARCH_USE_MEMTEST
-@@ -82,7 +83,7 @@ config ARM
+@@ -80,7 +81,7 @@ config ARM
  	select HAS_IOPORT
  	select HAVE_ARCH_AUDITSYSCALL if AEABI && !OABI_COMPAT
  	select HAVE_ARCH_BITREVERSE if (CPU_32v7M || CPU_32v7) && !CPU_32v6
@@ -55,16 +62,16 @@ index 25ed6f1a7c7a..89466636d460 100644
  	select HAVE_ARCH_KFENCE if MMU && !XIP_KERNEL
  	select HAVE_ARCH_KGDB if !CPU_ENDIAN_BE32 && MMU
  	select HAVE_ARCH_KASAN if MMU && !XIP_KERNEL
-@@ -106,7 +107,7 @@ config ARM
+@@ -105,7 +106,7 @@ config ARM
  	select HAVE_DYNAMIC_FTRACE_WITH_REGS if HAVE_DYNAMIC_FTRACE
  	select HAVE_EFFICIENT_UNALIGNED_ACCESS if (CPU_V6 || CPU_V6K || CPU_V7) && MMU
  	select HAVE_EXIT_THREAD
 -	select HAVE_GUP_FAST if ARM_LPAE
 +	select HAVE_GUP_FAST if ARM_LPAE && !(PREEMPT_RT && HIGHPTE)
- 	select HAVE_FTRACE_MCOUNT_RECORD if !XIP_KERNEL
  	select HAVE_FUNCTION_ERROR_INJECTION
  	select HAVE_FUNCTION_GRAPH_TRACER
-@@ -130,6 +131,7 @@ config ARM
+ 	select HAVE_FUNCTION_TRACER if !XIP_KERNEL
+@@ -128,6 +129,7 @@ config ARM
  	select HAVE_PERF_EVENTS
  	select HAVE_PERF_REGS
  	select HAVE_PERF_USER_STACK_DUMP
@@ -73,7 +80,7 @@ index 25ed6f1a7c7a..89466636d460 100644
  	select HAVE_REGS_AND_STACK_ACCESS_API
  	select HAVE_RSEQ
 diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
-index ab01b51de559..cd030e2734e5 100644
+index 46169fe42c61..3fdc8771dbe7 100644
 --- a/arch/arm/mm/fault.c
 +++ b/arch/arm/mm/fault.c
 @@ -474,6 +474,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
@@ -96,79 +103,11 @@ index ab01b51de559..cd030e2734e5 100644
  	do_bad_area(addr, fsr, regs);
  	return 0;
  }
-diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index a182295e6f08..84e3094b00ef 100644
---- a/arch/arm64/Kconfig
-+++ b/arch/arm64/Kconfig
-@@ -42,6 +42,7 @@ config ARM64
- 	select ARCH_HAS_NMI_SAFE_THIS_CPU_OPS
- 	select ARCH_HAS_NON_OVERLAPPING_ADDRESS_SPACE
- 	select ARCH_HAS_NONLEAF_PMD_YOUNG if ARM64_HAFT
-+	select ARCH_HAS_PREEMPT_LAZY
- 	select ARCH_HAS_PTDUMP
- 	select ARCH_HAS_PTE_DEVMAP
- 	select ARCH_HAS_PTE_SPECIAL
-diff --git a/arch/arm64/include/asm/thread_info.h b/arch/arm64/include/asm/thread_info.h
-index 1114c1c3300a..4443ef278975 100644
---- a/arch/arm64/include/asm/thread_info.h
-+++ b/arch/arm64/include/asm/thread_info.h
-@@ -59,11 +59,12 @@ void arch_setup_new_exec(void);
- 
- #define TIF_SIGPENDING		0	/* signal pending */
- #define TIF_NEED_RESCHED	1	/* rescheduling necessary */
--#define TIF_NOTIFY_RESUME	2	/* callback before returning to user */
--#define TIF_FOREIGN_FPSTATE	3	/* CPU's FP state is not current's */
--#define TIF_UPROBE		4	/* uprobe breakpoint or singlestep */
--#define TIF_MTE_ASYNC_FAULT	5	/* MTE Asynchronous Tag Check Fault */
--#define TIF_NOTIFY_SIGNAL	6	/* signal notifications exist */
-+#define TIF_NEED_RESCHED_LAZY	2	/* Lazy rescheduling needed */
-+#define TIF_NOTIFY_RESUME	3	/* callback before returning to user */
-+#define TIF_FOREIGN_FPSTATE	4	/* CPU's FP state is not current's */
-+#define TIF_UPROBE		5	/* uprobe breakpoint or singlestep */
-+#define TIF_MTE_ASYNC_FAULT	6	/* MTE Asynchronous Tag Check Fault */
-+#define TIF_NOTIFY_SIGNAL	7	/* signal notifications exist */
- #define TIF_SYSCALL_TRACE	8	/* syscall trace active */
- #define TIF_SYSCALL_AUDIT	9	/* syscall auditing */
- #define TIF_SYSCALL_TRACEPOINT	10	/* syscall tracepoint for ftrace */
-@@ -85,6 +86,7 @@ void arch_setup_new_exec(void);
- 
- #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
- #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)
-+#define _TIF_NEED_RESCHED_LAZY	(1 << TIF_NEED_RESCHED_LAZY)
- #define _TIF_NOTIFY_RESUME	(1 << TIF_NOTIFY_RESUME)
- #define _TIF_FOREIGN_FPSTATE	(1 << TIF_FOREIGN_FPSTATE)
- #define _TIF_SYSCALL_TRACE	(1 << TIF_SYSCALL_TRACE)
-@@ -100,10 +102,10 @@ void arch_setup_new_exec(void);
- #define _TIF_NOTIFY_SIGNAL	(1 << TIF_NOTIFY_SIGNAL)
- #define _TIF_TSC_SIGSEGV	(1 << TIF_TSC_SIGSEGV)
- 
--#define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_SIGPENDING | \
-+#define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY | \
- 				 _TIF_NOTIFY_RESUME | _TIF_FOREIGN_FPSTATE | \
- 				 _TIF_UPROBE | _TIF_MTE_ASYNC_FAULT | \
--				 _TIF_NOTIFY_SIGNAL)
-+				 _TIF_NOTIFY_SIGNAL | _TIF_SIGPENDING)
- 
- #define _TIF_SYSCALL_WORK	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | \
- 				 _TIF_SYSCALL_TRACEPOINT | _TIF_SECCOMP | \
-diff --git a/arch/arm64/kernel/entry-common.c b/arch/arm64/kernel/entry-common.c
-index b260ddc4d3e9..7993fab0cab4 100644
---- a/arch/arm64/kernel/entry-common.c
-+++ b/arch/arm64/kernel/entry-common.c
-@@ -132,7 +132,7 @@ static void do_notify_resume(struct pt_regs *regs, unsigned long thread_flags)
- 	do {
- 		local_irq_enable();
- 
--		if (thread_flags & _TIF_NEED_RESCHED)
-+		if (thread_flags & (_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY))
- 			schedule();
- 
- 		if (thread_flags & _TIF_UPROBE)
 diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
-index 6722625a406a..5f1b8d31cbf5 100644
+index 93402a1d9c9f..72ee7d148989 100644
 --- a/arch/powerpc/Kconfig
 +++ b/arch/powerpc/Kconfig
-@@ -173,6 +173,7 @@ config PPC
+@@ -170,6 +170,7 @@ config PPC
  	select ARCH_STACKWALK
  	select ARCH_SUPPORTS_ATOMIC_RMW
  	select ARCH_SUPPORTS_DEBUG_PAGEALLOC	if PPC_BOOK3S || PPC_8xx
@@ -176,14 +115,14 @@ index 6722625a406a..5f1b8d31cbf5 100644
  	select ARCH_USE_BUILTIN_BSWAP
  	select ARCH_USE_CMPXCHG_LOCKREF		if PPC64
  	select ARCH_USE_MEMTEST
-@@ -277,6 +278,7 @@ config PPC
+@@ -273,6 +274,7 @@ config PPC
  	select HAVE_PERF_EVENTS_NMI		if PPC64
  	select HAVE_PERF_REGS
  	select HAVE_PERF_USER_STACK_DUMP
 +	select HAVE_POSIX_CPU_TIMERS_TASK_WORK	if !KVM
+ 	select HAVE_PREEMPT_DYNAMIC_KEY
  	select HAVE_RETHOOK			if KPROBES
  	select HAVE_REGS_AND_STACK_ACCESS_API
- 	select HAVE_RELIABLE_STACKTRACE
 diff --git a/arch/powerpc/include/asm/stackprotector.h b/arch/powerpc/include/asm/stackprotector.h
 index 283c34647856..4727f40052dd 100644
 --- a/arch/powerpc/include/asm/stackprotector.h
@@ -204,10 +143,10 @@ index 283c34647856..4727f40052dd 100644
  #ifdef CONFIG_PPC64
  	get_paca()->canary = canary;
 diff --git a/arch/powerpc/kvm/Kconfig b/arch/powerpc/kvm/Kconfig
-index dbfdc126bf14..82dd033cf796 100644
+index 2f2702c867f7..8e5a7bab208a 100644
 --- a/arch/powerpc/kvm/Kconfig
 +++ b/arch/powerpc/kvm/Kconfig
-@@ -221,6 +221,7 @@ config KVM_E500MC
+@@ -234,6 +234,7 @@ config KVM_E500MC
  config KVM_MPIC
  	bool "KVM in-kernel MPIC emulation"
  	depends on KVM && PPC_E500
@@ -228,7 +167,7 @@ index fa3c2fff082a..ea4f42cfe825 100644
  	select MPIC
  	select OF_DYNAMIC
 diff --git a/arch/powerpc/platforms/pseries/iommu.c b/arch/powerpc/platforms/pseries/iommu.c
-index d6ebc19fb99c..34657e0288e9 100644
+index eec333dd2e59..0b952ad638f9 100644
 --- a/arch/powerpc/platforms/pseries/iommu.c
 +++ b/arch/powerpc/platforms/pseries/iommu.c
 @@ -26,6 +26,7 @@
@@ -335,10 +274,10 @@ index 5e939004b646..40a9234e6e5d 100644
  	select INTERVAL_TREE
  	# we need shmfs for the swappable backing store, and in particular
 diff --git a/drivers/gpu/drm/i915/display/intel_crtc.c b/drivers/gpu/drm/i915/display/intel_crtc.c
-index 5b2603ef2ff7..6e9145ff4a7c 100644
+index a187db6df2d3..dbdc4d9b2a33 100644
 --- a/drivers/gpu/drm/i915/display/intel_crtc.c
 +++ b/drivers/gpu/drm/i915/display/intel_crtc.c
-@@ -560,7 +560,8 @@ void intel_pipe_update_start(struct intel_atomic_state *state,
+@@ -562,7 +562,8 @@ void intel_pipe_update_start(struct intel_atomic_state *state,
  	 */
  	intel_psr_wait_for_idle_locked(new_crtc_state);
  
@@ -348,7 +287,7 @@ index 5b2603ef2ff7..6e9145ff4a7c 100644
  
  	crtc->debug.min_vbl = evade.min;
  	crtc->debug.max_vbl = evade.max;
-@@ -578,7 +579,8 @@ void intel_pipe_update_start(struct intel_atomic_state *state,
+@@ -580,7 +581,8 @@ void intel_pipe_update_start(struct intel_atomic_state *state,
  	return;
  
  irq_disable:
@@ -358,7 +297,7 @@ index 5b2603ef2ff7..6e9145ff4a7c 100644
  }
  
  #if IS_ENABLED(CONFIG_DRM_I915_DEBUG_VBLANK_EVADE)
-@@ -724,7 +726,8 @@ void intel_pipe_update_end(struct intel_atomic_state *state,
+@@ -726,7 +728,8 @@ void intel_pipe_update_end(struct intel_atomic_state *state,
  	if (!state->base.legacy_cursor_update)
  		intel_vrr_send_push(NULL, new_crtc_state);
  
@@ -369,7 +308,7 @@ index 5b2603ef2ff7..6e9145ff4a7c 100644
  	if (intel_vgpu_active(dev_priv))
  		goto out;
 diff --git a/drivers/gpu/drm/i915/display/intel_cursor.c b/drivers/gpu/drm/i915/display/intel_cursor.c
-index 3276a5b4a9b0..48bf07df28e5 100644
+index 198e69efe9ac..2d86b2c3f863 100644
 --- a/drivers/gpu/drm/i915/display/intel_cursor.c
 +++ b/drivers/gpu/drm/i915/display/intel_cursor.c
 @@ -929,13 +929,15 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
@@ -416,10 +355,10 @@ index 27ebc32cb61a..a519d94700c3 100644
  #include <linux/string_helpers.h>
  #include <linux/types.h>
 diff --git a/drivers/gpu/drm/i915/display/intel_vblank.c b/drivers/gpu/drm/i915/display/intel_vblank.c
-index 7b240ce681a0..c37364613353 100644
+index 70ba7aa26bf4..d0197fd96d6c 100644
 --- a/drivers/gpu/drm/i915/display/intel_vblank.c
 +++ b/drivers/gpu/drm/i915/display/intel_vblank.c
-@@ -311,6 +311,20 @@ static void intel_vblank_section_exit(struct intel_display *display)
+@@ -312,6 +312,20 @@ static void intel_vblank_section_exit(struct intel_display *display)
  	struct drm_i915_private *i915 = to_i915(display->drm);
  	spin_unlock(&i915->uncore.lock);
  }
@@ -440,7 +379,7 @@ index 7b240ce681a0..c37364613353 100644
  #else
  static void intel_vblank_section_enter(struct intel_display *display)
  {
-@@ -319,6 +333,17 @@ static void intel_vblank_section_enter(struct intel_display *display)
+@@ -320,6 +334,17 @@ static void intel_vblank_section_enter(struct intel_display *display)
  static void intel_vblank_section_exit(struct intel_display *display)
  {
  }
@@ -458,7 +397,7 @@ index 7b240ce681a0..c37364613353 100644
  #endif
  
  static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
-@@ -355,10 +380,10 @@ static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
+@@ -356,10 +381,10 @@ static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
  	 * timing critical raw register reads, potentially with
  	 * preemption disabled, so the following code must not block.
  	 */
@@ -472,7 +411,7 @@ index 7b240ce681a0..c37364613353 100644
  
  	/* Get optional system timestamp before query. */
  	if (stime)
-@@ -422,10 +447,10 @@ static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
+@@ -423,10 +448,10 @@ static bool i915_get_crtc_scanoutpos(struct drm_crtc *_crtc,
  	if (etime)
  		*etime = ktime_get();
  
@@ -486,7 +425,7 @@ index 7b240ce681a0..c37364613353 100644
  
  	/*
  	 * While in vblank, position will be negative
-@@ -463,13 +488,11 @@ int intel_get_crtc_scanline(struct intel_crtc *crtc)
+@@ -464,13 +489,11 @@ int intel_get_crtc_scanline(struct intel_crtc *crtc)
  	unsigned long irqflags;
  	int position;
  
@@ -502,7 +441,7 @@ index 7b240ce681a0..c37364613353 100644
  
  	return position;
  }
-@@ -729,11 +752,13 @@ int intel_vblank_evade(struct intel_vblank_evade_ctx *evade)
+@@ -730,11 +753,13 @@ int intel_vblank_evade(struct intel_vblank_evade_ctx *evade)
  			break;
  		}
  
@@ -518,6 +457,19 @@ index 7b240ce681a0..c37364613353 100644
  	}
  
  	finish_wait(wq, &wait);
+diff --git a/drivers/gpu/drm/i915/gt/intel_engine_cs.c b/drivers/gpu/drm/i915/gt/intel_engine_cs.c
+index b721bbd23356..f5a6143ea8a2 100644
+--- a/drivers/gpu/drm/i915/gt/intel_engine_cs.c
++++ b/drivers/gpu/drm/i915/gt/intel_engine_cs.c
+@@ -1609,7 +1609,7 @@ u64 intel_engine_get_last_batch_head(const struct intel_engine_cs *engine)
+ 
+ static unsigned long stop_timeout(const struct intel_engine_cs *engine)
+ {
+-	if (in_atomic() || irqs_disabled()) /* inside atomic preempt-reset? */
++	if (in_atomic() || irqs_disabled() || rcu_preempt_depth()) /* inside atomic preempt-reset? */
+ 		return 0;
+ 
+ 	/*
 diff --git a/drivers/gpu/drm/i915/gt/intel_execlists_submission.c b/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
 index 03baa7fa0a27..799e943d9fac 100644
 --- a/drivers/gpu/drm/i915/gt/intel_execlists_submission.c
@@ -595,7 +547,7 @@ index 053780f562c1..b25fa8f4dc4b 100644
  	/*
  	 * FIXME: Have caller pass in if we are in an atomic context to avoid
 diff --git a/drivers/gpu/drm/i915/i915_request.c b/drivers/gpu/drm/i915/i915_request.c
-index c3d27eadc0a7..4705d6d6db14 100644
+index b9a2b2194c8f..e24798e4b44e 100644
 --- a/drivers/gpu/drm/i915/i915_request.c
 +++ b/drivers/gpu/drm/i915/i915_request.c
 @@ -608,7 +608,6 @@ bool __i915_request_submit(struct i915_request *request)
@@ -630,10 +582,10 @@ index 7ed41ce9b708..6b87ef6005c6 100644
  #include <linux/types.h>
  #include <linux/tracepoint.h>
 diff --git a/drivers/gpu/drm/i915/i915_utils.h b/drivers/gpu/drm/i915/i915_utils.h
-index 609214231ffc..91b3e55c389e 100644
+index f7fb40cfdb70..9cb40c2c4b12 100644
 --- a/drivers/gpu/drm/i915/i915_utils.h
 +++ b/drivers/gpu/drm/i915/i915_utils.h
-@@ -269,8 +269,13 @@ wait_remaining_ms_from_jiffies(unsigned long timestamp_jiffies, int to_wait_ms)
+@@ -267,8 +267,13 @@ wait_remaining_ms_from_jiffies(unsigned long timestamp_jiffies, int to_wait_ms)
  						   (Wmax))
  #define wait_for(COND, MS)		_wait_for((COND), (MS) * 1000, 10, 1000)
  
@@ -665,10 +617,10 @@ index f13ff71edf2d..3c67e267fb60 100644
  
  #include <linux/types.h>
 diff --git a/drivers/tty/serial/8250/8250_core.c b/drivers/tty/serial/8250/8250_core.c
-index 5a56f853cf6d..1f4916e53cc3 100644
+index feb920c5b2e8..0468ea74793c 100644
 --- a/drivers/tty/serial/8250/8250_core.c
 +++ b/drivers/tty/serial/8250/8250_core.c
-@@ -388,12 +388,34 @@ void __init serial8250_register_ports(struct uart_driver *drv, struct device *de
+@@ -391,12 +391,34 @@ void __init serial8250_register_ports(struct uart_driver *drv, struct device *de
  
  #ifdef CONFIG_SERIAL_8250_CONSOLE
  
@@ -706,7 +658,7 @@ index 5a56f853cf6d..1f4916e53cc3 100644
  }
  
  static int univ8250_console_setup(struct console *co, char *options)
-@@ -494,12 +516,15 @@ static int univ8250_console_match(struct console *co, char *name, int idx,
+@@ -497,12 +519,15 @@ static int univ8250_console_match(struct console *co, char *name, int idx,
  
  static struct console univ8250_console = {
  	.name		= "ttyS",
@@ -725,11 +677,11 @@ index 5a56f853cf6d..1f4916e53cc3 100644
  	.data		= &serial8250_reg,
  };
 diff --git a/drivers/tty/serial/8250/8250_port.c b/drivers/tty/serial/8250/8250_port.c
-index 8ac452cea36c..22b3f7a19307 100644
+index 2da9db960d09..ab5fe3e78eb9 100644
 --- a/drivers/tty/serial/8250/8250_port.c
 +++ b/drivers/tty/serial/8250/8250_port.c
-@@ -709,7 +709,12 @@ static void serial8250_set_sleep(struct uart_8250_port *p, int sleep)
- 	serial8250_rpm_put(p);
+@@ -705,7 +705,12 @@ static void serial8250_clear_interrupts(struct uart_port *port)
+ 	serial_port_in(port, UART_MSR);
  }
  
 -static void serial8250_clear_IER(struct uart_8250_port *up)
@@ -742,7 +694,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  {
  	if (up->capabilities & UART_CAP_UUE)
  		serial_out(up, UART_IER, UART_IER_UUE);
-@@ -717,6 +722,14 @@ static void serial8250_clear_IER(struct uart_8250_port *up)
+@@ -713,6 +718,14 @@ static void serial8250_clear_IER(struct uart_8250_port *up)
  		serial_out(up, UART_IER, 0);
  }
  
@@ -754,10 +706,10 @@ index 8ac452cea36c..22b3f7a19307 100644
 +	__serial8250_clear_IER(up);
 +}
 +
- #ifdef CONFIG_SERIAL_8250_RSA
  /*
-  * Attempts to turn on the RSA FIFO.  Returns zero on failure.
-@@ -1404,9 +1417,6 @@ void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier)
+  * This is a quickie test to see how big the FIFO is.
+  * It doesn't work at all the time, more's the pity.
+@@ -1290,9 +1303,6 @@ void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier)
  {
  	unsigned char mcr = serial8250_in_MCR(p);
  
@@ -767,7 +719,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  	if (p->port.rs485.flags & SER_RS485_RTS_AFTER_SEND)
  		mcr |= UART_MCR_RTS;
  	else
-@@ -1422,6 +1432,16 @@ void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier)
+@@ -1308,6 +1318,16 @@ void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier)
  		serial8250_clear_and_reinit_fifos(p);
  
  		if (toggle_ier) {
@@ -784,7 +736,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  			p->ier |= UART_IER_RLSI | UART_IER_RDI;
  			serial_port_out(&p->port, UART_IER, p->ier);
  		}
-@@ -3303,7 +3323,11 @@ EXPORT_SYMBOL_GPL(serial8250_set_defaults);
+@@ -3243,7 +3263,11 @@ EXPORT_SYMBOL_GPL(serial8250_set_defaults);
  
  static void serial8250_console_putchar(struct uart_port *port, unsigned char ch)
  {
@@ -796,7 +748,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  }
  
  static void serial8250_console_wait_putchar(struct uart_port *port, unsigned char ch)
-@@ -3340,11 +3364,22 @@ static void serial8250_console_restore(struct uart_8250_port *up)
+@@ -3280,11 +3304,22 @@ static void serial8250_console_restore(struct uart_8250_port *up)
  	serial8250_out_MCR(up, up->mcr | UART_MCR_DTR | UART_MCR_RTS);
  }
  
@@ -820,7 +772,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  		if (wait_for_lsr(up, UART_LSR_THRE))
  			return;
  	}
-@@ -3357,20 +3392,29 @@ static void fifo_wait_for_lsr(struct uart_8250_port *up, unsigned int count)
+@@ -3297,20 +3332,29 @@ static void fifo_wait_for_lsr(struct uart_8250_port *up, unsigned int count)
   * to get empty.
   */
  static void serial8250_console_fifo_write(struct uart_8250_port *up,
@@ -853,7 +805,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  			if (*s == '\n' && !cr_sent) {
  				serial8250_console_putchar(port, '\r');
  				cr_sent = true;
-@@ -3378,6 +3422,8 @@ static void serial8250_console_fifo_write(struct uart_8250_port *up,
+@@ -3318,6 +3362,8 @@ static void serial8250_console_fifo_write(struct uart_8250_port *up,
  				serial8250_console_putchar(port, *s++);
  				cr_sent = false;
  			}
@@ -862,7 +814,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  		}
  		tx_count = i;
  	}
-@@ -3386,39 +3432,57 @@ static void serial8250_console_fifo_write(struct uart_8250_port *up,
+@@ -3326,39 +3372,57 @@ static void serial8250_console_fifo_write(struct uart_8250_port *up,
  	 * Allow timeout for each byte written since the caller will only wait
  	 * for UART_LSR_BOTH_EMPTY using the timeout of a single character
  	 */
@@ -895,11 +847,11 @@ index 8ac452cea36c..22b3f7a19307 100644
  /*
 - *	Print a string to the serial port trying not to disturb
 - *	any possible real use of the port...
-- *
-- *	The console_lock must be held when we get here.
 + * Print a string to the serial port trying not to disturb
 + * any possible real use of the port...
   *
+- *	The console_lock must be held when we get here.
+- *
 - *	Doing runtime PM is really a bad idea for the kernel console.
 - *	Thus, we assume the function is called when device is powered up.
 + * Doing runtime PM is really a bad idea for the kernel console.
@@ -940,7 +892,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  
  	/* check scratch reg to see if port powered off during system sleep */
  	if (up->canary && (up->canary != serial_port_in(port, UART_SCR))) {
-@@ -3432,6 +3496,18 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3372,6 +3436,18 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  		mdelay(port->rs485.delay_rts_before_send);
  	}
  
@@ -959,7 +911,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  	use_fifo = (up->capabilities & UART_CAP_FIFO) &&
  		/*
  		 * BCM283x requires to check the fifo
-@@ -3452,10 +3528,23 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3392,10 +3468,23 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  		 */
  		!(up->port.flags & UPF_CONS_FLOW);
  
@@ -985,7 +937,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  
  	/*
  	 *	Finally, wait for transmitter to become empty
-@@ -3478,11 +3567,18 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
+@@ -3418,11 +3507,18 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
  	 *	call it if we have saved something in the saved flags
  	 *	while processing with interrupts off.
  	 */
@@ -1008,7 +960,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  }
  
  static unsigned int probe_baud(struct uart_port *port)
-@@ -3500,8 +3596,24 @@ static unsigned int probe_baud(struct uart_port *port)
+@@ -3440,8 +3536,24 @@ static unsigned int probe_baud(struct uart_port *port)
  	return (port->uartclk / 16) / quot;
  }
  
@@ -1033,7 +985,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  	int baud = 9600;
  	int bits = 8;
  	int parity = 'n';
-@@ -3511,6 +3623,9 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
+@@ -3451,6 +3563,9 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
  	if (!port->iobase && !port->membase)
  		return -ENODEV;
  
@@ -1044,7 +996,7 @@ index 8ac452cea36c..22b3f7a19307 100644
  		uart_parse_options(options, &baud, &parity, &bits, &flow);
  	else if (probe)
 diff --git a/include/linux/serial_8250.h b/include/linux/serial_8250.h
-index 144de7a7948d..57875c37023a 100644
+index 01efdce0fda0..c10b31a79fe6 100644
 --- a/include/linux/serial_8250.h
 +++ b/include/linux/serial_8250.h
 @@ -150,8 +150,17 @@ struct uart_8250_port {
@@ -1076,6 +1028,30 @@ index 144de7a7948d..57875c37023a 100644
  int serial8250_console_setup(struct uart_port *port, char *options, bool probe);
  int serial8250_console_exit(struct uart_port *port);
  
+diff --git a/kernel/Kconfig.preempt b/kernel/Kconfig.preempt
+index 54ea59ff8fbe..da326800c1c9 100644
+--- a/kernel/Kconfig.preempt
++++ b/kernel/Kconfig.preempt
+@@ -103,6 +103,19 @@ config PREEMPT_RT
+ 	  Select this if you are building a kernel for systems which
+ 	  require real-time guarantees.
+ 
++config PREEMPT_RT_NEEDS_BH_LOCK
++	bool "Enforce softirq synchronisation on PREEMPT_RT"
++	depends on PREEMPT_RT
++	help
++	  Enforce synchronisation across the softirqs context. On PREEMPT_RT
++	  the softirq is preemptible. This enforces the same per-CPU BLK
++	  semantic non-PREEMPT_RT builds have. This should not be needed
++	  because per-CPU locks were added to avoid the per-CPU BKL.
++
++	  This switch provides the old behaviour for testing reasons. Select
++	  this if you suspect an error with preemptible softirq and want test
++	  the old synchronized behaviour.
++
+ config PREEMPT_COUNT
+        bool
+ 
 diff --git a/kernel/ksysfs.c b/kernel/ksysfs.c
 index eefb67d9883c..20ac8a5ac27d 100644
 --- a/kernel/ksysfs.c
@@ -1106,6 +1082,969 @@ index eefb67d9883c..20ac8a5ac27d 100644
  #endif
  	NULL
  };
+diff --git a/kernel/softirq.c b/kernel/softirq.c
+index 513b1945987c..77198911b8dd 100644
+--- a/kernel/softirq.c
++++ b/kernel/softirq.c
+@@ -165,7 +165,11 @@ void __local_bh_disable_ip(unsigned long ip, unsigned int cnt)
+ 	/* First entry of a task into a BH disabled section? */
+ 	if (!current->softirq_disable_cnt) {
+ 		if (preemptible()) {
+-			local_lock(&softirq_ctrl.lock);
++			if (IS_ENABLED(CONFIG_PREEMPT_RT_NEEDS_BH_LOCK))
++				local_lock(&softirq_ctrl.lock);
++			else
++				migrate_disable();
++
+ 			/* Required to meet the RCU bottomhalf requirements. */
+ 			rcu_read_lock();
+ 		} else {
+@@ -177,17 +181,34 @@ void __local_bh_disable_ip(unsigned long ip, unsigned int cnt)
+ 	 * Track the per CPU softirq disabled state. On RT this is per CPU
+ 	 * state to allow preemption of bottom half disabled sections.
+ 	 */
+-	newcnt = __this_cpu_add_return(softirq_ctrl.cnt, cnt);
+-	/*
+-	 * Reflect the result in the task state to prevent recursion on the
+-	 * local lock and to make softirq_count() & al work.
+-	 */
+-	current->softirq_disable_cnt = newcnt;
++	if (IS_ENABLED(CONFIG_PREEMPT_RT_NEEDS_BH_LOCK)) {
++		newcnt = this_cpu_add_return(softirq_ctrl.cnt, cnt);
++		/*
++		 * Reflect the result in the task state to prevent recursion on the
++		 * local lock and to make softirq_count() & al work.
++		 */
++		current->softirq_disable_cnt = newcnt;
+ 
+-	if (IS_ENABLED(CONFIG_TRACE_IRQFLAGS) && newcnt == cnt) {
+-		raw_local_irq_save(flags);
+-		lockdep_softirqs_off(ip);
+-		raw_local_irq_restore(flags);
++		if (IS_ENABLED(CONFIG_TRACE_IRQFLAGS) && newcnt == cnt) {
++			raw_local_irq_save(flags);
++			lockdep_softirqs_off(ip);
++			raw_local_irq_restore(flags);
++		}
++	} else {
++		bool sirq_dis = false;
++
++		if (!current->softirq_disable_cnt)
++			sirq_dis = true;
++
++		this_cpu_add(softirq_ctrl.cnt, cnt);
++		current->softirq_disable_cnt += cnt;
++		WARN_ON_ONCE(current->softirq_disable_cnt < 0);
++
++		if (IS_ENABLED(CONFIG_TRACE_IRQFLAGS) && sirq_dis) {
++			raw_local_irq_save(flags);
++			lockdep_softirqs_off(ip);
++			raw_local_irq_restore(flags);
++		}
+ 	}
+ }
+ EXPORT_SYMBOL(__local_bh_disable_ip);
+@@ -195,23 +216,42 @@ EXPORT_SYMBOL(__local_bh_disable_ip);
+ static void __local_bh_enable(unsigned int cnt, bool unlock)
+ {
+ 	unsigned long flags;
++	bool sirq_en = false;
+ 	int newcnt;
+ 
+-	DEBUG_LOCKS_WARN_ON(current->softirq_disable_cnt !=
+-			    this_cpu_read(softirq_ctrl.cnt));
++	if (IS_ENABLED(CONFIG_PREEMPT_RT_NEEDS_BH_LOCK)) {
++		DEBUG_LOCKS_WARN_ON(current->softirq_disable_cnt !=
++				    this_cpu_read(softirq_ctrl.cnt));
++		if (softirq_count() == cnt)
++			sirq_en = true;
++	} else {
++		if (current->softirq_disable_cnt == cnt)
++			sirq_en = true;
++	}
+ 
+-	if (IS_ENABLED(CONFIG_TRACE_IRQFLAGS) && softirq_count() == cnt) {
++	if (IS_ENABLED(CONFIG_TRACE_IRQFLAGS) && sirq_en) {
+ 		raw_local_irq_save(flags);
+ 		lockdep_softirqs_on(_RET_IP_);
+ 		raw_local_irq_restore(flags);
+ 	}
+ 
+-	newcnt = __this_cpu_sub_return(softirq_ctrl.cnt, cnt);
+-	current->softirq_disable_cnt = newcnt;
++	if (IS_ENABLED(CONFIG_PREEMPT_RT_NEEDS_BH_LOCK)) {
++		newcnt = this_cpu_sub_return(softirq_ctrl.cnt, cnt);
++		current->softirq_disable_cnt = newcnt;
+ 
+-	if (!newcnt && unlock) {
+-		rcu_read_unlock();
+-		local_unlock(&softirq_ctrl.lock);
++		if (!newcnt && unlock) {
++			rcu_read_unlock();
++			local_unlock(&softirq_ctrl.lock);
++		}
++	} else {
++		current->softirq_disable_cnt -= cnt;
++		this_cpu_sub(softirq_ctrl.cnt, cnt);
++		if (unlock && !current->softirq_disable_cnt) {
++			migrate_enable();
++			rcu_read_unlock();
++		} else {
++			WARN_ON_ONCE(current->softirq_disable_cnt < 0);
++		}
+ 	}
+ }
+ 
+@@ -228,7 +268,10 @@ void __local_bh_enable_ip(unsigned long ip, unsigned int cnt)
+ 	lock_map_release(&bh_lock_map);
+ 
+ 	local_irq_save(flags);
+-	curcnt = __this_cpu_read(softirq_ctrl.cnt);
++	if (IS_ENABLED(CONFIG_PREEMPT_RT_NEEDS_BH_LOCK))
++		curcnt = this_cpu_read(softirq_ctrl.cnt);
++	else
++		curcnt = current->softirq_disable_cnt;
+ 
+ 	/*
+ 	 * If this is not reenabling soft interrupts, no point in trying to
+@@ -805,6 +848,58 @@ static bool tasklet_clear_sched(struct tasklet_struct *t)
+ 	return false;
+ }
+ 
++#ifdef CONFIG_PREEMPT_RT
++struct tasklet_sync_callback {
++	spinlock_t	cb_lock;
++	atomic_t	cb_waiters;
++};
++
++static DEFINE_PER_CPU(struct tasklet_sync_callback, tasklet_sync_callback) = {
++	.cb_lock	= __SPIN_LOCK_UNLOCKED(tasklet_sync_callback.cb_lock),
++	.cb_waiters	= ATOMIC_INIT(0),
++};
++
++static void tasklet_lock_callback(void)
++{
++	spin_lock(this_cpu_ptr(&tasklet_sync_callback.cb_lock));
++}
++
++static void tasklet_unlock_callback(void)
++{
++	spin_unlock(this_cpu_ptr(&tasklet_sync_callback.cb_lock));
++}
++
++static void tasklet_callback_cancel_wait_running(void)
++{
++	struct tasklet_sync_callback *sync_cb = this_cpu_ptr(&tasklet_sync_callback);
++
++	atomic_inc(&sync_cb->cb_waiters);
++	spin_lock(&sync_cb->cb_lock);
++	atomic_dec(&sync_cb->cb_waiters);
++	spin_unlock(&sync_cb->cb_lock);
++}
++
++static void tasklet_callback_sync_wait_running(void)
++{
++	struct tasklet_sync_callback *sync_cb = this_cpu_ptr(&tasklet_sync_callback);
++
++	if (atomic_read(&sync_cb->cb_waiters)) {
++		spin_unlock(&sync_cb->cb_lock);
++		spin_lock(&sync_cb->cb_lock);
++	}
++}
++
++#else /* !CONFIG_PREEMPT_RT: */
++
++static void tasklet_lock_callback(void) { }
++static void tasklet_unlock_callback(void) { }
++static void tasklet_callback_sync_wait_running(void) { }
++
++#ifdef CONFIG_SMP
++static void tasklet_callback_cancel_wait_running(void) { }
++#endif
++#endif /* !CONFIG_PREEMPT_RT */
++
+ static void tasklet_action_common(struct tasklet_head *tl_head,
+ 				  unsigned int softirq_nr)
+ {
+@@ -816,6 +911,7 @@ static void tasklet_action_common(struct tasklet_head *tl_head,
+ 	tl_head->tail = &tl_head->head;
+ 	local_irq_enable();
+ 
++	tasklet_lock_callback();
+ 	while (list) {
+ 		struct tasklet_struct *t = list;
+ 
+@@ -835,6 +931,7 @@ static void tasklet_action_common(struct tasklet_head *tl_head,
+ 					}
+ 				}
+ 				tasklet_unlock(t);
++				tasklet_callback_sync_wait_running();
+ 				continue;
+ 			}
+ 			tasklet_unlock(t);
+@@ -847,6 +944,7 @@ static void tasklet_action_common(struct tasklet_head *tl_head,
+ 		__raise_softirq_irqoff(softirq_nr);
+ 		local_irq_enable();
+ 	}
++	tasklet_unlock_callback();
+ }
+ 
+ static __latent_entropy void tasklet_action(void)
+@@ -897,12 +995,9 @@ void tasklet_unlock_spin_wait(struct tasklet_struct *t)
+ 			/*
+ 			 * Prevent a live lock when current preempted soft
+ 			 * interrupt processing or prevents ksoftirqd from
+-			 * running. If the tasklet runs on a different CPU
+-			 * then this has no effect other than doing the BH
+-			 * disable/enable dance for nothing.
++			 * running.
+ 			 */
+-			local_bh_disable();
+-			local_bh_enable();
++			tasklet_callback_cancel_wait_running();
+ 		} else {
+ 			cpu_relax();
+ 		}
+diff --git a/kernel/workqueue.c b/kernel/workqueue.c
+index c6b79b3675c3..d6c94ee8edfc 100644
+--- a/kernel/workqueue.c
++++ b/kernel/workqueue.c
+@@ -222,7 +222,9 @@ struct worker_pool {
+ 	struct workqueue_attrs	*attrs;		/* I: worker attributes */
+ 	struct hlist_node	hash_node;	/* PL: unbound_pool_hash node */
+ 	int			refcnt;		/* PL: refcnt for unbound pools */
+-
++#ifdef CONFIG_PREEMPT_RT
++	spinlock_t		cb_lock;	/* BH worker cancel lock */
++#endif
+ 	/*
+ 	 * Destruction of pool is RCU protected to allow dereferences
+ 	 * from get_work_pool().
+@@ -3078,6 +3080,31 @@ __acquires(&pool->lock)
+ 		goto restart;
+ }
+ 
++#ifdef CONFIG_PREEMPT_RT
++static void worker_lock_callback(struct worker_pool *pool)
++{
++	spin_lock(&pool->cb_lock);
++}
++
++static void worker_unlock_callback(struct worker_pool *pool)
++{
++	spin_unlock(&pool->cb_lock);
++}
++
++static void workqueue_callback_cancel_wait_running(struct worker_pool *pool)
++{
++	spin_lock(&pool->cb_lock);
++	spin_unlock(&pool->cb_lock);
++}
++
++#else
++
++static void worker_lock_callback(struct worker_pool *pool) { }
++static void worker_unlock_callback(struct worker_pool *pool) { }
++static void workqueue_callback_cancel_wait_running(struct worker_pool *pool) { }
++
++#endif
++
+ /**
+  * manage_workers - manage worker pool
+  * @worker: self
+@@ -3557,6 +3584,7 @@ static void bh_worker(struct worker *worker)
+ 	int nr_restarts = BH_WORKER_RESTARTS;
+ 	unsigned long end = jiffies + BH_WORKER_JIFFIES;
+ 
++	worker_lock_callback(pool);
+ 	raw_spin_lock_irq(&pool->lock);
+ 	worker_leave_idle(worker);
+ 
+@@ -3585,6 +3613,7 @@ static void bh_worker(struct worker *worker)
+ 	worker_enter_idle(worker);
+ 	kick_pool(pool);
+ 	raw_spin_unlock_irq(&pool->lock);
++	worker_unlock_callback(pool);
+ }
+ 
+ /*
+@@ -4222,17 +4251,17 @@ static bool __flush_work(struct work_struct *work, bool from_cancel)
+ 		    (data & WORK_OFFQ_BH)) {
+ 			/*
+ 			 * On RT, prevent a live lock when %current preempted
+-			 * soft interrupt processing or prevents ksoftirqd from
+-			 * running by keeping flipping BH. If the BH work item
+-			 * runs on a different CPU then this has no effect other
+-			 * than doing the BH disable/enable dance for nothing.
+-			 * This is copied from
+-			 * kernel/softirq.c::tasklet_unlock_spin_wait().
++			 * soft interrupt processing by blocking on lock which
++			 * is owned by the thread invoking the callback.
+ 			 */
+ 			while (!try_wait_for_completion(&barr.done)) {
+ 				if (IS_ENABLED(CONFIG_PREEMPT_RT)) {
+-					local_bh_disable();
+-					local_bh_enable();
++					struct worker_pool *pool;
++
++					guard(rcu)();
++					pool = get_work_pool(work);
++					if (pool)
++						workqueue_callback_cancel_wait_running(pool);
+ 				} else {
+ 					cpu_relax();
+ 				}
+@@ -4782,6 +4811,9 @@ static int init_worker_pool(struct worker_pool *pool)
+ 	ida_init(&pool->worker_ida);
+ 	INIT_HLIST_NODE(&pool->hash_node);
+ 	pool->refcnt = 1;
++#ifdef CONFIG_PREEMPT_RT
++	spin_lock_init(&pool->cb_lock);
++#endif
+ 
+ 	/* shouldn't fail above this point */
+ 	pool->attrs = alloc_workqueue_attrs();
+diff --git a/net/core/gro_cells.c b/net/core/gro_cells.c
+index ff8e5b64bf6b..b43911562f4d 100644
+--- a/net/core/gro_cells.c
++++ b/net/core/gro_cells.c
+@@ -8,11 +8,13 @@
+ struct gro_cell {
+ 	struct sk_buff_head	napi_skbs;
+ 	struct napi_struct	napi;
++	local_lock_t		bh_lock;
+ };
+ 
+ int gro_cells_receive(struct gro_cells *gcells, struct sk_buff *skb)
+ {
+ 	struct net_device *dev = skb->dev;
++	bool have_bh_lock = false;
+ 	struct gro_cell *cell;
+ 	int res;
+ 
+@@ -25,6 +27,8 @@ int gro_cells_receive(struct gro_cells *gcells, struct sk_buff *skb)
+ 		goto unlock;
+ 	}
+ 
++	local_lock_nested_bh(&gcells->cells->bh_lock);
++	have_bh_lock = true;
+ 	cell = this_cpu_ptr(gcells->cells);
+ 
+ 	if (skb_queue_len(&cell->napi_skbs) > READ_ONCE(net_hotdata.max_backlog)) {
+@@ -39,6 +43,9 @@ int gro_cells_receive(struct gro_cells *gcells, struct sk_buff *skb)
+ 	if (skb_queue_len(&cell->napi_skbs) == 1)
+ 		napi_schedule(&cell->napi);
+ 
++	if (have_bh_lock)
++		local_unlock_nested_bh(&gcells->cells->bh_lock);
++
+ 	res = NET_RX_SUCCESS;
+ 
+ unlock:
+@@ -54,6 +61,7 @@ static int gro_cell_poll(struct napi_struct *napi, int budget)
+ 	struct sk_buff *skb;
+ 	int work_done = 0;
+ 
++	__local_lock_nested_bh(&cell->bh_lock);
+ 	while (work_done < budget) {
+ 		skb = __skb_dequeue(&cell->napi_skbs);
+ 		if (!skb)
+@@ -64,6 +72,7 @@ static int gro_cell_poll(struct napi_struct *napi, int budget)
+ 
+ 	if (work_done < budget)
+ 		napi_complete_done(napi, work_done);
++	__local_unlock_nested_bh(&cell->bh_lock);
+ 	return work_done;
+ }
+ 
+@@ -79,6 +88,7 @@ int gro_cells_init(struct gro_cells *gcells, struct net_device *dev)
+ 		struct gro_cell *cell = per_cpu_ptr(gcells->cells, i);
+ 
+ 		__skb_queue_head_init(&cell->napi_skbs);
++		local_lock_init(&cell->bh_lock);
+ 
+ 		set_bit(NAPI_STATE_NO_BUSY_POLL, &cell->napi.state);
+ 
+diff --git a/net/netfilter/nf_conntrack_netlink.c b/net/netfilter/nf_conntrack_netlink.c
+index 50fd6809380f..3a04665adf99 100644
+--- a/net/netfilter/nf_conntrack_netlink.c
++++ b/net/netfilter/nf_conntrack_netlink.c
+@@ -60,7 +60,7 @@ MODULE_LICENSE("GPL");
+ MODULE_DESCRIPTION("List and change connection tracking table");
+ 
+ struct ctnetlink_list_dump_ctx {
+-	struct nf_conn *last;
++	unsigned long last_id;
+ 	unsigned int cpu;
+ 	bool done;
+ };
+@@ -1733,16 +1733,6 @@ static int ctnetlink_get_conntrack(struct sk_buff *skb,
+ 	return nfnetlink_unicast(skb2, info->net, NETLINK_CB(skb).portid);
+ }
+ 
+-static int ctnetlink_done_list(struct netlink_callback *cb)
+-{
+-	struct ctnetlink_list_dump_ctx *ctx = (void *)cb->ctx;
+-
+-	if (ctx->last)
+-		nf_ct_put(ctx->last);
+-
+-	return 0;
+-}
+-
+ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+ static int ctnetlink_dump_one_entry(struct sk_buff *skb,
+ 				    struct netlink_callback *cb,
+@@ -1757,11 +1747,11 @@ static int ctnetlink_dump_one_entry(struct sk_buff *skb,
+ 	if (l3proto && nf_ct_l3num(ct) != l3proto)
+ 		return 0;
+ 
+-	if (ctx->last) {
+-		if (ct != ctx->last)
++	if (ctx->last_id) {
++		if (ctnetlink_get_id(ct) != ctx->last_id)
+ 			return 0;
+ 
+-		ctx->last = NULL;
++		ctx->last_id = 0;
+ 	}
+ 
+ 	/* We can't dump extension info for the unconfirmed
+@@ -1775,12 +1765,8 @@ static int ctnetlink_dump_one_entry(struct sk_buff *skb,
+ 				  cb->nlh->nlmsg_seq,
+ 				  NFNL_MSG_TYPE(cb->nlh->nlmsg_type),
+ 				  ct, dying, 0);
+-	if (res < 0) {
+-		if (!refcount_inc_not_zero(&ct->ct_general.use))
+-			return 0;
+-
+-		ctx->last = ct;
+-	}
++	if (res < 0)
++		ctx->last_id = ctnetlink_get_id(ct);
+ 
+ 	return res;
+ }
+@@ -1796,10 +1782,10 @@ static int
+ ctnetlink_dump_dying(struct sk_buff *skb, struct netlink_callback *cb)
+ {
+ 	struct ctnetlink_list_dump_ctx *ctx = (void *)cb->ctx;
+-	struct nf_conn *last = ctx->last;
+ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+ 	const struct net *net = sock_net(skb->sk);
+ 	struct nf_conntrack_net_ecache *ecache_net;
++	unsigned long last_id = ctx->last_id;
+ 	struct nf_conntrack_tuple_hash *h;
+ 	struct hlist_nulls_node *n;
+ #endif
+@@ -1807,7 +1793,7 @@ ctnetlink_dump_dying(struct sk_buff *skb, struct netlink_callback *cb)
+ 	if (ctx->done)
+ 		return 0;
+ 
+-	ctx->last = NULL;
++	ctx->last_id = 0;
+ 
+ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+ 	ecache_net = nf_conn_pernet_ecache(net);
+@@ -1818,24 +1804,21 @@ ctnetlink_dump_dying(struct sk_buff *skb, struct netlink_callback *cb)
+ 		int res;
+ 
+ 		ct = nf_ct_tuplehash_to_ctrack(h);
+-		if (last && last != ct)
++		if (last_id && last_id != ctnetlink_get_id(ct))
+ 			continue;
+ 
+ 		res = ctnetlink_dump_one_entry(skb, cb, ct, true);
+ 		if (res < 0) {
+ 			spin_unlock_bh(&ecache_net->dying_lock);
+-			nf_ct_put(last);
+ 			return skb->len;
+ 		}
+ 
+-		nf_ct_put(last);
+-		last = NULL;
++		last_id = 0;
+ 	}
+ 
+ 	spin_unlock_bh(&ecache_net->dying_lock);
+ #endif
+ 	ctx->done = true;
+-	nf_ct_put(last);
+ 
+ 	return skb->len;
+ }
+@@ -1847,7 +1830,6 @@ static int ctnetlink_get_ct_dying(struct sk_buff *skb,
+ 	if (info->nlh->nlmsg_flags & NLM_F_DUMP) {
+ 		struct netlink_dump_control c = {
+ 			.dump = ctnetlink_dump_dying,
+-			.done = ctnetlink_done_list,
+ 		};
+ 		return netlink_dump_start(info->sk, skb, info->nlh, &c);
+ 	}
+@@ -1862,7 +1844,6 @@ static int ctnetlink_get_ct_unconfirmed(struct sk_buff *skb,
+ 	if (info->nlh->nlmsg_flags & NLM_F_DUMP) {
+ 		struct netlink_dump_control c = {
+ 			.dump = ctnetlink_dump_unconfirmed,
+-			.done = ctnetlink_done_list,
+ 		};
+ 		return netlink_dump_start(info->sk, skb, info->nlh, &c);
+ 	}
+diff --git a/net/netfilter/nft_set_pipapo.c b/net/netfilter/nft_set_pipapo.c
+index 793790d79d13..337daa777c35 100644
+--- a/net/netfilter/nft_set_pipapo.c
++++ b/net/netfilter/nft_set_pipapo.c
+@@ -397,7 +397,7 @@ int pipapo_refill(unsigned long *map, unsigned int len, unsigned int rules,
+ }
+ 
+ /**
+- * pipapo_get() - Get matching element reference given key data
++ * pipapo_get_slow() - Get matching element reference given key data
+  * @m:		storage containing the set elements
+  * @data:	Key data to be matched against existing elements
+  * @genmask:	If set, check that element is active in given genmask
+@@ -414,12 +414,12 @@ int pipapo_refill(unsigned long *map, unsigned int len, unsigned int rules,
+  *
+  * Return: pointer to &struct nft_pipapo_elem on match, NULL otherwise.
+  */
+-static struct nft_pipapo_elem *pipapo_get(const struct nft_pipapo_match *m,
+-					  const u8 *data, u8 genmask,
+-					  u64 tstamp)
++static struct nft_pipapo_elem *pipapo_get_slow(const struct nft_pipapo_match *m,
++					       const u8 *data, u8 genmask,
++					       u64 tstamp)
+ {
++	unsigned long *res_map, *fill_map, *map;
+ 	struct nft_pipapo_scratch *scratch;
+-	unsigned long *res_map, *fill_map;
+ 	const struct nft_pipapo_field *f;
+ 	bool map_index;
+ 	int i;
+@@ -429,11 +429,13 @@ static struct nft_pipapo_elem *pipapo_get(const struct nft_pipapo_match *m,
+ 	scratch = *raw_cpu_ptr(m->scratch);
+ 	if (unlikely(!scratch))
+ 		goto out;
++	__local_lock_nested_bh(&scratch->bh_lock);
+ 
+ 	map_index = scratch->map_index;
+ 
+-	res_map  = scratch->map + (map_index ? m->bsize_max : 0);
+-	fill_map = scratch->map + (map_index ? 0 : m->bsize_max);
++	map = NFT_PIPAPO_LT_ALIGN(&scratch->__map[0]);
++	res_map  = map + (map_index ? m->bsize_max : 0);
++	fill_map = map + (map_index ? 0 : m->bsize_max);
+ 
+ 	pipapo_resmap_init(m, res_map);
+ 
+@@ -464,6 +466,7 @@ static struct nft_pipapo_elem *pipapo_get(const struct nft_pipapo_match *m,
+ 				  last);
+ 		if (b < 0) {
+ 			scratch->map_index = map_index;
++			__local_unlock_nested_bh(&scratch->bh_lock);
+ 			local_bh_enable();
+ 
+ 			return NULL;
+@@ -483,6 +486,7 @@ static struct nft_pipapo_elem *pipapo_get(const struct nft_pipapo_match *m,
+ 			 * *next* bitmap (not initial) for the next packet.
+ 			 */
+ 			scratch->map_index = map_index;
++			__local_unlock_nested_bh(&scratch->bh_lock);
+ 			local_bh_enable();
+ 			return e;
+ 		}
+@@ -497,11 +501,47 @@ static struct nft_pipapo_elem *pipapo_get(const struct nft_pipapo_match *m,
+ 		data += NFT_PIPAPO_GROUPS_PADDING(f);
+ 	}
+ 
++	__local_unlock_nested_bh(&scratch->bh_lock);
+ out:
+ 	local_bh_enable();
+ 	return NULL;
+ }
+ 
++/**
++ * pipapo_get() - Get matching element reference given key data
++ * @m:		Storage containing the set elements
++ * @data:	Key data to be matched against existing elements
++ * @genmask:	If set, check that element is active in given genmask
++ * @tstamp:	Timestamp to check for expired elements
++ *
++ * This is a dispatcher function, either calling out the generic C
++ * implementation or, if available, the AVX2 one.
++ * This helper is only called from the control plane, with either RCU
++ * read lock or transaction mutex held.
++ *
++ * Return: pointer to &struct nft_pipapo_elem on match, NULL otherwise.
++ */
++static struct nft_pipapo_elem *pipapo_get(const struct nft_pipapo_match *m,
++					  const u8 *data, u8 genmask,
++					  u64 tstamp)
++{
++	struct nft_pipapo_elem *e;
++
++	local_bh_disable();
++
++#if defined(CONFIG_X86_64) && !defined(CONFIG_UML)
++	if (boot_cpu_has(X86_FEATURE_AVX2) && boot_cpu_has(X86_FEATURE_AVX) &&
++	    irq_fpu_usable()) {
++		e = pipapo_get_avx2(m, data, genmask, tstamp);
++		local_bh_enable();
++		return e;
++	}
++#endif
++	e = pipapo_get_slow(m, data, genmask, tstamp);
++	local_bh_enable();
++	return e;
++}
++
+ /**
+  * nft_pipapo_lookup() - Dataplane fronted for main lookup function
+  * @net:	Network namespace
+@@ -510,8 +550,7 @@ static struct nft_pipapo_elem *pipapo_get(const struct nft_pipapo_match *m,
+  *
+  * This function is called from the data path.  It will search for
+  * an element matching the given key in the current active copy.
+- * Unlike other set types, this uses NFT_GENMASK_ANY instead of
+- * nft_genmask_cur().
++ * Unlike other set types, this uses 0 instead of nft_genmask_cur().
+  *
+  * This is because new (future) elements are not reachable from
+  * priv->match, they get added to priv->clone instead.
+@@ -521,8 +560,8 @@ static struct nft_pipapo_elem *pipapo_get(const struct nft_pipapo_match *m,
+  * inconsistent state: matching old entries get skipped but thew
+  * newly matching entries are unreachable.
+  *
+- * GENMASK will still find the 'now old' entries which ensures consistent
+- * priv->match view.
++ * GENMASK_ANY doesn't work for the same reason: old-gen entries get
++ * skipped, new-gen entries are only reachable from priv->clone.
+  *
+  * nft_pipapo_commit swaps ->clone and ->match shortly after the
+  * genbit flip.  As ->clone doesn't contain the old entries in the first
+@@ -539,7 +578,7 @@ nft_pipapo_lookup(const struct net *net, const struct nft_set *set,
+ 	const struct nft_pipapo_elem *e;
+ 
+ 	m = rcu_dereference(priv->match);
+-	e = pipapo_get(m, (const u8 *)key, NFT_GENMASK_ANY, get_jiffies_64());
++	e = pipapo_get_slow(m, (const u8 *)key, 0, get_jiffies_64());
+ 
+ 	return e ? &e->ext : NULL;
+ }
+@@ -1152,22 +1191,17 @@ static void pipapo_map(struct nft_pipapo_match *m,
+ }
+ 
+ /**
+- * pipapo_free_scratch() - Free per-CPU map at original (not aligned) address
++ * pipapo_free_scratch() - Free per-CPU map at original address
+  * @m:		Matching data
+  * @cpu:	CPU number
+  */
+ static void pipapo_free_scratch(const struct nft_pipapo_match *m, unsigned int cpu)
+ {
+ 	struct nft_pipapo_scratch *s;
+-	void *mem;
+ 
+ 	s = *per_cpu_ptr(m->scratch, cpu);
+-	if (!s)
+-		return;
+ 
+-	mem = s;
+-	mem -= s->align_off;
+-	kvfree(mem);
++	kvfree(s);
+ }
+ 
+ /**
+@@ -1184,11 +1218,8 @@ static int pipapo_realloc_scratch(struct nft_pipapo_match *clone,
+ 
+ 	for_each_possible_cpu(i) {
+ 		struct nft_pipapo_scratch *scratch;
+-#ifdef NFT_PIPAPO_ALIGN
+-		void *scratch_aligned;
+-		u32 align_off;
+-#endif
+-		scratch = kvzalloc_node(struct_size(scratch, map, bsize_max * 2) +
++
++		scratch = kvzalloc_node(struct_size(scratch, __map, bsize_max * 2) +
+ 					NFT_PIPAPO_ALIGN_HEADROOM,
+ 					GFP_KERNEL_ACCOUNT, cpu_to_node(i));
+ 		if (!scratch) {
+@@ -1203,23 +1234,7 @@ static int pipapo_realloc_scratch(struct nft_pipapo_match *clone,
+ 		}
+ 
+ 		pipapo_free_scratch(clone, i);
+-
+-#ifdef NFT_PIPAPO_ALIGN
+-		/* Align &scratch->map (not the struct itself): the extra
+-		 * %NFT_PIPAPO_ALIGN_HEADROOM bytes passed to kzalloc_node()
+-		 * above guarantee we can waste up to those bytes in order
+-		 * to align the map field regardless of its offset within
+-		 * the struct.
+-		 */
+-		BUILD_BUG_ON(offsetof(struct nft_pipapo_scratch, map) > NFT_PIPAPO_ALIGN_HEADROOM);
+-
+-		scratch_aligned = NFT_PIPAPO_LT_ALIGN(&scratch->map);
+-		scratch_aligned -= offsetof(struct nft_pipapo_scratch, map);
+-		align_off = scratch_aligned - (void *)scratch;
+-
+-		scratch = scratch_aligned;
+-		scratch->align_off = align_off;
+-#endif
++		local_lock_init(&scratch->bh_lock);
+ 		*per_cpu_ptr(clone->scratch, i) = scratch;
+ 	}
+ 
+diff --git a/net/netfilter/nft_set_pipapo.h b/net/netfilter/nft_set_pipapo.h
+index 4a2ff85ce1c4..eaab422aa56a 100644
+--- a/net/netfilter/nft_set_pipapo.h
++++ b/net/netfilter/nft_set_pipapo.h
+@@ -124,14 +124,14 @@ struct nft_pipapo_field {
+ 
+ /**
+  * struct nft_pipapo_scratch - percpu data used for lookup and matching
++ * @bh_lock:    PREEMPT_RT local spinlock
+  * @map_index:	Current working bitmap index, toggled between field matches
+- * @align_off:	Offset to get the originally allocated address
+- * @map:	store partial matching results during lookup
++ * @__map:	store partial matching results during lookup
+  */
+ struct nft_pipapo_scratch {
++	local_lock_t bh_lock;
+ 	u8 map_index;
+-	u32 align_off;
+-	unsigned long map[];
++	unsigned long __map[];
+ };
+ 
+ /**
+diff --git a/net/netfilter/nft_set_pipapo_avx2.c b/net/netfilter/nft_set_pipapo_avx2.c
+index c0884fa68c79..9235efb10dd5 100644
+--- a/net/netfilter/nft_set_pipapo_avx2.c
++++ b/net/netfilter/nft_set_pipapo_avx2.c
+@@ -1133,75 +1133,59 @@ static inline void pipapo_resmap_init_avx2(const struct nft_pipapo_match *m, uns
+ }
+ 
+ /**
+- * nft_pipapo_avx2_lookup() - Lookup function for AVX2 implementation
+- * @net:	Network namespace
+- * @set:	nftables API set representation
+- * @key:	nftables API element representation containing key data
++ * pipapo_get_avx2() - Lookup function for AVX2 implementation
++ * @m:		Storage containing the set elements
++ * @data:	Key data to be matched against existing elements
++ * @genmask:	If set, check that element is active in given genmask
++ * @tstamp:	Timestamp to check for expired elements
+  *
+  * For more details, see DOC: Theory of Operation in nft_set_pipapo.c.
+  *
+  * This implementation exploits the repetitive characteristic of the algorithm
+  * to provide a fast, vectorised version using the AVX2 SIMD instruction set.
+  *
+- * Return: true on match, false otherwise.
++ * The caller must check that the FPU is usable.
++ * This function must be called with BH disabled.
++ *
++ * Return: pointer to &struct nft_pipapo_elem on match, NULL otherwise.
+  */
+-const struct nft_set_ext *
+-nft_pipapo_avx2_lookup(const struct net *net, const struct nft_set *set,
+-		       const u32 *key)
++struct nft_pipapo_elem *pipapo_get_avx2(const struct nft_pipapo_match *m,
++					const u8 *data, u8 genmask,
++					u64 tstamp)
+ {
+-	struct nft_pipapo *priv = nft_set_priv(set);
+-	const struct nft_set_ext *ext = NULL;
+ 	struct nft_pipapo_scratch *scratch;
+-	const struct nft_pipapo_match *m;
+ 	const struct nft_pipapo_field *f;
+-	const u8 *rp = (const u8 *)key;
+-	unsigned long *res, *fill;
++	unsigned long *res, *fill, *map;
+ 	bool map_index;
+ 	int i;
+ 
+-	local_bh_disable();
+-
+-	if (unlikely(!irq_fpu_usable())) {
+-		ext = nft_pipapo_lookup(net, set, key);
++	scratch = *raw_cpu_ptr(m->scratch);
++	if (unlikely(!scratch))
++		return NULL;
+ 
+-		local_bh_enable();
+-		return ext;
+-	}
++	__local_lock_nested_bh(&scratch->bh_lock);
++	map_index = scratch->map_index;
++	map = NFT_PIPAPO_LT_ALIGN(&scratch->__map[0]);
++	res  = map + (map_index ? m->bsize_max : 0);
++	fill = map + (map_index ? 0 : m->bsize_max);
+ 
+-	m = rcu_dereference(priv->match);
++	pipapo_resmap_init_avx2(m, res);
+ 
+-	/* This also protects access to all data related to scratch maps.
+-	 *
+-	 * Note that we don't need a valid MXCSR state for any of the
++	/* Note that we don't need a valid MXCSR state for any of the
+ 	 * operations we use here, so pass 0 as mask and spare a LDMXCSR
+ 	 * instruction.
+ 	 */
+ 	kernel_fpu_begin_mask(0);
+ 
+-	scratch = *raw_cpu_ptr(m->scratch);
+-	if (unlikely(!scratch)) {
+-		kernel_fpu_end();
+-		local_bh_enable();
+-		return NULL;
+-	}
+-
+-	map_index = scratch->map_index;
+-
+-	res  = scratch->map + (map_index ? m->bsize_max : 0);
+-	fill = scratch->map + (map_index ? 0 : m->bsize_max);
+-
+-	pipapo_resmap_init_avx2(m, res);
+-
+ 	nft_pipapo_avx2_prepare();
+ 
+-next_match:
+ 	nft_pipapo_for_each_field(f, i, m) {
+ 		bool last = i == m->field_count - 1, first = !i;
+ 		int ret = 0;
+ 
+ #define NFT_SET_PIPAPO_AVX2_LOOKUP(b, n)				\
+ 		(ret = nft_pipapo_avx2_lookup_##b##b_##n(res, fill, f,	\
+-							 ret, rp,	\
++							 ret, data,	\
+ 							 first, last))
+ 
+ 		if (likely(f->bb == 8)) {
+@@ -1217,7 +1201,7 @@ nft_pipapo_avx2_lookup(const struct net *net, const struct nft_set *set,
+ 				NFT_SET_PIPAPO_AVX2_LOOKUP(8, 16);
+ 			} else {
+ 				ret = nft_pipapo_avx2_lookup_slow(m, res, fill, f,
+-								  ret, rp,
++								  ret, data,
+ 								  first, last);
+ 			}
+ 		} else {
+@@ -1233,7 +1217,7 @@ nft_pipapo_avx2_lookup(const struct net *net, const struct nft_set *set,
+ 				NFT_SET_PIPAPO_AVX2_LOOKUP(4, 32);
+ 			} else {
+ 				ret = nft_pipapo_avx2_lookup_slow(m, res, fill, f,
+-								  ret, rp,
++								  ret, data,
+ 								  first, last);
+ 			}
+ 		}
+@@ -1241,28 +1225,78 @@ nft_pipapo_avx2_lookup(const struct net *net, const struct nft_set *set,
+ 
+ #undef NFT_SET_PIPAPO_AVX2_LOOKUP
+ 
+-		if (ret < 0)
+-			goto out;
++next_match:
++		if (ret < 0) {
++			scratch->map_index = map_index;
++			kernel_fpu_end();
++			__local_unlock_nested_bh(&scratch->bh_lock);
++			return NULL;
++		}
+ 
+ 		if (last) {
+-			const struct nft_set_ext *e = &f->mt[ret].e->ext;
++			struct nft_pipapo_elem *e;
+ 
+-			if (unlikely(nft_set_elem_expired(e)))
++			e = f->mt[ret].e;
++			if (unlikely(__nft_set_elem_expired(&e->ext, tstamp) ||
++				     !nft_set_elem_active(&e->ext, genmask))) {
++				ret = pipapo_refill(res, f->bsize, f->rules,
++						    fill, f->mt, last);
+ 				goto next_match;
++			}
+ 
+-			ext = e;
+-			goto out;
++			scratch->map_index = map_index;
++			kernel_fpu_end();
++			__local_unlock_nested_bh(&scratch->bh_lock);
++			return e;
+ 		}
+ 
++		map_index = !map_index;
+ 		swap(res, fill);
+-		rp += NFT_PIPAPO_GROUPS_PADDED_SIZE(f);
++		data += NFT_PIPAPO_GROUPS_PADDED_SIZE(f);
+ 	}
+ 
+-out:
+-	if (i % 2)
+-		scratch->map_index = !map_index;
+ 	kernel_fpu_end();
++	__local_unlock_nested_bh(&scratch->bh_lock);
++	return NULL;
++}
++
++/**
++ * nft_pipapo_avx2_lookup() - Dataplane frontend for AVX2 implementation
++ * @net:	Network namespace
++ * @set:	nftables API set representation
++ * @key:	nftables API element representation containing key data
++ *
++ * This function is called from the data path.  It will search for
++ * an element matching the given key in the current active copy using
++ * the AVX2 routines if the FPU is usable or fall back to the generic
++ * implementation of the algorithm otherwise.
++ *
++ * Return: nftables API extension pointer or NULL if no match.
++ */
++const struct nft_set_ext *
++nft_pipapo_avx2_lookup(const struct net *net, const struct nft_set *set,
++		       const u32 *key)
++{
++	struct nft_pipapo *priv = nft_set_priv(set);
++	const struct nft_pipapo_match *m;
++	const u8 *rp = (const u8 *)key;
++	const struct nft_pipapo_elem *e;
++
++	local_bh_disable();
++
++	if (unlikely(!irq_fpu_usable())) {
++		const struct nft_set_ext *ext;
++
++		ext = nft_pipapo_lookup(net, set, key);
++
++		local_bh_enable();
++		return ext;
++	}
++
++	m = rcu_dereference(priv->match);
++
++	e = pipapo_get_avx2(m, rp, 0, get_jiffies_64());
+ 	local_bh_enable();
+ 
+-	return ext;
++	return e ? &e->ext : NULL;
+ }
+diff --git a/net/netfilter/nft_set_pipapo_avx2.h b/net/netfilter/nft_set_pipapo_avx2.h
+index dbb6aaca8a7a..c2999b63da3f 100644
+--- a/net/netfilter/nft_set_pipapo_avx2.h
++++ b/net/netfilter/nft_set_pipapo_avx2.h
+@@ -5,8 +5,12 @@
+ #include <asm/fpu/xstate.h>
+ #define NFT_PIPAPO_ALIGN	(XSAVE_YMM_SIZE / BITS_PER_BYTE)
+ 
++struct nft_pipapo_match;
+ bool nft_pipapo_avx2_estimate(const struct nft_set_desc *desc, u32 features,
+ 			      struct nft_set_estimate *est);
++struct nft_pipapo_elem *pipapo_get_avx2(const struct nft_pipapo_match *m,
++					const u8 *data, u8 genmask,
++					u64 tstamp);
+ #endif /* defined(CONFIG_X86_64) && !defined(CONFIG_UML) */
+ 
+ #endif /* _NFT_SET_PIPAPO_AVX2_H */
 -- 
-2.47.2
+2.51.0
 
