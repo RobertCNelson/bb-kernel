@@ -308,6 +308,7 @@ beagleboard_dtbs () {
 
 		device="k3-am6232-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-ardupilot-cape" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-led-all" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-mspm0swd" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
@@ -474,7 +475,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="v6.17.1"
+	backport_tag="v6.18-rc1"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -493,7 +494,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.17.1"
+	backport_tag="v6.18-rc1"
 
 	subsystem="it66121"
 	#regenerate="enable"
