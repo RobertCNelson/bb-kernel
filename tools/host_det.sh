@@ -533,11 +533,12 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		jammy|noble|plucky|questing)
+		jammy|noble|plucky|questing|resolute)
 			#22.04 jammy: (EOL: April 2027) lts: jammy -> noble
-			#24.04 noble: (EOL: June 2029) lts: noble -> xyz
+			#24.04 noble: (EOL: April 2029) lts: noble -> resolute
 			#25.04 plucky: (EOL: January 2026)
 			#25.10 questing: (EOL: July 2026)
+			#26.04 resolute: (EOL: April 2031) lts: resolute -> xyz
 			unset warn_eol_distro
 			;;
 		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|focal|groovy|hirsute|impish|kinetic|lunar|mantic|oracular)
