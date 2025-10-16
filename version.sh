@@ -46,16 +46,19 @@ toolchain="gcc_13_arm"
 #toolchain="gcc_14_riscv64"
 #toolchain="gcc_15_riscv64"
 
+#Wireless:
+WIRELESS_REGDB="2025.10.07"
+
 #Kernel
 linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.6
-KERNEL_TAG=${KERNEL_REL}.108
+KERNEL_TAG=${KERNEL_REL}.110
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.6/
-kernel_rt=".106-rt61"
+kernel_rt=".110-rt62"
 #Kernel Build
-BUILD=${build_prefix}32
+BUILD=${build_prefix}32.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
