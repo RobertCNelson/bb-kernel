@@ -542,7 +542,7 @@ backports () {
 		patch_backports
 	fi
 
-	dir 'drivers/ti/uio_revert'
+	#dir 'drivers/ti/uio_revert'
 
 	backport_tag="v6.6.113"
 
@@ -554,7 +554,7 @@ backports () {
 		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
-	else
+	#else
 		patch_backports
 
 		dir 'drivers/ti/uio'
