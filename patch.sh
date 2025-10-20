@@ -493,7 +493,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="v6.16.9"
+	backport_tag="v6.16.12"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -540,6 +540,24 @@ backports () {
 		post_rpibackports
 	else
 		patch_backports
+	fi
+
+	dir 'drivers/ti/uio_revert'
+
+	backport_tag="v6.6.113"
+
+	subsystem="uio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
+
+		post_backports
+	else
+		patch_backports
+
+		dir 'drivers/ti/uio'
 	fi
 }
 
