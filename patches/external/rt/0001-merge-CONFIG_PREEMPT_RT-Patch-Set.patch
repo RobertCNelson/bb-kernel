@@ -1,9 +1,9 @@
-From d4a6f5b4cc034fd59c6d5b08aa470e15a798e8bf Mon Sep 17 00:00:00 2001
+From 606443b06c2d4fefd709338152edc875c5d04170 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Tue, 14 Oct 2025 16:31:10 -0500
+Date: Sun, 26 Oct 2025 14:30:51 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.17.1-rt5.patch.xz
+patch-6.17.5-rt7.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -33,13 +33,13 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/ksysfs.c                               |  12 ++
  kernel/softirq.c                              | 145 +++++++++++---
  kernel/workqueue.c                            |  50 ++++-
- net/core/gro_cells.c                          |  10 +
+ net/core/gro_cells.c                          |   9 +
  net/netfilter/nf_conntrack_netlink.c          |  39 +---
  net/netfilter/nft_set_pipapo.c                |  97 ++++++----
  net/netfilter/nft_set_pipapo.h                |   8 +-
  net/netfilter/nft_set_pipapo_avx2.c           | 140 +++++++++-----
  net/netfilter/nft_set_pipapo_avx2.h           |   4 +
- 32 files changed, 662 insertions(+), 253 deletions(-)
+ 32 files changed, 661 insertions(+), 253 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index b1f3df39ed40..bf7cc612852c 100644
@@ -104,7 +104,7 @@ index 46169fe42c61..3fdc8771dbe7 100644
  	return 0;
  }
 diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
-index 93402a1d9c9f..72ee7d148989 100644
+index e51a595a0622..c7d706ce8481 100644
 --- a/arch/powerpc/Kconfig
 +++ b/arch/powerpc/Kconfig
 @@ -170,6 +170,7 @@ config PPC
@@ -1405,7 +1405,7 @@ index c6b79b3675c3..d6c94ee8edfc 100644
  	/* shouldn't fail above this point */
  	pool->attrs = alloc_workqueue_attrs();
 diff --git a/net/core/gro_cells.c b/net/core/gro_cells.c
-index ff8e5b64bf6b..b43911562f4d 100644
+index ff8e5b64bf6b..fd57b845de33 100644
 --- a/net/core/gro_cells.c
 +++ b/net/core/gro_cells.c
 @@ -8,11 +8,13 @@
@@ -1431,17 +1431,16 @@ index ff8e5b64bf6b..b43911562f4d 100644
  	cell = this_cpu_ptr(gcells->cells);
  
  	if (skb_queue_len(&cell->napi_skbs) > READ_ONCE(net_hotdata.max_backlog)) {
-@@ -39,6 +43,9 @@ int gro_cells_receive(struct gro_cells *gcells, struct sk_buff *skb)
- 	if (skb_queue_len(&cell->napi_skbs) == 1)
- 		napi_schedule(&cell->napi);
- 
-+	if (have_bh_lock)
-+		local_unlock_nested_bh(&gcells->cells->bh_lock);
-+
+@@ -42,6 +46,8 @@ int gro_cells_receive(struct gro_cells *gcells, struct sk_buff *skb)
  	res = NET_RX_SUCCESS;
  
  unlock:
-@@ -54,6 +61,7 @@ static int gro_cell_poll(struct napi_struct *napi, int budget)
++	if (have_bh_lock)
++		local_unlock_nested_bh(&gcells->cells->bh_lock);
+ 	rcu_read_unlock();
+ 	return res;
+ }
+@@ -54,6 +60,7 @@ static int gro_cell_poll(struct napi_struct *napi, int budget)
  	struct sk_buff *skb;
  	int work_done = 0;
  
@@ -1449,7 +1448,7 @@ index ff8e5b64bf6b..b43911562f4d 100644
  	while (work_done < budget) {
  		skb = __skb_dequeue(&cell->napi_skbs);
  		if (!skb)
-@@ -64,6 +72,7 @@ static int gro_cell_poll(struct napi_struct *napi, int budget)
+@@ -64,6 +71,7 @@ static int gro_cell_poll(struct napi_struct *napi, int budget)
  
  	if (work_done < budget)
  		napi_complete_done(napi, work_done);
@@ -1457,7 +1456,7 @@ index ff8e5b64bf6b..b43911562f4d 100644
  	return work_done;
  }
  
-@@ -79,6 +88,7 @@ int gro_cells_init(struct gro_cells *gcells, struct net_device *dev)
+@@ -79,6 +87,7 @@ int gro_cells_init(struct gro_cells *gcells, struct net_device *dev)
  		struct gro_cell *cell = per_cpu_ptr(gcells->cells, i);
  
  		__skb_queue_head_init(&cell->napi_skbs);
