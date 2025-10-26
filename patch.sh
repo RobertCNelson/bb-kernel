@@ -140,7 +140,7 @@ rt () {
 }
 
 wireless_regdb () {
-	#https://kernel.googlesource.com/pub/scm/linux/kernel/git/wens/wireless-regdb.git
+	#https://mirrors.edge.kernel.org/pub/software/network/wireless-regdb/
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
