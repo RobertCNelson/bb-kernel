@@ -546,7 +546,7 @@ backports () {
 
 	#dir 'drivers/ti/uio_revert'
 
-	backport_tag="v6.6.113"
+	backport_tag="v6.6.114"
 
 	subsystem="uio"
 	#regenerate="enable"
