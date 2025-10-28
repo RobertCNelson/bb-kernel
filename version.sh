@@ -58,7 +58,7 @@ KERNEL_TAG=${KERNEL_REL}.11
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.15/
 kernel_rt="-rt2"
 #Kernel Build
-BUILD=${build_prefix}27.1
+BUILD=${build_prefix}27.2
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
