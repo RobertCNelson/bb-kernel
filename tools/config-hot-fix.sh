@@ -394,4 +394,12 @@ cd ${DIR}/KERNEL/
 ./scripts/config --enable CONFIG_MEMCG_V1
 ./scripts/config --enable CONFIG_CGROUP_DMEM
 
+./scripts/config --module CONFIG_SND_SOC_PCM186X
+./scripts/config --module CONFIG_SND_SOC_PCM186X_I2C
+
+./scripts/config --module CONFIG_RTC_DRV_OPTEE
+
+./scripts/config --module CONFIG_LEDS_CLASS_FLASH
+./scripts/config --module CONFIG_GREYBUS_LIGHT
+
 cd ${DIR}/
