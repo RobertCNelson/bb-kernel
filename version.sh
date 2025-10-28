@@ -54,11 +54,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.6
-KERNEL_TAG=${KERNEL_REL}.112
+KERNEL_TAG=${KERNEL_REL}.114
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.6/
-kernel_rt=".112-rt63"
+kernel_rt=".114-rt65"
 #Kernel Build
-BUILD=${build_prefix}34
+BUILD=${build_prefix}34.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
