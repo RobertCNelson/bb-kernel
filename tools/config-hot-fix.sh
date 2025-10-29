@@ -399,4 +399,12 @@ cd ${DIR}/KERNEL/
 ./scripts/config --disable CONFIG_SOC_OMAP5
 ./scripts/config --disable CONFIG_SOC_DRA7XX
 
+./scripts/config --module CONFIG_SND_SOC_PCM186X
+./scripts/config --module CONFIG_SND_SOC_PCM186X_I2C
+
+./scripts/config --module CONFIG_RTC_DRV_OPTEE
+
+./scripts/config --module CONFIG_LEDS_CLASS_FLASH
+./scripts/config --module CONFIG_GREYBUS_LIGHT
+
 cd ${DIR}/
