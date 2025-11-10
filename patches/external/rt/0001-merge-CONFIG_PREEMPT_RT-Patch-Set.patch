@@ -1,14 +1,14 @@
-From 81e427dfeb0fd6d768597f79b848efc9d8b517a2 Mon Sep 17 00:00:00 2001
+From 8038f999ecbeb1272b9dc301a2591a207e56b4db Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Sun, 26 Oct 2025 17:28:10 -0500
+Date: Mon, 10 Nov 2025 15:07:18 -0600
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.18-rc2-rt1.patch.xz
+patch-6.18-rc4-rt3.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- arch/arm/Kconfig                              |   6 +-
- arch/arm/mm/fault.c                           |   6 +
+ arch/arm/Kconfig                              |   5 +-
+ arch/arm/mm/fault.c                           |  16 +-
  arch/powerpc/Kconfig                          |   2 +
  arch/powerpc/include/asm/stackprotector.h     |   7 +-
  arch/powerpc/kvm/Kconfig                      |   1 +
@@ -29,18 +29,17 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/8250/8250_port.c           | 183 ++++++++++++++----
  include/linux/serial_8250.h                   |  13 +-
  kernel/ksysfs.c                               |  12 ++
- net/core/gro_cells.c                          |   5 +-
- 23 files changed, 312 insertions(+), 93 deletions(-)
+ 22 files changed, 313 insertions(+), 96 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
-index 2e3f93b690f4..002db8da69ee 100644
+index 2e3f93b690f4..84ad4fe11589 100644
 --- a/arch/arm/Kconfig
 +++ b/arch/arm/Kconfig
 @@ -41,6 +41,7 @@ config ARM
  	select ARCH_SUPPORTS_CFI
  	select ARCH_SUPPORTS_HUGETLBFS if ARM_LPAE
  	select ARCH_SUPPORTS_PER_VMA_LOCK
-+	select ARCH_SUPPORTS_RT if HAVE_POSIX_CPU_TIMERS_TASK_WORK
++	select ARCH_SUPPORTS_RT
  	select ARCH_USE_BUILTIN_BSWAP
  	select ARCH_USE_CMPXCHG_LOCKREF
  	select ARCH_USE_MEMTEST
@@ -49,51 +48,63 @@ index 2e3f93b690f4..002db8da69ee 100644
  	select HAVE_ARCH_AUDITSYSCALL if AEABI && !OABI_COMPAT
  	select HAVE_ARCH_BITREVERSE if (CPU_32v7M || CPU_32v7) && !CPU_32v6
 -	select HAVE_ARCH_JUMP_LABEL if !XIP_KERNEL && !CPU_ENDIAN_BE32 && MMU
-+	select HAVE_ARCH_JUMP_LABEL if !XIP_KERNEL && !CPU_ENDIAN_BE32 && MMU && !PREEMPT_RT
++	select HAVE_ARCH_JUMP_LABEL if !XIP_KERNEL && !CPU_ENDIAN_BE32 && MMU && (!PREEMPT_RT || !SMP)
  	select HAVE_ARCH_KFENCE if MMU && !XIP_KERNEL
  	select HAVE_ARCH_KGDB if !CPU_ENDIAN_BE32 && MMU
  	select HAVE_ARCH_KASAN if MMU && !XIP_KERNEL
-@@ -105,7 +106,7 @@ config ARM
- 	select HAVE_DYNAMIC_FTRACE_WITH_REGS if HAVE_DYNAMIC_FTRACE
- 	select HAVE_EFFICIENT_UNALIGNED_ACCESS if (CPU_V6 || CPU_V6K || CPU_V7) && MMU
- 	select HAVE_EXIT_THREAD
--	select HAVE_GUP_FAST if ARM_LPAE
-+	select HAVE_GUP_FAST if ARM_LPAE && !(PREEMPT_RT && HIGHPTE)
- 	select HAVE_FUNCTION_ERROR_INJECTION
- 	select HAVE_FUNCTION_GRAPH_TRACER
- 	select HAVE_FUNCTION_GRAPH_FREGS
-@@ -129,6 +130,7 @@ config ARM
- 	select HAVE_PERF_EVENTS
- 	select HAVE_PERF_REGS
- 	select HAVE_PERF_USER_STACK_DUMP
-+	select HAVE_POSIX_CPU_TIMERS_TASK_WORK if !KVM
- 	select MMU_GATHER_RCU_TABLE_FREE if SMP && ARM_LPAE
- 	select HAVE_REGS_AND_STACK_ACCESS_API
- 	select HAVE_RSEQ
+@@ -1213,7 +1214,7 @@ config HIGHMEM
+ 
+ config HIGHPTE
+ 	bool "Allocate 2nd-level pagetables from highmem" if EXPERT
+-	depends on HIGHMEM
++	depends on HIGHMEM && !PREEMPT_RT
+ 	default y
+ 	help
+ 	  The VM uses one page of physical memory for each page table.
 diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
-index 2bc828a1940c..00713f22ef06 100644
+index 2bc828a1940c..ad58c1e22a5f 100644
 --- a/arch/arm/mm/fault.c
 +++ b/arch/arm/mm/fault.c
-@@ -473,6 +473,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
- 	if (addr < TASK_SIZE)
- 		return do_page_fault(addr, fsr, regs);
- 
-+	if (interrupts_enabled(regs))
-+		local_irq_enable();
-+
- 	if (user_mode(regs))
- 		goto bad_area;
- 
-@@ -543,6 +546,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
- static int
- do_sect_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
+@@ -183,9 +183,6 @@ __do_user_fault(unsigned long addr, unsigned int fsr, unsigned int sig,
  {
-+	if (interrupts_enabled(regs))
+ 	struct task_struct *tsk = current;
+ 
+-	if (addr > TASK_SIZE)
+-		harden_branch_predictor();
+-
+ #ifdef CONFIG_DEBUG_USER
+ 	if (((user_debug & UDBG_SEGV) && (sig == SIGSEGV)) ||
+ 	    ((user_debug & UDBG_BUS)  && (sig == SIGBUS))) {
+@@ -218,10 +215,14 @@ void do_bad_area(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
+ 	 * If we are in kernel mode at this point, we
+ 	 * have no context to handle this fault with.
+ 	 */
+-	if (user_mode(regs))
++	if (user_mode(regs)) {
++		if (addr >= TASK_SIZE)
++			harden_branch_predictor();
 +		local_irq_enable();
-+
- 	do_bad_area(addr, fsr, regs);
- 	return 0;
+ 		__do_user_fault(addr, fsr, SIGSEGV, SEGV_MAPERR, regs);
+-	else
++	} else {
+ 		__do_kernel_fault(mm, addr, fsr, regs);
++	}
  }
+ 
+ #ifdef CONFIG_MMU
+@@ -274,8 +275,11 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
+ 
+ 
+ 	/* Enable interrupts if they were enabled in the parent context. */
+-	if (interrupts_enabled(regs))
++	if (interrupts_enabled(regs)) {
++		if (user_mode(regs) && addr >= TASK_SIZE)
++			harden_branch_predictor();
+ 		local_irq_enable();
++	}
+ 
+ 	/*
+ 	 * If we're in an interrupt or have no user
 diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
 index e24f4d88885a..38b2b01455b7 100644
 --- a/arch/powerpc/Kconfig
@@ -1029,25 +1040,6 @@ index eefb67d9883c..20ac8a5ac27d 100644
  #endif
  	NULL
  };
-diff --git a/net/core/gro_cells.c b/net/core/gro_cells.c
-index b43911562f4d..fd57b845de33 100644
---- a/net/core/gro_cells.c
-+++ b/net/core/gro_cells.c
-@@ -43,12 +43,11 @@ int gro_cells_receive(struct gro_cells *gcells, struct sk_buff *skb)
- 	if (skb_queue_len(&cell->napi_skbs) == 1)
- 		napi_schedule(&cell->napi);
- 
--	if (have_bh_lock)
--		local_unlock_nested_bh(&gcells->cells->bh_lock);
--
- 	res = NET_RX_SUCCESS;
- 
- unlock:
-+	if (have_bh_lock)
-+		local_unlock_nested_bh(&gcells->cells->bh_lock);
- 	rcu_read_unlock();
- 	return res;
- }
 -- 
 2.51.0
 
