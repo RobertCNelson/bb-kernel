@@ -47,6 +47,7 @@ toolchain="gcc_15_arm"
 #toolchain="gcc_15_riscv64"
 
 #Wireless:
+#https://mirrors.edge.kernel.org/pub/software/network/wireless-regdb/
 WIRELESS_REGDB="2025.10.07"
 
 #Kernel
@@ -54,11 +55,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.17
-KERNEL_TAG=${KERNEL_REL}.5
+KERNEL_TAG=${KERNEL_REL}.7
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.17/
 kernel_rt=".5-rt7"
 #Kernel Build
-BUILD=${build_prefix}14
+BUILD=${build_prefix}14.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""

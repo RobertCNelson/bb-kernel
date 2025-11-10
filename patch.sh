@@ -477,7 +477,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="v6.18-rc2"
+	backport_tag="v6.18-rc5"
 
 	subsystem="tps65219"
 	#regenerate="enable"
@@ -496,7 +496,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="v6.18-rc2"
+	backport_tag="v6.18-rc5"
 
 	subsystem="it66121"
 	#regenerate="enable"
