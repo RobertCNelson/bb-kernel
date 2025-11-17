@@ -277,10 +277,12 @@ beagleboard_dtbs () {
 		device="BB-HDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-IT66122-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C1-FAST-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-MCP7940X-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-RTC-DS3231" ; arm_dtbo_makefile_append
 		device="BB-I2C1-RTC-PCF8563" ; arm_dtbo_makefile_append
 		device="BB-I2C2-BME680" ; arm_dtbo_makefile_append
+		device="BB-I2C2-FAST-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C2-MPU6050" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-IT66122-00A0" ; arm_dtbo_makefile_append
