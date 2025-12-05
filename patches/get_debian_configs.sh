@@ -10,7 +10,7 @@
 #kernel="6.17.5-1~exp1"
 #
 abi="6.18"
-kernel="6.18~rc6-1~exp1"
+kernel="6.18~rc7-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
