@@ -534,6 +534,7 @@ backports () {
 drivers () {
 	dir 'branding/boris'
 
+	dir 'drivers/tilcdc/'
 	dir 'drivers/it66121_drm_connector_v2'
 	dir 'drivers/it66122'
 
