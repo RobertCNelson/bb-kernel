@@ -9,7 +9,7 @@ branch_prefix="am33x-v"
 branch_postfix=""
 
 #Changes
-#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.18-rc1
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.19-rc1
 #
 #Cross Compilers
 #arm
@@ -54,8 +54,8 @@ WIRELESS_REGDB="2025.10.07"
 linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
-KERNEL_REL=6.18
-KERNEL_TAG=${KERNEL_REL}.1
+KERNEL_REL=6.19
+KERNEL_TAG=${KERNEL_REL}-rc1
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.18/
 kernel_rt="-rc4-rt3"
 #Kernel Build
