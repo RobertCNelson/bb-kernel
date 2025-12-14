@@ -46,11 +46,11 @@ git_kernel_stable () {
 }
 
 git_kernel_stable_tag () {
-	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
+#	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
 		echo "-----------------------------"
 		echo "scripts/git: fetching v${KERNEL_TAG} from: ${linux_stable_repo}"
 		${git_bin} fetch "${linux_stable_repo}" tag v${KERNEL_TAG} --no-tags
-	fi
+#	fi
 }
 
 git_kernel_torvalds () {
