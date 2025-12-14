@@ -236,7 +236,7 @@ k3_dtbo_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v6.18.x"
+	branch="v6.19.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -521,7 +521,7 @@ backports () {
 		patch_backports
 	fi
 
-	backport_tag="rpi-6.18.y"
+	backport_tag="rpi-6.19.y"
 
 	subsystem="edt-ft5x06"
 	#regenerate="enable"
@@ -539,18 +539,18 @@ backports () {
 drivers () {
 	dir 'branding/boris'
 
-	dir 'drivers/tilcdc/'
+	#dir 'drivers/tilcdc/'
 
-	dir 'drivers/it66121_drm_connector'
+	#dir 'drivers/it66121_drm_connector'
 	#dir 'drivers/it66121_drm_connector_v2'
 
-	dir 'drivers/it66122'
+	#dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
 
 ###
-backports
+#backports
 drivers
 
 packaging () {
