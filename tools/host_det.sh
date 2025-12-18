@@ -43,8 +43,6 @@ redhat_reqs () {
 
 	#https://fedoraproject.org/wiki/Releases
 	unset rpm_pkgs
-	#pkg="redhat-lsb-core"
-	#check_rpm
 	pkg="bison"
 	check_rpm
 	pkg="bc"
