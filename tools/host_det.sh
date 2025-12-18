@@ -43,16 +43,16 @@ redhat_reqs () {
 
 	#https://fedoraproject.org/wiki/Releases
 	unset rpm_pkgs
-	pkg="redhat-lsb-core"
-	check_rpm
+	#pkg="redhat-lsb-core"
+	#check_rpm
 	pkg="gcc"
 	check_rpm
 	pkg="lz4"
 	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
-	pkg="wget"
-	check_rpm
+	#pkg="wget"
+	#check_rpm
 	pkg="fakeroot"
 	check_rpm
 	pkg="bison"
@@ -62,6 +62,8 @@ redhat_reqs () {
 	pkg="uboot-tools"
 	check_rpm
 	pkg="openssl-devel"
+	check_rpm
+	pkg="cpio"
 	check_rpm
 
 	arch=$(uname -m)
