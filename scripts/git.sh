@@ -45,12 +45,17 @@ git_kernel_stable () {
 	fi
 }
 
+git_kernel_stable_tag_backup () {
+	backup_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+	echo "-----------------------------"
+	echo "scripts/git: fetching v${KERNEL_TAG} from: ${backup_stable_repo}"
+	${git_bin} fetch "${backup_stable_repo}" tag v${KERNEL_TAG} --no-tags
+}
+
 git_kernel_stable_tag () {
-	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
-		echo "-----------------------------"
-		echo "scripts/git: fetching v${KERNEL_TAG} from: ${linux_stable_repo}"
-		${git_bin} fetch "${linux_stable_repo}" tag v${KERNEL_TAG} --no-tags
-	fi
+	echo "-----------------------------"
+	echo "scripts/git: fetching v${KERNEL_TAG} from: ${linux_stable_repo}"
+	${git_bin} fetch "${linux_stable_repo}" tag v${KERNEL_TAG} --no-tags || git_kernel_stable_tag_backup
 }
 
 git_kernel_torvalds () {
