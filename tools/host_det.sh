@@ -45,25 +45,29 @@ redhat_reqs () {
 	unset rpm_pkgs
 	#pkg="redhat-lsb-core"
 	#check_rpm
+	pkg="bison"
+	check_rpm
+	pkg="bc"
+	check_rpm
+	pkg="cpio"
+	check_rpm
 	pkg="gcc"
+	check_rpm
+	pkg="fakeroot"
+	check_rpm
+	pkg="flex"
 	check_rpm
 	pkg="lz4"
 	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
-	#pkg="wget"
-	#check_rpm
-	pkg="fakeroot"
+	pkg="wget2-wget"
 	check_rpm
 	pkg="bison"
-	check_rpm
-	pkg="flex"
 	check_rpm
 	pkg="uboot-tools"
 	check_rpm
 	pkg="openssl-devel"
-	check_rpm
-	pkg="cpio"
 	check_rpm
 
 	arch=$(uname -m)
@@ -125,11 +129,15 @@ debian_regs () {
 	check_dpkg
 	pkg="bc"
 	check_dpkg
+	pkg="bison"
+	check_dpkg
 	pkg="build-essential"
 	check_dpkg
 	pkg="cpio"
 	check_dpkg
 	pkg="fakeroot"
+	check_dpkg
+	pkg="flex"
 	check_dpkg
 	pkg="lsb-release"
 	check_dpkg
@@ -139,11 +147,6 @@ debian_regs () {
 	check_dpkg
 	#git
 	pkg="gettext"
-	check_dpkg
-	#v4.16-rc0
-	pkg="bison"
-	check_dpkg
-	pkg="flex"
 	check_dpkg
 	#v4.18-rc0
 	pkg="pkg-config"
