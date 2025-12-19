@@ -43,21 +43,25 @@ redhat_reqs () {
 
 	#https://fedoraproject.org/wiki/Releases
 	unset rpm_pkgs
-	pkg="redhat-lsb-core"
+	pkg="bison"
+	check_rpm
+	pkg="bc"
+	check_rpm
+	pkg="cpio"
 	check_rpm
 	pkg="gcc"
+	check_rpm
+	pkg="fakeroot"
+	check_rpm
+	pkg="flex"
 	check_rpm
 	pkg="lz4"
 	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
-	pkg="wget"
-	check_rpm
-	pkg="fakeroot"
+	pkg="wget2-wget"
 	check_rpm
 	pkg="bison"
-	check_rpm
-	pkg="flex"
 	check_rpm
 	pkg="uboot-tools"
 	check_rpm
@@ -123,11 +127,15 @@ debian_regs () {
 	check_dpkg
 	pkg="bc"
 	check_dpkg
+	pkg="bison"
+	check_dpkg
 	pkg="build-essential"
 	check_dpkg
 	pkg="cpio"
 	check_dpkg
 	pkg="fakeroot"
+	check_dpkg
+	pkg="flex"
 	check_dpkg
 	pkg="lsb-release"
 	check_dpkg
@@ -137,11 +145,6 @@ debian_regs () {
 	check_dpkg
 	#git
 	pkg="gettext"
-	check_dpkg
-	#v4.16-rc0
-	pkg="bison"
-	check_dpkg
-	pkg="flex"
 	check_dpkg
 	#v4.18-rc0
 	pkg="pkg-config"
@@ -495,6 +498,12 @@ debian_regs () {
 			;;
 		freia)
 			deb_distro="forky"
+			;;
+		gryphon)
+			deb_distro="duke"
+			;;
+		ceres)
+			deb_distro="sid"
 			;;
 		esac
 
