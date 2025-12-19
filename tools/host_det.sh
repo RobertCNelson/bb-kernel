@@ -43,21 +43,25 @@ redhat_reqs () {
 
 	#https://fedoraproject.org/wiki/Releases
 	unset rpm_pkgs
-	pkg="redhat-lsb-core"
+	pkg="bison"
+	check_rpm
+	pkg="bc"
+	check_rpm
+	pkg="cpio"
 	check_rpm
 	pkg="gcc"
+	check_rpm
+	pkg="fakeroot"
+	check_rpm
+	pkg="flex"
 	check_rpm
 	pkg="lz4"
 	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
-	pkg="wget"
-	check_rpm
-	pkg="fakeroot"
+	pkg="wget2-wget"
 	check_rpm
 	pkg="bison"
-	check_rpm
-	pkg="flex"
 	check_rpm
 	pkg="uboot-tools"
 	check_rpm
@@ -123,11 +127,15 @@ debian_regs () {
 	check_dpkg
 	pkg="bc"
 	check_dpkg
+	pkg="bison"
+	check_dpkg
 	pkg="build-essential"
 	check_dpkg
 	pkg="cpio"
 	check_dpkg
 	pkg="fakeroot"
+	check_dpkg
+	pkg="flex"
 	check_dpkg
 	pkg="lsb-release"
 	check_dpkg
@@ -137,11 +145,6 @@ debian_regs () {
 	check_dpkg
 	#git
 	pkg="gettext"
-	check_dpkg
-	#v4.16-rc0
-	pkg="bison"
-	check_dpkg
-	pkg="flex"
 	check_dpkg
 	#v4.18-rc0
 	pkg="pkg-config"
@@ -496,6 +499,12 @@ debian_regs () {
 		freia)
 			deb_distro="forky"
 			;;
+		gryphon)
+			deb_distro="duke"
+			;;
+		ceres)
+			deb_distro="sid"
+			;;
 		esac
 
 		#Future Debian Code names:
@@ -533,11 +542,12 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		jammy|noble|plucky|questing)
-			#22.04 jammy: (EOL: April 2027) lts: jammy -> noble
-			#24.04 noble: (EOL: June 2029) lts: noble -> xyz
+		jammy|noble|plucky|questing|resolute)
+			#22.04 jammy: (EOL: June 2027) lts: jammy -> noble
+			#24.04 noble: (EOL: June 2029) lts: noble -> resolute
 			#25.04 plucky: (EOL: January 2026)
 			#25.10 questing: (EOL: July 2026)
+			#26.04 resolute: (EOL: July 2031) lts: resolute -> xyz
 			unset warn_eol_distro
 			;;
 		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|focal|groovy|hirsute|impish|kinetic|lunar|mantic|oracular)
