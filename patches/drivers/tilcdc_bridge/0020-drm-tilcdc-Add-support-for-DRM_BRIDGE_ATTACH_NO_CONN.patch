@@ -1,0 +1,94 @@
+From a8634dd85142c56964c557bede6c8afaea3aae89 Mon Sep 17 00:00:00 2001
+From: "Kory Maincent (TI.com)" <kory.maincent@bootlin.com>
+Date: Thu, 11 Dec 2025 17:39:04 +0100
+Subject: [PATCH 20/20] drm/tilcdc: Add support for
+ DRM_BRIDGE_ATTACH_NO_CONNECTOR
+
+Convert the driver to use the DRM_BRIDGE_ATTACH_NO_CONNECTOR flag when
+attaching bridges. This modernizes the driver by delegating connector
+creation to the bridge subsystem through drm_bridge_connector_init()
+instead of manually searching for connectors created by the bridge.
+
+The custom tilcdc_encoder_find_connector() function is removed and
+replaced with the standard drm_bridge_connector infrastructure, which
+simplifies the code and aligns with current DRM bridge best practices.
+
+This change is safe as there are now no in-tree devicetrees that
+connect tilcdc to bridges which do not support the
+DRM_BRIDGE_ATTACH_NO_CONNECTOR flag.
+
+Signed-off-by: Kory Maincent (TI.com) <kory.maincent@bootlin.com>
+---
+ drivers/gpu/drm/tilcdc/tilcdc_encoder.c | 38 +++++++++++--------------
+ 1 file changed, 16 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/gpu/drm/tilcdc/tilcdc_encoder.c b/drivers/gpu/drm/tilcdc/tilcdc_encoder.c
+index d01e7a31a286..11fde3a2be35 100644
+--- a/drivers/gpu/drm/tilcdc/tilcdc_encoder.c
++++ b/drivers/gpu/drm/tilcdc/tilcdc_encoder.c
+@@ -8,46 +8,40 @@
+ 
+ #include <drm/drm_atomic_helper.h>
+ #include <drm/drm_bridge.h>
++#include <drm/drm_bridge_connector.h>
+ #include <drm/drm_of.h>
+ #include <drm/drm_simple_kms_helper.h>
+ 
+ #include "tilcdc_drv.h"
+ #include "tilcdc_encoder.h"
+ 
+-static
+-struct drm_connector *tilcdc_encoder_find_connector(struct drm_device *ddev,
+-						    struct drm_encoder *encoder)
+-{
+-	struct drm_connector *connector;
+-
+-	list_for_each_entry(connector, &ddev->mode_config.connector_list, head) {
+-		if (drm_connector_has_possible_encoder(connector, encoder))
+-			return connector;
+-	}
+-
+-	dev_err(ddev->dev, "No connector found for %s encoder (id %d)\n",
+-		encoder->name, encoder->base.id);
+-
+-	return NULL;
+-}
+-
+ static
+ int tilcdc_attach_bridge(struct drm_device *ddev, struct drm_bridge *bridge)
+ {
+ 	struct tilcdc_drm_private *priv = ddev_to_tilcdc_priv(ddev);
++	struct drm_connector *connector;
+ 	int ret;
+ 
+ 	priv->encoder->possible_crtcs = BIT(0);
+ 
+-	ret = drm_bridge_attach(priv->encoder, bridge, NULL, 0);
++	ret = drm_bridge_attach(priv->encoder, bridge, NULL,
++				DRM_BRIDGE_ATTACH_NO_CONNECTOR);
+ 	if (ret)
+ 		return ret;
+ 
+-	priv->connector =
+-		tilcdc_encoder_find_connector(ddev, priv->encoder);
+-	if (!priv->connector)
+-		return -ENODEV;
++	connector = drm_bridge_connector_init(ddev, priv->encoder);
++	if (IS_ERR(connector)) {
++		dev_err(ddev->dev, "bridge_connector create failed\n");
++		return PTR_ERR(connector);
++	}
++
++	ret = drm_connector_attach_encoder(connector, priv->encoder);
++	if (ret) {
++		dev_err(ddev->dev, "attaching encoder to connector failed\n");
++		return ret;
++	}
+ 
++	priv->connector = connector;
+ 	return 0;
+ }
+ 
+-- 
+2.51.0
+

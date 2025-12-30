@@ -1,0 +1,103 @@
+From 29564a40f53cde91aebe4c078e092f2e50edbb8a Mon Sep 17 00:00:00 2001
+From: "Kory Maincent (TI.com)" <kory.maincent@bootlin.com>
+Date: Thu, 11 Dec 2025 17:38:47 +0100
+Subject: [PATCH 03/20] drm/tilcdc: Remove simulate_vesa_sync flag
+
+The tilcdc hardware does not generate VESA-compliant sync signals. It
+aligns the vertical sync (VS) on the second edge of the horizontal sync
+(HS) instead of the first edge. To compensate for this hardware
+behavior, the driver applies a timing adjustment in mode_fixup().
+
+Previously, this adjustment was conditional based on the simulate_vesa_sync
+flag, which was only set when using external encoders. This appears
+problematic because:
+
+1. The timing adjustment seems needed for the hardware behavior regardless
+   of whether an external encoder is used
+2. The external encoder infrastructure is driver-specific and being
+   removed due to design issues
+3. Boards using tilcdc without bridges (e.g., am335x-evm, am335x-evmsk)
+   may not be getting the necessary timing adjustments
+
+Remove the simulate_vesa_sync flag and apply the VESA sync timing
+adjustment unconditionally, ensuring consistent behavior across all
+configurations. While it's unclear if the previous conditional behavior
+was causing actual issues, the unconditional adjustment better reflects
+the hardware's characteristics.
+
+Signed-off-by: Kory Maincent (TI.com) <kory.maincent@bootlin.com>
+---
+ drivers/gpu/drm/tilcdc/tilcdc_crtc.c     | 16 ----------------
+ drivers/gpu/drm/tilcdc/tilcdc_drv.h      |  2 --
+ drivers/gpu/drm/tilcdc/tilcdc_external.c |  1 -
+ 3 files changed, 19 deletions(-)
+
+diff --git a/drivers/gpu/drm/tilcdc/tilcdc_crtc.c b/drivers/gpu/drm/tilcdc/tilcdc_crtc.c
+index 41802c9bd147..5c5d2c5a0fae 100644
+--- a/drivers/gpu/drm/tilcdc/tilcdc_crtc.c
++++ b/drivers/gpu/drm/tilcdc/tilcdc_crtc.c
+@@ -47,9 +47,6 @@ struct tilcdc_crtc {
+ 
+ 	struct drm_framebuffer *next_fb;
+ 
+-	/* Only set if an external encoder is connected */
+-	bool simulate_vesa_sync;
+-
+ 	int sync_lost_count;
+ 	bool frame_intact;
+ 	struct work_struct recover_work;
+@@ -642,11 +639,6 @@ static bool tilcdc_crtc_mode_fixup(struct drm_crtc *crtc,
+ 		const struct drm_display_mode *mode,
+ 		struct drm_display_mode *adjusted_mode)
+ {
+-	struct tilcdc_crtc *tilcdc_crtc = to_tilcdc_crtc(crtc);
+-
+-	if (!tilcdc_crtc->simulate_vesa_sync)
+-		return true;
+-
+ 	/*
+ 	 * tilcdc does not generate VESA-compliant sync but aligns
+ 	 * VS on the second edge of HS instead of first edge.
+@@ -873,14 +865,6 @@ void tilcdc_crtc_set_panel_info(struct drm_crtc *crtc,
+ 	tilcdc_crtc->info = info;
+ }
+ 
+-void tilcdc_crtc_set_simulate_vesa_sync(struct drm_crtc *crtc,
+-					bool simulate_vesa_sync)
+-{
+-	struct tilcdc_crtc *tilcdc_crtc = to_tilcdc_crtc(crtc);
+-
+-	tilcdc_crtc->simulate_vesa_sync = simulate_vesa_sync;
+-}
+-
+ void tilcdc_crtc_update_clk(struct drm_crtc *crtc)
+ {
+ 	struct drm_device *dev = crtc->dev;
+diff --git a/drivers/gpu/drm/tilcdc/tilcdc_drv.h b/drivers/gpu/drm/tilcdc/tilcdc_drv.h
+index 58b276f82a66..3aba3a1155ba 100644
+--- a/drivers/gpu/drm/tilcdc/tilcdc_drv.h
++++ b/drivers/gpu/drm/tilcdc/tilcdc_drv.h
+@@ -160,8 +160,6 @@ irqreturn_t tilcdc_crtc_irq(struct drm_crtc *crtc);
+ void tilcdc_crtc_update_clk(struct drm_crtc *crtc);
+ void tilcdc_crtc_set_panel_info(struct drm_crtc *crtc,
+ 		const struct tilcdc_panel_info *info);
+-void tilcdc_crtc_set_simulate_vesa_sync(struct drm_crtc *crtc,
+-					bool simulate_vesa_sync);
+ void tilcdc_crtc_shutdown(struct drm_crtc *crtc);
+ void tilcdc_crtc_destroy(struct drm_crtc *crtc);
+ int tilcdc_crtc_update_fb(struct drm_crtc *crtc,
+diff --git a/drivers/gpu/drm/tilcdc/tilcdc_external.c b/drivers/gpu/drm/tilcdc/tilcdc_external.c
+index 3b86d002ef62..da755a411d9f 100644
+--- a/drivers/gpu/drm/tilcdc/tilcdc_external.c
++++ b/drivers/gpu/drm/tilcdc/tilcdc_external.c
+@@ -80,7 +80,6 @@ int tilcdc_add_component_encoder(struct drm_device *ddev)
+ 		return -ENODEV;
+ 
+ 	/* Only tda998x is supported at the moment. */
+-	tilcdc_crtc_set_simulate_vesa_sync(priv->crtc, true);
+ 	tilcdc_crtc_set_panel_info(priv->crtc, &panel_info_tda998x);
+ 
+ 	return 0;
+-- 
+2.51.0
+

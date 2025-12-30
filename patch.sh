@@ -542,8 +542,9 @@ drivers () {
 	dir 'drivers/tilcdc/'
 	dir 'drivers/it66121/'
 
-#exit 2
-	dir 'drivers/it66121_drm_connector'
+	dir 'drivers/tilcdc_bridge'
+
+	#dir 'drivers/it66121_drm_connector'
 	#dir 'drivers/it66121_drm_connector_v2'
 
 
