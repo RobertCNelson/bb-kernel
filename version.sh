@@ -8,7 +8,10 @@ build_prefix="-bone"
 branch_prefix="am33x-v"
 branch_postfix=""
 
+#Changes
 #https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.10-rc1
+#
+#Cross Compilers
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf
@@ -44,6 +47,7 @@ toolchain="gcc_10_arm"
 #toolchain="gcc_15_riscv64"
 
 #Wireless:
+#https://mirrors.edge.kernel.org/pub/software/network/wireless-regdb/
 WIRELESS_REGDB="2025.10.07"
 
 #Kernel
@@ -55,7 +59,7 @@ KERNEL_TAG=${KERNEL_REL}.240
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/5.10/
 kernel_rt=".240-rt134"
 #Kernel Build
-BUILD=${build_prefix}80.10
+BUILD=${build_prefix}80.11
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
