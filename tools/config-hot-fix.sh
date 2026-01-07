@@ -324,4 +324,9 @@ config="CONFIG_PRU_REMOTEPROC" ; config_module
 #Cool for debugging, little noisy on production...
 ./scripts/config --disable CONFIG_UBSAN
 
+# Murata Wi-Fi module LBEE5XV1YM
+./scripts/config --module CONFIG_MWIFIEX
+./scripts/config --module CONFIG_MWIFIEX_SDIO
+./scripts/config --module CONFIG_MWIFIEX_USB
+
 cd ${DIR}/
