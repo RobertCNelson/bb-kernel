@@ -402,4 +402,6 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_LEDS_CLASS_FLASH
 ./scripts/config --module CONFIG_GREYBUS_LIGHT
 
+./scripts/config --module CONFIG_MWIFIEX_SDIO
+
 cd ${DIR}/
