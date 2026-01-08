@@ -292,8 +292,13 @@ beagleboard_dtbs () {
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
+		device="BB-EHRPWM0-P9_29-P9_31" ; arm_dtbo_makefile_append
 		device="BB-EHRPWM1-P9_14-P9_16" ; arm_dtbo_makefile_append
 		device="BB-EHRPWM2-P8_13-P8_19" ; arm_dtbo_makefile_append
+		device="BB-EQEP0" ; arm_dtbo_makefile_append
+		device="BB-EQEP1" ; arm_dtbo_makefile_append
+		device="BB-EQEP2B" ; arm_dtbo_makefile_append
+		device="BB-EQEP2" ; arm_dtbo_makefile_append
 		device="BB-HDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-IT66122-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
@@ -304,6 +309,7 @@ beagleboard_dtbs () {
 		device="BB-I2C2-BME680" ; arm_dtbo_makefile_append
 		device="BB-I2C2-FAST-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C2-MPU6050" ; arm_dtbo_makefile_append
+		device="BB-I2C2-RTC-DS3231" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-IT66122-00A0" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
