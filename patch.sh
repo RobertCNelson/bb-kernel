@@ -320,6 +320,7 @@ beagleboard_dtbs () {
 		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART4-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART5-00A0" ; arm_dtbo_makefile_append
 		device="BB-W1-P9.12-00A0" ; arm_dtbo_makefile_append
 		device="BONE-ADC" ; arm_dtbo_makefile_append
 		device="BONE-LED-P8-37" ; arm_dtbo_makefile_append
