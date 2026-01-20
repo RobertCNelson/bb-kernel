@@ -128,8 +128,6 @@ rt () {
 			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 			rm -f patch-${rt_patch}.patch.xz
 			rm -f localversion-rt
-			rm -f kernel/sched/fair.c.orig || true
-			rm -f kernel/time/timer.c.orig || true
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
@@ -322,6 +320,7 @@ beagleboard_dtbs () {
 		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART4-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART5-00A0" ; arm_dtbo_makefile_append
 		device="BB-W1-P9.12-00A0" ; arm_dtbo_makefile_append
 		device="BONE-ADC" ; arm_dtbo_makefile_append
 		device="BONE-LED-P8-37" ; arm_dtbo_makefile_append
