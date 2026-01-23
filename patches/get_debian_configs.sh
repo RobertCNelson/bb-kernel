@@ -35,8 +35,8 @@ dl_deb () {
 
 	if [ -f ./dl/linux-config-${abi}_${kernel}_${dpkg_arch}.deb ] ; then
 		dpkg -x ./dl/linux-config-${abi}_${kernel}_${dpkg_arch}.deb ./dl/tmp/
-		if [ -f ./dl/tmp/usr/src/linux-config-${abi}/config.${dpkg_arch}_none_${config}.xz ] ; then
-			xzcat ./dl/tmp/usr/src/linux-config-${abi}/config.${dpkg_arch}_none_${config}.xz > ./debian.config
+		if [ -f ./dl/tmp/usr/src/linux-config-${abi}/config.${dpkg_arch}_${config}.xz ] ; then
+			xzcat ./dl/tmp/usr/src/linux-config-${abi}/config.${dpkg_arch}_${config}.xz > ./debian.config
 		else
 			tree ./dl/tmp/usr/src/linux-config-${abi}/
 			exit 2
@@ -46,7 +46,7 @@ dl_deb () {
 }
 
 dpkg_arch="armhf"
-config="armmp"
+config="none_armmp"
 dl_deb
 
 rm -rf ./dl/ || true
