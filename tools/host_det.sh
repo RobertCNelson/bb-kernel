@@ -1,5 +1,9 @@
 #!/bin/bash -e
 
+# SPDX-FileCopyrightText: Robert Nelson <robertcnelson@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 #opensuse support added by: Antonio Cavallo
 #https://launchpad.net/~a.cavallo
 
