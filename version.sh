@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: Robert Nelson <robertcnelson@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 #
 ARCH=$(uname -m)
 
