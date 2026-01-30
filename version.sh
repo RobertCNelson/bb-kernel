@@ -17,6 +17,7 @@ branch_postfix=""
 #https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.18-rc1
 #
 #Cross Compilers
+#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf
@@ -60,11 +61,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.18
-KERNEL_TAG=${KERNEL_REL}.7
+KERNEL_TAG=${KERNEL_REL}.8
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.18/
 kernel_rt="-rc4-rt3"
 #Kernel Build
-BUILD=${build_prefix}17
+BUILD=${build_prefix}17.1
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
