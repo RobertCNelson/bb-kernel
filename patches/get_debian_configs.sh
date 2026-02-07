@@ -8,7 +8,7 @@
 #https://packages.debian.org/source/sid/linux
 #
 abi="6.18"
-kernel="6.18.5-1"
+kernel="6.18.8-1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
@@ -37,7 +37,7 @@ dl_deb () {
 		echo "[linux-config-${abi}_${kernel}_${dpkg_arch}.deb]"
 		dpkg -x ./dl/linux-config-${abi}_${kernel}_${dpkg_arch}.deb ./dl/tmp/
 		if [ -f ./dl/tmp/usr/src/linux-config-${abi}/config.${dpkg_arch}_${config}.xz ] ; then
-			xzcat ./dl/tmp/usr/src/linux-config-${abi}/config.${dpkg_arch}_${config}.xz > ./debian.config
+			xzcat -v ./dl/tmp/usr/src/linux-config-${abi}/config.${dpkg_arch}_${config}.xz > ./debian.config
 		else
 			tree ./dl/tmp/usr/src/linux-config-${abi}/
 			exit 2
