@@ -315,6 +315,10 @@ beagleboard_dtbs () {
 
 		device="k3-am625-beagleplay-bcfserial-no-firmware" ; k3_dtbo_makefile_append
 
+		#ls src/arm64/overlays/ | grep sancloud
+
+		device="k3-am625-sancloud-bbe-2.dtb" ; k3_dtb_makefile_append
+
 		#ls src/arm64/overlays/ | grep beagley
 
 		device="k3-am67a-beagley-ai-csi0-imx219" ; k3_dtbo_makefile_append
