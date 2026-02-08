@@ -309,6 +309,7 @@ beagleboard_dtbs () {
 		device="k3-am62-pocketbeagle2-led-all" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-mspm0swd" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-pru0-out" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
 
 		#ls src/arm64/overlays/ | grep beagleplay
