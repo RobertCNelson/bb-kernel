@@ -8,7 +8,7 @@
 #https://packages.debian.org/source/sid/linux
 #
 abi="6.18"
-kernel="6.18.13-1"
+kernel="6.18.15-1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
