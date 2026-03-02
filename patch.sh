@@ -252,6 +252,7 @@ beagleboard_dtbs () {
 		ls ../${work_dir}/src/arm/overlays/ | grep dtso
 		#exit 2
 
+		device="AM3359-PWM012" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append

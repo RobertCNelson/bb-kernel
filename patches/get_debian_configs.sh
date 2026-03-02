@@ -11,7 +11,7 @@
 #kernel="6.18.5-1"
 #
 abi="6.19"
-kernel="6.19.3-1~exp1"
+kernel="6.19.5-1~exp1"
 #
 #abi="6.19"
 #kernel="6.19~rc8-1~exp1"
