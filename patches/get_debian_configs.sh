@@ -7,11 +7,11 @@
 #
 #https://packages.debian.org/source/sid/linux
 #
-#abi="6.18"
-#kernel="6.18.5-1"
-#
 abi="6.19"
-kernel="6.19.5-1~exp1"
+kernel="6.19.8-1"
+#
+#abi="6.19"
+#kernel="6.19.5-1~exp1"
 #
 #abi="6.19"
 #kernel="6.19~rc8-1~exp1"
