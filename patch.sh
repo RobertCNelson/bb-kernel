@@ -528,7 +528,7 @@ backports () {
 }
 
 drivers () {
-	#dir 'branding/boris'
+	dir 'branding/boris'
 
 	#dir 'drivers/tilcdc/'
 
