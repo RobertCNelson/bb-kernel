@@ -267,6 +267,7 @@ beagleboard_dtbs () {
 		device="BB-EQEP1" ; arm_dtbo_makefile_append
 		device="BB-EQEP2B" ; arm_dtbo_makefile_append
 		device="BB-EQEP2" ; arm_dtbo_makefile_append
+		device="BB-GREEN-HDMI-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-IT66122-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
