@@ -264,11 +264,11 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		ls ../${work_dir}/src/arm/overlays/ | grep dtso
+		#ls ../${work_dir}/src/arm/overlays/ | grep dtso
 		#exit 2
 
-		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="AM3359-PWM012" ; arm_dtbo_makefile_append
+		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
@@ -283,6 +283,7 @@ beagleboard_dtbs () {
 		device="BB-EQEP1" ; arm_dtbo_makefile_append
 		device="BB-EQEP2B" ; arm_dtbo_makefile_append
 		device="BB-EQEP2" ; arm_dtbo_makefile_append
+		device="BB-GREEN-HDMI-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-IT66121-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-IT66122-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
@@ -292,6 +293,7 @@ beagleboard_dtbs () {
 		device="BB-I2C1-RTC-PCF8563" ; arm_dtbo_makefile_append
 		device="BB-I2C2-BME680" ; arm_dtbo_makefile_append
 		device="BB-I2C2-FAST-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C2-MCP7940X-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C2-MPU6050" ; arm_dtbo_makefile_append
 		device="BB-I2C2-RTC-DS3231" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-IT66121-00A0" ; arm_dtbo_makefile_append
@@ -378,9 +380,16 @@ beagleboard_dtbs () {
 		device="k3-am67a-beagley-ai-spidev0" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-uart-ttyama0" ; k3_dtbo_makefile_append
 
-		#ls src/arm64/overlays/ | grep beaglebone
+		#ls ../${work_dir}/src/arm64/overlays/ | grep beagleboneai64
+		#exit 2
 
 		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-ecap0" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-ecap1" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-ecap2" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-eqep0" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-eqep1" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-io-pins" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13-p8_19" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_19" ; k3_dtbo_makefile_append
@@ -388,6 +397,7 @@ beagleboard_dtbs () {
 		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_14-p9_16" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-pwm-epwm2-p9_16" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-pwm-epwm4-p9_25" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-rs485-uart8" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi1-cs0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi1-cs0-no-miso" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi2-cs0" ; k3_dtbo_makefile_append
