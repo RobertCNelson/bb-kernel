@@ -305,8 +305,8 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		ls ../${work_dir}/src/arm/overlays/ | grep dtso
-		exit 2
+		#ls ../${work_dir}/src/arm/overlays/ | grep dtso
+		#exit 2
 
 		device="AM3359-PWM012" ; arm_dtbo_makefile_append
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
@@ -356,7 +356,7 @@ beagleboard_dtbs () {
 		device="M-BB-BBG-00A0" ; arm_dtbo_makefile_append
 		device="M-BB-BBGG-00A0" ; arm_dtbo_makefile_append
 		device="PB-MIKROBUS-0" ; arm_dtbo_makefile_append
-		device="PB-MIKROBUS-1" ; arm_dtbo_makefile_append
+		device="PB-MIKROBUS-1" ; arm_dtbo_makefile_append_last
 
 		device="am335x-bonegreen-gateway.dtb" ; arm_dtb_makefile_append
 
