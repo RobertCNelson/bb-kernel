@@ -1,9 +1,9 @@
-From 85bd55e46d2e02a12b6d3550d3736bc9ecd6f280 Mon Sep 17 00:00:00 2001
+From 10fc01eab671d667b9174fbea6b28f3a536ebc65 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 5 Mar 2026 16:35:09 -0600
+Date: Fri, 3 Apr 2026 14:19:36 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-5.15.201-rt92.patch.xz
+patch-5.15.201-rt93.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -203,6 +203,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/core/dev.c                                |  33 +-
  net/core/gen_estimator.c                      |  52 +-
  net/core/gen_stats.c                          | 186 ++--
+ net/ipv6/route.c                              |  13 +-
  net/netfilter/nft_counter.c                   |  91 +-
  net/netfilter/xt_RATEEST.c                    |   7 +-
  net/sched/act_api.c                           |  21 +-
@@ -233,7 +234,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  samples/kfifo/record-example.c                |  12 +-
  security/smack/smack_lsm.c                    |   9 +-
  sound/soc/mediatek/common/mtk-afe-fe-dai.c    |   1 -
- 226 files changed, 3077 insertions(+), 1627 deletions(-)
+ 227 files changed, 3089 insertions(+), 1628 deletions(-)
 
 diff --git a/Documentation/admin-guide/cgroup-v1/memory.rst b/Documentation/admin-guide/cgroup-v1/memory.rst
 index dd913eefbf31..33d3c988b951 100644
@@ -10180,6 +10181,30 @@ index e491b083b348..a10335b4ba2d 100644
  
  	if (d->compat_tc_stats) {
  		d->tc_stats.drops = qstats.drops;
+diff --git a/net/ipv6/route.c b/net/ipv6/route.c
+index f30a5b7d93f4..3536192438ce 100644
+--- a/net/ipv6/route.c
++++ b/net/ipv6/route.c
+@@ -1424,7 +1424,18 @@ static struct rt6_info *rt6_make_pcpu_route(struct net *net,
+ 
+ 	p = this_cpu_ptr(res->nh->rt6i_pcpu);
+ 	prev = cmpxchg(p, NULL, pcpu_rt);
+-	BUG_ON(prev);
++	if (unlikely(prev)) {
++		/*
++		 * Another task on this CPU already installed a pcpu_rt.
++		 * This can happen on PREEMPT_RT where preemption is possible.
++		 * Free our allocation and return the existing one.
++		 */
++		WARN_ON_ONCE(!IS_ENABLED(CONFIG_PREEMPT_RT));
++
++		dst_dev_put(&pcpu_rt->dst);
++		dst_release(&pcpu_rt->dst);
++		return prev;
++	}
+ 
+ 	if (res->f6i->fib6_destroying) {
+ 		struct fib6_info *from;
 diff --git a/net/netfilter/nft_counter.c b/net/netfilter/nft_counter.c
 index 30b24d002c3d..e387b6610aaf 100644
 --- a/net/netfilter/nft_counter.c

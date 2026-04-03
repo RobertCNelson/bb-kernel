@@ -298,7 +298,6 @@ beagleboard_dtbs () {
 
 		cleanup_dts_builds
 		rm -rf arch/arm/boot/dts/overlays/ || true
-
 		mkdir -p arch/arm/boot/dts/overlays/
 		arm_makefile_patch_of_overlays
 
@@ -306,10 +305,11 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#ls src/arm/overlays/ | grep dtso
+		#ls ../${work_dir}/src/arm/overlays/ | grep dtso
+		#exit 2
 
-		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="AM3359-PWM012" ; arm_dtbo_makefile_append
+		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
@@ -318,13 +318,25 @@ beagleboard_dtbs () {
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
+		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
+		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAPE-DISP-CT4-00A0" ; arm_dtbo_makefile_append
+		device="BB-EHRPWM0-P9_29-P9_31" ; arm_dtbo_makefile_append
+		device="BB-EHRPWM1-P9_14-P9_16" ; arm_dtbo_makefile_append
+		device="BB-EHRPWM2-P8_13-P8_19" ; arm_dtbo_makefile_append
+		device="BB-EQEP0" ; arm_dtbo_makefile_append
+		device="BB-EQEP1" ; arm_dtbo_makefile_append
+		device="BB-EQEP2B" ; arm_dtbo_makefile_append
+		device="BB-EQEP2" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C1-FAST-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-MCP7940X-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-RTC-DS3231" ; arm_dtbo_makefile_append
 		device="BB-I2C1-RTC-PCF8563" ; arm_dtbo_makefile_append
 		device="BB-I2C2-BME680" ; arm_dtbo_makefile_append
+		device="BB-I2C2-FAST-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C2-MPU6050" ; arm_dtbo_makefile_append
+		device="BB-I2C2-RTC-DS3231" ; arm_dtbo_makefile_append
 		device="BB-LCD-ADAFRUIT-24-SPI1-00A0" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
 		device="BBORG_COMMS-00A2" ; arm_dtbo_makefile_append
@@ -335,8 +347,12 @@ beagleboard_dtbs () {
 		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART4-00A0" ; arm_dtbo_makefile_append
+		device="BB-UART5-00A0" ; arm_dtbo_makefile_append
 		device="BB-W1-P9.12-00A0" ; arm_dtbo_makefile_append
 		device="BONE-ADC" ; arm_dtbo_makefile_append
+		device="BONE-LED-P8-37" ; arm_dtbo_makefile_append
+		device="BONE-LED-P9-19" ; arm_dtbo_makefile_append
+		device="BONE-LED-P9-42" ; arm_dtbo_makefile_append
 		device="M-BB-BBG-00A0" ; arm_dtbo_makefile_append
 		device="M-BB-BBGG-00A0" ; arm_dtbo_makefile_append
 		device="PB-MIKROBUS-0" ; arm_dtbo_makefile_append
