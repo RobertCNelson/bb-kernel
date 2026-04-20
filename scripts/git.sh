@@ -55,7 +55,7 @@ git_kernel_torvalds () {
 	echo "scripts/git: pulling from: ${linux_repo}"
 	echo "log: [${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags]"
 	${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags
-	${git_bin} tag | grep v"${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable_tag
+	${git_bin} fetch "${linux_repo}" tag v${KERNEL_TAG} --no-tags || git_kernel_stable_tag
 }
 
 check_and_or_clone () {
