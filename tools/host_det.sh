@@ -71,6 +71,16 @@ redhat_reqs () {
 	check_rpm
 	pkg="openssl-devel"
 	check_rpm
+	pkg="rust"
+	check_rpm
+	pkg="rust-src"
+	check_rpm
+	pkg="bindgen-cli"
+	check_rpm
+	pkg="rustfmt"
+	check_rpm
+	pkg="clippy"
+	check_rpm
 
 	arch=$(uname -m)
 	if [ "x${arch}" = "xx86_64" ] ; then
@@ -172,6 +182,8 @@ debian_regs () {
 	pkg="rustc"
 	check_dpkg
 	pkg="rustfmt"
+	check_dpkg
+	pkg="rust-clippy"
 	check_dpkg
 
 	unset stop_pkg_search
