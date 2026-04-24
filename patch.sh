@@ -572,7 +572,7 @@ drivers () {
 	dir 'drivers/wkup_m3_ipc'
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
-	dir 'drivers/ti-cc33xx-1.0.2.10'
+#	dir 'drivers/ti-cc33xx-1.0.2.10'
 }
 
 ###
