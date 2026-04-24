@@ -1,24 +1,8 @@
 #!/bin/sh -e
+
+# SPDX-FileCopyrightText: 2009 Robert Nelson <robertcnelson@gmail.com>
 #
-# Copyright (c) 2009-2025 Robert Nelson <robertcnelson@gmail.com>
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 DIR=$PWD
 
@@ -45,11 +29,19 @@ git_kernel_stable () {
 	fi
 }
 
+git_kernel_org_stable_tag_backup () {
+	#We want to hit git.kernel.org last for least bandwidth hit...
+	backup_stable_repo="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+	echo "-----------------------------"
+	echo "scripts/git: fetching v${KERNEL_TAG} from: ${backup_stable_repo}"
+	${git_bin} fetch "${backup_stable_repo}" tag v${KERNEL_TAG} --no-tags
+}
+
 git_kernel_stable_tag_backup () {
 	backup_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
 	echo "-----------------------------"
 	echo "scripts/git: fetching v${KERNEL_TAG} from: ${backup_stable_repo}"
-	${git_bin} fetch "${backup_stable_repo}" tag v${KERNEL_TAG} --no-tags
+	${git_bin} fetch "${backup_stable_repo}" tag v${KERNEL_TAG} --no-tags || git_kernel_org_stable_tag_backup
 }
 
 git_kernel_stable_tag () {
@@ -63,7 +55,7 @@ git_kernel_torvalds () {
 	echo "scripts/git: pulling from: ${linux_repo}"
 	echo "log: [${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags]"
 	${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags
-	${git_bin} tag | grep v"${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable_tag
+	${git_bin} fetch "${linux_repo}" tag v${KERNEL_TAG} --no-tags || git_kernel_stable_tag
 }
 
 check_and_or_clone () {
