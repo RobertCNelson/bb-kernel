@@ -1,24 +1,8 @@
 #!/bin/bash -e
+
+# SPDX-FileCopyrightText: 2009 Robert Nelson <robertcnelson@gmail.com>
 #
-# Copyright (c) 2009-2025 Robert Nelson <robertcnelson@gmail.com>
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 # Split out, so build_kernel.sh and build_deb.sh can share..
 
@@ -139,7 +123,7 @@ rt () {
 }
 
 wireless_regdb () {
-	#https://kernel.googlesource.com/pub/scm/linux/kernel/git/wens/wireless-regdb.git
+	#https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
@@ -147,21 +131,23 @@ wireless_regdb () {
 			rm -rf ./src || true
 		fi
 
-		${git_bin} clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/wens/wireless-regdb.git --depth=1 ./src/
-		cd ./src
-			wireless_regdb_hash=$(git rev-parse HEAD)
-		cd -
+		wget -c https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/snapshot/wireless-regdb-master-${WIRELESS_REGDB}.tar.gz
+		mkdir ./src/
+		tar xf wireless-regdb-master-${WIRELESS_REGDB}.tar.gz -C ./src/
+		sync
+		rm -rf wireless-regdb-master-${WIRELESS_REGDB}.tar.gz
 
 		cd ./KERNEL/
 
 		mkdir -p ./firmware/ || true
-		cp -v ../src/regulatory.db ./firmware/
-		cp -v ../src/regulatory.db.p7s ./firmware/
+		cp -v ../src/wireless-regdb-master-${WIRELESS_REGDB}/regulatory.db ./firmware/
+		cp -v ../src/wireless-regdb-master-${WIRELESS_REGDB}/regulatory.db.p7s ./firmware/
 		${git_bin} add -f ./firmware/regulatory.*
-		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" -s
+
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${WIRELESS_REGDB}" -s
 
 		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
-		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/commit/?id=${wireless_regdb_hash}" > ../patches/external/git/WIRELESS_REGDB
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${WIRELESS_REGDB}" > ../patches/external/git/WIRELESS_REGDB
 
 		rm -rf ../src/ || true
 
@@ -245,7 +231,7 @@ k3_makefile_patch_cleanup_overlays () {
 
 beagleboard_dtbs () {
 	branch="v6.7.x"
-	https_repo="https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees.git"
+	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
@@ -317,9 +303,9 @@ beagleboard_dtbs () {
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
 		${git_bin} add -f include/dt-bindings/
-		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/tree/${branch}" -m "https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" -s
+		${git_bin} commit -a -m "Add BeagleBoard.org Device Tree Changes" -m "https://github.com/beagleboard/BeagleBoard-DeviceTrees/tree/${branch}" -m "https://github.com/beagleboard/BeagleBoard-DeviceTrees/commit/${git_hash}" -s
 		${git_bin} format-patch -1 -o ../patches/external/bbb.io/
-		echo "BBDTBS: https://openbeagle.org/beagleboard/BeagleBoard-DeviceTrees/-/commit/${git_hash}" > ../patches/external/git/BBDTBS
+		echo "BBDTBS: https://github.com/beagleboard/BeagleBoard-DeviceTrees/commit/${git_hash}" > ../patches/external/git/BBDTBS
 
 		rm -rf ../${work_dir}/ || true
 
