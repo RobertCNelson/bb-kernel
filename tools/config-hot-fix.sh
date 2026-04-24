@@ -427,4 +427,11 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_DRM_ITE_IT66121
 ./scripts/config --enable CONFIG_SYSFB_SIMPLEFB
 
+#CC33XX
+./scripts/config --module CONFIG_CC33XX
+./scripts/config --disable CONFIG_CC33XX_SPI
+./scripts/config --module CONFIG_CC33XX_SDIO
+
+./scripts/config --module CONFIG_BT_TI_UART
+
 cd ${DIR}/
