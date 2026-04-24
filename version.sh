@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: Robert Nelson <robertcnelson@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 #
 ARCH=$(uname -m)
 
@@ -12,6 +17,7 @@ branch_postfix=""
 #https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v6.10-rc1
 #
 #Cross Compilers
+#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/
 #arm
 KERNEL_ARCH=arm
 DEBARCH=armhf
@@ -46,6 +52,10 @@ toolchain="gcc_13_arm"
 #toolchain="gcc_14_riscv64"
 #toolchain="gcc_15_riscv64"
 
+#Wireless:
+#https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git
+WIRELESS_REGDB="2026-03-18"
+
 #Kernel
 linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
@@ -55,7 +65,7 @@ KERNEL_TAG=${KERNEL_REL}.14
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.10/
 kernel_rt=".2-rt14"
 #Kernel Build
-BUILD=${build_prefix}19.1
+BUILD=${build_prefix}19.2
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
