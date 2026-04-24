@@ -411,4 +411,11 @@ cd ${DIR}/KERNEL/
 ./scripts/config --module CONFIG_LEDS_CLASS_FLASH
 ./scripts/config --module CONFIG_GREYBUS_LIGHT
 
+#CC33XX
+./scripts/config --module CONFIG_CC33XX
+./scripts/config --disable CONFIG_CC33XX_SPI
+./scripts/config --module CONFIG_CC33XX_SDIO
+
+./scripts/config --module CONFIG_BT_TI_UART
+
 cd ${DIR}/
