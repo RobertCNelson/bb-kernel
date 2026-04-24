@@ -486,6 +486,35 @@ post_rpibackports () {
 	exit 2
 }
 
+pre_ti_backports () {
+	#git clone --reference ~/linux-src/ http://forgejo.gfnd.rcn-ee.org:3000/TexasInstruments/ti-linux-kernel.git ~/linux-ti/
+	echo "dir: backports/${subsystem}"
+
+	cd ~/linux-ti/
+	${git_bin} fetch --tags
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		echo "${git_bin} checkout ${backport_tag} -f"
+		${git_bin} checkout ${backport_tag} -f
+	fi
+	cd -
+}
+
+post_ti_backports () {
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		cd ~/linux-ti/
+		${git_bin} checkout master -f
+		cd -
+	fi
+
+	${git_bin} add .
+	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
+		mkdir -p ../patches/backports/${subsystem}/
+	fi
+	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
+	exit 2
+}
+
 backports () {
 	backport_tag="v6.18-rc5"
 
@@ -533,6 +562,21 @@ backports () {
 	else
 		patch_backports
 	fi
+
+	backport_tag="12.00.00.07"
+
+	subsystem="remoteproc"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_ti_backports
+
+		cp -v ~/linux-ti/drivers/remoteproc/pru_rproc.c ./drivers/remoteproc/
+		cp -v ~/linux-ti/drivers/remoteproc/pru_rproc.h ./drivers/remoteproc/
+
+		post_ti_backports
+	else
+		patch_backports
+	fi
 }
 
 drivers () {
@@ -547,7 +591,7 @@ drivers () {
 
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
-	dir 'drivers/remoteproc'
+#	dir 'drivers/remoteproc'
 }
 
 ###
