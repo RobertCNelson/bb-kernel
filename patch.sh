@@ -494,6 +494,8 @@ drivers () {
 	dir 'external/ti-amx3-cm3-pm-firmware'
 
 	dir 'drivers/fixes/mmc'
+
+	dir 'drivers/ti-cc33xx-1.0.2.10'
 }
 
 ###
