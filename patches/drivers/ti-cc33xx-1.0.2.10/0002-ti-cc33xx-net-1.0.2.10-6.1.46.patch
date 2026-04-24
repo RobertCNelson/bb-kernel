@@ -1,0 +1,225 @@
+From 2059928065e2d5fbf44d5dfc2a8b9899eb20ee6c Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Fri, 24 Apr 2026 14:10:14 -0500
+Subject: [PATCH 2/2] ti cc33xx net 1.0.2.10 6.1.46
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ net/mac80211/mlme.c | 52 +++++++++++++++++++++++++++++++++++++++------
+ net/mac80211/util.c | 12 +----------
+ net/mac80211/wpa.c  | 32 ++++++++++++++--------------
+ 3 files changed, 63 insertions(+), 33 deletions(-)
+
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index dc9e7eb7dd85..c8b819cb4014 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -235,11 +235,20 @@ ieee80211_determine_chantype(struct ieee80211_sub_if_data *sdata,
+ 	if (sta_ht_cap.cap & IEEE80211_HT_CAP_SUP_WIDTH_20_40) {
+ 		ieee80211_chandef_ht_oper(ht_oper, chandef);
+ 	} else {
++
+ 		mlme_dbg(sdata, "40 MHz not supported\n");
+-		/* 40 MHz (and 80 MHz) must be supported for VHT */
+-		ret = IEEE80211_CONN_DISABLE_VHT;
+-		/* also mark 40 MHz disabled */
+-		ret |= IEEE80211_CONN_DISABLE_40MHZ;
++
++		/* 40 MHz (and 80 MHz) must be supported for 5GHZ VHT
++			unless peer allows operating mode notification. If so a 20MHz 
++			station can ask from peer to lower bandwidth. */
++		if (channel->band != NL80211_BAND_2GHZ){
++				ret = IEEE80211_CONN_DISABLE_40MHZ;
++		}else{
++				ret = IEEE80211_CONN_DISABLE_VHT;
++				/* also mark 40 MHz disabled */
++				ret |= IEEE80211_CONN_DISABLE_40MHZ;
++		}
++			
+ 		goto out;
+ 	}
+ 
+@@ -972,6 +981,9 @@ static size_t ieee80211_assoc_link_elems(struct ieee80211_sub_if_data *sdata,
+ 	int present_elems_len = 0;
+ 	u8 *pos;
+ 	int i;
++	u8 opmode_notif = 0; 
++	u8 rx_nss = 0; 
++	u8 rx_nss_type = 0;
+ 
+ #define ADD_PRESENT_ELEM(id) do {					\
+ 	/* need a last for termination - we use 0 == SSID */		\
+@@ -1079,6 +1091,25 @@ static size_t ieee80211_assoc_link_elems(struct ieee80211_sub_if_data *sdata,
+ 					     &assoc_data->link[link_id].ap_vht_cap,
+ 					     assoc_data->link[link_id].conn_flags);
+ 
++		//Add operation mode notification element when operating at 20 MHz bandwidth
++		if(chanctx_conf->def.width == NL80211_CHAN_WIDTH_20)
++		{
++			/*  Operating Mode Notification element */
++			rx_nss = 0;
++			rx_nss_type= 0;
++			opmode_notif |= IEEE80211_OPMODE_NOTIF_CHANWIDTH_20MHZ; 
++			rx_nss <<= IEEE80211_OPMODE_NOTIF_RX_NSS_SHIFT;
++			rx_nss_type <<= (IEEE80211_OPMODE_NOTIF_RX_NSS_SHIFT + 3);
++			opmode_notif |= rx_nss;
++			opmode_notif |= rx_nss_type;
++
++			pos = skb_put(skb, 2 + sizeof(u8));
++
++			*pos++ = WLAN_EID_OPMODE_NOTIF;
++			*pos++ = sizeof(u8);
++			*pos++ = opmode_notif;
++		}
++
+ 		if (link)
+ 			link->conf->mu_mimo_owner = mu_mimo_owner;
+ 		ADD_PRESENT_ELEM(WLAN_EID_VHT_CAPABILITY);
+@@ -1368,6 +1399,7 @@ static int ieee80211_send_assoc(struct ieee80211_sub_if_data *sdata)
+ 		/* HT, VHT, HE, EHT */
+ 		size += 2 + sizeof(struct ieee80211_ht_cap);
+ 		size += 2 + sizeof(struct ieee80211_vht_cap);
++		size += 2 + sizeof(u8); /*VHT operating mode Notification elem*/
+ 		size += 2 + 1 + sizeof(struct ieee80211_he_cap_elem) +
+ 			sizeof(struct ieee80211_he_mcs_nss_supp) +
+ 			IEEE80211_HE_PPE_THRES_MAX_LEN;
+@@ -4615,6 +4647,7 @@ static int ieee80211_prep_channel(struct ieee80211_sub_if_data *sdata,
+ 	int ret;
+ 	u32 i;
+ 	bool have_80mhz;
++	bool operating_mode_notif_capable = false;
+ 
+ 	rcu_read_lock();
+ 
+@@ -4746,6 +4779,7 @@ static int ieee80211_prep_channel(struct ieee80211_sub_if_data *sdata,
+ 			eht_oper = NULL;
+ 	}
+ 
++
+ 	/* Allow VHT if at least one channel on the sband supports 80 MHz */
+ 	have_80mhz = false;
+ 	for (i = 0; i < sband->n_channels; i++) {
+@@ -4756,9 +4790,15 @@ static int ieee80211_prep_channel(struct ieee80211_sub_if_data *sdata,
+ 		have_80mhz = true;
+ 		break;
+ 	}
++	
++	//get operating mode notification capable element
++	const u8* extended_cap_ie = ieee80211_bss_get_ie(cbss,WLAN_EID_EXT_CAPABILITY);
++	if ( (extended_cap_ie)  && (extended_cap_ie[1] >= 8) && 
++			(extended_cap_ie[9] & WLAN_EXT_CAPA8_OPMODE_NOTIF))
++			operating_mode_notif_capable = true;
+ 
+-	if (!have_80mhz) {
+-		sdata_info(sdata, "80 MHz not supported, disabling VHT\n");
++	if ((!have_80mhz) && (!operating_mode_notif_capable)) {
++		sdata_info(sdata, "80 MHz not supported nor operating mode notification capable, disabling VHT\n");
+ 		*conn_flags |= IEEE80211_CONN_DISABLE_VHT;
+ 	}
+ 
+diff --git a/net/mac80211/util.c b/net/mac80211/util.c
+index 98806c359b17..66c6d094cc9d 100644
+--- a/net/mac80211/util.c
++++ b/net/mac80211/util.c
+@@ -1843,7 +1843,6 @@ static int ieee80211_build_preq_ies_band(struct ieee80211_sub_if_data *sdata,
+ 	int ext_rates_len;
+ 	int shift;
+ 	u32 rate_flags;
+-	bool have_80mhz = false;
+ 
+ 	*offset = 0;
+ 
+@@ -1967,17 +1966,8 @@ static int ieee80211_build_preq_ies_band(struct ieee80211_sub_if_data *sdata,
+ 		*offset = noffset;
+ 	}
+ 
+-	/* Check if any channel in this sband supports at least 80 MHz */
+-	for (i = 0; i < sband->n_channels; i++) {
+-		if (sband->channels[i].flags & (IEEE80211_CHAN_DISABLED |
+-						IEEE80211_CHAN_NO_80MHZ))
+-			continue;
+-
+-		have_80mhz = true;
+-		break;
+-	}
+ 
+-	if (sband->vht_cap.vht_supported && have_80mhz) {
++	if (sband->vht_cap.vht_supported) {
+ 		if (end - pos < 2 + sizeof(struct ieee80211_vht_cap))
+ 			goto out_err;
+ 		pos = ieee80211_ie_build_vht_cap(pos, &sband->vht_cap,
+diff --git a/net/mac80211/wpa.c b/net/mac80211/wpa.c
+index 20f742b5503b..56d04f021783 100644
+--- a/net/mac80211/wpa.c
++++ b/net/mac80211/wpa.c
+@@ -538,12 +538,12 @@ ieee80211_crypto_ccmp_decrypt(struct ieee80211_rx_data *rx,
+ 	if (!rx->sta || data_len < 0)
+ 		return RX_DROP_UNUSABLE;
+ 
+-	if (!(status->flag & RX_FLAG_PN_VALIDATED)) {
+-		int res;
++	ccmp_hdr2pn(pn, skb->data + hdrlen);
+ 
+-		ccmp_hdr2pn(pn, skb->data + hdrlen);
++	queue = rx->security_idx;
+ 
+-		queue = rx->security_idx;
++	if (!(status->flag & RX_FLAG_PN_VALIDATED)) {
++		int res;
+ 
+ 		res = memcmp(pn, key->u.ccmp.rx_pn[queue],
+ 			     IEEE80211_CCMP_PN_LEN);
+@@ -566,12 +566,12 @@ ieee80211_crypto_ccmp_decrypt(struct ieee80211_rx_data *rx,
+ 				    skb->data + skb->len - mic_len))
+ 				return RX_DROP_UNUSABLE;
+ 		}
+-
+-		memcpy(key->u.ccmp.rx_pn[queue], pn, IEEE80211_CCMP_PN_LEN);
+-		if (unlikely(ieee80211_is_frag(hdr)))
+-			memcpy(rx->ccm_gcm.pn, pn, IEEE80211_CCMP_PN_LEN);
+ 	}
+ 
++	memcpy(key->u.ccmp.rx_pn[queue], pn, IEEE80211_CCMP_PN_LEN);
++	if (unlikely(ieee80211_is_frag(hdr)))
++		memcpy(rx->ccm_gcm.pn, pn, IEEE80211_CCMP_PN_LEN);
++
+ 	/* Remove CCMP header and MIC */
+ 	if (pskb_trim(skb, skb->len - mic_len))
+ 		return RX_DROP_UNUSABLE;
+@@ -734,12 +734,12 @@ ieee80211_crypto_gcmp_decrypt(struct ieee80211_rx_data *rx)
+ 	if (!rx->sta || data_len < 0)
+ 		return RX_DROP_UNUSABLE;
+ 
+-	if (!(status->flag & RX_FLAG_PN_VALIDATED)) {
+-		int res;
++	gcmp_hdr2pn(pn, skb->data + hdrlen);
+ 
+-		gcmp_hdr2pn(pn, skb->data + hdrlen);
++	queue = rx->security_idx;
+ 
+-		queue = rx->security_idx;
++	if (!(status->flag & RX_FLAG_PN_VALIDATED)) {
++		int res;
+ 
+ 		res = memcmp(pn, key->u.gcmp.rx_pn[queue],
+ 			     IEEE80211_GCMP_PN_LEN);
+@@ -763,12 +763,12 @@ ieee80211_crypto_gcmp_decrypt(struct ieee80211_rx_data *rx)
+ 				    IEEE80211_GCMP_MIC_LEN))
+ 				return RX_DROP_UNUSABLE;
+ 		}
+-
+-		memcpy(key->u.gcmp.rx_pn[queue], pn, IEEE80211_GCMP_PN_LEN);
+-		if (unlikely(ieee80211_is_frag(hdr)))
+-			memcpy(rx->ccm_gcm.pn, pn, IEEE80211_CCMP_PN_LEN);
+ 	}
+ 
++	memcpy(key->u.gcmp.rx_pn[queue], pn, IEEE80211_GCMP_PN_LEN);
++	if (unlikely(ieee80211_is_frag(hdr)))
++		memcpy(rx->ccm_gcm.pn, pn, IEEE80211_CCMP_PN_LEN);
++
+ 	/* Remove GCMP header and MIC */
+ 	if (pskb_trim(skb, skb->len - mic_len))
+ 		return RX_DROP_UNUSABLE;
+-- 
+2.53.0
+
