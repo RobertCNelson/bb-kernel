@@ -1,5 +1,9 @@
 #!/bin/sh -e
 
+# SPDX-FileCopyrightText: Robert Nelson <robertcnelson@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 #yeah, i'm getting lazy..
 
 wfile=$(mktemp /tmp/builder.XXXXXXXXX)
