@@ -544,6 +544,12 @@ drivers () {
 	dir 'drivers/it66122'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
+
+	echo "dir: drivers/cc33xx/v5_20241107"
+	#b4 am https://lore.kernel.org/linux-wireless/20241107125209.1736277-1-michael.nemanov@ti.com/
+	${git} "${DIR}/patches/drivers/cc33xx/v5_20241107/v5_20241107_michael_nemanov_wifi_cc33xx_add_driver_for_new_ti_cc33xx_wireless_device_family.mbx"
+
+	dir 'drivers/cc33xx/1.0.2.10'
 }
 
 ###
