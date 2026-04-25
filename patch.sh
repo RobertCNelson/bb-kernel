@@ -495,7 +495,7 @@ drivers () {
 
 	dir 'drivers/fixes/mmc'
 
-	dir 'drivers/ti-cc33xx-1.0.2.10'
+#	dir 'drivers/ti-cc33xx-1.0.2.10'
 }
 
 ###
