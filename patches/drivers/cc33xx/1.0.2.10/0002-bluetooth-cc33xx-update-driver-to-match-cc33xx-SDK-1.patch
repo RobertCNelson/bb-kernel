@@ -1,0 +1,2552 @@
+From 525e3eb5c86972dd06e9afe259c83c0e67a8df91 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Sat, 25 Apr 2026 12:49:01 -0500
+Subject: [PATCH 2/2] bluetooth: cc33xx: update driver to match cc33xx SDK
+ 1.0.2.10
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/bluetooth/Kconfig        |  35 ++
+ drivers/bluetooth/Makefile       |   6 +
+ drivers/bluetooth/btti_debugfs.c | 140 +++++
+ drivers/bluetooth/btti_drv.h     |  83 +++
+ drivers/bluetooth/btti_main.c    | 434 ++++++++++++++
+ drivers/bluetooth/btti_sdio.c    | 958 +++++++++++++++++++++++++++++++
+ drivers/bluetooth/btti_sdio.h    |  74 +++
+ drivers/bluetooth/btti_uart.c    | 730 +++++++++++++++++++++++
+ 8 files changed, 2460 insertions(+)
+ create mode 100644 drivers/bluetooth/btti_debugfs.c
+ create mode 100644 drivers/bluetooth/btti_drv.h
+ create mode 100644 drivers/bluetooth/btti_main.c
+ create mode 100644 drivers/bluetooth/btti_sdio.c
+ create mode 100644 drivers/bluetooth/btti_sdio.h
+ create mode 100644 drivers/bluetooth/btti_uart.c
+
+diff --git a/drivers/bluetooth/Kconfig b/drivers/bluetooth/Kconfig
+index 7df69ccb6600..d223e293f064 100644
+--- a/drivers/bluetooth/Kconfig
++++ b/drivers/bluetooth/Kconfig
+@@ -386,6 +386,41 @@ config BT_HCIVHCI
+ 	  Say Y here to compile support for virtual HCI devices into the
+ 	  kernel or say M to compile it as module (hci_vhci).
+ 
++config BT_TI
++	tristate "TI Bluetooth driver support"
++	help
++	  The core driver to support TI Bluetooth devices.
++
++	  Say Y here to compile TI Bluetooth driver
++	  into the kernel or say M to compile it as module.
++
++config BT_TI_SDIO
++	tristate "TI BT-over-SDIO driver"
++	depends on BT_TI && MMC
++	select FW_LOADER
++	select WANT_DEV_COREDUMP
++	help
++	  The driver for TI Bluetooth chipsets with SDIO interface.
++
++	  This driver is required if you want to use TI Bluetooth
++	  devices with SDIO interface.
++	  chipsets are supported.
++
++	  Say Y here to compile support for TI BT-over-SDIO driver
++	  into the kernel or say M to compile it as module.
++
++config BT_TI_UART
++	tristate "TI BT-over-UART driver"
++	depends on SERIAL_DEV_BUS
++	help
++	  Bluetooth HCI UART driver for CC33XX TI devices.
++	  This driver is required if you want to use CC33XX device with
++	  UART interface.
++	  Currently does not require BT_TI core.
++
++	  Say Y here to compile support for CC33XX UART devices into the
++	  kernel or say M to compile it as module (btuart).
++
+ config BT_MRVL
+ 	tristate "Marvell Bluetooth driver support"
+ 	help
+diff --git a/drivers/bluetooth/Makefile b/drivers/bluetooth/Makefile
+index 81856512ddd0..9d98c2b893d9 100644
+--- a/drivers/bluetooth/Makefile
++++ b/drivers/bluetooth/Makefile
+@@ -19,6 +19,9 @@ obj-$(CONFIG_BT_HCIBTSDIO)	+= btsdio.o
+ obj-$(CONFIG_BT_INTEL)		+= btintel.o
+ obj-$(CONFIG_BT_INTEL_PCIE)	+= btintel_pcie.o btintel.o
+ obj-$(CONFIG_BT_ATH3K)		+= ath3k.o
++obj-$(CONFIG_BT_TI)		+= btti.o
++obj-$(CONFIG_BT_TI_SDIO)	+= btti_sdio.o
++obj-$(CONFIG_BT_TI_UART)	+= btti_uart.o
+ obj-$(CONFIG_BT_MRVL)		+= btmrvl.o
+ obj-$(CONFIG_BT_MRVL_SDIO)	+= btmrvl_sdio.o
+ obj-$(CONFIG_BT_MTKSDIO)	+= btmtksdio.o
+@@ -36,6 +39,9 @@ obj-$(CONFIG_BT_HCIUART_NOKIA)	+= hci_nokia.o
+ 
+ obj-$(CONFIG_BT_HCIRSI)		+= btrsi.o
+ 
++btti-y				:= btti_main.o
++btti-$(CONFIG_DEBUG_FS)		+= btti_debugfs.o
++
+ btmrvl-y			:= btmrvl_main.o
+ btmrvl-$(CONFIG_DEBUG_FS)	+= btmrvl_debugfs.o
+ 
+diff --git a/drivers/bluetooth/btti_debugfs.c b/drivers/bluetooth/btti_debugfs.c
+new file mode 100644
+index 000000000000..f6d4480c8df4
+--- /dev/null
++++ b/drivers/bluetooth/btti_debugfs.c
+@@ -0,0 +1,140 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * This file is part of TI BLE over SDIO
++ *
++ * Copyright (C) 2022 Texas Instruments
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License for more details.
++ *
++ */
++
++#include <linux/debugfs.h>
++#include <linux/slab.h>
++
++#include <net/bluetooth/bluetooth.h>
++#include <net/bluetooth/hci_core.h>
++
++#include "btti_drv.h"
++
++struct btti_debugfs_dir {
++	struct dentry *config_dir;
++	struct dentry *status_dir;
++};
++
++#define DEBUGFS_FORMAT_BUFFER_SIZE 256
++
++int btti_format_buffer(char __user *userbuf, size_t count,
++		       loff_t *ppos, char *fmt, ...)
++{
++	va_list args;
++	char buf[DEBUGFS_FORMAT_BUFFER_SIZE];
++	int res;
++
++	va_start(args, fmt);
++	res = vscnprintf(buf, sizeof(buf), fmt, args);
++	va_end(args);
++
++	return simple_read_from_buffer(userbuf, count, ppos, buf, res);
++}
++
++//ble_enable
++static ssize_t ble_enable_read(struct file *file, char __user *userbuf,
++			       size_t count, loff_t *ppos)
++{
++	struct btti_private *private_data = file->private_data;
++	char buf[16];
++	int ret;
++
++	BT_INFO("[bt sdio] ble enable read");
++
++	ret = snprintf(buf, sizeof(buf) - 1, "%d\n", private_data->hci_adapter->ble_enable);
++
++	return btti_format_buffer(userbuf, count,  ppos, "%d\n",
++				  private_data->hci_adapter->ble_enable);
++}
++
++static ssize_t ble_enable_write(struct file *file,
++				const char __user *user_buf,
++				size_t count, loff_t *ppos)
++{
++	struct btti_private *private_data = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 0, &value);
++	BT_INFO("[bt sdio] ble enable write: %ld", value);
++
++	if (!private_data || !private_data->hci_adapter)
++		BT_ERR("[bt sdio] driver is not ready");
++
++	if (private_data->hci_adapter->ble_enable) {
++		BT_WARN("[bt sdio] ble_enable is already %d",
++			private_data->hci_adapter->ble_enable);
++		return -EINVAL;
++	}
++
++	if (value != 1) {
++		BT_WARN("illegal value in ble_enable (only value allowed is 1)");
++		BT_WARN("ble_enable can't be disabled after being enabled.");
++		return -EINVAL;
++	}
++
++	ret = btti_debugfs_if_prepare_command((u8)CMD_TYPE_BLE_ENABLE, private_data);
++
++	return count;
++}
++
++static const struct file_operations ble_enable_ops = {
++	.read = ble_enable_read,
++	.write = ble_enable_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++void btti_debugfs_init(struct hci_dev *hdev)
++{
++	struct btti_private *private_data = hci_get_drvdata(hdev);
++	struct btti_debugfs_dir *dbg;
++	struct dentry *root_cfg_dir;
++
++	if (!hdev->debugfs)
++		return;
++
++	dbg = kzalloc(sizeof(*dbg), GFP_KERNEL);
++	private_data->debugfs_dir_vals = dbg;
++
++	if (!dbg) {
++		BT_ERR("Can not allocate memory for btti_debugfs_dir.");
++		return;
++	}
++
++	dbg->config_dir = debugfs_create_dir("config", hdev->debugfs);
++	root_cfg_dir = dbg->config_dir;
++
++	debugfs_create_file("ble_enable", 0744, root_cfg_dir,  private_data,
++			    &ble_enable_ops);
++
++	dbg->status_dir = debugfs_create_dir("cc3xx_status", hdev->debugfs);
++}
++
++void btti_debugfs_remove(struct hci_dev *hdev)
++{
++	struct btti_private *private_data = hci_get_drvdata(hdev);
++	struct btti_debugfs_dir *dbgfs = private_data->debugfs_dir_vals;
++
++	if (!dbgfs)
++		return;
++
++	debugfs_remove_recursive(dbgfs->config_dir);
++
++	debugfs_remove_recursive(dbgfs->status_dir);
++
++	kfree(dbgfs);
++}
+diff --git a/drivers/bluetooth/btti_drv.h b/drivers/bluetooth/btti_drv.h
+new file mode 100644
+index 000000000000..2ccb9e25cfac
+--- /dev/null
++++ b/drivers/bluetooth/btti_drv.h
+@@ -0,0 +1,83 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ *
++ * This file is part of TI BLE over SDIO
++ *
++ * Copyright (C) 2022 Texas Instruments
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License for more details.
++ *
++ */
++
++#include <linux/kthread.h>
++#include <linux/bitops.h>
++#include <linux/slab.h>
++#include <net/bluetooth/bluetooth.h>
++#include <linux/err.h>
++#include <linux/gfp.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/of_platform.h>
++#include <linux/platform_device.h>
++#include <linux/pm_runtime.h>
++#include <linux/of_irq.h>
++
++#define BT_SDIO_HEADER_LEN			4
++#define BT_SDIO_UPLD_SIZE			(251 + BT_SDIO_HEADER_LEN)
++
++#define CMD_TYPE_BLE_ENABLE         1
++
++struct btti_worker_thread {
++	struct task_struct *task;
++	wait_queue_head_t wait_queue;
++	void *private_data;
++};
++
++struct btti_device {
++	void *sdiodev; //see btti_sdio_dev
++	struct hci_dev *hcidev;
++	u8 dev_type;
++};
++
++struct btti_hci_adapter {
++	u32 num_of_interrupt;
++	struct sk_buff_head tx_queue;
++	u8 ble_enable;
++	u8 enable_autosuspend;
++	bool is_suspended;
++	bool is_suspending;
++};
++
++struct btti_private {
++	struct btti_device btti_dev;
++	struct btti_hci_adapter *hci_adapter;
++	struct btti_worker_thread work_thread;
++	int (*card_tx_packet_funcp)(struct btti_private *private_data, struct sk_buff *skb);
++	int (*card_power_up_firmware_funcp)(struct btti_private *private_data);
++	int (*card_power_dn_firmware_funcp)(struct btti_private *private_data);
++	int (*card_process_rx_funcp)(struct btti_private *private_data);
++	spinlock_t irq_cnt_lock;		/* spinlock used by driver */
++#ifdef CONFIG_DEBUG_FS
++	void *debugfs_dir_vals;
++#endif
++	bool sdio_dev_removed;
++};
++
++/* Prototype of global function */
++int btti_hci_register_hdev(struct btti_private *private_data);
++struct btti_private *btti_hci_add_sdio_dev(void *sdiodev);
++int btti_hci_remove_sdio_dev(struct btti_private *private_data);
++void btti_hci_irq_handler(struct btti_private *private_data);
++
++int btti_debugfs_if_prepare_command(u8 cmd_type, struct btti_private *private_data);
++
++#ifdef CONFIG_DEBUG_FS
++void btti_debugfs_init(struct hci_dev *hdev);
++void btti_debugfs_remove(struct hci_dev *hdev);
++#endif
+diff --git a/drivers/bluetooth/btti_main.c b/drivers/bluetooth/btti_main.c
+new file mode 100644
+index 000000000000..414374ff23cf
+--- /dev/null
++++ b/drivers/bluetooth/btti_main.c
+@@ -0,0 +1,434 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * This file is part of TI BLE over SDIO
++ *
++ * Copyright (C) 2022 Texas Instruments
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License for more details.
++ *
++ */
++
++#include <linux/module.h>
++#include <linux/of.h>
++#include <net/bluetooth/bluetooth.h>
++#include <net/bluetooth/hci_core.h>
++
++#include <linux/mmc/sdio_ids.h>
++#include <linux/mmc/sdio_func.h>
++
++#include "btti_drv.h"
++#include "btti_sdio.h"
++
++#define VERSION "ti_1.0"
++
++#define BTTI_SDIO_AUTOSUSPEND_DELAY	8000
++
++static int btti_hci_is_ble_enabled(struct btti_private *private_data);
++
++/*
++ * This function is called by the interrupt handler.
++ * It wakes up the worker thread.to make the RX reception.
++ */
++void btti_hci_irq_handler(struct btti_private *private_data)
++{
++	ulong flags;
++
++	spin_lock_irqsave(&private_data->irq_cnt_lock, flags);
++	private_data->hci_adapter->num_of_interrupt++;
++	spin_unlock_irqrestore(&private_data->irq_cnt_lock, flags);
++
++    //  wakeup to btti_service_work_thread
++	wake_up_interruptible(&private_data->work_thread.wait_queue);
++}
++EXPORT_SYMBOL_GPL(btti_hci_irq_handler);
++
++int btti_debugfs_if_prepare_command(u8 cmd_type, struct btti_private *private_data)
++{
++	int ret = 0;
++
++	switch (cmd_type) {
++	case CMD_TYPE_BLE_ENABLE:
++		ret = btti_hci_is_ble_enabled(private_data);
++	break;
++	default:
++		break;
++	}
++	return ret;
++}
++
++static int btti_hci_tx_pkt(struct btti_private *private_data,
++			   struct sk_buff *skb)
++{
++	int ret = 0;
++
++	if (!skb || !skb->data)
++		return -EINVAL;
++
++	if (!skb->len || ((skb->len + BT_SDIO_HEADER_LEN) > BT_SDIO_UPLD_SIZE)) {
++		BT_ERR("[bt sdio hci] TX Error: Bad skb length %d : %d",
++		       skb->len, BT_SDIO_UPLD_SIZE);
++		return -EINVAL;
++	}
++
++	skb_push(skb, BT_SDIO_HEADER_LEN);
++
++	/* header type: byte[3]
++	 * HCI_COMMAND = 1, ACL_DATA = 2, SCO_DATA = 3, 0xFE = Vendor
++	 * header length: byte[2][1][0]
++	 */
++
++	skb->data[0] = (skb->len & 0x0000ff);
++	skb->data[1] = (skb->len & 0x00ff00) >> 8;
++	skb->data[2] = (skb->len & 0xff0000) >> 16;
++	skb->data[3] = hci_skb_pkt_type(skb);
++
++	BT_DBG("[bt sdio hci] TX buff 0x: %*ph", skb->len, skb->data);
++
++	if (private_data->card_tx_packet_funcp)
++		ret = private_data->card_tx_packet_funcp(private_data, skb);
++
++	return ret;
++}
++
++static void btti_hci_init_hci_adapter(struct btti_private *private_data)
++{
++	skb_queue_head_init(&private_data->hci_adapter->tx_queue);
++	private_data->hci_adapter->enable_autosuspend = true;
++}
++
++static void btti_hci_free_hci_adapter(struct btti_private *private_data)
++{
++	skb_queue_purge(&private_data->hci_adapter->tx_queue);
++	kfree(private_data->hci_adapter);
++
++	private_data->hci_adapter = NULL;
++}
++
++static int btti_hci_is_ble_enabled(struct btti_private *private_data)
++{
++	//if ble_enabled -- return 0
++	return private_data->hci_adapter->ble_enable;
++}
++
++static int btti_hci_if_open(struct hci_dev *hdev)
++{
++	return 0;
++}
++
++static int btti_hci_if_close(struct hci_dev *hdev)
++{
++	struct btti_private *private_data = hci_get_drvdata(hdev);
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++
++	pm_runtime_disable(&sdiodev->func->dev);
++	skb_queue_purge(&private_data->hci_adapter->tx_queue);
++
++	return 0;
++}
++
++static int btti_hci_if_flush(struct hci_dev *hdev)
++{
++	struct btti_private *private_data = hci_get_drvdata(hdev);
++
++	skb_queue_purge(&private_data->hci_adapter->tx_queue);
++
++	return 0;
++}
++
++static int btti_hci_if_tx_frame(struct hci_dev *hdev, struct sk_buff *skb)
++{
++	struct btti_private *private_data = hci_get_drvdata(hdev);
++
++	BT_INFO("[bt sdio hci] TX from HCI received ,type=%d, opcode: 0x%x len=%d ble_enable=%d",
++		hci_skb_pkt_type(skb), hci_skb_opcode(skb),
++		skb->len, private_data->hci_adapter->ble_enable);
++
++	if (private_data->hci_adapter->is_suspending ||
++	    private_data->hci_adapter->is_suspended) {
++		BT_ERR("[bt sdio hci] %s: Device is suspending or suspended", __func__);
++		goto fail;
++	}
++
++	//check of ble is enabled
++	if (!btti_hci_is_ble_enabled(private_data)) {
++		BT_INFO("[bt sdio hci] ble is not enabled");
++		goto fail;
++	}
++
++	switch (hci_skb_pkt_type(skb)) {
++	case HCI_COMMAND_PKT:
++		if (hdev)
++			hdev->stat.cmd_tx++;
++		break;
++
++	case HCI_ACLDATA_PKT:
++		if (hdev)
++			hdev->stat.acl_tx++;
++		break;
++
++	case HCI_SCODATA_PKT:
++		BT_WARN("[bt sdio hci] HCI_SCODATA_PKT not supported");
++		if (hdev)
++			hdev->stat.sco_tx++;
++		break;
++
++	default:
++		BT_ERR("[bt sdio hci] unknown packet type :%d", hci_skb_pkt_type(skb));
++		return -EILSEQ;
++	}
++
++	skb_queue_tail(&private_data->hci_adapter->tx_queue, skb);
++
++	if (!private_data->hci_adapter->is_suspended) {
++		wake_up_interruptible(&private_data->work_thread.wait_queue);
++	} else {
++		skb_dequeue_tail(&private_data->hci_adapter->tx_queue);
++		BT_INFO("[bt sdio hci] Device is suspending");
++		goto fail;
++	}
++
++	return 0;
++fail:
++    //in case of error HCI frees the skb
++	return -EIO;
++}
++
++static int btti_hci_if_setup(struct hci_dev *hdev)
++{
++	struct btti_private *private_data = hci_get_drvdata(hdev);
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++
++	pm_runtime_set_autosuspend_delay(&sdiodev->func->dev,
++					 BTTI_SDIO_AUTOSUSPEND_DELAY);
++	pm_runtime_use_autosuspend(&sdiodev->func->dev);
++
++	pm_runtime_set_active(&sdiodev->func->dev);
++
++	/* Default forbid runtime auto suspend
++	 */
++	pm_runtime_forbid(&sdiodev->func->dev);
++	pm_runtime_enable(&sdiodev->func->dev);
++
++	//auto suspend is allowed
++	if (private_data->hci_adapter &&
++	    private_data->hci_adapter->enable_autosuspend) {
++		pm_runtime_allow(&sdiodev->func->dev);
++	}
++	return 0;
++}
++
++/*
++ * This function handles the event generated by firmware, rx data
++ * received from firmware, and tx data sent from kernel.
++ * work_thread.wait_queue
++ */
++static int btti_service_work_thread(void *data)
++{
++	struct btti_worker_thread *thread = data;
++	struct btti_private *private_data = thread->private_data;
++	struct btti_hci_adapter *hci_adapter = private_data->hci_adapter;
++	wait_queue_entry_t wait;
++	struct sk_buff *skb;
++	ulong flags;
++
++	BT_INFO("[bt sdio hci] work thread is started");
++
++	init_waitqueue_entry(&wait, current);
++
++	for (;;) {
++		add_wait_queue(&thread->wait_queue, &wait);
++
++		if (kthread_should_stop() || private_data->sdio_dev_removed) {
++			BT_DBG("[bt sdio hci]work_thread: thread is need to stopped");
++			break;
++		}
++
++		set_current_state(TASK_INTERRUPTIBLE);
++
++		//if no RX and queue is empty or ble is not enabled
++		if (!private_data->hci_adapter->ble_enable ||
++		    (!hci_adapter->num_of_interrupt &&
++		     skb_queue_empty(&hci_adapter->tx_queue))) {
++			BT_INFO("[bt sdio hci] work thread is sleeping...");
++			schedule();
++		}
++
++		set_current_state(TASK_RUNNING);
++
++		remove_wait_queue(&thread->wait_queue, &wait);
++
++		BT_DBG("[bt sdio hci] work thread woke up");
++
++		if (kthread_should_stop() || private_data->sdio_dev_removed) {
++			BT_INFO("[bt sdio hci] work_thread: break from main thread");
++			break;
++		}
++
++		//handle the RX, process the interrupt function
++		spin_lock_irqsave(&private_data->irq_cnt_lock, flags);
++		if (hci_adapter->num_of_interrupt) {
++			hci_adapter->num_of_interrupt = 0;
++			spin_unlock_irqrestore(&private_data->irq_cnt_lock, flags);
++			if (private_data->card_process_rx_funcp) {
++				//call to btti_sdio_process_rx
++				private_data->card_process_rx_funcp(private_data);
++			}
++		} else {
++			spin_unlock_irqrestore(&private_data->irq_cnt_lock, flags);
++		}
++
++		if (private_data->hci_adapter->is_suspended) {
++			BT_INFO("[bt sdio hci] work thread not available, is_suspended:%d",
++				private_data->hci_adapter->is_suspended);
++			continue;
++		}
++		//handle the TX
++		skb = skb_dequeue(&hci_adapter->tx_queue);
++		if (skb) {
++			if (btti_hci_tx_pkt(private_data, skb)) {
++				//handle tx packet
++				BT_ERR("[bt sdio hci] TX , error send packet");
++			}
++		}
++	}
++
++	return 0;
++}
++
++int btti_hci_register_hdev(struct btti_private *private_data)
++
++{
++	struct hci_dev *hdev = NULL;
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++	int ret;
++
++	hdev = hci_alloc_dev();
++	if (!hdev) {
++		BT_ERR("[bt sdio hci] Can not allocate HCI device");
++		goto err_hdev;
++	}
++
++	private_data->btti_dev.hcidev = hdev;
++	hci_set_drvdata(hdev, private_data);
++
++	hdev->bus   = HCI_SDIO;
++	hdev->open  = btti_hci_if_open;
++	hdev->close = btti_hci_if_close;
++	hdev->flush = btti_hci_if_flush;
++	hdev->send  = btti_hci_if_tx_frame;
++	hdev->setup = btti_hci_if_setup;
++	SET_HCIDEV_DEV(hdev, &sdiodev->func->dev);
++
++	set_bit(HCI_QUIRK_NON_PERSISTENT_SETUP, &hdev->quirks);
++
++	ret = hci_register_dev(hdev);
++	if (ret < 0) {
++		BT_ERR("[bt sdio hci] Can not register HCI device");
++		goto err_hci_register_dev;
++	}
++
++#ifdef CONFIG_DEBUG_FS
++	btti_debugfs_init(hdev);
++#endif
++
++	return 0;
++
++err_hci_register_dev:
++	hci_free_dev(hdev);
++
++err_hdev:
++	/* Stop the thread servicing the interrupts */
++	kthread_stop(private_data->work_thread.task);
++
++	btti_hci_free_hci_adapter(private_data);
++	kfree(private_data);
++
++	return -ENOMEM;
++}
++EXPORT_SYMBOL_GPL(btti_hci_register_hdev);
++
++struct btti_private *btti_hci_add_sdio_dev(void *sdiodev)
++{
++	struct btti_private *private_data;
++
++	private_data = kzalloc(sizeof(*private_data), GFP_KERNEL);
++	if (!private_data) {
++		BT_ERR("[bt sdio hci] Can not allocate private_data");
++		goto err_priv;
++	}
++
++	private_data->hci_adapter = kzalloc(sizeof(*private_data->hci_adapter),
++					    GFP_KERNEL);
++	if (!private_data->hci_adapter) {
++		BT_ERR("[bt sdio hci] Allocate buffer for btti_hci_adapter failed!");
++		goto err_hci_adapter;
++	}
++
++	btti_hci_init_hci_adapter(private_data);
++
++	BT_INFO("[bt sdio hci] Starting work thread...");
++	private_data->work_thread.private_data = private_data;
++	spin_lock_init(&private_data->irq_cnt_lock);
++
++	init_waitqueue_head(&private_data->work_thread.wait_queue);
++	private_data->work_thread.task = kthread_run(btti_service_work_thread,
++						     &private_data->work_thread,
++						     "btti_main_service");
++	if (IS_ERR(private_data->work_thread.task))
++		goto err_thread;
++
++	private_data->btti_dev.sdiodev = sdiodev;
++	return private_data;
++
++err_thread:
++	btti_hci_free_hci_adapter(private_data);
++
++err_hci_adapter:
++	kfree(private_data);
++
++err_priv:
++	return NULL;
++}
++EXPORT_SYMBOL_GPL(btti_hci_add_sdio_dev);
++
++int btti_hci_remove_sdio_dev(struct btti_private *private_data)
++{
++	struct hci_dev *hdev;
++
++	BT_INFO("[bt sdio hci] remove sdio dev");
++
++	hdev = private_data->btti_dev.hcidev;
++
++	if (private_data->work_thread.task)
++		kthread_stop(private_data->work_thread.task);
++
++	if (hdev) {
++		BT_INFO("[bt sdio hci] unregister hci");
++#ifdef CONFIG_DEBUG_FS
++		btti_debugfs_remove(hdev);
++#endif
++		hci_unregister_dev(hdev);
++		hci_free_dev(hdev);
++	}
++
++	private_data->btti_dev.hcidev = NULL;
++
++	btti_hci_free_hci_adapter(private_data);
++
++	kfree(private_data);
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(btti_hci_remove_sdio_dev);
++
++MODULE_AUTHOR("Texas Instruments.");
++MODULE_DESCRIPTION("Texas Instruments Bluetooth driver ver " VERSION);
++MODULE_VERSION(VERSION);
++MODULE_LICENSE("GPL");
+diff --git a/drivers/bluetooth/btti_sdio.c b/drivers/bluetooth/btti_sdio.c
+new file mode 100644
+index 000000000000..95e784ba222a
+--- /dev/null
++++ b/drivers/bluetooth/btti_sdio.c
+@@ -0,0 +1,958 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * This file is part of TI BLE over SDIO
++ *
++ * Copyright (C) 2022 Texas Instruments
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License for more details.
++ *
++ */
++
++#include <linux/firmware.h>
++#include <linux/slab.h>
++#include <linux/suspend.h>
++
++#include <linux/mmc/sdio.h>
++#include <linux/mmc/sdio_ids.h>
++#include <linux/mmc/sdio_func.h>
++#include <linux/module.h>
++#include <linux/devcoredump.h>
++
++#include <net/bluetooth/bluetooth.h>
++#include <net/bluetooth/hci_core.h>
++
++#include "btti_drv.h"
++#include "btti_sdio.h"
++
++#define VERSION "ti_1.0"
++
++#define SDIO_DEVICE_ID_TI_CC33XX	0x4077
++
++static void btti_sdio_if_remove(struct sdio_func *func);
++static int __maybe_unused btti_sdio_unregister_dev(struct sdio_func *func);
++static int btti_sdio_rx_packet(struct btti_private *private_data);
++static int btti_sdio_tx_packet(struct btti_private *private_data,
++			       struct sk_buff *skb);
++static void btti_sdio_irq_handler(struct sdio_func *func);
++static int btti_sdio_power_up_fw(struct btti_private *private_data);
++static int btti_handle_rx_vendor_event(struct btti_private *private_data,
++				       struct sk_buff *skb);
++static void btti_acknldg_packet(struct btti_sdio_dev *sdiodev, u8 ack);
++
++static const struct of_device_id btti_sdio_of_match_table[] = {
++	{ .compatible = "ti,cc33xxbt" },
++	{ }
++};
++
++static int btti_sdio_if_probe_of(struct device *dev)
++{
++	if (!dev || !dev->of_node ||
++	    !of_match_node(btti_sdio_of_match_table, dev->of_node)) {
++		BT_ERR("[bt sdio] sdio device tree data not available\n");
++		return -1;
++	}
++
++	return 0;
++}
++
++static const struct btti_sdio_dev_reg_map btti_reg_map_cc33xx = {
++	/* fun0 ,ELP Wakeup Reg address, func0 not used*/
++	.sdio_wup_ble = 0x40,
++	/* fun1, set 0x1, to enable interrupts, 0 to disable */
++	.sdio_enable_int = 0x14,
++	/* fun1,read and write to the card are at 0x0 address */
++	.sdio_rt_data = 0x0,
++	/* fun1,write 1 to clear rx interrupt after reception */
++	.sdio_cl_int = 0x13,
++	/* fun1, bt mode status, bit 1 means ack mode,
++	 * currently the code just read it
++	 */
++	.bt_mode_status = 0x20,
++	/* fun1 read packet control, write 1 is set ack for RX,
++	 *  write 0 for nack
++	 */
++	.sdio_pc_rrt = 0x10,
++};
++
++static const struct btti_sdio_device btti_sdio_cc33xx_bt = {
++	.reg_map		= &btti_reg_map_cc33xx,
++};
++
++static const struct sdio_device_id btti_sdio_ids[] = {
++	{SDIO_DEVICE(SDIO_VENDOR_ID_TI, SDIO_DEVICE_ID_TI_CC33XX),
++		.driver_data = (unsigned long)&btti_sdio_cc33xx_bt},
++	{ }	/* Terminating entry */
++};
++
++MODULE_DEVICE_TABLE(sdio, btti_sdio_ids);
++
++static int btti_sdio_enable_func_interrupt(struct btti_sdio_dev *sdiodev,
++					   u8 mask)
++{
++	int ret;
++
++	sdio_writeb(sdiodev->func, mask, sdiodev->reg_map->sdio_enable_int, &ret);
++	if (ret) {
++		BT_ERR("[bt sdio] Unable to enable the host interrupt!");
++		ret = -EIO;
++	}
++
++	return ret;
++}
++
++static int btti_sdio_disable_func_interrupt(struct btti_sdio_dev *sdiodev,
++					    u8 mask)
++{
++	u8 sdio_enable_int_mask;
++	int ret;
++
++	sdio_enable_int_mask = sdio_readb(sdiodev->func,
++					  sdiodev->reg_map->sdio_enable_int, &ret);
++	if (ret)
++		return -EIO;
++
++	sdio_enable_int_mask &= ~mask;
++
++	sdio_writeb(sdiodev->func, sdio_enable_int_mask,
++		    sdiodev->reg_map->sdio_enable_int, &ret);
++	if (ret < 0) {
++		BT_ERR("[bt sdio] Unable to disable the host interrupt!");
++		return -EIO;
++	}
++
++	return 0;
++}
++
++//Read Rx, called from btti_service_work_thread
++static int btti_sdio_process_rx(struct btti_private *private_data)
++{
++	ulong flags;
++	u8 intrpt_occur;
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++
++	spin_lock_irqsave(&private_data->irq_cnt_lock, flags);
++	intrpt_occur = sdiodev->intrpt_triggered;
++	sdiodev->intrpt_triggered = 0;
++	spin_unlock_irqrestore(&private_data->irq_cnt_lock, flags);
++
++	sdio_claim_host(sdiodev->func);
++	if (intrpt_occur)
++		btti_sdio_rx_packet(private_data);//read Rx,
++	else
++		btti_acknldg_packet(sdiodev, 1);//nack
++
++	sdio_release_host(sdiodev->func);
++
++	return 0;
++}
++
++static int btti_sdio_clr_irq(struct btti_sdio_dev *sdiodev)
++{
++	int ret;
++
++	BT_DBG("[bt sdio] clear int_status");
++
++	sdio_writeb(sdiodev->func, 1, sdiodev->reg_map->sdio_cl_int, &ret);
++	if (ret) {
++		BT_ERR("[bt sdio] clear int status failed: %d", ret);
++		return ret;
++	}
++
++	return 0;
++}
++
++static int btti_sdio_register_dev(struct btti_sdio_dev *sdiodev)
++{
++	struct sdio_func *func;
++	u8 reg;
++	int ret;
++
++	if (!sdiodev || !sdiodev->func) {
++		BT_ERR("[bt sdio] Error: sdiodev or function is NULL!");
++		ret = -EINVAL;
++		goto failed;
++	}
++
++	func = sdiodev->func;
++
++	sdio_claim_host(func);
++
++	func->enable_timeout = 0;
++
++	ret = sdio_enable_func(func);
++	if (ret) {
++		//this is ok, since the ble is not up yet so SDIO_CCCR_IOEx
++		//is not set on this sage
++		BT_DBG("[bt sdio] sdio_enable_func: %d failed: ret=%d", func->num, ret);
++	} else {
++		BT_INFO("[bt sdio] sdio_enable_func: %d success", func->num);
++	}
++
++	//set block size
++	ret = sdio_set_block_size(sdiodev->func, SDIO_BLOCK_SIZE);
++	if (ret) {
++		BT_ERR("[bt sdio] cannot set SDIO block size");
++		ret = -EIO;
++		goto unreg_device;
++	}
++
++	//clear interrupt, write to clear
++	ret = btti_sdio_clr_irq(sdiodev);
++
++	//read status --not in use
++	reg = sdio_readb(func, sdiodev->reg_map->bt_mode_status, &ret);
++	if (ret < 0) {
++		BT_ERR("[bt sdio] Failed to read bt_mode_status ");
++		ret = -EIO;
++		goto unreg_device;
++	}
++	sdiodev->bt_mode_status = ret;
++
++	BT_DBG("[bt sdio] SDIO FUNC%d IO port: 0x%x BT MODE: 0x%x",
++	       func->num, sdiodev->reg_map->sdio_rt_data,
++	       sdiodev->bt_mode_status);
++
++	sdio_set_drvdata(func, sdiodev);
++
++	sdio_release_host(func);
++
++	return 0;
++
++unreg_device:
++		sdio_release_host(func);
++		btti_sdio_unregister_dev(func);
++		return ret;
++failed:
++		return ret;
++}
++
++static int btti_sdio_unregister_dev(struct sdio_func *func)
++{
++	if (func) {
++		sdio_claim_host(func);
++		BT_DBG("[bt sdio] sdio_release_irq");
++		sdio_release_irq(func);
++		sdio_disable_func(func);
++		sdio_set_drvdata(func, NULL);
++		sdio_release_host(func);
++	}
++
++	return 0;
++}
++
++static int btti_sdio_enable_int(struct btti_sdio_dev *sdiodev)
++{
++	int ret;
++
++	if (!sdiodev || !sdiodev->func)
++		return -EINVAL;
++
++	sdio_claim_host(sdiodev->func);
++
++	ret = btti_sdio_enable_func_interrupt(sdiodev, INTRPT_ENABLE_MASk);
++
++	sdio_release_host(sdiodev->func);
++
++	return ret;
++}
++
++static int btti_sdio_disable_int(struct btti_sdio_dev *sdiodev)
++{
++	int ret;
++
++	if (!sdiodev || !sdiodev->func)
++		return -EINVAL;
++
++	sdio_claim_host(sdiodev->func);
++
++	ret = btti_sdio_disable_func_interrupt(sdiodev, INTRPT_ENABLE_MASk);
++
++	sdio_release_host(sdiodev->func);
++
++	return ret;
++}
++
++static void btti_sdio_dump_regs(struct btti_private *private_data)
++{
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++	int ret = 0;
++	unsigned int reg, reg_start, reg_end;
++	char buf[256], *ptr;
++	u8 loop, func, data;
++	int MAX_LOOP = 2;
++
++	btti_sdio_power_up_fw(private_data);
++	sdio_claim_host(sdiodev->func);
++
++	for (loop = 0; loop < MAX_LOOP; loop++) {
++		memset(buf, 0, sizeof(buf));
++		ptr = buf;
++
++		if (loop == 0) {
++			/* Read the registers of SDIO function0 */
++			func = loop;
++			reg_start = 0;
++			reg_end = 9;
++		} else {
++			func = 2;
++			reg_start = 0;
++			reg_end = 0x09;
++		}
++
++		ptr += sprintf(ptr, "[bt sdio] SDIO Func%d (%#x-%#x): ",
++			       func, reg_start, reg_end);
++		for (reg = reg_start; reg <= reg_end; reg++) {
++			if (func == 0)
++				data = sdio_f0_readb(sdiodev->func, reg, &ret);
++			else
++				data = sdio_readb(sdiodev->func, reg, &ret);
++
++			if (!ret) {
++				ptr += sprintf(ptr, "%02x ", data);
++			} else {
++				ptr += sprintf(ptr, "ERR");
++				break;
++			}
++		}
++
++		BT_INFO("%s", buf);
++	}
++
++	sdio_release_host(sdiodev->func);
++}
++
++/* This function dump sdio register and memory data */
++static void btti_sdio_coredump(struct device *dev)
++{
++	struct sdio_func *func = dev_to_sdio_func(dev);
++	struct btti_sdio_dev *sdiodev;
++	struct btti_private *private_data;
++
++	sdiodev = sdio_get_drvdata(func);
++	if (sdiodev) {
++		private_data = sdiodev->private_data;
++		if (!private_data) {
++			BT_ERR("[bt sdio] private_data is not allocated");
++			return;
++		}
++	} else {
++		BT_ERR("[bt sdio] no sdiodev");
++		return;
++	}
++
++	/* dump sdio register first */
++	btti_sdio_dump_regs(private_data);
++}
++
++static int btti_sdio_power_up_fw(struct btti_private *private_data)
++{
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++	int ret = 0;
++
++	BT_DBG("[bt sdio] power up FW");
++
++	if (!sdiodev || !sdiodev->func) {
++		BT_ERR("[bt sdio] sdiodev or function is NULL!");
++		return -EINVAL;
++	}
++
++	sdio_claim_host(sdiodev->func);
++
++	// BLE firmware remains awake , force Lx to remain awake;
++	sdio_f0_writeb(sdiodev->func, HOST_POWER_UP_MASK,
++		       sdiodev->reg_map->sdio_wup_ble, &ret);
++	if (ret) {
++		BT_ERR("[bt sdio] Unable to power up ble firmware!");
++		ret = -EIO;
++	}
++
++	sdio_release_host(sdiodev->func);
++
++	BT_INFO("[bt sdio] wake up firmware");
++
++	return ret;
++}
++
++static int btti_sdio_power_dn_fw(struct btti_private *private_data)
++{
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++	int ret = 0;
++
++	BT_DBG("[bt sdio] power up FW");
++
++	if (!sdiodev || !sdiodev->func) {
++		BT_ERR("[bt sdio] sdiodev or function is NULL!");
++		return -EINVAL;
++	}
++
++	sdio_claim_host(sdiodev->func);
++
++	//  Lx Core can go to sleep (from host perspective)
++	sdio_f0_writeb(sdiodev->func, ~HOST_POWER_UP_MASK,
++		       sdiodev->reg_map->sdio_wup_ble, &ret);
++	if (ret) {
++		BT_ERR("[bt sdio] Unable to power down ble firmware!");
++		ret = -EIO;
++	}
++
++	sdio_release_host(sdiodev->func);
++
++	BT_INFO("[bt sdio] wake up firmware");
++
++	return ret;
++}
++
++static void btti_sdio_irq_handler(struct sdio_func *func)
++{
++	struct btti_private *private_data;
++	struct btti_sdio_dev *sdiodev;
++	ulong flags;
++	int ret;
++
++	sdiodev = sdio_get_drvdata(func);
++	if (!sdiodev || !sdiodev->private_data) {
++		BT_ERR("[bt sdio] sdiodev or private_data is NULL, sdiodev=%p", sdiodev);
++		return;
++	}
++
++	private_data = sdiodev->private_data;
++
++	if (private_data->sdio_dev_removed) {
++		BT_ERR("[bt sdio] RX sdio_dev_removed");
++		return;
++	}
++
++	sdio_claim_host(func);
++
++	//clear interrupt
++	ret = btti_sdio_clr_irq(sdiodev);
++
++	sdio_release_host(func);
++
++	if (ret) {
++		BT_ERR("[bt sdio] failed to clear");
++		return;
++	}
++
++	spin_lock_irqsave(&private_data->irq_cnt_lock, flags);
++	sdiodev->intrpt_triggered = 1;// signal that interrupt happened
++	spin_unlock_irqrestore(&private_data->irq_cnt_lock, flags);
++
++	btti_hci_irq_handler(private_data);
++}
++
++//rx
++static int btti_sdio_rx_packet(struct btti_private *private_data)
++{
++	u32 packet_len = 0;
++	int ret;
++	u32 data_read_size;
++	struct sk_buff *skb = NULL;
++	u32 packet_type;
++
++	struct hci_dev *hdev = private_data->btti_dev.hcidev;
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++	u8 *sdio_header = sdiodev->sdio_header;
++
++	if (!sdiodev || !sdiodev->func) {
++		BT_ERR("[bt sdio] RX sdiodev or function is NULL!");
++		ret = -EINVAL;
++		goto exit;
++	}
++
++	//Read the length of data to be transferred
++	ret = sdio_readsb(sdiodev->func, sdio_header,
++			  sdiodev->reg_map->sdio_rt_data, SDIO_HEADER_LEN);
++	if (ret < 0) {
++		BT_ERR("[bt sdio] RX read rx_len failed");
++		ret = -EIO;
++		goto exit;
++	}
++
++	packet_len = sdio_header[0] | (sdio_header[1] << 8) | (sdio_header[2] << 16);
++	packet_type = sdio_header[3];
++
++	BT_INFO("[bt sdio] RX packet_len:%d packet_type:%d packet header hex: %*ph",
++		packet_len, packet_type, SDIO_HEADER_LEN, sdio_header);
++
++	if (packet_len <= SDIO_HEADER_LEN || packet_len > HCI_MAX_FRAME_SIZE) {
++		BT_ERR("[bt sdio] RX packet length: %d not HCI valid length", packet_len);
++		ret = -EINVAL;
++		goto exit;
++	}
++
++	if (packet_len > (TIDRV_SIZE_OF_CMD_BUFFER + SDIO_HEADER_LEN)) {
++		BT_WARN("[bt sdio] RX packet length: %d not supported",
++			packet_len);
++	}
++
++	data_read_size = roundup((packet_len - SDIO_HEADER_LEN), BTSDIO_RX_ALIGN);
++
++	skb = bt_skb_alloc(data_read_size, GFP_KERNEL);
++	if (!skb) {
++		/* Out of memory. Prepare a read retry and just
++		 * return with the expectation that the next time
++		 * we're called we'll have more memory.
++		 */
++		BT_ERR("[bt sdio] No free skb");
++		ret = -ENOMEM;
++		goto exit;
++	}
++
++	skb_put(skb, packet_len - SDIO_HEADER_LEN);
++
++	ret = sdio_readsb(sdiodev->func, skb->data,
++			  sdiodev->reg_map->sdio_rt_data, data_read_size);
++	if (ret < 0) {
++		BT_ERR("[bt sdio] RX sdio_readsb failed: %d, size read:%d",
++		       ret, data_read_size);
++		ret = -EIO;
++		goto exit;
++	}
++	BT_INFO("[bt sdio] packet data hex: %*ph", data_read_size, skb->data);
++
++	switch (packet_type) {
++	case HCI_ACLDATA_PKT:
++	case HCI_SCODATA_PKT:
++	case HCI_EVENT_PKT:
++		if (hdev) {
++			btti_acknldg_packet(sdiodev, 0);//ack
++			hdev->stat.byte_rx += data_read_size;
++			hci_skb_pkt_type(skb) = packet_type;
++
++			ret = hci_recv_frame(hdev, skb);
++			if (ret < 0)
++				BT_ERR("[bt sdio] RX hci_recv_frame failed :%d ", ret);
++			ret = 0;
++		} else {
++			ret = -EPERM;
++		}
++
++		//no need to free the skb in here, it is freed at hci_recv_frame
++		break;
++
++	case HCI_VENDOR_PKT:
++		BT_INFO("[bt sdio] vendor packet received");
++		ret = btti_handle_rx_vendor_event(private_data, skb);
++		if (!ret) {
++			//if hdev was just created read it
++			hdev = private_data->btti_dev.hcidev;
++			if (hdev) {
++				btti_acknldg_packet(sdiodev, 0);//ack
++				BT_INFO("[bt sdio] Hdev was created");
++				hdev->stat.byte_rx += data_read_size;
++				hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
++				ret = hci_recv_frame(hdev, skb);
++				if (ret < 0)
++					BT_ERR("[bt sdio] RX hci_recv_frame failed: %d", ret);
++
++				//no need to free the skb in here,
++				//it is freed at hci_recv_frame
++				ret = 0;
++			} else {
++				ret = -EPERM;
++			}
++		}
++		break;
++
++	default:
++		BT_ERR("[bt sdio] RX Unknown packet packet_type:%d", packet_type);
++		ret = -ENOENT;
++		break;
++	}
++
++exit:
++    //send nack
++	if (ret) {
++		if (hdev)
++			hdev->stat.err_rx++;
++		kfree_skb(skb);
++		skb = NULL;
++		btti_acknldg_packet(sdiodev, 1);//nack
++	}
++	return ret;
++}
++
++static void btti_acknldg_packet(struct btti_sdio_dev *sdiodev, u8 ack)
++{
++	int ret_ack = 0;
++
++	//ack the packet, HCI will release the skb
++	BT_DBG("[bt sdio] RX sdio_writesb: send ACK ");
++	sdio_writeb(sdiodev->func, ack, sdiodev->reg_map->sdio_pc_rrt, &ret_ack);
++	if (ret_ack && ack == 0)
++		BT_ERR("[bt sdio] RX sdio_writesb: send ACK failed: %d", ret_ack);
++	if (ret_ack && ack == 1)
++		BT_ERR("[bt sdio] RX sdio_writesb: send NACK failed: %d", ret_ack);
++}
++
++static int btti_handle_rx_vendor_event(struct btti_private *private_data,
++				       struct sk_buff *skb)
++{
++	int ret = 0;
++	struct btti_vendor_event *vendor_event;
++
++	vendor_event = (struct btti_vendor_event *)skb->data;
++	switch (vendor_event->event_opcode) {
++	case BTTI_BLE_FIRMWARE_UP:
++		BT_INFO("[bt sdio] vendor packet- ble is up");
++		private_data->hci_adapter->ble_enable = 1;
++		if (btti_hci_register_hdev(private_data)) {
++			BT_ERR("[bt sdio] Register hdev failed!");
++			ret = -ENODEV;
++		}
++		BT_INFO("[bt sdio] registered to HCI");
++
++		break;
++	default:
++		BT_ERR("[bt sdio] unsupported rx vendor event code: %d",
++		       vendor_event->event_code);
++		ret = -EINVAL;
++		break;
++	}
++
++	return ret;
++}
++
++//tx
++//packet_len, the length includes the header.
++static int btti_sdio_tx_packet(struct btti_private *private_data,
++			       struct sk_buff *skb)
++{
++	struct btti_sdio_dev *sdiodev = private_data->btti_dev.sdiodev;
++	int ret = 0;
++	int i = 0;
++	void *tmpbuf = NULL;
++	u32 data_send_size = 0;
++	u32 packet_len;
++	char *payload;
++	bool alignment_required;
++
++	if (!sdiodev || !sdiodev->func) {
++		BT_ERR("[bt sdio] sdiodev or function is NULL!");
++		return -EINVAL;
++	}
++
++	packet_len = skb->len;
++	payload = skb->data;
++	data_send_size = roundup(packet_len, BTSDIO_TX_ALIGN);
++	alignment_required = (data_send_size != packet_len);
++
++	if (alignment_required) {
++		tmpbuf = kzalloc(data_send_size, GFP_KERNEL);
++		if (!tmpbuf) {
++			BT_ERR("[bt sdio] TX allocation failed");
++			return -ENOMEM;
++		}
++		memcpy(tmpbuf, payload, data_send_size);
++	} else {
++		tmpbuf = payload;
++	}
++
++	pm_runtime_get_sync(&sdiodev->func->dev);
++
++	sdio_claim_host(sdiodev->func);
++	do {
++		/* Transfer data to device */
++		ret = sdio_writesb(sdiodev->func,
++				   sdiodev->reg_map->sdio_rt_data, tmpbuf,
++				   data_send_size);
++		if (ret < 0) {
++			i++;
++			BT_ERR("[bt sdio] TX  i=%d writesb failed: %d", i, ret);
++			BT_ERR("[bt sdio] TX data_send_size: %d hex: %*ph",
++			       data_send_size, data_send_size, tmpbuf);
++			ret = -EIO;
++			if (i > MAX_SDIO_TX_RETRY)
++				goto exit;
++		}
++		BT_INFO("[bt sdio] TX to SDIO sdiodev done : %*ph ",
++			data_send_size, tmpbuf);
++
++	} while (ret);
++
++exit:
++	sdio_release_host(sdiodev->func);
++
++	if (alignment_required)
++		kfree(tmpbuf);
++
++	pm_runtime_mark_last_busy(&sdiodev->func->dev);
++	pm_runtime_put_autosuspend(&sdiodev->func->dev);
++
++	if (ret)
++		private_data->btti_dev.hcidev->stat.err_tx++;
++	else
++		private_data->btti_dev.hcidev->stat.byte_tx += data_send_size;
++	kfree_skb(skb);
++	return ret;
++}
++
++static int btti_sdio_if_probe(struct sdio_func *func,
++			      const struct sdio_device_id *id)
++{
++	int ret = 0;
++	struct btti_private *private_data = NULL;
++	struct btti_sdio_dev *sdiodev = NULL;
++
++	BT_INFO("[bt sdio] PROBE vendor=0x%x, device=0x%x, class=%d, fn=%d 0x%lx",
++		id->vendor, id->device, id->class, func->num,
++		(unsigned long)func);
++
++	/* We are only able to handle the wlan function */
++	if (func->num != 0x01) {
++		BT_DBG("[bt sdio] PROBE incorrect function number!");
++		ret = -ENODEV;
++		return ret;
++	}
++
++	/* Device tree node parsing */
++	if (btti_sdio_if_probe_of(&func->dev)) {
++		ret = -ENODEV;
++		return ret;
++	}
++
++	sdiodev = devm_kzalloc(&func->dev, sizeof(*sdiodev), GFP_KERNEL);
++	if (!sdiodev) {
++		ret = -ENODEV;
++		return ret;
++	}
++
++	sdiodev->func = func;
++	sdiodev->private_data = NULL;
++
++	if (id->driver_data) {
++		struct btti_sdio_device *data = (void *)id->driver_data;
++
++		sdiodev->reg_map = data->reg_map;
++	}
++
++	if (btti_sdio_register_dev(sdiodev) < 0) {
++		BT_ERR("[bt sdio] PROBE Failed to register BT device!");
++		ret = -ENODEV;
++		goto remove_device;
++	}
++	//enable interrupts
++	btti_sdio_enable_int(sdiodev);
++
++	private_data = btti_hci_add_sdio_dev(sdiodev);
++	if (!private_data) {
++		BT_ERR("[bt sdio] PROBE Initializing sdiodev failed!");
++		ret = -ENODEV;
++		goto remove_device;
++	}
++
++	sdiodev->private_data = private_data;
++
++	/* Initialize the interface specific function pointers */
++	private_data->card_tx_packet_funcp = btti_sdio_tx_packet;
++	private_data->card_power_up_firmware_funcp = btti_sdio_power_up_fw;
++	private_data->card_power_dn_firmware_funcp = btti_sdio_power_dn_fw;
++	private_data->card_process_rx_funcp = btti_sdio_process_rx;
++
++	/* pm_runtime_enable would be done after the firmware is being
++	 * downloaded because the core layer probably already enables
++	 * runtime PM for this func such as the case host->caps &
++	 * MMC_CAP_POWER_OFF_CARD.
++	 */
++	if (pm_runtime_enabled(&sdiodev->func->dev))
++		pm_runtime_disable(&sdiodev->func->dev);
++
++	/* As explaination in drivers/mmc/core/sdio_bus.c tells us:
++	 * Unbound SDIO functions are always suspended.
++	 * During probe, the function is set active and the usage count
++	 * is incremented.  If the driver supports runtime PM,
++	 * it should call pm_runtime_put_noidle() in its probe routine and
++	 * pm_runtime_get_noresume() in its remove routine.
++	 *
++	 * So, put a pm_runtime_put_noidle here !
++	 */
++	pm_runtime_put_noidle(&sdiodev->func->dev);
++
++	BT_DBG("[bt sdio] PROBE sdio_claim_irq");
++	sdio_claim_host(func);
++	ret = sdio_claim_irq(func, btti_sdio_irq_handler);
++	sdio_release_host(func);
++
++	if (ret) {
++		BT_ERR("[bt sdio] PROBE sdio_claim_irq failed: ret=%d", ret);
++		ret = -EIO;
++		goto remove_device;
++	}
++
++	BT_INFO("[bt sdio] TI cc33xx BLE-over-SDIO driver is up and running!");
++
++	return 0;
++
++/*
++ * disable_sdio_dev_int:
++ *	btti_sdio_disable_int(sdiodev);
++ *	btti_sdio_unregister_dev(func);
++ */
++remove_device:
++	btti_sdio_if_remove(func);
++	return ret;
++}
++
++static void btti_sdio_if_remove(struct sdio_func *func)
++{
++	struct btti_sdio_dev *sdiodev;
++
++	BT_INFO("[bt sdio if] sdio remove");
++
++	if (func) {
++		sdiodev = sdio_get_drvdata(func);
++		if (sdiodev) {
++			BT_INFO("[bt sdio] disable interrupt");
++			btti_sdio_disable_int(sdiodev);
++			if (sdiodev->private_data) {
++				sdiodev->private_data->sdio_dev_removed = true;
++				btti_hci_remove_sdio_dev(sdiodev->private_data);
++			} else {
++				BT_ERR("[bt sdio] private_data was not allocated");
++			}
++		}
++		btti_sdio_unregister_dev(func);
++	}
++	/* Be consistent the state in btti_sdio_if_probe */
++	pm_runtime_get_noresume(&func->dev);
++}
++
++static int btti_sdio_if_suspend(struct device *dev)
++{
++	struct sdio_func *func = dev_to_sdio_func(dev);
++	struct btti_sdio_dev *sdiodev;
++	struct btti_private *private_data;
++	mmc_pm_flag_t pm_flags;
++	struct hci_dev *hcidev;
++
++	BT_INFO("[bt sdio] suspend");
++	if (func) {
++		pm_flags = sdio_get_host_pm_caps(func);
++		BT_INFO("[bt sdio] %s: suspend: PM flags = 0x%x", sdio_func_id(func),
++			pm_flags);
++		if (!(pm_flags & MMC_PM_KEEP_POWER)) {
++			BT_ERR("[bt sdio] %s: cannot remain alive while suspended",
++			       sdio_func_id(func));
++			return -ENOSYS;
++		}
++		//sdio_set_host_pm_flags(func, MMC_PM_KEEP_POWER);
++
++		sdiodev = sdio_get_drvdata(func);
++		if (!sdiodev || !sdiodev->private_data) {
++			BT_ERR("[bt sdio] sdiodev or private_data is not valid");
++			return 0;
++		}
++	} else {
++		BT_ERR("[bt sdio] sdio_func is not specified");
++		return 0;
++	}
++
++	private_data = sdiodev->private_data;
++	private_data->hci_adapter->is_suspending = true;
++	hcidev = private_data->btti_dev.hcidev;
++	BT_DBG("[bt sdio] %s: SDIO suspend", hcidev->name);
++	hci_suspend_dev(hcidev);
++	private_data->hci_adapter->is_suspending = false;
++	private_data->hci_adapter->is_suspended = true;
++
++	//if(private_data->card_power_dn_firmware_funcp){
++	//	private_data->card_power_dn_firmware_funcp(private_data);
++	//}
++
++	BT_DBG("[bt sdio] suspend end");
++	return 0;
++}
++
++static int btti_sdio_if_resume(struct device *dev)
++{
++	struct sdio_func *func = dev_to_sdio_func(dev);
++	struct btti_sdio_dev *sdiodev;
++	struct btti_private *private_data;
++	mmc_pm_flag_t pm_flags;
++	struct hci_dev *hcidev;
++
++	BT_INFO("[bt sdio] resume");
++
++	if (func) {
++		pm_flags = sdio_get_host_pm_caps(func);
++		BT_INFO("[bt sdio] %s: resume: PM flags = 0x%x",
++			sdio_func_id(func), pm_flags);
++		sdiodev = sdio_get_drvdata(func);
++		if (!sdiodev || !sdiodev->private_data) {
++			BT_ERR("[bt sdio] sdiodev or private_data is not valid");
++			return 0;
++		}
++	} else {
++		BT_ERR("[bt sdio] sdio_func is not specified");
++		return 0;
++	}
++	private_data = sdiodev->private_data;
++	if (!private_data) {
++		BT_ERR("[bt sdio] private_data is not allocated");
++		return 0;
++	}
++
++	if (!private_data->hci_adapter->is_suspended) {
++		BT_WARN("[bt sdio] device already resumed");
++		return 0;
++	}
++
++	//if(private_data->card_power_up_firmware_funcp){
++	//	private_data->card_power_up_firmware_funcp(private_data);
++	//}
++	hcidev = private_data->btti_dev.hcidev;
++	private_data->hci_adapter->is_suspended = false;
++	BT_INFO("[bt sdio] %s: SDIO resume", hcidev->name);
++	hci_resume_dev(hcidev);
++
++	return 0;
++}
++
++static const struct dev_pm_ops btti_sdio_pm_ops = {
++	.suspend	= btti_sdio_if_suspend,
++	.resume		= btti_sdio_if_resume,
++};
++
++static struct sdio_driver bt_ti_sdio = {
++	.name		= "btti_cc33xx_bt_sdio",
++	.id_table	= btti_sdio_ids,
++	.probe		= btti_sdio_if_probe,
++	.remove		= btti_sdio_if_remove,
++	.drv = {
++		.owner = THIS_MODULE,
++		.coredump = btti_sdio_coredump,
++		.pm = &btti_sdio_pm_ops,
++	}
++};
++
++static int __init btti_sdio_init_module(void)
++{
++	BT_INFO("[bt sdio] BLE SDIO init module");
++	if (sdio_register_driver(&bt_ti_sdio) != 0) {
++		BT_ERR("[bt sdio] SDIO Driver Registration Failed");
++		return -ENODEV;
++	}
++	return 0;
++}
++
++static void __exit btti_sdio_exit_module(void)
++{
++	BT_INFO("[bt sdio] BLE SDIO exit module");
++	sdio_unregister_driver(&bt_ti_sdio);
++}
++
++module_init(btti_sdio_init_module);
++module_exit(btti_sdio_exit_module);
++
++MODULE_AUTHOR("Texas Instruments.");
++MODULE_DESCRIPTION("Texas Instruments BT-over-SDIO driver ver " VERSION);
++MODULE_VERSION(VERSION);
++MODULE_LICENSE("GPL");
+diff --git a/drivers/bluetooth/btti_sdio.h b/drivers/bluetooth/btti_sdio.h
+new file mode 100644
+index 000000000000..f8106bc99667
+--- /dev/null
++++ b/drivers/bluetooth/btti_sdio.h
+@@ -0,0 +1,74 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ *
++ * This file is part of TI BLE over SDIO
++ *
++ * Copyright (C) 2022 Texas Instruments
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License for more details.
++ *
++ */
++
++#define SDIO_HEADER_LEN			4
++
++/* SD block size can not bigger than 64 due to buf size limit in firmware */
++/* define SD block size for data Tx/Rx */
++#define SDIO_BLOCK_SIZE			128
++
++#define TIDRV_BT_RX_PACKET_BUFFER_SIZE	(HCI_MAX_FRAME_SIZE)
++#define TIDRV_SIZE_OF_CMD_BUFFER         (251)
++
++#define MAX_RX_PACKET_SIZE	(((min_t (int, TIDRV_BT_RX_PACKET_BUFFER_SIZE, \
++			TIDRV_SIZE_OF_CMD_BUFFER) + SDIO_HEADER_LEN \
++			+ SDIO_BLOCK_SIZE - 1) / SDIO_BLOCK_SIZE) \
++			* SDIO_BLOCK_SIZE)
++
++/* Max retry number of CMD53 write */
++#define MAX_SDIO_TX_RETRY		2
++
++/* register bitmasks */
++#define HOST_POWER_UP_MASK			1 // 1 to power up BLE SDIO firmware wake up bit
++
++#define INTRPT_ENABLE_MASk		    1 //interrupt set
++
++struct btti_sdio_dev_reg_map {
++	u8 sdio_wup_ble;
++	u8 sdio_enable_int;
++	u8 sdio_rt_data;
++	u8 sdio_cl_int;
++	u8 bt_mode_status;
++	u8 sdio_pc_rrt;//ack interrupt
++};
++
++struct btti_sdio_dev {
++	struct sdio_func *func;
++	const struct btti_sdio_dev_reg_map *reg_map;
++	u8 bt_mode_status;/* the status read from 0x20 address */
++	struct btti_private *private_data;
++	u8 sdio_header[SDIO_HEADER_LEN];
++	bool intrpt_triggered;
++};
++
++struct btti_sdio_device {
++	const struct btti_sdio_dev_reg_map *reg_map;
++};
++
++struct btti_vendor_event {
++	u8  event_code;//0xFF
++	u8  total_length;//0x2
++	u16 event_opcode;// EOGF  = 1  ; ESG = 0 ;  CMD
++	u8  param_00[2];//Data
++} __packed;
++
++//BTTI_BLE_FIRMWARE_UP: EOGF  = 1  ; ESG = 0 ;  CMD= 42 => opcode  = 0x042A
++#define BTTI_BLE_FIRMWARE_UP 0x2A04 //on the packet it is 0x042A
++
++// CC33xx HW FIFOs must be accessed with 32 bit alignment
++#define BTSDIO_RX_ALIGN		    4
++#define BTSDIO_TX_ALIGN		    4
+diff --git a/drivers/bluetooth/btti_uart.c b/drivers/bluetooth/btti_uart.c
+new file mode 100644
+index 000000000000..87f4d0db0a17
+--- /dev/null
++++ b/drivers/bluetooth/btti_uart.c
+@@ -0,0 +1,730 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ *  TI Bluetooth HCI UART driver
++ *  Copyright (C) 2023 Texas Instruments
++ *
++ *  Acknowledgements:
++ *  This file is based on btuart.c, which was written by Marcel Holtmann.
++ */
++
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/skbuff.h>
++#include <linux/serdev.h>
++#include <linux/of.h>
++#include <linux/irq.h>
++#include <linux/firmware.h>
++#include <linux/regulator/consumer.h>
++#include <linux/pm_runtime.h>
++#include <linux/gpio/consumer.h>
++#include <linux/pinctrl/consumer.h>
++#include <linux/unaligned.h>
++
++#include <net/bluetooth/bluetooth.h>
++#include <net/bluetooth/hci_core.h>
++
++#include "hci_uart.h"
++
++struct btti_uart_vnd {
++	const struct h4_recv_pkt *recv_pkts;
++	int recv_pkts_cnt;
++	unsigned int manufacturer;
++};
++
++enum state {
++	STATE_PROBING = 0,
++	STATE_HW_OFF,
++	STATE_HW_ON,
++	STATE_HW_READY,
++	STATE_REMOVED
++};
++
++static const char *sm_state_to_string(enum state state)
++{
++	switch (state) {
++	case STATE_PROBING:
++		return "STATE_PROBING";
++	case STATE_HW_OFF:
++		return "STATE_HW_OFF";
++	case STATE_HW_ON:
++		return "STATE_HW_ON";
++	case STATE_HW_READY:
++		return "STATE_HW_READY";
++	case STATE_REMOVED:
++		return "STATE_REMOVED";
++	}
++
++	return "Illegal state value";
++};
++
++enum sm_event {
++	EVENT_PROBE_DONE,
++	EVENT_REMOVE,
++	EVENT_REGULATOR_ENABLE,
++	EVENT_REGULATOR_DISABLE,
++	EVENT_HCI_WAKEUP_FRAME_RECEIVED,
++};
++
++static const char *event_to_string(enum sm_event event)
++{
++	switch (event) {
++	case EVENT_PROBE_DONE:
++		return "EVENT_PROBE_DONE";
++	case EVENT_REMOVE:
++		return "EVENT_REMOVE";
++	case EVENT_REGULATOR_ENABLE:
++		return "EVENT_REGULATOR_ENABLE";
++	case EVENT_REGULATOR_DISABLE:
++		return "EVENT_REGULATOR_DISABLE";
++	case EVENT_HCI_WAKEUP_FRAME_RECEIVED:
++		return "EVENT_HCI_WAKEUP_FRAME_RECEIVED";
++	}
++
++	return "Illegal event value";
++};
++
++struct btti_uart_dev {
++	struct hci_dev *hdev;
++	struct serdev_device *serdev;
++	struct regulator *reg;
++	struct notifier_block nb;
++
++	struct work_struct tx_work;
++	struct sk_buff_head txq;
++
++	struct work_struct btti_uart_sm_work;
++	struct llist_head sm_event_list;
++	enum state sm_state;
++
++	struct sk_buff *rx_skb;
++
++	const struct btti_uart_vnd *vnd;
++
++	struct gpio_desc	*host_wakeup;
++
++	struct pinctrl *pinctrl;
++	struct pinctrl_state *pins_runtime;
++	struct pinctrl_state *pins_sleep;
++	struct hci_uart hu;
++};
++
++struct event_node {
++	struct llist_node node;
++	enum sm_event event;
++};
++
++static int serial_open(struct btti_uart_dev *bdev)
++{
++	struct serdev_device *serdev = bdev->serdev;
++	bool disable_flow_control = false;
++	u32 max_speed = 3000000;
++	int ret = 0;
++
++	ret = serdev_device_open(serdev);
++	if (ret) {
++		dev_err(&serdev->dev, "Cannot open serial port (%d)", ret);
++		return ret;
++	}
++
++	of_property_read_u32(serdev->dev.of_node, "max-speed", &max_speed);
++	disable_flow_control = of_property_read_bool(serdev->dev.of_node, "disable-flow-control");
++
++	serdev_device_set_baudrate(serdev, max_speed);
++	if (disable_flow_control)
++		serdev_device_set_flow_control(serdev, false);
++
++	if (bdev->host_wakeup)
++		pm_runtime_enable(&serdev->dev);
++
++	return ret;
++}
++
++static void serial_close(struct btti_uart_dev *bdev)
++{
++	struct serdev_device *serdev = bdev->serdev;
++
++	if (bdev->host_wakeup)
++		pm_runtime_disable(&serdev->dev);
++
++	serdev_device_close(serdev);
++}
++
++static int btti_uart_open(struct hci_dev *hdev)
++{
++	return 0;
++}
++
++static int btti_uart_close(struct hci_dev *hdev)
++{
++	return 0;
++}
++
++static int btti_uart_flush(struct hci_dev *hdev)
++{
++	struct btti_uart_dev *bdev = hci_get_drvdata(hdev);
++
++	/* Flush any pending characters */
++	serdev_device_write_flush(bdev->serdev);
++	skb_queue_purge(&bdev->txq);
++
++	cancel_work_sync(&bdev->tx_work);
++
++	kfree_skb(bdev->rx_skb);
++	bdev->rx_skb = NULL;
++
++	return 0;
++}
++
++static int btti_uart_setup(struct hci_dev *hdev)
++{
++	return 0;
++}
++
++static int btti_uart_tx_wakeup(struct btti_uart_dev *bdev)
++{
++	schedule_work(&bdev->tx_work);
++	return 0;
++}
++
++static int btti_uart_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
++{
++	struct btti_uart_dev *bdev = hci_get_drvdata(hdev);
++
++	/* Prepend skb with frame type */
++	memcpy(skb_push(skb, 1), &hci_skb_pkt_type(skb), 1);
++	skb_queue_tail(&bdev->txq, skb);
++
++	btti_uart_tx_wakeup(bdev);
++	return 0;
++}
++
++static int btti_uart_register_hci_device(struct btti_uart_dev *bdev)
++{
++	struct serdev_device *serdev = bdev->serdev;
++	struct hci_dev *hdev;
++	int ret;
++
++	hdev = hci_alloc_dev();
++	if (!hdev) {
++		dev_err(&serdev->dev, "Can't allocate HCI device");
++		return -ENOMEM;
++	}
++
++	hci_set_drvdata(hdev, bdev);
++	hdev->bus = HCI_UART;
++	hdev->open  = btti_uart_open;
++	hdev->close = btti_uart_close;
++	hdev->flush = btti_uart_flush;
++	hdev->setup = btti_uart_setup;
++	hdev->send  = btti_uart_send_frame;
++	SET_HCIDEV_DEV(hdev, &serdev->dev);
++
++	ret = hci_register_dev(hdev);
++	if (ret) {
++		dev_err(&serdev->dev, "Can't register HCI device (%d)", ret);
++		hci_free_dev(hdev);
++		hdev = NULL;
++	}
++
++	bdev->hdev = hdev;
++	bdev->hu.hdev = hdev;
++	return ret;
++}
++
++static void btti_uart_unregister_device(struct btti_uart_dev *bdev)
++{
++	struct hci_dev *hdev = bdev->hdev;
++
++	hci_unregister_dev(hdev);
++	hci_free_dev(hdev);
++
++	bdev->hdev = NULL;
++}
++
++static void btti_uart_tx_work(struct work_struct *work)
++{
++	struct btti_uart_dev *bdev = container_of(work, struct btti_uart_dev,
++							tx_work);
++	struct serdev_device *serdev = bdev->serdev;
++	struct hci_dev *hdev = bdev->hdev;
++
++	while (1) {
++		struct sk_buff *skb = skb_dequeue(&bdev->txq);
++		int len;
++
++		if (!skb)
++			break;
++
++		len = serdev_device_write_buf(serdev, skb->data,
++					      skb->len);
++		hdev->stat.byte_tx += len;
++
++		skb_pull(skb, len);
++		if (skb->len > 0) {
++			skb_queue_head(&bdev->txq, skb);
++			break;
++		}
++
++		switch (hci_skb_pkt_type(skb)) {
++		case HCI_COMMAND_PKT:
++			hdev->stat.cmd_tx++;
++			break;
++		case HCI_ACLDATA_PKT:
++			hdev->stat.acl_tx++;
++			break;
++		case HCI_SCODATA_PKT:
++			hdev->stat.sco_tx++;
++			break;
++		}
++
++		kfree_skb(skb);
++	}
++}
++
++static void unexpected_event(struct serdev_device *serdev,
++			     enum state state, enum sm_event event)
++{
++	dev_err(&serdev->dev, "Unexpected event %s at state %s",
++		event_to_string(event), sm_state_to_string(state));
++	WARN_ON(1);
++}
++
++static void btti_uart_sm_post_event(struct btti_uart_dev *bdev, enum sm_event event)
++{
++	struct event_node *event_node;
++
++	event_node = kzalloc(sizeof(*event_node), GFP_KERNEL);
++	if (unlikely(!event_node)) {
++		dev_err(&bdev->serdev->dev, "Event allocation failure");
++		return;
++	}
++
++	event_node->event = event;
++
++	llist_add(&event_node->node, &bdev->sm_event_list);
++	schedule_work(&bdev->btti_uart_sm_work);
++}
++
++static void sm_process(struct btti_uart_dev *bdev, enum sm_event event)
++{
++	struct serdev_device *serdev = bdev->serdev;
++	enum state next_state = bdev->sm_state;
++
++	switch (bdev->sm_state) {
++	case STATE_PROBING:
++		switch (event) {
++		case EVENT_PROBE_DONE:
++			if (regulator_is_enabled(bdev->reg))
++				btti_uart_sm_post_event(bdev, EVENT_REGULATOR_ENABLE);
++
++			next_state = STATE_HW_OFF;
++			break;
++
++		default:
++			unexpected_event(serdev, bdev->sm_state, event);
++		}
++		break;
++
++	case STATE_HW_OFF:
++		switch (event) {
++		case EVENT_REGULATOR_ENABLE:
++			if (serial_open(bdev) == 0)
++				next_state = STATE_HW_ON;
++			else
++				dev_err(&serdev->dev, "Could not open serial port");
++			break;
++
++		case EVENT_REMOVE:
++			next_state = STATE_REMOVED;
++			break;
++
++		case EVENT_REGULATOR_DISABLE:
++			break;
++
++		default:
++			unexpected_event(serdev, bdev->sm_state, event);
++		}
++		break;
++
++	case STATE_HW_ON:
++		switch (event) {
++		case EVENT_REMOVE:
++		case EVENT_REGULATOR_DISABLE:
++			serial_close(bdev);
++			next_state = (event == EVENT_REMOVE) ?
++						STATE_REMOVED : STATE_HW_OFF;
++			break;
++
++		case EVENT_HCI_WAKEUP_FRAME_RECEIVED:
++			if (btti_uart_register_hci_device(bdev) == 0)
++				next_state = STATE_HW_READY;
++			break;
++
++		case EVENT_REGULATOR_ENABLE:
++			break;
++
++		default:
++			unexpected_event(serdev, bdev->sm_state, event);
++		}
++		break;
++
++	case STATE_HW_READY:
++		switch (event) {
++		case EVENT_REMOVE:
++		case EVENT_REGULATOR_DISABLE:
++			btti_uart_unregister_device(bdev);
++			serial_close(bdev);
++			next_state = (event == EVENT_REMOVE) ?
++						STATE_REMOVED : STATE_HW_OFF;
++			break;
++
++		case EVENT_REGULATOR_ENABLE:
++			break;
++
++		default:
++			unexpected_event(serdev, bdev->sm_state, event);
++		}
++		break;
++
++	case STATE_REMOVED:
++		switch (event) {
++		case EVENT_REGULATOR_DISABLE:
++		case EVENT_REGULATOR_ENABLE:
++		case EVENT_HCI_WAKEUP_FRAME_RECEIVED:
++			break;
++
++		default:
++			unexpected_event(serdev, bdev->sm_state, event);
++		}
++		break;
++	}
++
++	dev_dbg(&serdev->dev,
++		"SM: Got %s, moving from %s to %s",
++		event_to_string(event), sm_state_to_string(bdev->sm_state),
++		sm_state_to_string(next_state));
++
++	bdev->sm_state = next_state;
++}
++
++static inline struct llist_node *get_event_list(struct btti_uart_dev *bdev)
++{
++	struct llist_node *node;
++
++	node = llist_del_all(&bdev->sm_event_list);
++	if (!node)
++		return NULL;
++
++	return llist_reverse_order(node);
++}
++
++static void btti_uart_sm_work(struct work_struct *work)
++{
++	struct btti_uart_dev *bdev;
++	struct event_node *event_node, *tmp;
++	struct llist_node *event_list;
++
++	bdev = container_of(work, struct btti_uart_dev, btti_uart_sm_work);
++	event_list = get_event_list(bdev);
++
++	llist_for_each_entry_safe(event_node, tmp, event_list, node) {
++		sm_process(bdev, event_node->event);
++		kfree(event_node);
++	}
++}
++
++static int btti_uart_wakeup_event_match(struct serdev_device *serdev,
++					const u8 *data, size_t count)
++{
++	struct btti_uart_dev *bdev = serdev_device_get_drvdata(serdev);
++	const u8 hw_wakeup_evt[] = {HCI_VENDOR_PKT, 0xff, 0x02, 0x04, 0x2a, 0x00, 0x00};
++
++	if (count < sizeof(hw_wakeup_evt))
++		return 0; // Reject data until all bytes have been received
++
++	if (count > sizeof(hw_wakeup_evt))
++		goto error;
++
++	if (memcmp(&hw_wakeup_evt, data, sizeof(hw_wakeup_evt)) != 0)
++		goto error;
++
++	btti_uart_sm_post_event(bdev, EVENT_HCI_WAKEUP_FRAME_RECEIVED);
++	return count;
++
++error:
++	dev_err(&serdev->dev, "Unexpected wakeup pattern");
++	print_hex_dump(KERN_DEBUG, "Pattern:",
++		       DUMP_PREFIX_NONE, 16, 1, data, count, true);
++	return count;
++}
++
++static size_t btti_uart_receive_buf(struct serdev_device *serdev, const u8 *data,
++				    size_t count)
++{
++	struct btti_uart_dev *bdev = serdev_device_get_drvdata(serdev);
++	const struct btti_uart_vnd *vnd = bdev->vnd;
++
++	if (unlikely(!bdev->hdev)) {
++		// Accept only wakeup event until driver is registered with HCI
++		return btti_uart_wakeup_event_match(serdev, data, count);
++	}
++
++	bdev->rx_skb = h4_recv_buf(&bdev->hu, bdev->rx_skb, data, count,
++				   vnd->recv_pkts, vnd->recv_pkts_cnt);
++	if (IS_ERR(bdev->rx_skb)) {
++		int err = PTR_ERR(bdev->rx_skb);
++
++		dev_err(&serdev->dev, "Frame reassembly failed (%d)", err);
++		bdev->rx_skb = NULL;
++		print_hex_dump(KERN_DEBUG, "Frame:", DUMP_PREFIX_NONE,
++			       16, 1, data, count, true);
++		return 0;
++	}
++
++	bdev->hdev->stat.byte_rx += count;
++
++	return count;
++}
++
++static void btti_uart_write_wakeup(struct serdev_device *serdev)
++{
++	struct btti_uart_dev *bdev = serdev_device_get_drvdata(serdev);
++
++	btti_uart_tx_wakeup(bdev);
++}
++
++static const struct serdev_device_ops btti_uart_client_ops = {
++	.receive_buf = btti_uart_receive_buf,
++	.write_wakeup = btti_uart_write_wakeup,
++};
++
++static const struct h4_recv_pkt default_recv_pkts[] = {
++	{ H4_RECV_ACL,      .recv = hci_recv_frame },
++	{ H4_RECV_SCO,      .recv = hci_recv_frame },
++	{ H4_RECV_EVENT,    .recv = hci_recv_frame },
++};
++
++static const struct btti_uart_vnd default_vnd = {
++	.recv_pkts	= default_recv_pkts,
++	.recv_pkts_cnt	= ARRAY_SIZE(default_recv_pkts),
++};
++
++static const struct btti_uart_vnd ti_vnd = {
++	.recv_pkts	= default_recv_pkts,
++	.recv_pkts_cnt	= ARRAY_SIZE(default_recv_pkts),
++	.manufacturer	= 13,
++};
++
++static int btti_uart_regulator_event(struct notifier_block *nb,
++				     unsigned long event, void *data)
++{
++	struct btti_uart_dev *bdev = container_of(nb, struct btti_uart_dev, nb);
++
++	if (event & REGULATOR_EVENT_DISABLE)
++		btti_uart_sm_post_event(bdev, EVENT_REGULATOR_DISABLE);
++
++	if (event & REGULATOR_EVENT_ENABLE)
++		btti_uart_sm_post_event(bdev, EVENT_REGULATOR_ENABLE);
++
++	return NOTIFY_OK;
++}
++
++static irqreturn_t host_wake_irq(int irq, void *data)
++{
++	struct btti_uart_dev *bdev = data;
++	struct serdev_device *serdev = bdev->serdev;
++
++	dev_info(&serdev->dev, "CC33xx wake IRQ");
++
++	pm_wakeup_event(&serdev->dev, 0);
++	pm_system_wakeup();
++
++	return IRQ_HANDLED;
++}
++
++static void btti_uart_host_wake_init(struct serdev_device *serdev)
++{
++	struct btti_uart_dev *bdev = serdev_device_get_drvdata(serdev);
++	int ret;
++
++	if (!bdev->pinctrl)
++		goto out_err;
++
++	bdev->pins_sleep = pinctrl_lookup_state(bdev->pinctrl, "sleep");
++	if (IS_ERR(bdev->pins_sleep))
++		bdev->pins_sleep = NULL;
++
++	bdev->host_wakeup = devm_gpiod_get_optional(&serdev->dev, "host-wakeup", GPIOD_IN);
++	if (IS_ERR(bdev->host_wakeup))
++		goto out_err;
++
++	if (device_init_wakeup(&serdev->dev, true) != 0)
++		goto out_err;
++
++	ret = devm_request_irq(&serdev->dev, gpiod_to_irq(bdev->host_wakeup),
++			       host_wake_irq, IRQF_TRIGGER_RISING, "btti_host_wake", bdev);
++	if (ret)
++		goto out_err;
++
++	ret = enable_irq_wake(gpiod_to_irq(bdev->host_wakeup));
++	if (ret < 0)
++		goto out_err_disable_wake;
++
++	disable_irq(gpiod_to_irq(bdev->host_wakeup));
++
++	dev_info(&serdev->dev, "Host wakeup enabled");
++	return;
++
++out_err_disable_wake:
++	device_init_wakeup(&serdev->dev, false);
++out_err:
++	bdev->host_wakeup = NULL;
++	bdev->pins_sleep = NULL;
++	dev_info(&serdev->dev, "Host wakeup NOT enabled");
++}
++
++static int btti_uart_probe(struct serdev_device *serdev)
++{
++	struct btti_uart_dev *bdev;
++	int ret;
++
++	bdev = devm_kzalloc(&serdev->dev, sizeof(*bdev), GFP_KERNEL);
++	if (!bdev)
++		return -ENOMEM;
++
++	/* Request the vendor specific data and callbacks */
++	bdev->vnd = device_get_match_data(&serdev->dev);
++	if (!bdev->vnd)
++		bdev->vnd = &default_vnd;
++
++	bdev->serdev = serdev;
++	serdev_device_set_drvdata(serdev, bdev);
++
++	/*
++	 * Using the optional get regulator API as normal get returns a dummy
++	 * if the regulator is not found.
++	 */
++	bdev->reg = devm_regulator_get_optional(&serdev->dev, "cc33xx");
++	if (PTR_ERR(bdev->reg) == -EPROBE_DEFER)
++		return -EPROBE_DEFER;
++	if (IS_ERR(bdev->reg)) {
++		dev_err(&serdev->dev, "can't get regulator");
++		return PTR_ERR(bdev->reg);
++	}
++
++	bdev->pinctrl = devm_pinctrl_get(&serdev->dev);
++	if (!IS_ERR(bdev->pinctrl)) {
++		bdev->pins_runtime = pinctrl_lookup_state(bdev->pinctrl, "default");
++		if (IS_ERR(bdev->pins_runtime)) {
++			dev_err(&serdev->dev, "can't lookup default pin state");
++			return PTR_ERR(bdev->pins_runtime);
++		}
++	} else {
++		bdev->pinctrl = NULL;
++		bdev->pins_runtime = NULL;
++	}
++
++	btti_uart_host_wake_init(serdev);
++
++	if (bdev->pins_runtime)
++		pinctrl_select_state(bdev->pinctrl, bdev->pins_runtime);
++
++	bdev->nb.notifier_call = btti_uart_regulator_event;
++
++	ret = regulator_register_notifier(bdev->reg, &bdev->nb);
++	if (ret != 0) {
++		dev_err(&serdev->dev,
++			"Failed to register regulator notifier (%d)", ret);
++		return ret;
++	}
++
++	serdev_device_set_client_ops(serdev, &btti_uart_client_ops);
++
++	INIT_WORK(&bdev->tx_work, btti_uart_tx_work);
++	skb_queue_head_init(&bdev->txq);
++
++	INIT_WORK(&bdev->btti_uart_sm_work, btti_uart_sm_work);
++	init_llist_head(&bdev->sm_event_list);
++
++	btti_uart_sm_post_event(bdev, EVENT_PROBE_DONE);
++
++	return 0;
++}
++
++static void btti_uart_remove(struct serdev_device *serdev)
++{
++	struct btti_uart_dev *bdev = serdev_device_get_drvdata(serdev);
++
++	if (bdev->host_wakeup) {
++		device_init_wakeup(&serdev->dev, false);
++		disable_irq_wake(gpiod_to_irq(bdev->host_wakeup));
++	}
++
++	regulator_unregister_notifier(bdev->reg, &bdev->nb);
++	btti_uart_sm_post_event(bdev, EVENT_REMOVE);
++	flush_work(&bdev->btti_uart_sm_work);
++}
++
++static int btti_suspend_device(struct device *dev)
++{
++	struct btti_uart_dev *bdev = dev_get_drvdata(dev);
++	int ret;
++
++	if (bdev->pins_sleep) {
++		ret = pinctrl_select_state(bdev->pinctrl, bdev->pins_sleep);
++		if (ret < 0)
++			goto out_err;
++	}
++
++	enable_irq(gpiod_to_irq(bdev->host_wakeup));
++
++	return 0;
++
++out_err:
++	if (bdev->pins_runtime)
++		pinctrl_select_state(bdev->pinctrl, bdev->pins_runtime);
++
++	return ret;
++}
++
++static int btti_resume_device(struct device *dev)
++{
++	struct btti_uart_dev *bdev = dev_get_drvdata(dev);
++	int ret = 0;
++
++	disable_irq_nosync(gpiod_to_irq(bdev->host_wakeup));
++
++	if (bdev->pins_runtime) {
++		ret = pinctrl_select_state(bdev->pinctrl, bdev->pins_runtime);
++		if (ret < 0)
++			return ret;
++	}
++
++	return ret;
++}
++
++#ifdef CONFIG_OF
++static const struct of_device_id btti_uart_of_match_table[] = {
++	{ .compatible = "ti,cc33xx-bt", .data = &ti_vnd },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, btti_uart_of_match_table);
++#endif
++
++static const struct dev_pm_ops btti_pm_ops = {
++	SET_SYSTEM_SLEEP_PM_OPS(btti_suspend_device, btti_resume_device)
++};
++
++static struct serdev_device_driver btti_uart_driver = {
++	.probe = btti_uart_probe,
++	.remove = btti_uart_remove,
++	.driver = {
++		.name = "btti",
++		.of_match_table = of_match_ptr(btti_uart_of_match_table),
++		.pm = &btti_pm_ops
++	},
++};
++
++module_serdev_device_driver(btti_uart_driver);
++MODULE_DESCRIPTION("TI CC33xx Bluetooth HCI UART driver");
++MODULE_LICENSE("GPL");
+-- 
+2.53.0
+
