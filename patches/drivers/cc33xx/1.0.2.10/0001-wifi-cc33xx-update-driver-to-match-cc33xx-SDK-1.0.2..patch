@@ -1,0 +1,6226 @@
+From 8c5317eb26590a9108f0385af6f25e1f00e9f6d2 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Sat, 25 Apr 2026 09:43:31 -0500
+Subject: [PATCH] wifi: cc33xx: update driver to match cc33xx SDK 1.0.2.10
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/net/wireless/ti/cc33xx/Kconfig    |   12 +
+ drivers/net/wireless/ti/cc33xx/Makefile   |    4 +-
+ drivers/net/wireless/ti/cc33xx/acx.c      |  482 ++++-
+ drivers/net/wireless/ti/cc33xx/acx.h      |  416 ++---
+ drivers/net/wireless/ti/cc33xx/boot.c     |   38 +
+ drivers/net/wireless/ti/cc33xx/cc33xx.h   |   14 +-
+ drivers/net/wireless/ti/cc33xx/cc33xx_i.h |    5 +-
+ drivers/net/wireless/ti/cc33xx/cmd.c      |  109 +-
+ drivers/net/wireless/ti/cc33xx/cmd.h      |   13 +-
+ drivers/net/wireless/ti/cc33xx/conf.h     |  921 ++++------
+ drivers/net/wireless/ti/cc33xx/debugfs.c  | 1990 +++++++++++++++++++++
+ drivers/net/wireless/ti/cc33xx/debugfs.h  |  101 ++
+ drivers/net/wireless/ti/cc33xx/event.c    |    5 +-
+ drivers/net/wireless/ti/cc33xx/event.h    |    3 +
+ drivers/net/wireless/ti/cc33xx/io.c       |    8 +-
+ drivers/net/wireless/ti/cc33xx/io.h       |    1 +
+ drivers/net/wireless/ti/cc33xx/main.c     |  266 ++-
+ drivers/net/wireless/ti/cc33xx/ps.c       |    2 -
+ drivers/net/wireless/ti/cc33xx/rx.c       |    3 +
+ drivers/net/wireless/ti/cc33xx/rx.h       |    6 +-
+ drivers/net/wireless/ti/cc33xx/sdio.c     |   51 +-
+ drivers/net/wireless/ti/cc33xx/spi.c      |  690 +++++++
+ drivers/net/wireless/ti/cc33xx/tx.c       |    4 +
+ 23 files changed, 4131 insertions(+), 1013 deletions(-)
+ create mode 100644 drivers/net/wireless/ti/cc33xx/debugfs.c
+ create mode 100644 drivers/net/wireless/ti/cc33xx/debugfs.h
+ create mode 100644 drivers/net/wireless/ti/cc33xx/spi.c
+
+diff --git a/drivers/net/wireless/ti/cc33xx/Kconfig b/drivers/net/wireless/ti/cc33xx/Kconfig
+index 0c3ff97dacc7..2cca2fd32562 100644
+--- a/drivers/net/wireless/ti/cc33xx/Kconfig
++++ b/drivers/net/wireless/ti/cc33xx/Kconfig
+@@ -12,6 +12,18 @@ config CC33XX
+ 	  If you choose to build a module, it will be called cc33xx. Say N if
+ 	  unsure.
+ 
++config CC33XX_SPI
++	tristate "TI CC33XX SPI support"
++	depends on CC33XX && SPI_MASTER && OF
++	select CRC7
++	help
++	  This module adds support for the SPI interface of adapters using
++	  TI CC33XX chipsets.  Select this if your platform is using
++	  the SPI bus.
++
++	  If you choose to build a module, it'll be called cc33xx_spi.
++	  Say N if unsure.
++
+ config CC33XX_SDIO
+ 	tristate "TI CC33XX SDIO support"
+ 	depends on CC33XX && MMC
+diff --git a/drivers/net/wireless/ti/cc33xx/Makefile b/drivers/net/wireless/ti/cc33xx/Makefile
+index 6156f778edee..caefe742ae6b 100644
+--- a/drivers/net/wireless/ti/cc33xx/Makefile
++++ b/drivers/net/wireless/ti/cc33xx/Makefile
+@@ -1,10 +1,12 @@
+ # SPDX-License-Identifier: GPL-2.0
+ 
+ cc33xx-objs		= main.o cmd.o io.o event.o tx.o rx.o ps.o acx.o \
+-					boot.o init.o scan.o
++					boot.o init.o scan.o debugfs.o
+ 
++cc33xx_spi-objs 	= spi.o
+ cc33xx_sdio-objs	= sdio.o
+ 
+ cc33xx-$(CONFIG_NL80211_TESTMODE)	+= testmode.o
+ obj-$(CONFIG_CC33XX)				+= cc33xx.o
++obj-$(CONFIG_CC33XX_SPI)			+= cc33xx_spi.o
+ obj-$(CONFIG_CC33XX_SDIO)			+= cc33xx_sdio.o
+diff --git a/drivers/net/wireless/ti/cc33xx/acx.c b/drivers/net/wireless/ti/cc33xx/acx.c
+index 882a6ccbf24e..dc8f25a30be7 100644
+--- a/drivers/net/wireless/ti/cc33xx/acx.c
++++ b/drivers/net/wireless/ti/cc33xx/acx.c
+@@ -5,28 +5,6 @@
+ 
+ #include "acx.h"
+ 
+-int cc33xx_acx_clear_statistics(struct cc33xx *cc)
+-{
+-	struct acx_header *acx;
+-	int ret = 0;
+-
+-	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+-	if (!acx) {
+-		ret = -ENOMEM;
+-		goto out;
+-	}
+-
+-	ret = cc33xx_cmd_configure(cc, ACX_CLEAR_STATISTICS, acx, sizeof(*acx));
+-	if (ret < 0) {
+-		cc33xx_warning("failed to clear firmware statistics: %d", ret);
+-		goto out;
+-	}
+-
+-out:
+-	kfree(acx);
+-	return ret;
+-}
+-
+ int cc33xx_acx_wake_up_conditions(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 				  u8 wake_up_event, u8 listen_interval)
+ {
+@@ -403,21 +381,6 @@ int cc33xx_acx_cts_protect(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 	return ret;
+ }
+ 
+-int cc33xx_acx_statistics(struct cc33xx *cc, void *stats)
+-{
+-	int ret;
+-
+-	ret = cc33xx_cmd_interrogate(cc, ACX_STATISTICS, stats,
+-				     sizeof(struct acx_header),
+-				     sizeof(struct cc33xx_acx_statistics));
+-	if (ret < 0) {
+-		cc33xx_warning("acx statistics failed: %d", ret);
+-		return -ENOMEM;
+-	}
+-
+-	return 0;
+-}
+-
+ int cc33xx_update_ap_rates(struct cc33xx *cc, u8 role_id,
+ 			   u32 basic_rates_set, u32 supported_rates)
+ {
+@@ -612,56 +575,6 @@ int cc33xx_acx_set_ba_receiver_session(struct cc33xx *cc, u8 tid_index, u16 ssn,
+ 	return ret;
+ }
+ 
+-int cc33xx_acx_tsf_info(struct cc33xx *cc,
+-			struct cc33xx_vif *wlvif, u64 *mactime)
+-{
+-	struct cc33xx_acx_fw_tsf_information *tsf_info;
+-	int ret = 0;
+-
+-	tsf_info = kzalloc(sizeof(*tsf_info), GFP_KERNEL);
+-	if (!tsf_info) {
+-		ret = -ENOMEM;
+-		goto out;
+-	}
+-
+-	tsf_info->role_id = wlvif->role_id;
+-
+-	*mactime = le32_to_cpu(tsf_info->current_tsf_low) |
+-		((u64)le32_to_cpu(tsf_info->current_tsf_high) << 32);
+-
+-out:
+-	kfree(tsf_info);
+-	return ret;
+-}
+-
+-int cc33xx_acx_config_ps(struct cc33xx *cc, struct cc33xx_vif *wlvif)
+-{
+-	struct cc33xx_acx_config_ps *config_ps;
+-	int ret;
+-
+-	config_ps = kzalloc(sizeof(*config_ps), GFP_KERNEL);
+-	if (!config_ps) {
+-		ret = -ENOMEM;
+-		goto out;
+-	}
+-
+-	config_ps->exit_retries = cc->conf.host_conf.conn.psm_exit_retries;
+-	config_ps->enter_retries = cc->conf.host_conf.conn.psm_entry_retries;
+-	config_ps->null_data_rate = cpu_to_le32(wlvif->basic_rate);
+-
+-	ret = cc33xx_cmd_configure(cc, ACX_CONFIG_PS, config_ps,
+-				   sizeof(*config_ps));
+-
+-	if (ret < 0) {
+-		cc33xx_warning("acx config ps failed: %d", ret);
+-		goto out;
+-	}
+-
+-out:
+-	kfree(config_ps);
+-	return ret;
+-}
+-
+ int cc33xx_acx_average_rssi(struct cc33xx *cc,
+ 			    struct cc33xx_vif *wlvif, s8 *avg_rssi)
+ {
+@@ -908,6 +821,59 @@ int cc33xx_acx_set_peer_cap(struct cc33xx *cc,
+ 	return ret;
+ }
+ 
++int cc33xx_acx_set_antenna_select(struct cc33xx *cc, u8 selection)
++{
++	struct acx_antenna_select *acx;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx setting antenna to %d", selection);
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	acx->selection = selection;
++
++	ret = cc33xx_cmd_configure(cc, SET_ANTENNA_SELECT_CFG,
++				   acx, sizeof(*acx));
++	if (ret < 0) {
++		cc33xx_warning("acx setting antenna failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(acx);
++	return ret;
++}
++
++int cc33xx_acx_set_tsf(struct cc33xx *cc, u64 tsf_val)
++{
++	struct debug_set_tsf *set_tsf_cmd;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx set tsf. new tsf value: %llx", tsf_val);
++
++	set_tsf_cmd = kzalloc(sizeof(*set_tsf_cmd), GFP_KERNEL);
++	if (!set_tsf_cmd) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	set_tsf_cmd->tsf_val = cpu_to_le64(tsf_val);
++
++	ret = cc33xx_cmd_debug(cc, SET_TSF, set_tsf_cmd, sizeof(*set_tsf_cmd));
++	if (ret < 0) {
++		cc33xx_error("acx set tsf failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(set_tsf_cmd);
++	return ret;
++}
++
+ int cc33xx_acx_trigger_fw_assert(struct cc33xx *cc)
+ {
+ 	struct debug_header *buf;
+@@ -929,3 +895,345 @@ int cc33xx_acx_trigger_fw_assert(struct cc33xx *cc)
+ 	kfree(buf);
+ 	return ret;
+ }
++
++int cc33xx_acx_burst_mode_cfg(struct cc33xx *cc, u8 burst_disable)
++{
++	struct debug_burst_mode_cfg *burst_mode_cfg;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx burst mode cfg. burst_disable = %d",
++		     burst_disable);
++
++	burst_mode_cfg = kzalloc(sizeof(*burst_mode_cfg), GFP_KERNEL);
++	if (!burst_mode_cfg) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	burst_mode_cfg->burst_disable = burst_disable;
++
++	ret = cc33xx_cmd_debug(cc, BURST_MODE_CFG, burst_mode_cfg,
++			       sizeof(*burst_mode_cfg));
++	if (ret < 0) {
++		cc33xx_warning("acx burst mode cfg failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(burst_mode_cfg);
++	return ret;
++}
++
++int cc33xx_acx_get_antenna_diversity_status(struct cc33xx *cc)
++{
++	struct acx_diversity_status *get_diversity_status_cmd;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx get antenna diversity status");
++
++	get_diversity_status_cmd = kzalloc(sizeof(*get_diversity_status_cmd), GFP_KERNEL);
++	if (!get_diversity_status_cmd) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	ret = cc33xx_cmd_interrogate(cc, GET_ANT_DIV_STATUS, get_diversity_status_cmd,
++				sizeof(struct acx_header), sizeof(*get_diversity_status_cmd));
++	if (ret < 0) {
++		cc33xx_warning("acx get antenna diversity status failed: %d", ret);
++		goto out;
++	}
++
++	ret = get_diversity_status_cmd->enable;
++
++out:
++	kfree(get_diversity_status_cmd);
++	return ret;
++}
++
++int cc33xx_acx_set_antenna_diversity_status(struct cc33xx *cc, u8 enable)
++{
++	struct acx_diversity_status *set_diversity_status_cmd;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx set antenna diversity status. enable = %d", enable);
++
++	set_diversity_status_cmd = kzalloc(sizeof(*set_diversity_status_cmd), GFP_KERNEL);
++	if (!set_diversity_status_cmd) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	set_diversity_status_cmd->enable = enable;
++
++	ret = cc33xx_cmd_configure(cc, ANT_DIV_ENABLE, set_diversity_status_cmd,
++							sizeof(*set_diversity_status_cmd));
++	if (ret < 0) {
++		cc33xx_warning("acx set antenna diversity status failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(set_diversity_status_cmd);
++	return ret;
++}
++
++int cc33xx_acx_antenna_diversity_get_rssi_threshold(struct cc33xx *cc, s8 *threshold)
++{
++	struct acx_diversity_rssi_threshold *get_rssi_threshold_cmd;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx antenna diversity get rssi threshold");
++
++	get_rssi_threshold_cmd = kzalloc(sizeof(*get_rssi_threshold_cmd), GFP_KERNEL);
++	if (!get_rssi_threshold_cmd) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	ret = cc33xx_cmd_interrogate(cc, GET_ANT_DIV_RSSI_THRESHOLD, get_rssi_threshold_cmd,
++				sizeof(struct acx_header), sizeof(*get_rssi_threshold_cmd));
++	if (ret < 0) {
++		cc33xx_warning("acx antenna diversity get rssi threshold failed: %d", ret);
++		goto out;
++	}
++
++	*threshold = get_rssi_threshold_cmd->rssi_threshold;
++	ret = 0;
++
++out:
++	kfree(get_rssi_threshold_cmd);
++	return ret;
++}
++
++int cc33xx_acx_antenna_diversity_set_rssi_threshold(struct cc33xx *cc, s8 rssi_threshold)
++{
++	struct acx_diversity_rssi_threshold *set_rssi_threshold_cmd;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx antenna diversity set rssi threshold to %d",
++					rssi_threshold);
++
++	set_rssi_threshold_cmd = kzalloc(sizeof(*set_rssi_threshold_cmd), GFP_KERNEL);
++	if (!set_rssi_threshold_cmd) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	set_rssi_threshold_cmd->rssi_threshold = rssi_threshold;
++
++	ret = cc33xx_cmd_configure(cc, ANT_DIV_SET_RSSI_THRESHOLD, set_rssi_threshold_cmd,
++					sizeof(*set_rssi_threshold_cmd));
++	if (ret < 0) {
++		cc33xx_warning("acx antenna diversity set rssi threshold failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(set_rssi_threshold_cmd);
++	return ret;
++}
++
++int cc33xx_acx_antenna_diversity_get_default_antenna(struct cc33xx *cc)
++{
++	struct acx_diversity_default_antenna *get_default_antenna_cmd;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx antenna diversity get default antenna");
++
++	get_default_antenna_cmd = kzalloc(sizeof(*get_default_antenna_cmd), GFP_KERNEL);
++	if (!get_default_antenna_cmd) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	ret = cc33xx_cmd_interrogate(cc, GET_ANT_DIV_DEFAULT_ANTENNA, get_default_antenna_cmd,
++				sizeof(struct acx_header), sizeof(*get_default_antenna_cmd));
++	if (ret < 0) {
++		cc33xx_warning("acx antenna diversity get default antenna failed: %d", ret);
++		goto out;
++	}
++
++	ret = get_default_antenna_cmd->default_antenna;
++
++out:
++	kfree(get_default_antenna_cmd);
++	return ret;
++}
++
++int cc33xx_acx_antenna_diversity_select_default_antenna(struct cc33xx *cc, u8 default_antenna)
++{
++	struct acx_diversity_default_antenna *select_default_antenna_cmd;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx antenna diversity select default antenna. default_antenna = %d", default_antenna);
++
++	select_default_antenna_cmd = kzalloc(sizeof(*select_default_antenna_cmd), GFP_KERNEL);
++	if (!select_default_antenna_cmd) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	select_default_antenna_cmd->default_antenna = default_antenna;
++
++	ret = cc33xx_cmd_configure(cc, ANT_DIV_SELECT_DEFAULT_ANTENNA, select_default_antenna_cmd, sizeof(*select_default_antenna_cmd));
++	if (ret < 0) {
++		cc33xx_warning("acx antenna diversity select default antenna failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(select_default_antenna_cmd);
++	return ret;
++}
++
++int cc33xx_acx_statistics(struct cc33xx *cc, void *stats)
++{
++	int ret;
++
++	ret = cc33xx_cmd_interrogate(cc, GET_STATISTICS, stats,
++				     sizeof(struct acx_header),
++				     sizeof(struct cc33xx_acx_statistics));
++	if (ret < 0) {
++		cc33xx_warning("acx statistics failed: %d", ret);
++		return -ENOMEM;
++	}
++
++	return 0;
++}
++
++int cc33xx_acx_clear_statistics(struct cc33xx *cc)
++{
++	struct acx_header *acx;
++	int ret;
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx)
++		return -ENOMEM;
++
++	ret = cc33xx_cmd_configure(cc, RESET_STATS,
++				   acx, sizeof(*acx));
++	if (ret < 0)
++		cc33xx_warning("clear stats failed: %d", ret);
++
++	kfree(acx);
++	return ret;
++}
++
++int cc33xx_acx_twt_setup(struct cc33xx *cc, u32 min_wake_duration_usec,
++		       u32 min_wake_interval_mantissa, u32 min_wake_interval_exponent,
++			   u32 max_wake_interval_mantissa, u32 max_wake_interval_exponent,
++			   u8 valid_params)
++{
++	struct acx_twt_setup *acx;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx config twt setup. valid_params: %d, "
++				"min_wake_duration_usec: %d, min_wake_interval_mantissa: %d, "
++				"min_wake_interval_exponent: %d, max_wake_interval_mantissa: %d, "
++				"max_wake_interval_exponent: %d",
++				valid_params, min_wake_duration_usec,
++				min_wake_interval_mantissa, min_wake_interval_exponent,
++				max_wake_interval_mantissa, max_wake_interval_exponent);
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	acx->min_wake_duration_usec = cpu_to_le32(min_wake_duration_usec);
++	acx->min_wake_interval_mantissa = cpu_to_le32(min_wake_interval_mantissa);
++	acx->min_wake_interval_exponent = cpu_to_le32(min_wake_interval_exponent);
++	acx->max_wake_interval_mantissa = cpu_to_le32(max_wake_interval_mantissa);
++	acx->max_wake_interval_exponent = cpu_to_le32(max_wake_interval_exponent);
++	acx->valid_params = valid_params;
++
++	ret = cc33xx_cmd_configure(cc, TWT_SETUP, acx, sizeof(*acx));
++	if (ret < 0) {
++		cc33xx_warning("acx config twt setup failed: %d", ret);
++		goto out;
++	}
++
++	cc->min_wake_duration_usec = min_wake_duration_usec;
++	cc->min_wake_interval_mantissa = min_wake_interval_mantissa;
++	cc->min_wake_interval_exponent = min_wake_interval_exponent;
++	cc->max_wake_interval_mantissa = max_wake_interval_mantissa;
++	cc->max_wake_interval_exponent = max_wake_interval_exponent;
++out:
++	kfree(acx);
++	return ret;
++}
++
++int cc33xx_acx_twt_terminate(struct cc33xx *cc)
++{
++	struct acx_twt_terminate *acx;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx config twt terminate");
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	ret = cc33xx_cmd_configure(cc, TWT_TERMINATE, acx, sizeof(*acx));
++	if (ret < 0) {
++		cc33xx_warning("acx config twt terminate failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(acx);
++	return ret;
++}
++
++int cc33xx_acx_twt_suspend(struct cc33xx *cc)
++{
++	struct acx_twt_terminate *acx;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx config twt suspend");
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	ret = cc33xx_cmd_configure(cc, TWT_SUSPEND, acx, sizeof(*acx));
++	if (ret < 0) {
++		cc33xx_warning("acx config twt suspend failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(acx);
++	return ret;
++}
++
++int cc33xx_acx_twt_resume(struct cc33xx *cc)
++{
++	struct acx_twt_terminate *acx;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx config twt resume");
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	ret = cc33xx_cmd_configure(cc, TWT_RESUME, acx, sizeof(*acx));
++	if (ret < 0) {
++		cc33xx_warning("acx config twt resume failed: %d", ret);
++		goto out;
++	}
++
++out:
++
++	kfree(acx);
++	return ret;
++}
+diff --git a/drivers/net/wireless/ti/cc33xx/acx.h b/drivers/net/wireless/ti/cc33xx/acx.h
+index f250758c3da5..ed5ff819c89b 100644
+--- a/drivers/net/wireless/ti/cc33xx/acx.h
++++ b/drivers/net/wireless/ti/cc33xx/acx.h
+@@ -327,8 +327,9 @@ struct cc33xx_acx_fw_versions {
+ 	__le16 api_version;
+ 	__le16 build_version;
+ 
+-	u8 phy_version[6];
+-	u8 padding[2];
++	u8 phy_version[8];
++	u8 container_type;
++	u8 padding[3];
+ } __packed;
+ 
+ /* special capability bit (not employed by the 802.11n spec) */
+@@ -398,15 +399,6 @@ struct cc33xx_acx_fw_tsf_information {
+ 	u8 padding2[3];
+ } __packed;
+ 
+-struct cc33xx_acx_config_ps {
+-	struct acx_header header;
+-
+-	u8 exit_retries;
+-	u8 enter_retries;
+-	u8 padding[2];
+-	__le32 null_data_rate;
+-} __packed;
+-
+ #define ACX_RATE_MGMT_ALL_PARAMS 0xff
+ 
+ struct acx_default_rx_filter {
+@@ -478,6 +470,10 @@ enum cfg {
+ 	ANT_DIV_ENABLE				= 26,
+ 	ANT_DIV_SET_RSSI_THRESHOLD		= 27,
+ 	ANT_DIV_SELECT_DEFAULT_ANTENNA		= 28,
++	RESET_DECRYPT_PACKETS_COUNT	= 29,
++	ENABLE_CHANNEL_UTILIZATION_NEXT_SCAN = 30,
++	SET_SEED_CFG			= 31,
++	RESET_STATS			= 32,
+ 
+ 	LAST_CFG_VALUE,
+ 	MAX_DOT11_CFG = LAST_CFG_VALUE,
+@@ -506,6 +502,7 @@ enum cmd_debug {
+ 	PWR_PARTIAL_MODES_CFG,
+ 	TRIGGER_FW_ASSERT,
+ 	BURST_MODE_CFG,
++	THERMAL_PROTECTION_CFG,
+ 
+ 	LAST_DEBUG_VALUE,
+ 
+@@ -521,221 +518,21 @@ enum interrogate_opt {
+ 	GET_PREAMBLE_AND_TX_RATE_INTR = 4,
+ 	GET_MAC_ADDRESS = 5,
+ 	READ_COEX_STATISTICS = 6,
++	GET_ANT_DIV_STATUS = 7,
++	GET_ANT_DIV_RSSI_THRESHOLD = 8,
++	GET_ANT_DIV_DEFAULT_ANTENNA = 9,
++	GET_LATEST_CHANNEL_UTILIZATION_SURVEY = 10,
++	GET_DECRYPT_PACKETS_COUNTS = 11,
++	GET_ROLE_CHANNEL_NUMBER = 12,
++	GET_STATISTICS = 13,
++	GET_SP_VERSIONS_INTR = 14,
++	GET_LINK_INACTIVITY = 15,
+ 	LAST_IE_VALUE,
+ 	MAX_DOT11_IE = LAST_IE_VALUE,
+ 
+ 	MAX_IE = 0xFFFF /*force enumeration to 16bits*/
+ };
+ 
+-enum {
+-	ACX_STATISTICS = LAST_CFG_VALUE,
+-	ACX_CONFIG_PS,
+-	ACX_CLEAR_STATISTICS		 = 0x0054,
+-};
+-
+-struct cc33xx_acx_error_stats {
+-	__le32 error_frame_non_ctrl;
+-	__le32 error_frame_ctrl;
+-	__le32 error_frame_during_protection;
+-	__le32 null_frame_tx_start;
+-	__le32 null_frame_cts_start;
+-	__le32 bar_retry;
+-	__le32 num_frame_cts_nul_flid;
+-	__le32 tx_abort_failure;
+-	__le32 tx_resume_failure;
+-	__le32 rx_cmplt_db_overflow_cnt;
+-	__le32 elp_while_rx_exch;
+-	__le32 elp_while_tx_exch;
+-	__le32 elp_while_tx;
+-	__le32 elp_while_nvic_pending;
+-	__le32 rx_excessive_frame_len;
+-	__le32 burst_mismatch;
+-	__le32 tbc_exch_mismatch;
+-} __packed;
+-
+-#define NUM_OF_RATES_INDEXES 30
+-struct cc33xx_acx_tx_stats {
+-	__le32 tx_prepared_descs;
+-	__le32 tx_cmplt;
+-	__le32 tx_template_prepared;
+-	__le32 tx_data_prepared;
+-	__le32 tx_template_programmed;
+-	__le32 tx_data_programmed;
+-	__le32 tx_burst_programmed;
+-	__le32 tx_starts;
+-	__le32 tx_stop;
+-	__le32 tx_start_templates;
+-	__le32 tx_start_int_templates;
+-	__le32 tx_start_fw_gen;
+-	__le32 tx_start_data;
+-	__le32 tx_start_null_frame;
+-	__le32 tx_exch;
+-	__le32 tx_retry_template;
+-	__le32 tx_retry_data;
+-	__le32 tx_retry_per_rate[NUM_OF_RATES_INDEXES];
+-	__le32 tx_exch_pending;
+-	__le32 tx_exch_expiry;
+-	__le32 tx_done_template;
+-	__le32 tx_done_data;
+-	__le32 tx_done_int_template;
+-	__le32 tx_cfe1;
+-	__le32 tx_cfe2;
+-	__le32 frag_called;
+-	__le32 frag_mpdu_alloc_failed;
+-	__le32 frag_init_called;
+-	__le32 frag_in_process_called;
+-	__le32 frag_tkip_called;
+-	__le32 frag_key_not_found;
+-	__le32 frag_need_fragmentation;
+-	__le32 frag_bad_mblk_num;
+-	__le32 frag_failed;
+-	__le32 frag_cache_hit;
+-	__le32 frag_cache_miss;
+-} __packed;
+-
+-struct cc33xx_acx_rx_stats {
+-	__le32 rx_beacon_early_term;
+-	__le32 rx_out_of_mpdu_nodes;
+-	__le32 rx_hdr_overflow;
+-	__le32 rx_dropped_frame;
+-	__le32 rx_done_stage;
+-	__le32 rx_done;
+-	__le32 rx_defrag;
+-	__le32 rx_defrag_end;
+-	__le32 rx_cmplt;
+-	__le32 rx_pre_complt;
+-	__le32 rx_cmplt_task;
+-	__le32 rx_phy_hdr;
+-	__le32 rx_timeout;
+-	__le32 rx_rts_timeout;
+-	__le32 rx_timeout_wa;
+-	__le32 defrag_called;
+-	__le32 defrag_init_called;
+-	__le32 defrag_in_process_called;
+-	__le32 defrag_tkip_called;
+-	__le32 defrag_need_defrag;
+-	__le32 defrag_decrypt_failed;
+-	__le32 decrypt_key_not_found;
+-	__le32 defrag_need_decrypt;
+-	__le32 rx_tkip_replays;
+-	__le32 rx_xfr;
+-} __packed;
+-
+-struct cc33xx_acx_isr_stats {
+-	__le32 irqs;
+-} __packed;
+-
+-#define PWR_STAT_MAX_CONT_MISSED_BCNS_SPREAD 10
+-
+-struct cc33xx_acx_pwr_stats {
+-	__le32 missing_bcns_cnt;
+-	__le32 rcvd_bcns_cnt;
+-	__le32 connection_out_of_sync;
+-	__le32 cont_miss_bcns_spread[PWR_STAT_MAX_CONT_MISSED_BCNS_SPREAD];
+-	__le32 rcvd_awake_bcns_cnt;
+-	__le32 sleep_time_count;
+-	__le32 sleep_time_avg;
+-	__le32 sleep_cycle_avg;
+-	__le32 sleep_percent;
+-	__le32 ap_sleep_active_conf;
+-	__le32 ap_sleep_user_conf;
+-	__le32 ap_sleep_counter;
+-} __packed;
+-
+-struct cc33xx_acx_rx_filter_stats {
+-	__le32 beacon_filter;
+-	__le32 arp_filter;
+-	__le32 mc_filter;
+-	__le32 dup_filter;
+-	__le32 data_filter;
+-	__le32 ibss_filter;
+-	__le32 protection_filter;
+-	__le32 accum_arp_pend_requests;
+-	__le32 max_arp_queue_dep;
+-} __packed;
+-
+-struct cc33xx_acx_rx_rate_stats {
+-	__le32 rx_frames_per_rates[50];
+-} __packed;
+-
+-#define AGGR_STATS_TX_AGG	16
+-#define AGGR_STATS_RX_SIZE_LEN	16
+-
+-struct cc33xx_acx_aggr_stats {
+-	__le32 tx_agg_rate[AGGR_STATS_TX_AGG];
+-	__le32 tx_agg_len[AGGR_STATS_TX_AGG];
+-	__le32 rx_size[AGGR_STATS_RX_SIZE_LEN];
+-} __packed;
+-
+-#define PIPE_STATS_HW_FIFO	11
+-
+-struct cc33xx_acx_pipeline_stats {
+-	__le32 hs_tx_stat_fifo_int;
+-	__le32 hs_rx_stat_fifo_int;
+-	__le32 enc_tx_stat_fifo_int;
+-	__le32 enc_rx_stat_fifo_int;
+-	__le32 rx_complete_stat_fifo_int;
+-	__le32 pre_proc_swi;
+-	__le32 post_proc_swi;
+-	__le32 sec_frag_swi;
+-	__le32 pre_to_defrag_swi;
+-	__le32 defrag_to_rx_xfer_swi;
+-	__le32 dec_packet_in;
+-	__le32 dec_packet_in_fifo_full;
+-	__le32 dec_packet_out;
+-	__le16 pipeline_fifo_full[PIPE_STATS_HW_FIFO];
+-	__le16 padding;
+-} __packed;
+-
+-#define DIVERSITY_STATS_NUM_OF_ANT	2
+-
+-struct cc33xx_acx_diversity_stats {
+-	__le32 num_of_packets_per_ant[DIVERSITY_STATS_NUM_OF_ANT];
+-	__le32 total_num_of_toggles;
+-} __packed;
+-
+-struct cc33xx_acx_thermal_stats {
+-	__le16 irq_thr_low;
+-	__le16 irq_thr_high;
+-	__le16 tx_stop;
+-	__le16 tx_resume;
+-	__le16 false_irq;
+-	__le16 adc_source_unexpected;
+-} __packed;
+-
+-#define CC33XX_NUM_OF_CALIBRATIONS_ERRORS 18
+-struct cc33xx_acx_calib_failure_stats {
+-	__le16 fail_count[CC33XX_NUM_OF_CALIBRATIONS_ERRORS];
+-	__le32 calib_count;
+-} __packed;
+-
+-struct cc33xx_roaming_stats {
+-	s32 rssi_level;
+-} __packed;
+-
+-struct cc33xx_dfs_stats {
+-	__le32 num_of_radar_detections;
+-} __packed;
+-
+-struct cc33xx_acx_statistics {
+-	struct acx_header header;
+-
+-	struct cc33xx_acx_error_stats		error;
+-	struct cc33xx_acx_tx_stats		tx;
+-	struct cc33xx_acx_rx_stats		rx;
+-	struct cc33xx_acx_isr_stats		isr;
+-	struct cc33xx_acx_pwr_stats		pwr;
+-	struct cc33xx_acx_rx_filter_stats	rx_filter;
+-	struct cc33xx_acx_rx_rate_stats		rx_rate;
+-	struct cc33xx_acx_aggr_stats		aggr_size;
+-	struct cc33xx_acx_pipeline_stats	pipeline;
+-	struct cc33xx_acx_diversity_stats	diversity;
+-	struct cc33xx_acx_thermal_stats		thermal;
+-	struct cc33xx_acx_calib_failure_stats	calib;
+-	struct cc33xx_roaming_stats		roaming;
+-	struct cc33xx_dfs_stats			dfs;
+-} __packed;
+-
+ /* ACX_PEER_CAP
+  * this struct is very similar to cc33xx_acx_ht_capabilities, with the
+  * addition of supported rates
+@@ -775,6 +572,46 @@ struct cc33xx_acx_peer_cap {
+ 	u8 padding;
+ } __packed;
+ 
++struct acx_antenna_select {
++	struct acx_header header;
++
++	u8 selection;
++	u8 padding[3];
++} __packed;
++
++struct debug_set_tsf {
++	struct debug_header header;
++
++	__le64 tsf_val;
++} __packed;
++
++struct debug_burst_mode_cfg {
++	struct debug_header header;
++
++	u8 burst_disable;
++	u8 padding[3];
++} __packed;
++struct acx_twt_setup {
++	struct acx_header header;
++	__le32 min_wake_duration_usec;
++	__le32 min_wake_interval_mantissa;
++	__le32 min_wake_interval_exponent;
++	__le32 max_wake_interval_mantissa;
++	__le32 max_wake_interval_exponent;
++	u8 valid_params;
++	u8 padding[3];
++} __packed;
++
++#define MIN_WAKE_DURATION_VALID				BIT(0)
++#define MIN_WAKE_INTERVAL_MANTISSA_VALID	BIT(1)
++#define MIN_WAKE_INTERVAL_EXPONENT_VALID	BIT(2)
++#define MAX_WAKE_INTERVAL_MANTISSA_VALID	BIT(3)
++#define MAX_WAKE_INTERVAL_EXPONENT_VALID	BIT(4)
++
++struct acx_twt_terminate {
++	struct acx_header header;
++} __packed;
++
+ struct acx_preamble_and_tx_rate {
+ 	struct acx_header header;
+ 	u16 tx_rate;
+@@ -782,6 +619,119 @@ struct acx_preamble_and_tx_rate {
+ 	u8 role_id;
+ } __packed;
+ 
++static const u16 cc33xx_idx_to_rate_100Kbps[] = {
++	10, 20, 55, 110, 60, 90, 120, 180, 240, 360, 480, 540
++};
++
++struct cc33xx_coex_statistics {
++	__le32 wifi_request_assertion_log;
++	__le32 wifi_request_de_assertion_log;
++	__le32 wifi_grant_assertion_log;
++	__le32 wifi_grant_deassertion_log;
++	__le32 wifi_prio_reject_log;
++	__le32 wifi_grant_during_dual_ant_assertion_log;
++	__le32 wifi_grant_during_dual_ant_deassertion_log;
++	__le32 ble_request_assertion_log;
++	__le32 ble_request_deassertion_log;
++	__le32 ble_grant_assertion_log;
++	__le32 ble_grant_deassertion_log;
++	__le32 ble_tx_high_prio_reject_log;
++	__le32 ble_tx_low_prio_reject_log;
++	__le32 ble_rx_high_prio_reject_log;
++	__le32 ble_rx_low_prio_reject_log;
++	__le32 soc_request_assertion_log;
++	__le32 soc_request_deassertion_log;
++	__le32 soc_grant_assertion_log;
++	__le32 soc_grant_deassertion_log;
++	__le32 soc_high_prio_reject_log;
++	__le32 soc_low_prio_reject_log;
++} __packed;
++
++struct cc33xx_coex_stat_and_entities {
++	__u8 coex_entities_bitmap;
++	__u8 padding[3];
++	struct cc33xx_coex_statistics coex_statistics;
++} __packed;
++
++
++struct cc33xx_acx_coex_statistics {
++	struct acx_header header;
++
++	struct cc33xx_coex_stat_and_entities coex_stat;
++} __packed;
++
++struct cc33xx_acx_coex_statistics_cfg {
++	struct acx_header header;
++
++	__u8 coex_statictics;
++	__u8 padding[3];
++} __packed;
++
++struct acx_diversity_status {
++	struct acx_header header;
++
++    u8 enable;
++	u8 padding[3];
++} __packed;
++
++struct acx_diversity_rssi_threshold {
++	struct acx_header header;
++
++    s8 rssi_threshold;
++	u8 padding[3];
++} __packed;
++
++struct acx_diversity_default_antenna {
++	struct acx_header header;
++
++    u8 default_antenna;
++	u8 padding[3];
++} __packed;
++
++struct reset_decrypt_count_cfg {
++	u8 role_id;
++	u8 padding[3];
++} __packed;
++
++struct decrypt_packets_status_count {
++	__le32 roleid;
++
++	struct {
++		__le32 decrypted_ok_unicast_count;
++		__le32 decrypted_error_unicast_count;
++		__le32 decrypted_ok_multicast_count;
++		__le32 decrypted_error_multicast_count;
++		__le32 decrypted_ok_broadcast_count;
++		__le32 decrypted_error_broadcast_count;
++	} counters;
++} __packed;
++
++struct channel_utilization_survey_results {
++	u8 channel_number;
++	u8 channel_load;
++	s8 noise_floor_avg;
++	u8 bss_count;
++} __packed;
++
++struct role_current_channel_number {
++	u8 role_type;
++	u8 role_id;
++	__le16 channel_num;
++} __packed;
++
++struct cc33xx_acx_power_stats {
++	__le32 sleep_time_count;
++	__le32 sleep_time_avg;
++	__le32 sleep_cycle_avg;
++	__le32 sleep_percent;
++} __packed;
++
++struct cc33xx_acx_statistics {
++	struct acx_header header;
++
++	struct cc33xx_acx_power_stats power;
++} __packed;
++
+ int cc33xx_acx_wake_up_conditions(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 				  u8 wake_up_event, u8 listen_interval);
+ int cc33xx_acx_sleep_auth(struct cc33xx *cc, u8 sleep_auth);
+@@ -799,7 +749,6 @@ int cc33xx_acx_set_preamble(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 			    enum acx_preamble_type preamble);
+ int cc33xx_acx_cts_protect(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 			   enum acx_ctsprotect_type ctsprotect);
+-int cc33xx_acx_statistics(struct cc33xx *cc, void *stats);
+ int cc33xx_tx_param_cfg(struct cc33xx *cc, struct cc33xx_vif *wlvif, u8 ac,
+ 			u8 cw_min, u16 cw_max, u8 aifsn, u16 txop, bool acm,
+ 			u8 ps_scheme, u8 is_mu_edca, u8 mu_edca_aifs,
+@@ -813,9 +762,6 @@ int cc33xx_acx_set_ht_information(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 				  u16 he_oper_nss_set);
+ int cc33xx_acx_set_ba_receiver_session(struct cc33xx *cc, u8 tid_index, u16 ssn,
+ 				       bool enable, u8 peer_hlid, u8 win_size);
+-int cc33xx_acx_tsf_info(struct cc33xx *cc,
+-			struct cc33xx_vif *wlvif, u64 *mactime);
+-int cc33xx_acx_config_ps(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+ int cc33xx_acx_get_tx_rate(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 			   struct station_info *sinfo);
+ int cc33xx_acx_average_rssi(struct cc33xx *cc,
+@@ -824,12 +770,32 @@ int cc33xx_acx_default_rx_filter_enable(struct cc33xx *cc, bool enable,
+ 					enum rx_filter_action action);
+ int cc33xx_acx_set_rx_filter(struct cc33xx *cc, u8 index, bool enable,
+ 			     struct cc33xx_rx_filter *filter);
+-int cc33xx_acx_clear_statistics(struct cc33xx *cc);
+ int cc33xx_acx_set_peer_cap(struct cc33xx *cc,
+ 			    struct ieee80211_sta_ht_cap *ht_cap,
+ 			    struct ieee80211_sta_he_cap *he_cap,
+ 			    struct cc33xx_vif *wlvif, bool allow_ht_operation,
+ 			    u32 rate_set, u8 hlid);
++int cc33xx_acx_set_antenna_select(struct cc33xx *cc, u8 selection);
++int cc33xx_acx_set_tsf(struct cc33xx *cc, u64 tsf_val);
+ int cc33xx_acx_trigger_fw_assert(struct cc33xx *cc);
++int cc33xx_acx_burst_mode_cfg(struct cc33xx *cc, u8 burst_disable);
++int cc33xx_acx_get_antenna_diversity_status(struct cc33xx *cc);
++int cc33xx_acx_set_antenna_diversity_status(struct cc33xx *cc, u8 enable);
++int cc33xx_acx_antenna_diversity_get_rssi_threshold(struct cc33xx *cc, s8 *threshold);
++int cc33xx_acx_antenna_diversity_set_rssi_threshold(struct cc33xx *cc, s8 rssi_threshold);
++int cc33xx_acx_antenna_diversity_get_default_antenna(struct cc33xx *cc);
++int cc33xx_acx_antenna_diversity_select_default_antenna(struct cc33xx *cc, u8 default_antenna);
++int cc33xx_acx_twt_setup(struct cc33xx *wl,
++			 u32 min_wake_duration_usec,
++			 u32 min_wake_interval_mantissa,
++			 u32 min_wake_interval_exponent,
++			 u32 max_wake_interval_mantissa,
++			 u32 max_wake_interval_exponent,
++			 u8 valid_params);
++int cc33xx_acx_twt_terminate(struct cc33xx *wl);
++int cc33xx_acx_twt_resume(struct cc33xx *wl);
++int cc33xx_acx_twt_suspend(struct cc33xx *wl);
++int cc33xx_acx_statistics(struct cc33xx *cc, void *stats);
++int cc33xx_acx_clear_statistics(struct cc33xx *cc);
+ 
+ #endif /* __CC33XX_ACX_H__ */
+diff --git a/drivers/net/wireless/ti/cc33xx/boot.c b/drivers/net/wireless/ti/cc33xx/boot.c
+index 25efbe937837..7a0b738250d5 100644
+--- a/drivers/net/wireless/ti/cc33xx/boot.c
++++ b/drivers/net/wireless/ti/cc33xx/boot.c
+@@ -13,6 +13,7 @@
+ #include "io.h"
+ 
+ #define CC33XX_BOOT_TIMEOUT 2000
++#define CC33XX_FW_HIF_INIT_DELAY 50
+ 
+ struct hwinfo_bitmap {
+ 	u32 disable_5g			: 1u;
+@@ -32,6 +33,7 @@ struct hwinfo_bitmap {
+ 	u32 fw_rollback_protection_1	: 32u;
+ 	u32 fw_rollback_protection_2	: 32u;
+ 	u32 fw_rollback_protection_3	: 32u;
++	u32 disable_wifi6               : 1u;
+ 	u32 reserved			: 13u;
+ } /* Aligned with boot code, must not be __packed */;
+ 
+@@ -126,6 +128,14 @@ static int wait_for_boot_irq(struct cc33xx *cc, u32 boot_irq_mask,
+ 
+ 	fw_download = cc->fw_download;
+ 
++	/**
++	 * Hosts can miss boot-done signal after powerup or internal reset.
++	 * Work around this by explicitly triggering IRQ handler which will
++	 * check current device status after a safe delay.
++	 */
++	msleep(CC33XX_FW_HIF_INIT_DELAY);
++	cc33xx_irq(cc);
++
+ 	ret = wait_for_completion_interruptible_timeout(&fw_download->wait_on_irq,
+ 							msecs_to_jiffies(timeout));
+ 
+@@ -273,6 +283,30 @@ static int get_device_info(struct cc33xx *cc)
+ 	return 0;
+ }
+ 
++static int get_device_info_ram_loader(struct cc33xx *cc)
++{
++	int ret;
++	union hw_info hw_info;
++	u64 mac_address;
++
++	ret = cmd_get_device_info(cc, hw_info.bytes, sizeof hw_info.bytes);
++	if (ret < 0)
++		return ret;
++
++	mac_address = hw_info.bitmap.mac_address;
++
++	cc->efuse_mac_address[5] = (u8)(mac_address);
++	cc->efuse_mac_address[4] = (u8)(mac_address >> 8);
++	cc->efuse_mac_address[3] = (u8)(mac_address >> 16);
++	cc->efuse_mac_address[2] = (u8)(mac_address >> 24);
++	cc->efuse_mac_address[1] = (u8)(mac_address >> 32);
++	cc->efuse_mac_address[0] = (u8)(mac_address >> 40);
++
++	cc->disable_wifi6 = hw_info.bitmap.disable_wifi6;
++
++	return 0;
++}
++
+ int cc33xx_init_fw(struct cc33xx *cc)
+ {
+ 	int ret;
+@@ -305,6 +339,10 @@ int cc33xx_init_fw(struct cc33xx *cc)
+ 	if (ret < 0)
+ 		goto disable_irq;
+ 
++	ret = get_device_info_ram_loader(cc);
++	if (ret < 0)
++		goto disable_irq;
++
+ 	ret = container_download_and_wait(cc,  FW_NAME,
+ 					  HINT_FW_WAKEUP_COMPLETE);
+ 	if (ret < 0)
+diff --git a/drivers/net/wireless/ti/cc33xx/cc33xx.h b/drivers/net/wireless/ti/cc33xx/cc33xx.h
+index e756dc6a7d41..351d6c64ff17 100644
+--- a/drivers/net/wireless/ti/cc33xx/cc33xx.h
++++ b/drivers/net/wireless/ti/cc33xx/cc33xx.h
+@@ -16,6 +16,8 @@
+ #define CC33XX_INI_PARAM_COMMAND_SIZE (16UL)
+ #define CC33XX_INI_CMD_MAX_SIZE      (CC33X_CONF_SIZE + CC33XX_INI_PARAM_COMMAND_SIZE + sizeof(int))
+ 
++#define CC33XX_MAX_FW_LOGS_BUFFER_SIZE    ((0x1000) - (sizeof(struct NAB_header))) //a bit under ~4KB
++
+ #define CC33XX_CMD_BUFFER_SIZE ((CC33XX_INI_CMD_MAX_SIZE > CC33XX_CMD_MAX_SIZE)\
+ 				? CC33XX_INI_CMD_MAX_SIZE : CC33XX_CMD_MAX_SIZE)
+ 
+@@ -40,7 +42,7 @@ enum wl_rx_buf_align;
+ 
+ struct cc33xx_stats {
+ 	void *fw_stats;
+-	unsigned long fw_stats_update;
++	unsigned long fw_stats_next_update;
+ 	unsigned int retry_count;
+ 	unsigned int excessive_retries;
+ };
+@@ -264,6 +266,9 @@ struct cc33xx {
+ 	/*ble_enable value - 1=enabled, 0=disabled. */
+ 	int ble_enable;
+ 
++	/*fw_crash_logs, allocated upon successfully receiving FW Logs after general error (ie FW assert)*/
++	u8  *fw_crash_logs;
++
+ 	/* parameters for joining a TWT agreement */
+ 	int min_wake_duration_usec;
+ 	int min_wake_interval_mantissa;
+@@ -308,6 +313,8 @@ struct cc33xx {
+ 	/* burst mode cfg */
+ 	u8 burst_disable;
+ 
++	u8 disable_wifi6;
++
+ 	struct cc33xx_ant_diversity diversity;
+ };
+ 
+@@ -370,11 +377,10 @@ enum CC33xx_FRAME_FORMAT {
+ #define NAB_CONTROL_ADDR	0x0000BFF8
+ #define NAB_STATUS_ADDR		0x0000BFFC
+ 
+-#define NAB_SEND_CMD			0x940d
+-#define NAB_SEND_FLAGS			0x08
+-#define CC33xx_INTERNAL_DESC_SIZE	200
+ #define NAB_EXTRA_BYTES			4
+ 
++#define NAB_GENERAL_ERROR_FW_LOGS_OPCODE  (0x900)
++
+ #define TX_RESULT_QUEUE_SIZE  108
+ 
+ struct control_info_descriptor {
+diff --git a/drivers/net/wireless/ti/cc33xx/cc33xx_i.h b/drivers/net/wireless/ti/cc33xx/cc33xx_i.h
+index 99a296a5e94e..2e1616a1106f 100644
+--- a/drivers/net/wireless/ti/cc33xx/cc33xx_i.h
++++ b/drivers/net/wireless/ti/cc33xx/cc33xx_i.h
+@@ -58,6 +58,7 @@ enum cc33xx_state {
+ 	CC33XX_STATE_OFF,
+ 	CC33XX_STATE_RESTARTING,
+ 	CC33XX_STATE_ON,
++	CC33XX_STATE_FAILED,
+ };
+ 
+ struct cc33xx;
+@@ -89,6 +90,7 @@ struct cc33xx_if_operations {
+ 	void (*set_irq_handler)(struct device *child, void *irq_handler);
+ 	void (*enable_irq)(struct device *child);
+ 	void (*disable_irq)(struct device *child);
++	void (*sync_irq) (struct device *child);
+ };
+ 
+ struct cc33xx_platdev_data {
+@@ -136,7 +138,6 @@ enum cc33xx_vif_flags {
+ 	WLVIF_FLAG_STA_AUTHORIZED,
+ 	WLVIF_FLAG_IBSS_JOINED,
+ 	WLVIF_FLAG_AP_STARTED,
+-	WLVIF_FLAG_IN_PS,
+ 	WLVIF_FLAG_STA_STATE_SENT,
+ 	WLVIF_FLAG_PSPOLL_FAILURE,
+ 	WLVIF_FLAG_CS_PROGRESS,
+@@ -398,6 +399,8 @@ struct cc33xx_vif {
+ 	u8 persistent[];
+ };
+ 
++void cc33xx_irq(void *cookie);
++
+ static inline struct cc33xx_vif *cc33xx_vif_to_data(struct ieee80211_vif *vif)
+ {
+ 	WARN_ON(!vif);
+diff --git a/drivers/net/wireless/ti/cc33xx/cmd.c b/drivers/net/wireless/ti/cc33xx/cmd.c
+index bcdca2435dfd..f533a7a5b658 100644
+--- a/drivers/net/wireless/ti/cc33xx/cmd.c
++++ b/drivers/net/wireless/ti/cc33xx/cmd.c
+@@ -8,7 +8,7 @@
+ #include "io.h"
+ #include "tx.h"
+ 
+-#define CC33XX_REBOOT_TIMEOUT_MSEC		100
++#define CC33XX_REBOOT_TIMEOUT_MSEC		250
+ 
+ static void init_cmd_header(struct cc33xx_cmd_header *header,
+ 			    size_t cmd_len, u16 id)
+@@ -110,6 +110,8 @@ static int __cc33xx_cmd_send(struct cc33xx *cc, u16 id, void *buf,
+ 	case CMD_DEBUG_READ:
+ 	case CMD_TEST_MODE:
+ 	case CMD_BM_READ_DEVICE_INFO:
++	case CMD_SET_PROBE_IE:
++    case CMD_DEBUG:
+ 		if (!res_len)
+ 			break; /* Response should be discarded */
+ 
+@@ -310,6 +312,87 @@ int cc33xx_set_link(struct cc33xx *cc, struct cc33xx_vif *wlvif, u8 link)
+ 	return 0;
+ }
+ 
++static u8 cc33xx_check_is_dfs_channel(struct cc33xx *cc,
++						enum nl80211_band rate_band, u8 channel)
++{
++	struct ieee80211_supported_band *band;
++	u8 is_dfs = 0;
++
++	if (rate_band != NL80211_BAND_5GHZ) {
++		return is_dfs;
++	}
++
++	band = cc->hw->wiphy->bands[NL80211_BAND_5GHZ];
++
++	for (int i = 0; i < band->n_channels; i++) {
++		if (band->channels[i].hw_value == channel) {
++			is_dfs = !!(band->channels[i].flags & IEEE80211_CHAN_RADAR);
++			break;
++		}
++	}
++
++	return is_dfs;
++}
++
++static u8 cc33xx_get_sub_channel_type(u8 band, u8 channel, u8 band_width)
++{
++	if (band == NL80211_BAND_5GHZ) {
++		switch (channel) {
++		case 36:
++		case 52:
++		case 100:
++		case 116:
++		case 132:
++		case 149:
++		case 165:
++			return 0;
++		case 40:
++		case 56:
++		case 104:
++		case 120:
++		case 136:
++		case 153:
++		case 169:
++			return 1;
++		case 44:
++		case 60:
++		case 108:
++		case 124:
++		case 140:
++		case 157:
++		case 173:
++			return 2;
++		case 48:
++		case 64:
++		case 112:
++		case 128:
++		case 144:
++		case 161:
++		case 177:
++			return 3;
++		default:
++			return 0xff;
++		}
++	}
++
++	if (band == NL80211_BAND_2GHZ) {
++		switch (channel) {
++		case 9:
++		case 5:
++			return 0;
++		case 1:
++			return 0;
++		case 13:
++			return 1;
++		default:
++			return 0;
++		}
++	}
++
++	return 0xff;
++}
++
++
+ void cc33xx_clear_link(struct cc33xx *cc, struct cc33xx_vif *wlvif, u8 *hlid)
+ {
+ 	unsigned long flags;
+@@ -586,6 +669,7 @@ int cc33xx_cmd_role_start_sta(struct cc33xx *cc, struct cc33xx_vif *wlvif)
+ 	cmd->role_id = wlvif->role_id;
+ 	cmd->role_type = CC33XX_ROLE_STA;
+ 	cmd->channel = wlvif->channel;
++	cmd->is_dfs_channel = cc33xx_check_is_dfs_channel(cc, wlvif->band, cmd->channel);
+ 	if (wlvif->band == NL80211_BAND_5GHZ) {
+ 		cmd->band = CC33XX_BAND_5GHZ;
+ 		cmd->sta.basic_rate_set = cpu_to_le32(wlvif->basic_rate_set
+@@ -607,8 +691,7 @@ int cc33xx_cmd_role_start_sta(struct cc33xx *cc, struct cc33xx_vif *wlvif)
+ 		supported_rates &= ~CONF_TX_CCK_RATES;
+ 
+ 	cmd->sta.local_rates = cpu_to_le32(supported_rates);
+-
+-	cmd->channel_type = cc33xx_get_native_channel_type(wlvif->channel_type);
++	cmd->channel_type = cc33xx_get_sub_channel_type(cmd->band, cmd->channel, 0);
+ 
+ 	/* We don't have the correct remote rates in this stage.  The
+ 	 * rates will be reconfigured later, after association, if the
+@@ -712,6 +795,7 @@ int cc33xx_cmd_role_start_ap(struct cc33xx *cc, struct cc33xx_vif *wlvif)
+ 	cmd->ap.wmm = wlvif->wmm_enabled;
+ 	cmd->channel = wlvif->channel;
+ 	cmd->channel_type = cc33xx_get_native_channel_type(wlvif->channel_type);
++	cmd->is_dfs_channel = cc33xx_check_is_dfs_channel(cc, wlvif->band, cmd->channel);
+ 
+ 	supported_rates = CONF_TX_ENABLED_RATES | CONF_TX_MCS_RATES;
+ 	if (wlvif->p2p)
+@@ -983,6 +1067,7 @@ static int cc33xx_cmd_debug_failsafe(struct cc33xx *cc, u16 id, void *buf,
+ 				     size_t len, unsigned long valid_rets)
+ {
+ 	struct debug_header *acx = buf;
++	size_t res_len = sizeof(struct cc33xx_cmd_header);
+ 	int ret;
+ 
+ 	if (WARN_ON_ONCE(len < sizeof(*acx)))
+@@ -993,13 +1078,19 @@ static int cc33xx_cmd_debug_failsafe(struct cc33xx *cc, u16 id, void *buf,
+ 	/* payload length, does not include any headers */
+ 	acx->len = cpu_to_le16(len - sizeof(*acx));
+ 
+-	ret = cc33xx_cmd_send_failsafe(cc, CMD_DEBUG, acx, len, 0,
++	ret = cc33xx_cmd_send_failsafe(cc, CMD_DEBUG, acx, len, res_len,
+ 				       valid_rets);
+ 	if (ret < 0) {
+ 		cc33xx_warning("CONFIGURE command NOK");
+ 		return ret;
+ 	}
+ 
++	//check fw status code
++    if (!(acx->cmd.status == CMD_STATUS_SUCCESS)) {
++		cc33xx_error("command execute failure %d", acx->cmd.status);
++		ret = -EINVAL;
++	}
++
+ 	return ret;
+ }
+ 
+@@ -1364,12 +1455,12 @@ static int cc33xx_get_reg_conf_ch_idx(enum nl80211_band band, u16 ch)
+ 		case 52 ... 64:
+ 			/* channels 52,56..64 are mapped to 29..32 */
+ 			return 29 + (ch - 52) / 4;
+-		case 100 ... 140:
+-			/* channels 100,104..140 are mapped to 33..43 */
++		case 100 ... 144:
++			/* channels 100,104..144 are mapped to 33..44 */
+ 			return 33 + (ch - 100) / 4;
+-		case 149 ... 165:
+-			/* channels 149,153..165 are mapped to 44..48 */
+-			return 44 + (ch - 149) / 4;
++		case 149 ... 169:
++			/* channels 149,153..169 are mapped to 45..50 */
++			return 45 + (ch - 149) / 4;
+ 		default:
+ 			break;
+ 		}
+diff --git a/drivers/net/wireless/ti/cc33xx/cmd.h b/drivers/net/wireless/ti/cc33xx/cmd.h
+index f6e4877cf7b4..27bae1ff4df5 100644
+--- a/drivers/net/wireless/ti/cc33xx/cmd.h
++++ b/drivers/net/wireless/ti/cc33xx/cmd.h
+@@ -137,12 +137,12 @@ enum cc33xx_cmd {
+ 	CMD_DOWNLOAD_INI_PARAMS = 37,
+ 	CMD_SET_BD_ADDR = 38,
+ 	CMD_BLE_COMMANDS = 39,
++	CMD_SET_PS_MODE = 40,
+ 
+ 	CMD_LAST_SUPPORTED_COMMAND,
+ 
+ 	/* The following commands are legacy and are not yet supported */
+ 
+-	CMD_SET_PS_MODE,
+ 	CMD_DFS_CHANNEL_CONFIG,
+ 	CMD_CONFIG_FWLOGGER,
+ 	CMD_START_FWLOGGER,
+@@ -239,7 +239,8 @@ struct cc33xx_cmd_role_disable {
+ enum cc33xx_band {
+ 	CC33XX_BAND_2_4GHZ		= 0,
+ 	CC33XX_BAND_5GHZ		= 1,
+-	CC33XX_BAND_JAPAN_4_9_GHZ	= 2,
++	WLCORE_BAND_6GHZ		= 2,
++	CC33XX_BAND_JAPAN_4_9_GHZ	= 3,
+ 	CC33XX_BAND_DEFAULT		= CC33XX_BAND_2_4GHZ,
+ 	CC33XX_BAND_INVALID		= 0x7E,
+ 	CC33XX_BAND_MAX_RADIO		= 0x7F,
+@@ -258,7 +259,7 @@ struct cc33xx_cmd_role_start {
+ 	u8 role_type;
+ 	u8 band;
+ 	u8 channel;
+-
++	u8 is_dfs_channel;
+ 	u8 channel_type;
+ 
+ 	union {
+@@ -316,7 +317,7 @@ struct cc33xx_cmd_role_start {
+ 			u8 padding_1[42];
+ 		} __packed ap;
+ 	};
+-	u8 padding;
++	u8 padding[4];
+ } __packed;
+ 
+ struct cc33xx_cmd_complete_role_start {
+@@ -640,8 +641,8 @@ struct cmd_channel_switch {
+ 
+ 	u8 channel_type;
+ 	u8 band;
+-
+-	u8 padding[2];
++	u8 is_dfs_channel;
++	u8 padding;
+ } __packed;
+ 
+ struct cmd_set_bd_addr {
+diff --git a/drivers/net/wireless/ti/cc33xx/conf.h b/drivers/net/wireless/ti/cc33xx/conf.h
+index bc6eeb7a82c4..2998134d3bb0 100644
+--- a/drivers/net/wireless/ti/cc33xx/conf.h
++++ b/drivers/net/wireless/ti/cc33xx/conf.h
+@@ -7,15 +7,25 @@
+ #define __CONF_H__
+ 
+ struct cc33xx_conf_header {
+-	__le32 magic;
+-	__le32 version;
+-	__le32 checksum;
++	u32 magic;
++	u16 fw_major_version;
++	u16 fw_minor_version;
++	u16 fw_api_version;
++	u16 fw_build_version;
++	u32 checksum;
+ } __packed;
+ 
+-#define CC33XX_CONF_MAGIC	0x10e100ca
+-#define CC33XX_CONF_VERSION	0x01070069
+-#define CC33XX_CONF_MASK	0x0000ffff
+-#define CC33X_CONF_SIZE	(sizeof(struct cc33xx_conf_file))
++#define CC33XX_CONF_MAGIC				0x10e100ca
++
++#define CC33XX_CONF_FW_MAJOR_VERSION 	0x0001
++#define CC33XX_CONF_FW_MINOR_VERSION 	0x0007
++#define CC33XX_CONF_FW_API_VERSION   	0x0000
++#define CC33XX_CONF_FW_BUILD_VERSION 	0x013C
++
++#define CC33XX_CONF_MASK				0x0000ffff
++#define CC33X_CONF_SIZE					(sizeof(struct cc33xx_conf_file))
++
++#define CONF_HW_RXTX_RATE_UNSUPPORTED 0xff
+ 
+ enum {
+ 	CONF_HW_BIT_RATE_1MBPS   = BIT(1),
+@@ -82,11 +92,25 @@ enum {
+ 	CONF_PREAMBLE_TYPE_INVALID	= 0xFF
+ };
+ 
+-#define CONF_HW_RXTX_RATE_UNSUPPORTED 0xff
++enum {
++	CONF_PS_SCHEME_LEGACY = 0,
++	CONF_PS_SCHEME_UPSD_TRIGGER = 1,
++	CONF_PS_SCHEME_LEGACY_PSPOLL = 2,
++	CONF_PS_SCHEME_SAPSD = 3,
++};
+ 
+-enum conf_rx_queue_type {
+-	CONF_RX_QUEUE_TYPE_LOW_PRIORITY,  /* All except the high priority */
+-	CONF_RX_QUEUE_TYPE_HIGH_PRIORITY, /* Management and voice packets */
++enum {
++	CONF_TX_AC_BE = 0,
++	CONF_TX_AC_BK = 1,
++	CONF_TX_AC_VI = 2,
++	CONF_TX_AC_VO = 3,
++	CONF_TX_AC_CTS2SELF = 4,
++	CONF_TX_AC_ANY_TID = 0xff
++};
++
++enum {
++	CONF_BCN_FILT_MODE_DISABLED = 0,
++	CONF_BCN_FILT_MODE_ENABLED = 1
+ };
+ 
+ struct cc33xx_clk_cfg {
+@@ -97,204 +121,8 @@ struct cc33xx_clk_cfg {
+ 	u8 swallow;
+ };
+ 
+-struct conf_rx_settings {
+-	/* The maximum amount of time, in TU, before the
+-	 * firmware discards the MSDU.
+-	 *
+-	 * Range: 0 - 0xFFFFFFFF
+-	 */
+-	u32 rx_msdu_life_time;
+-
+-	/* Packet detection threshold in the PHY.
+-	 *
+-	 * FIXME: details unknown.
+-	 */
+-	u32 packet_detection_threshold;
+-
+-	/* The longest time the STA will wait to receive traffic from the AP
+-	 * after a PS-poll has been transmitted.
+-	 *
+-	 * Range: 0 - 200000
+-	 */
+-	u16 ps_poll_timeout;
+-	/* The longest time the STA will wait to receive traffic from the AP
+-	 * after a frame has been sent from an UPSD enabled queue.
+-	 *
+-	 * Range: 0 - 200000
+-	 */
+-	u16 upsd_timeout;
+-
+-	/* The number of octets in an MPDU, below which an RTS/CTS
+-	 * handshake is not performed.
+-	 *
+-	 * Range: 0 - 4096
+-	 */
+-	u16 rts_threshold;
+-
+-	/* The RX Clear Channel Assessment threshold in the PHY
+-	 * (the energy threshold).
+-	 *
+-	 * Range: ENABLE_ENERGY_D  == 0x140A
+-	 *        DISABLE_ENERGY_D == 0xFFEF
+-	 */
+-	u16 rx_cca_threshold;
+-
+-	/* Occupied Rx mem-blocks number which requires interrupting the host
+-	 * (0 = no buffering, 0xffff = disabled).
+-	 *
+-	 * Range: uint16_t
+-	 */
+-	u16 irq_blk_threshold;
+-
+-	/* Rx packets number which requires interrupting the host
+-	 * (0 = no buffering).
+-	 *
+-	 * Range: uint16_t
+-	 */
+-	u16 irq_pkt_threshold;
+-
+-	/* Max time in msec the FW may delay RX-Complete interrupt.
+-	 *
+-	 * Range: 1 - 100
+-	 */
+-	u16 irq_timeout;
+-
+-	/* The RX queue type.
+-	 *
+-	 * Range: RX_QUEUE_TYPE_RX_LOW_PRIORITY, RX_QUEUE_TYPE_RX_HIGH_PRIORITY,
+-	 */
+-	u8 queue_type;
+-} __packed;
+-
+-#define CONF_TX_MAX_RATE_CLASSES       10
+-
+-#define CONF_TX_RATE_MASK_UNSPECIFIED  0
+-#define CONF_TX_RATE_MASK_BASIC        (CONF_HW_BIT_RATE_1MBPS | \
+-					CONF_HW_BIT_RATE_2MBPS)
+-#define CONF_TX_RATE_RETRY_LIMIT       10
+-
+-/* basic rates for p2p operations (probe req/resp, etc.) */
+-#define CONF_TX_RATE_MASK_BASIC_P2P    CONF_HW_BIT_RATE_6MBPS
+-
+-/* Rates supported for data packets when operating as STA/AP. Note the absence
+- * of the 22Mbps rate. There is a FW limitation on 12 rates so we must drop
+- * one. The rate dropped is not mandatory under any operating mode.
+- */
+-#define CONF_TX_ENABLED_RATES       (CONF_HW_BIT_RATE_1MBPS |    \
+-	CONF_HW_BIT_RATE_2MBPS | CONF_HW_BIT_RATE_5_5MBPS |      \
+-	CONF_HW_BIT_RATE_6MBPS | CONF_HW_BIT_RATE_9MBPS |        \
+-	CONF_HW_BIT_RATE_11MBPS | CONF_HW_BIT_RATE_12MBPS |      \
+-	CONF_HW_BIT_RATE_18MBPS | CONF_HW_BIT_RATE_24MBPS |      \
+-	CONF_HW_BIT_RATE_36MBPS | CONF_HW_BIT_RATE_48MBPS |      \
+-	CONF_HW_BIT_RATE_54MBPS)
+-
+-#define CONF_TX_CCK_RATES  (CONF_HW_BIT_RATE_1MBPS |		\
+-	CONF_HW_BIT_RATE_2MBPS | CONF_HW_BIT_RATE_5_5MBPS |	\
+-	CONF_HW_BIT_RATE_11MBPS)
+-
+-#define CONF_TX_OFDM_RATES (CONF_HW_BIT_RATE_6MBPS |             \
+-	CONF_HW_BIT_RATE_12MBPS | CONF_HW_BIT_RATE_24MBPS |      \
+-	CONF_HW_BIT_RATE_36MBPS | CONF_HW_BIT_RATE_48MBPS |      \
+-	CONF_HW_BIT_RATE_54MBPS)
+-
+-#define CONF_TX_MCS_RATES (CONF_HW_BIT_RATE_MCS_0 |              \
+-	CONF_HW_BIT_RATE_MCS_1 | CONF_HW_BIT_RATE_MCS_2 |        \
+-	CONF_HW_BIT_RATE_MCS_3 | CONF_HW_BIT_RATE_MCS_4 |        \
+-	CONF_HW_BIT_RATE_MCS_5 | CONF_HW_BIT_RATE_MCS_6 |        \
+-	CONF_HW_BIT_RATE_MCS_7)
+-
+-/* Default rates for management traffic when operating in AP mode. This
+- * should be configured according to the basic rate set of the AP
+- */
+-#define CONF_TX_AP_DEFAULT_MGMT_RATES  (CONF_HW_BIT_RATE_1MBPS | \
+-	CONF_HW_BIT_RATE_2MBPS | CONF_HW_BIT_RATE_5_5MBPS)
+-
+-/* default rates for working as IBSS (11b and OFDM) */
+-#define CONF_TX_IBSS_DEFAULT_RATES  (CONF_HW_BIT_RATE_1MBPS |       \
+-		CONF_HW_BIT_RATE_2MBPS | CONF_HW_BIT_RATE_5_5MBPS | \
+-		CONF_HW_BIT_RATE_11MBPS | CONF_TX_OFDM_RATES)
+-
+-struct conf_tx_rate_class {
+-	/* The rates enabled for this rate class.
+-	 *
+-	 * Range: CONF_HW_BIT_RATE_* bit mask
+-	 */
+-	u32 enabled_rates;
+-
+-	/* The dot11 short retry limit used for TX retries.
+-	 *
+-	 * Range: uint8_t
+-	 */
+-	u8 short_retry_limit;
+-
+-	/* The dot11 long retry limit used for TX retries.
+-	 *
+-	 * Range: uint8_t
+-	 */
+-	u8 long_retry_limit;
+-
+-	/* Flags controlling the attributes of TX transmission.
+-	 *
+-	 * Range: bit 0: Truncate - when set, FW attempts to send a frame stop
+-	 *               when the total valid per-rate attempts have
+-	 *               been exhausted; otherwise transmissions
+-	 *               will continue at the lowest available rate
+-	 *               until the appropriate one of the
+-	 *               short_retry_limit, long_retry_limit,
+-	 *               dot11_max_transmit_msdu_life_time, or
+-	 *               max_tx_life_time, is exhausted.
+-	 *            1: Preamble Override - indicates if the preamble type
+-	 *               should be used in TX.
+-	 *            2: Preamble Type - the type of the preamble to be used by
+-	 *               the policy (0 - long preamble, 1 - short preamble.
+-	 */
+-	u8 aflags;
+-} __packed;
+-
+ #define CONF_TX_MAX_AC_COUNT 4
+ 
+-/* Slot number setting to start transmission at PIFS interval */
+-#define CONF_TX_AIFS_PIFS 1
+-/* Slot number setting to start transmission at DIFS interval normal
+- * DCF access
+- */
+-#define CONF_TX_AIFS_DIFS 2
+-
+-enum conf_tx_ac {
+-	CONF_TX_AC_BE = 0,         /* best effort / legacy */
+-	CONF_TX_AC_BK = 1,         /* background */
+-	CONF_TX_AC_VI = 2,         /* video */
+-	CONF_TX_AC_VO = 3,         /* voice */
+-	CONF_TX_AC_CTS2SELF = 4,   /* fictitious AC, follows AC_VO */
+-	CONF_TX_AC_ANY_TID = 0xff
+-};
+-
+-struct conf_sig_weights {
+-	/* RSSI from beacons average weight.
+-	 *
+-	 * Range: uint8_t
+-	 */
+-	u8 rssi_bcn_avg_weight;
+-
+-	/* RSSI from data average weight.
+-	 *
+-	 * Range: uint8_t
+-	 */
+-	u8 rssi_pkt_avg_weight;
+-
+-	/* SNR from beacons average weight.
+-	 *
+-	 * Range: uint8_t
+-	 */
+-	u8 snr_bcn_avg_weight;
+-
+-	/* SNR from data average weight.
+-	 *
+-	 * Range: uint8_t
+-	 */
+-	u8 snr_pkt_avg_weight;
+-} __packed;
+-
+ struct conf_tx_ac_category {
+ 	/* The AC class identifier.
+ 	 *
+@@ -355,51 +183,44 @@ struct conf_tx_ac_category {
+ 	u8 mu_edca_timer;
+ } __packed;
+ 
+-#define CONF_TX_MAX_TID_COUNT 8
++struct conf_tx_tid {
++	u8 channel_type;
++	u8 ps_scheme;
++} __packed;
+ 
+-/* Allow TX BA on all TIDs but 6,7. These are currently reserved in the FW */
+-#define CONF_TX_BA_ENABLED_TID_BITMAP 0x3F
++#define CONF_TX_RATE_MASK_BASIC     (CONF_HW_BIT_RATE_1MBPS | CONF_HW_BIT_RATE_2MBPS)
+ 
+-enum {
+-	CONF_CHANNEL_TYPE_DCF = 0,   /* DC/LEGACY*/
+-	CONF_CHANNEL_TYPE_EDCF = 1,  /* EDCA*/
+-	CONF_CHANNEL_TYPE_HCCA = 2,  /* HCCA*/
+-};
++#define CONF_TX_ENABLED_RATES       (CONF_HW_BIT_RATE_1MBPS |    \
++	CONF_HW_BIT_RATE_2MBPS | CONF_HW_BIT_RATE_5_5MBPS |      \
++	CONF_HW_BIT_RATE_6MBPS | CONF_HW_BIT_RATE_9MBPS |        \
++	CONF_HW_BIT_RATE_11MBPS | CONF_HW_BIT_RATE_12MBPS |      \
++	CONF_HW_BIT_RATE_18MBPS | CONF_HW_BIT_RATE_24MBPS |      \
++	CONF_HW_BIT_RATE_36MBPS | CONF_HW_BIT_RATE_48MBPS |      \
++	CONF_HW_BIT_RATE_54MBPS)
+ 
+-enum {
+-	CONF_PS_SCHEME_LEGACY = 0,
+-	CONF_PS_SCHEME_UPSD_TRIGGER = 1,
+-	CONF_PS_SCHEME_LEGACY_PSPOLL = 2,
+-	CONF_PS_SCHEME_SAPSD = 3,
+-};
++#define CONF_TX_MCS_RATES (CONF_HW_BIT_RATE_MCS_0 |              \
++	CONF_HW_BIT_RATE_MCS_1 | CONF_HW_BIT_RATE_MCS_2 |        \
++	CONF_HW_BIT_RATE_MCS_3 | CONF_HW_BIT_RATE_MCS_4 |        \
++	CONF_HW_BIT_RATE_MCS_5 | CONF_HW_BIT_RATE_MCS_6 |        \
++	CONF_HW_BIT_RATE_MCS_7)
+ 
+-enum {
+-	CONF_ACK_POLICY_LEGACY = 0,
+-	CONF_ACK_POLICY_NO_ACK = 1,
+-	CONF_ACK_POLICY_BLOCK = 2,
+-};
++#define CONF_TX_IBSS_DEFAULT_RATES  (CONF_HW_BIT_RATE_1MBPS |       \
++		CONF_HW_BIT_RATE_2MBPS | CONF_HW_BIT_RATE_5_5MBPS | \
++		CONF_HW_BIT_RATE_11MBPS | CONF_TX_OFDM_RATES)
+ 
+-struct conf_tx_tid {
+-	u8 queue_id;
+-	u8 channel_type;
+-	u8 tsid;
+-	u8 ps_scheme;
+-	u8 ack_policy;
+-	u32 apsd_conf[2];
+-} __packed;
++#define CONF_TX_CCK_RATES  (CONF_HW_BIT_RATE_1MBPS |		\
++	CONF_HW_BIT_RATE_2MBPS | CONF_HW_BIT_RATE_5_5MBPS |	\
++	CONF_HW_BIT_RATE_11MBPS)
+ 
+-struct conf_tx_settings {
+-	/* The TX ED value for TELEC Enable/Disable.
+-	 *
+-	 * Range: 0, 1
+-	 */
+-	u8 tx_energy_detection;
++#define CONF_TX_OFDM_RATES (CONF_HW_BIT_RATE_6MBPS |             \
++	CONF_HW_BIT_RATE_12MBPS | CONF_HW_BIT_RATE_24MBPS |      \
++	CONF_HW_BIT_RATE_36MBPS | CONF_HW_BIT_RATE_48MBPS |      \
++	CONF_HW_BIT_RATE_54MBPS)
+ 
+-	/* Configuration for rate classes for TX (currently only one
+-	 * rate class supported). Used in non-AP mode.
+-	 */
+-	struct conf_tx_rate_class sta_rc_conf;
++#define CONF_BCN_IE_OUI_LEN 3
++#define CONF_BCN_IE_VER_LEN 2
+ 
++struct conf_tx_settings {
+ 	/* Configuration for access categories for TX rate control.
+ 	 */
+ 	u8 ac_conf_count;
+@@ -416,11 +237,6 @@ struct conf_tx_settings {
+ 	 */
+ 	u8 max_tx_retries;
+ 
+-	/* AP-mode - after this number of seconds a connected station is
+-	 * considered inactive.
+-	 */
+-	u16 ap_aging_period;
+-
+ 	/* Configuration for TID parameters.
+ 	 */
+ 	u8 tid_conf_count;
+@@ -434,25 +250,12 @@ struct conf_tx_settings {
+ 	struct conf_tx_tid tid_conf6;
+ 	struct conf_tx_tid tid_conf7;
+ 
+-	/* The TX fragmentation threshold.
+-	 *
+-	 * Range: uint16_t
+-	 */
+-	u16 frag_threshold;
+-
+ 	/* Max time in msec the FW may delay frame TX-Complete interrupt.
+ 	 *
+ 	 * Range: uint16_t
+ 	 */
+ 	u16 tx_compl_timeout;
+ 
+-	/* Completed TX packet count which requires to issue the TX-Complete
+-	 * interrupt.
+-	 *
+-	 * Range: uint16_t
+-	 */
+-	u16 tx_compl_threshold;
+-
+ 	/* The rate used for control messages and scanning on the 2.4GHz band
+ 	 *
+ 	 * Range: CONF_HW_BIT_RATE_* bit mask
+@@ -465,43 +268,12 @@ struct conf_tx_settings {
+ 	 */
+ 	u32 basic_rate_5;
+ 
+-	/* TX retry limits for templates
+-	 */
+-	u8 tmpl_short_retry_limit;
+-	u8 tmpl_long_retry_limit;
+-
+ 	/* Time in ms for Tx watchdog timer to expire */
+ 	u32 tx_watchdog_timeout;
+-
+-	/* when a slow link has this much packets pending, it becomes a low
+-	 * priority link, scheduling-wise
+-	 */
+-	u8 slow_link_thold;
+-
+-	/* when a fast link has this much packets pending, it becomes a low
+-	 * priority link, scheduling-wise
+-	 */
+-	u8 fast_link_thold;
+ } __packed;
+ 
+-enum {
+-	CONF_WAKE_UP_EVENT_BEACON    = 0x00, /* Wake on every Beacon */
+-	CONF_WAKE_UP_EVENT_DTIM      = 0x01, /* Wake on every DTIM */
+-	CONF_WAKE_UP_EVENT_N_DTIM    = 0x02, /* Wake every Nth DTIM */
+-	CONF_WAKE_UP_EVENT_LIMIT     = CONF_WAKE_UP_EVENT_N_DTIM,
+-	/* Not supported: */
+-	CONF_WAKE_UP_EVENT_N_BEACONS = 0x03, /* Wake every Nth beacon */
+-	CONF_WAKE_UP_EVENT_BITS_MASK = 0x0F
+-};
+-
+ #define CONF_MAX_BCN_FILT_IE_COUNT 32
+ 
+-#define CONF_BCN_RULE_PASS_ON_CHANGE         BIT(0)
+-#define CONF_BCN_RULE_PASS_ON_APPEARANCE     BIT(1)
+-
+-#define CONF_BCN_IE_OUI_LEN    3
+-#define CONF_BCN_IE_VER_LEN    2
+-
+ struct conf_bcn_filt_rule {
+ 	/* IE number to which to associate a rule.
+ 	 *
+@@ -528,16 +300,6 @@ struct conf_bcn_filt_rule {
+ 	u8 version[2];
+ } __packed;
+ 
+-enum conf_bcn_filt_mode {
+-	CONF_BCN_FILT_MODE_DISABLED = 0,
+-	CONF_BCN_FILT_MODE_ENABLED = 1
+-};
+-
+-enum conf_bet_mode {
+-	CONF_BET_MODE_DISABLE = 0,
+-	CONF_BET_MODE_ENABLE = 1,
+-};
+-
+ struct conf_conn_settings {
+ 	/* Enable or disable the beacon filtering.
+ 	 *
+@@ -598,88 +360,11 @@ struct conf_conn_settings {
+ 	 */
+ 	u32 bss_lose_timeout;
+ 
+-	/* Beacon receive timeout.
+-	 *
+-	 * Range: uint32_t
+-	 */
+-	u32 beacon_rx_timeout;
+-
+-	/* Broadcast receive timeout.
+-	 *
+-	 * Range: uint32_t
+-	 */
+-	u32 broadcast_timeout;
+-
+-	/* Enable/disable reception of broadcast packets in power save mode
+-	 *
+-	 * Range: 1 - enable, 0 - disable
+-	 */
+-	u8 rx_broadcast_in_ps;
+-
+-	/* Consecutive PS Poll failures before sending event to driver
+-	 *
+-	 * Range: uint8_t
+-	 */
+-	u8 ps_poll_threshold;
+-
+-	/* Configuration of signal average weights.
+-	 */
+-	struct conf_sig_weights sig_weights;
+-
+-	/* Specifies if beacon early termination procedure is enabled or
+-	 * disabled.
+-	 *
+-	 * Range: CONF_BET_MODE_*
+-	 */
+-	u8 bet_enable;
+-
+-	/* Specifies the maximum number of consecutive beacons that may be
+-	 * early terminated. After this number is reached at least one full
+-	 * beacon must be correctly received in FW before beacon ET
+-	 * resumes.
+-	 *
+-	 * Range 0 - 255
+-	 */
+-	u8 bet_max_consecutive;
+-
+-	/* Specifies the maximum number of times to try PSM entry if it fails
+-	 * (if sending the appropriate null-func message fails.)
+-	 *
+-	 * Range 0 - 255
+-	 */
+-	u8 psm_entry_retries;
+-
+-	/* Specifies the maximum number of times to try PSM exit if it fails
+-	 * (if sending the appropriate null-func message fails.)
+-	 *
+-	 * Range 0 - 255
+-	 */
+-	u8 psm_exit_retries;
+-
+-	/* Specifies the maximum number of times to try transmit the PSM entry
+-	 * null-func frame for each PSM entry attempt
+-	 *
+-	 * Range 0 - 255
+-	 */
+-	u8 psm_entry_nullfunc_retries;
+-
+ 	/* Specifies the dynamic PS timeout in ms that will be used
+ 	 * by the FW when in AUTO_PS mode
+ 	 */
+ 	u16 dynamic_ps_timeout;
+ 
+-	/* Specifies whether dynamic PS should be disabled and PSM forced.
+-	 * This is required for certain WiFi certification tests.
+-	 */
+-	u8 forced_ps;
+-
+-	/* Specifies the interval of the connection keep-alive null-func
+-	 * frame in ms.
+-	 *
+-	 * Range: 1000 - 3600000
+-	 */
+-	u32 keep_alive_interval;
+-
+ 	/* Maximum listen interval supported by the driver in units of beacons.
+ 	 *
+ 	 * Range: uint16_t
+@@ -696,65 +381,6 @@ struct conf_conn_settings {
+ 	u8 suspend_rx_ba_activity;
+ } __packed;
+ 
+-struct conf_itrim_settings {
+-	/* enable dco itrim */
+-	u8 enable;
+-
+-	/* moderation timeout in microsecs from the last TX */
+-	u32 timeout;
+-} __packed;
+-
+-enum conf_fast_wakeup {
+-	CONF_FAST_WAKEUP_ENABLE,
+-	CONF_FAST_WAKEUP_DISABLE,
+-};
+-
+-struct conf_pm_config_settings {
+-	/* Host clock settling time
+-	 *
+-	 * Range: 0 - 30000 us
+-	 */
+-	u32 host_clk_settling_time;
+-
+-	/* Host fast wakeup support
+-	 *
+-	 * Range: enum conf_fast_wakeup
+-	 */
+-	u8 host_fast_wakeup_support;
+-} __packed;
+-
+-struct conf_roam_trigger_settings {
+-	/* The minimum interval between two trigger events.
+-	 *
+-	 * Range: 0 - 60000 ms
+-	 */
+-	u16 trigger_pacing;
+-
+-	/* The weight for rssi/beacon average calculation
+-	 *
+-	 * Range: 0 - 255
+-	 */
+-	u8 avg_weight_rssi_beacon;
+-
+-	/* The weight for rssi/data frame average calculation
+-	 *
+-	 * Range: 0 - 255
+-	 */
+-	u8 avg_weight_rssi_data;
+-
+-	/* The weight for snr/beacon average calculation
+-	 *
+-	 * Range: 0 - 255
+-	 */
+-	u8 avg_weight_snr_beacon;
+-
+-	/* The weight for snr/data frame average calculation
+-	 *
+-	 * Range: 0 - 255
+-	 */
+-	u8 avg_weight_snr_data;
+-} __packed;
+-
+ struct conf_scan_settings {
+ 	/* The minimum time to wait on each channel for active scans
+ 	 * This value will be used whenever there's a connected interface.
+@@ -858,78 +484,11 @@ struct conf_sched_scan_settings {
+ 
+ struct conf_ht_setting {
+ 	u8 rx_ba_win_size;
+-	u8 tx_ba_win_size;
+-	u16 inactivity_timeout;
+-
+-	/* bitmap of enabled TIDs for TX BA sessions */
+-	u8 tx_ba_tid_bitmap;
+ 
+ 	/* DEFAULT / WIDE / SISO20 */
+ 	u8 mode;
+ } __packed;
+ 
+-struct conf_memory_settings {
+-	/* Number of stations supported in IBSS mode */
+-	u8 num_stations;
+-
+-	/* Number of ssid profiles used in IBSS mode */
+-	u8 ssid_profiles;
+-
+-	/* Number of memory buffers allocated to rx pool */
+-	u8 rx_block_num;
+-
+-	/* Minimum number of blocks allocated to tx pool */
+-	u8 tx_min_block_num;
+-
+-	/* Disable/Enable dynamic memory */
+-	u8 dynamic_memory;
+-
+-	/* Minimum required free tx memory blocks in order to assure optimum
+-	 * performance
+-	 *
+-	 * Range: 0-120
+-	 */
+-	u8 min_req_tx_blocks;
+-
+-	/* Minimum required free rx memory blocks in order to assure optimum
+-	 * performance
+-	 *
+-	 * Range: 0-120
+-	 */
+-	u8 min_req_rx_blocks;
+-
+-	/* Minimum number of mem blocks (free+used) guaranteed for TX
+-	 *
+-	 * Range: 0-120
+-	 */
+-	u8 tx_min;
+-} __packed;
+-
+-struct conf_rx_streaming_settings {
+-	/* RX Streaming duration (in msec) from last tx/rx
+-	 *
+-	 * Range: uint32_t
+-	 */
+-	u32 duration;
+-
+-	/* Bitmap of tids to be polled during RX streaming.
+-	 * (Note: it doesn't look like it really matters)
+-	 *
+-	 * Range: 0x1-0xff
+-	 */
+-	u8 queues;
+-
+-	/* RX Streaming interval.
+-	 * (Note:this value is also used as the rx streaming timeout)
+-	 * Range: 0 (disabled), 10 - 100
+-	 */
+-	u8 interval;
+-
+-	/* enable rx streaming also when there is no coex activity
+-	 */
+-	u8 always;
+-} __packed;
+-
+ struct conf_fwlog {
+ 	/* Continuous or on-demand */
+ 	u8 mode;
+@@ -953,53 +512,6 @@ struct conf_fwlog {
+ 	u8 threshold;
+ } __packed;
+ 
+-#define ACX_RATE_MGMT_NUM_OF_RATES 13
+-struct conf_rate_policy_settings {
+-	u16 rate_retry_score;
+-	u16 per_add;
+-	u16 per_th1;
+-	u16 per_th2;
+-	u16 max_per;
+-	u8 inverse_curiosity_factor;
+-	u8 tx_fail_low_th;
+-	u8 tx_fail_high_th;
+-	u8 per_alpha_shift;
+-	u8 per_add_shift;
+-	u8 per_beta1_shift;
+-	u8 per_beta2_shift;
+-	u8 rate_check_up;
+-	u8 rate_check_down;
+-	u8 rate_retry_policy[13];
+-} __packed;
+-
+-struct conf_hangover_settings {
+-	u32 recover_time;
+-	u8 hangover_period;
+-	u8 dynamic_mode;
+-	u8 early_termination_mode;
+-	u8 max_period;
+-	u8 min_period;
+-	u8 increase_delta;
+-	u8 decrease_delta;
+-	u8 quiet_time;
+-	u8 increase_time;
+-	u8 window_size;
+-} __packed;
+-
+-enum {
+-	CLOCK_CONFIG_16_2_M	= 1,
+-	CLOCK_CONFIG_16_368_M,
+-	CLOCK_CONFIG_16_8_M,
+-	CLOCK_CONFIG_19_2_M,
+-	CLOCK_CONFIG_26_M,
+-	CLOCK_CONFIG_32_736_M,
+-	CLOCK_CONFIG_33_6_M,
+-	CLOCK_CONFIG_38_468_M,
+-	CLOCK_CONFIG_52_M,
+-
+-	NUM_CLOCK_CONFIGS,
+-};
+-
+ enum cc33xx_ht_mode {
+ 	/* Default - use MIMO, fallback to SISO20 */
+ 	HT_MODE_DEFAULT = 0,
+@@ -1011,78 +523,192 @@ enum cc33xx_ht_mode {
+ 	HT_MODE_SISO20 = 2,
+ };
+ 
+-struct conf_ap_sleep_settings {
+-	/* Duty Cycle (20-80% of staying Awake) for IDLE AP
+-	 * (0: disable)
+-	 */
+-	u8 idle_duty_cycle;
+-	/* Duty Cycle (20-80% of staying Awake) for Connected AP
+-	 * (0: disable)
+-	 */
+-	u8 connected_duty_cycle;
+-	/* Maximum stations that are allowed to be connected to AP
+-	 *  (255: no limit)
+-	 */
+-	u8 max_stations_thresh;
+-	/* Timeout till enabling the Sleep Mechanism after data stops
+-	 * [unit: 100 msec]
+-	 */
+-	u8 idle_conn_thresh;
++struct coex_wifi_group_priorities {
++	/*
++	 * WLAN activity groups priorities
++	 *
++	 * Range: 0 - 15
++	 */
++	u8 coex_enabled;
++	u8 wlan_group_core_active_priority;
++	u8 wlan_group_traffic_priority;
++	u8 wlan_group_scan_priority;
++	u8 wlan_group_twt_traffic_priority;
++	u8 wlan_group_management_sequence_priority;
++	u8 wlan_group_scan_high_priority;
++	u8 wlan_group_broadcast_multicast_priority;
++	u8 wlan_group_beacon_priority;
++	u8 wlan_group_management_sequence_urgent_priority;
++	u8 wlan_group_beacon_urgent_priority;
++	u8 wlan_group_phy_command_priority;
+ } __packed;
+ 
+-#define CHANNELS_COUNT 39 /* 14 2.4GHz channels, 25 5GHz channels*/
+-#define PER_CHANNEL_REG_RULE_BYTES 13
+-#define REG_RULES_COUNT (CHANNELS_COUNT * PER_CHANNEL_REG_RULE_BYTES) /* 507 */
++struct coex_ble_group_priorities {
++	/*
++	 * BLE command groups priorities
++	 *
++	 * Range: 0 - 15
++	 */
++	u8 ble_group_test;
++	u8 ble_group_setup;
++	u8 ble_group_connected;
++	u8 ble_group_observer;
++	u8 ble_group_broadcaster;
++	u8 ble_group_initiator;
++	u8 ble_group_urgent_priority;
++} __packed;
+ 
+-/* TX Power limitation for a channel, used for reg domain */
+-struct conf_channel_power_limit {
+-	u32 reg_lim_0;
+-	u32 reg_lim_1;
+-	u32 reg_lim_2;
+-	u8  reg_lim_3;
++struct coex_external_soc_priorities {
++	/*
++	 * External SoC low and high priorities
++	 *
++	 * Range: 0 - 15
++	 */
++	u8 low_priority;
++	u8 high_priority;
+ } __packed;
+ 
+ struct conf_coex_configuration {
+-	/* Work without Coex HW
++	/*
++	 * Work without Coex HW
+ 	 *
+ 	 * Range: 1 - YES, 0 - NO
+ 	 */
+-	u8 disable_coex;
+-	/* Yes/No Choose if External SoC entity is connected
++	u8 Disable_coex;
++
++	/*
++	 * Tie breaker configuration
+ 	 *
+-	 * Range: 1 - YES, 0 - NO
++	 * Range: 0 - 3 for each tie breaker.
++	 *
++	 * 0 is lowest and 3 is the highest.
+ 	 */
+-	u8 is_ext_soc_enable;
+-	/* External SoC grant polarity
++	u8 tie_breaker_ble;
++	u8 tie_breaker_wifi;
++	u8 tie_breaker_ext_soc;
++
++	/*
++	 * Coex BLE configuration
++	 */
++	u8 ble_enabled;
++	u8 ble_grant_polarity;
++	u8 ble_pta_signalling_mode;
++	u8 ble_tx_bypass_val;
++	u8 ble_rx_bypass_val;
++
++	/*
++	 * Coex WiFi configuration
++	 */
++	u8 wifi_enabled;
++	u8 wifi_grant_polarity;
++	u8 wifi_alt_band_input_bypass;
++	u8 wifi_rx_only_input_bypass;
++	u8 wifi_alt_band_input_bypass_val;
++	u8 wifi_rx_only_input_bypass_val;
++
++	/*
++	 * External SoC entity enable
+ 	 *
+-	 * 0 - Active Low
++	 * 0 - NO
++	 * 1 - YES
++	 */
++	u8 is_Ext_soc_enable;
++	/*
++	 * External SoC PTA signalling mode
+ 	 *
+-	 * 1 - Active High (Default)
++	 * 00 - Reserved
++	 * 01 - 1-wire
++	 * 02 - 2-wires
++	 * 11 - 3-wires
+ 	 */
+-	u8 ext_soc_grant_polarity;
+-	/* External SoC priority polarity
++	u8 ext_soc_pta_signalling_mode;
++	/*
++	 * External SoC request polarity
+ 	 *
+ 	 * 0 - Active Low (Default)
+ 	 *
+ 	 * 1 - Active High
+ 	 */
+-	u8 ext_soc_priority_polarity;
+-	/* External SoC request polarity
++	u8 ext_soc_request_polarity;
++	/*
++	 * External SoC priority polarity
+ 	 *
+ 	 * 0 - Active Low (Default)
+ 	 *
+ 	 * 1 - Active High
+ 	 */
+-	u8 ext_soc_request_polarity;
++	u8 ext_soc_priority_polarity;
++	/*
++	 * External SoC grant polarity
++	 *
++	 * 0 - Active Low
++	 *
++	 * 1 - Active High (Default)
++	 */
++	u8 ext_soc_grant_polarity;
++	/*
++	 * External SoC grant renew bypass
++	 *
++	 * 0 - SOC needs to renew grant.
++	 *
++	 * 1 - Bypass SOC grant renew
++	 */
++	u8 ext_soc_grant_renew_bypass;
++	/*
++	 * External SoC request signal detection mechanism
++	 *
++	 * 00 - Rise edge detection (L -> H)
++	 * 01 - Fall edge detection (H -> L)
++	 * 10 - Level detection (active high)
++	 * 11 - Level detection (active low)
++	 */
++	u8 ext_soc_request_signal_detection;
++
++	/*
++	 * External SoC GPIO pins
++	 */
++	u8 ext_soc_grant_pin;
++	u8 ext_soc_request_pin;
++	u8 ext_soc_priority_pin;
++
++	/*
++	 * Coex grant delays
++	 *
++	 * Range: 0 - 200 usec
++	 */
++	u8 wifi_to_ble_grant_delay;
++	u8 wifi_to_ext_soc_grant_delay;
++	u8 ble_to_wifi_grant_delay;
++	u8 ble_to_ext_soc_grant_delay;
++	u8 ext_soc_to_wifi_grant_delay;
++	u8 ext_soc_to_ble_grant_delay;
++
++	/*
++	 * Coex grant times
++	 */
++	u16 wifi_min_grant_time;
++	u16 ble_min_grant_time;
++	u16 ble_max_grant_time;
+ 	u16 ext_soc_min_grant_time;
+ 	u16 ext_soc_max_grant_time;
+-	/* Range: 0 - 20 us
++	/*
++	 * BLE T2 time
++	 *
++	 * Range: 0 - 50 us
++	 */
++	u8 ble_t2_time;
++	/*
++	 * External SoC T2 time
++	 *
++	 * Range: 0 - 50 us
+ 	 */
+ 	u8 ext_soc_t2_time;
+ 
+-	u8 ext_soc_to_wifi_grant_delay;
+-	u8 ext_soc_to_ble_grant_delay;
+-} __packed;
++	struct coex_wifi_group_priorities wifi_group_priorities;
++	struct coex_ble_group_priorities ble_group_priorities;
++	struct coex_external_soc_priorities external_soc_priorities;
++
++} __attribute__((__packed__));
+ 
+ struct conf_iomux_configuration {
+ 	/* For any iomux pull value:
+@@ -1165,8 +791,76 @@ struct conf_ant_diversity {
+ 	/* The antenna to use when the diversity mechanism is not in charge.
+ 	 */
+ 	u8 default_antenna;
++
++	u8 rssi_low_limit;
++
++	u8 wifi_grant_override;
++	u8 wifi_grant_override_val;
++	u8 ext_soc_grant_override;
++	u8 ext_soc_grant_override_val;
++	u8 ble_grant_override;
++	u8 ble_grant_override_val;
++
++	u8 grant_override;
++
++	u8 external_mask;
++
++	u8 antenna_control_override;
++
++	u8 sw_enable_register;
++
++	/*
++	 * SW index
++	 * Bit 0 - SW index value
++	 * Bit 1 - SW index override
++	 */
++	u8 sw_index;
++
++	/*
++	 * GPIO antenna index (0-5)
++	 */
++	u8 gpio_antenna_index_0;
++	u8 gpio_antenna_index_1;
++	u8 gpio_antenna_index_2;
++	u8 gpio_antenna_index_3;
++	u8 gpio_antenna_index_4;
++	u8 gpio_antenna_index_5;
++
++	/*
++	 * Antenna selection bits
++	 */
++	u8 ant_sel_0;
++	u8 ant_sel_1;
++	u8 ant_sel_2;
++	u8 ant_sel_3;
+ } __packed;
+ 
++struct conf_thermal_thresholds {
++	s16 high_threshold_24G;
++	s16 low_threshold_24G;
++	s16 high_threshold_5G;
++	s16 low_threshold_5G;
++	s16 high_sample_threshold;
++	u8 enable_value;
++} __attribute__((__packed__));
++
++struct conf_limit105c_params {
++	u8 enable_value;
++	u8 maxMCS;
++	u8 maxOFDM;
++} __attribute__((__packed__));
++
++struct conf_gpadc_params {
++	u8  overrideEn;
++	u8  disable_measuring;
++	u8 pmcioSlop;
++	u16 pmcioIntercept;
++	u8 rfcioSlop;
++	u16 rfcioIntercept;
++	u32 measurePeriodUsec;
++	u8 dcSlopExponent;
++} __attribute__((__packed__));
++
+ struct cc33xx_core_conf {
+ 	u8 enable_5ghz;
+ 	u8 enable_ble;
+@@ -1174,15 +868,17 @@ struct cc33xx_core_conf {
+ 	u8 disable_beamforming_fftp;
+ 	u32 ble_uart_baudrate;
+ 	u8 enable_flow_ctrl;
++	s8 ble_default_tx_power;
+ 	u8 listen_interval;
+ 	u8 wake_up_event;
+ 	u8 suspend_listen_interval;
+ 	u8 suspend_wake_up_event;
+-	u8 per_channel_power_limit[507];
++	u8 per_channel_power_limit[520];
+ 	u32 internal_slowclk_wakeup_earlier;
+ 	u32 internal_slowclk_open_window_longer;
+ 	u32 external_slowclk_wakeup_earlier;
+ 	u32 external_slowclk_open_window_longer;
++	u32 slowclk_sampled_cycles;
+ 	struct conf_coex_configuration coex_configuration;
+ 	/* Prevent HW recovery. FW will remain stuck. */
+ 	u8 no_recovery;
+@@ -1190,14 +886,23 @@ struct cc33xx_core_conf {
+ 	u8 mixed_mode_support;
+ 	u8 sram_ldo_voltage_trimming;
+ 	u32 xtal_settling_time_usec;
++	u8 max_rx_ampdu_len;
++	u32 country_code;
+ 	struct conf_ant_diversity ant_diversity;
+ 	struct conf_iomux_configuration iomux_configuration;
++	struct conf_thermal_thresholds thermal_thresholds;
++	struct conf_limit105c_params limit105c_params;
++	struct conf_gpadc_params gpadc_params;
+ } __packed;
+ 
+ struct cc33xx_mac_conf {
++	u8 ps_mode;
+ 	u8 ps_scheme;
+ 	u8 he_enable;
+ 	u8 ap_max_num_stations;
++	u8 fw_defrag;
++	u16 rx_memblks_override;
++	u8 rts_mode;
+ } __packed;
+ 
+ struct cc33xx_phy_conf {
+@@ -1214,33 +919,37 @@ struct cc33xx_phy_conf {
+ 	u8 num_of_antennas;
+ 	u8 reg_domain;
+ 	u16 calib_period;
++	u8 tx_psat_compensation_2_4GHz;
++	u8 tx_psat_compensation_5GHz;
++	u8 psat_reserved;
++	u8 Is85cDevice;
++	u16 product_type;
++	u32 gpio_data[4];
++	u16 xtalCorrAbove95C;
++	u8 reserved[6];
+ } __packed;
+ 
+ struct cc33xx_host_conf {
+-	struct conf_rx_settings rx;
+ 	struct conf_tx_settings tx;
+ 	struct conf_conn_settings conn;
+-	struct conf_itrim_settings itrim;
+-	struct conf_pm_config_settings pm_config;
+-	struct conf_roam_trigger_settings roam_trigger;
+ 	struct conf_scan_settings scan;
+ 	struct conf_sched_scan_settings sched_scan;
+ 	struct conf_ht_setting ht;
+-	struct conf_memory_settings mem;
+-	struct conf_rx_streaming_settings rx_streaming;
+ 	struct conf_fwlog fwlog;
+-	struct conf_rate_policy_settings rate;
+-	struct conf_hangover_settings hangover;
+-	struct conf_ap_sleep_settings ap_sleep;
+ 
+ } __packed;
+ 
++struct cc33xx_crc_conf {
++	u32 userChecksum;
++} __packed;
++
+ struct cc33xx_conf_file {
+ 	struct cc33xx_conf_header header;
+ 	struct cc33xx_phy_conf phy;
+ 	struct cc33xx_mac_conf mac;
+ 	struct cc33xx_core_conf core;
+ 	struct cc33xx_host_conf host_conf;
++	struct cc33xx_crc_conf crc_conf;
+ } __packed;
+ 
+ #endif
+diff --git a/drivers/net/wireless/ti/cc33xx/debugfs.c b/drivers/net/wireless/ti/cc33xx/debugfs.c
+new file mode 100644
+index 000000000000..c9fb8c05148c
+--- /dev/null
++++ b/drivers/net/wireless/ti/cc33xx/debugfs.c
+@@ -0,0 +1,1990 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * This file is part of cc33xx
++ *
++ * Copyright (C) 2009 Nokia Corporation
++ *
++ * Contact: Luciano Coelho <luciano.coelho@nokia.com>
++ */
++
++#include "debugfs.h"
++#include "acx.h"
++#include "ps.h"
++#include "io.h"
++#include "tx.h"
++#include "../net/mac80211/ieee80211_i.h"
++
++#define CC33XX_DEBUGFS_FWSTATS_FILE(a, b, c) \
++	DEBUGFS_FWSTATS_FILE(a, b, c, cc33xx_acx_statistics)
++#define CC33XX_DEBUGFS_FWSTATS_FILE_ARRAY(a, b, c) \
++	DEBUGFS_FWSTATS_FILE_ARRAY(a, b, c, cc33xx_acx_statistics)
++
++CC33XX_DEBUGFS_FWSTATS_FILE(power, sleep_time_count, "%u");
++CC33XX_DEBUGFS_FWSTATS_FILE(power, sleep_time_avg, "%u");
++CC33XX_DEBUGFS_FWSTATS_FILE(power, sleep_cycle_avg, "%u");
++CC33XX_DEBUGFS_FWSTATS_FILE(power, sleep_percent, "%u");
++
++struct cc33xx_cmd_dfs_radar_debug {
++	struct cc33xx_cmd_header header;
++
++	u8 channel;
++	u8 padding[3];
++} __packed;
++
++/* ms */
++#define CC33XX_DEBUGFS_STATS_LIFETIME 1000
++#define MAX_VERSIONS_LEN	128
++#define MAX_VERSIONS_EXTENDED_LEN	256
++
++static int cc33xx_cmd_radar_detection_debug(struct cc33xx *wl, u8 channel)
++{
++	struct cc33xx_cmd_dfs_radar_debug *cmd;
++	int ret = 0;
++
++	cc33xx_debug(DEBUG_CMD, "cmd radar detection debug (chan %d)",
++		     channel);
++
++	cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
++	if (!cmd)
++		return -ENOMEM;
++
++	cmd->channel = channel;
++
++	ret = cc33xx_cmd_send(wl, CMD_DFS_RADAR_DETECTION_DEBUG,
++			      cmd, sizeof(*cmd), 0);
++	if (ret < 0) {
++		cc33xx_error("failed to send radar detection debug command");
++		goto out_free;
++	}
++
++out_free:
++	kfree(cmd);
++	return ret;
++}
++
++static ssize_t conf_read(struct file *file, char __user *user_buf,
++			 size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_conf_header header;
++	char *buf, *pos;
++	size_t len;
++	int ret;
++
++	len = CC33X_CONF_SIZE;
++	buf = kmalloc(len, GFP_KERNEL);
++	if (!buf)
++		return -ENOMEM;
++
++	header.magic	= cpu_to_le32(CC33XX_CONF_MAGIC);
++
++	header.fw_major_version = cpu_to_le32(CC33XX_CONF_FW_MAJOR_VERSION);
++	header.fw_minor_version = cpu_to_le32(CC33XX_CONF_FW_MINOR_VERSION);
++	header.fw_api_version = cpu_to_le32(CC33XX_CONF_FW_API_VERSION);
++	header.fw_build_version = cpu_to_le32(CC33XX_CONF_FW_BUILD_VERSION);
++
++	mutex_lock(&wl->mutex);
++
++	pos = buf;
++	memcpy(pos, &header, sizeof(header));
++	pos += sizeof(header);
++	memcpy(pos, &wl->conf, sizeof(wl->conf));
++
++	mutex_unlock(&wl->mutex);
++
++	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
++
++	kfree(buf);
++	return ret;
++}
++
++static const struct file_operations conf_ops = {
++	.read = conf_read,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t clear_fw_stats_write(struct file *file,
++				    const char __user *user_buf,
++				    size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	mutex_lock(&wl->mutex);
++
++	cc33xx_acx_clear_statistics(wl);
++
++	mutex_unlock(&wl->mutex);
++
++	return count;
++}
++
++static const struct file_operations clear_fw_stats_ops = {
++	.write = clear_fw_stats_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t radar_detection_write(struct file *file,
++				     const char __user *user_buf,
++				     size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++	u8 channel;
++
++	ret = kstrtou8_from_user(user_buf, count, 10, &channel);
++	if (ret < 0) {
++		cc33xx_warning("illegal channel");
++		return -EINVAL;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++	ret = cc33xx_cmd_radar_detection_debug(wl, channel);
++	if (ret < 0)
++		count = ret;
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations radar_detection_ops = {
++	.write = radar_detection_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t dynamic_fw_traces_write(struct file *file,
++				       const char __user *user_buf,
++				       size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 0, &value);
++	if (ret < 0)
++		return ret;
++
++	wl->dynamic_fw_traces = value;
++	return count;
++}
++
++static ssize_t dynamic_fw_traces_read(struct file *file, char __user *userbuf,
++				      size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	return cc33xx_format_buffer(userbuf, count, ppos,
++				    "%d\n", wl->dynamic_fw_traces);
++}
++
++static const struct file_operations dynamic_fw_traces_ops = {
++	.read = dynamic_fw_traces_read,
++	.write = dynamic_fw_traces_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++#ifdef CONFIG_CFG80211_CERTIFICATION_ONUS
++static ssize_t radar_debug_mode_write(struct file *file,
++				      const char __user *user_buf,
++				      size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_vif *wlvif;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal radar_debug_mode value!");
++		return -EINVAL;
++	}
++
++	/* valid values: 0/1 */
++	if (!(value == 0 || value == 1)) {
++		cc33xx_warning("value is not in valid!");
++		return -EINVAL;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	wl->radar_debug_mode = value;
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++	cc33xx_for_each_wlvif_ap(wl, wlvif) {
++		wlcore_cmd_generic_cfg(wl, wlvif,
++				       WLCORE_CFG_FEATURE_RADAR_DEBUG,
++				       wl->radar_debug_mode, 0);
++	}
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static ssize_t radar_debug_mode_read(struct file *file,
++				     char __user *userbuf,
++				     size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	return cc33xx_format_buffer(userbuf, count, ppos,
++				    "%d\n", wl->radar_debug_mode);
++}
++
++static const struct file_operations radar_debug_mode_ops = {
++	.write = radar_debug_mode_write,
++	.read = radar_debug_mode_read,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static void cc33xx_debugfs_add_files_helper(struct dentry *moddir)
++{
++	DEBUGFS_ADD(radar_debug_mode, moddir);
++}
++#else
++static void cc33xx_debugfs_add_files_helper(struct dentry *moddir) {}
++#endif /* CFG80211_CERTIFICATION_ONUS */
++
++
++/* debugfs macros idea from mac80211 */
++int cc33xx_format_buffer(char __user *userbuf, size_t count,
++			 loff_t *ppos, char *fmt, ...)
++{
++	va_list args;
++	char buf[DEBUGFS_FORMAT_BUFFER_SIZE];
++	int res;
++
++	va_start(args, fmt);
++	res = vscnprintf(buf, sizeof(buf), fmt, args);
++	va_end(args);
++
++	return simple_read_from_buffer(userbuf, count, ppos, buf, res);
++}
++
++void cc33xx_debugfs_update_stats(struct cc33xx *wl)
++{
++	bool update_needed;
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++	update_needed = time_after(jiffies, wl->stats.fw_stats_next_update);
++
++	if (!wl->plt && update_needed) {
++		cc33xx_acx_statistics(wl, wl->stats.fw_stats);
++
++		wl->stats.fw_stats_next_update =
++			jiffies + msecs_to_jiffies(CC33XX_DEBUGFS_STATS_LIFETIME);
++	}
++
++out:
++	mutex_unlock(&wl->mutex);
++}
++
++DEBUGFS_READONLY_FILE(retry_count, "%u", wl->stats.retry_count);
++DEBUGFS_READONLY_FILE(excessive_retries, "%u", wl->stats.excessive_retries);
++
++static ssize_t tx_queue_len_read(struct file *file, char __user *userbuf,
++				 size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	u32 queue_len;
++	char buf[20];
++	int res;
++
++	queue_len = cc33xx_tx_total_queue_count(wl);
++
++	res = scnprintf(buf, sizeof(buf), "%u\n", queue_len);
++	return simple_read_from_buffer(userbuf, count, ppos, buf, res);
++}
++
++static const struct file_operations tx_queue_len_ops = {
++	.read = tx_queue_len_read,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++#define CC33XX_CONF_DEBUGFS(param, conf_sub_struct,			\
++			    min_val, max_val, write_handler_locked,	\
++			    write_handler_arg)				\
++	static ssize_t param##_read(struct file *file,			\
++				      char __user *user_buf,		\
++				      size_t count, loff_t *ppos)	\
++	{								\
++	struct cc33xx *wl = file->private_data;				\
++	return cc33xx_format_buffer(user_buf, count,			\
++				    ppos, "%d\n",			\
++				    wl->conf.host_conf.conf_sub_struct.param);	\
++	}								\
++									\
++	static ssize_t param##_write(struct file *file,			\
++				     const char __user *user_buf,	\
++				     size_t count, loff_t *ppos)	\
++	{								\
++	struct cc33xx *wl = file->private_data;				\
++	unsigned long value;						\
++	int ret;							\
++									\
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);		\
++	if (ret < 0) {							\
++		cc33xx_warning("illegal value for " #param);		\
++		return -EINVAL;						\
++	}								\
++									\
++	if (value < min_val || value > max_val) {			\
++		cc33xx_warning(#param " is not in valid range");	\
++		return -ERANGE;						\
++	}								\
++									\
++	mutex_lock(&wl->mutex);						\
++	wl->conf.host_conf.conf_sub_struct.param = value;		\
++									\
++	write_handler_locked(wl, value, write_handler_arg);		\
++									\
++	mutex_unlock(&wl->mutex);					\
++	return count;							\
++	}								\
++									\
++	static const struct file_operations param##_ops = {		\
++		.read = param##_read,					\
++		.write = param##_write,					\
++		.open = simple_open,					\
++		.llseek = default_llseek,				\
++	};
++
++static ssize_t gpio_power_read(struct file *file, char __user *user_buf,
++			       size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	bool state = test_bit(CC33XX_FLAG_GPIO_POWER, &wl->flags);
++
++	int res;
++	char buf[10];
++
++	res = scnprintf(buf, sizeof(buf), "%d\n", state);
++
++	return simple_read_from_buffer(user_buf, count, ppos, buf, res);
++}
++
++static ssize_t gpio_power_write(struct file *file, const char __user *user_buf,
++				size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in gpio_power");
++		return -EINVAL;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (value)
++		cc33xx_power_on(wl);
++	else
++		cc33xx_power_off(wl);
++
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations gpio_power_ops = {
++	.read = gpio_power_read,
++	.write = gpio_power_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t start_recovery_write(struct file *file,
++				    const char __user *user_buf,
++				    size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	mutex_lock(&wl->mutex);
++	cc33xx_queue_recovery_work(wl);
++	mutex_unlock(&wl->mutex);
++
++	return count;
++}
++
++static const struct file_operations start_recovery_ops = {
++	.write = start_recovery_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t dynamic_ps_timeout_read(struct file *file,
++					      char __user *user_buf,
++					      size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
++				    wl->conf.host_conf.conn.dynamic_ps_timeout);
++}
++
++static ssize_t dynamic_ps_timeout_write(struct file *file,
++					const char __user *user_buf,
++					size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_vif *wlvif;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in dynamic_ps");
++		return -EINVAL;
++	}
++
++	if (value < 1 || value > 65535) {
++		cc33xx_warning("dynamic_ps_timeout is not in valid range");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	wl->conf.host_conf.conn.dynamic_ps_timeout = value;
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++	/* In case we're already in PSM, trigger it again to set new timeout
++	 * immediately without waiting for re-association
++	 */
++
++	cc33xx_for_each_wlvif_sta(wl, wlvif) {
++		cc33xx_ps_set_mode(wl, wlvif, STATION_AUTO_PS_MODE);
++	}
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations dynamic_ps_timeout_ops = {
++	.read = dynamic_ps_timeout_read,
++	.write = dynamic_ps_timeout_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t ps_mode_read(struct file *file, char __user *user_buf,
++				     size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
++				    wl->conf.mac.ps_mode);
++}
++
++static ssize_t ps_mode_write(struct file *file, const char __user *user_buf,
++			       size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_vif *wlvif;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in ps_mode");
++		return -EINVAL;
++	}
++
++	if (value < 0 || value > 2) {
++		cc33xx_warning("ps_mode should be either 0 or 1 or 2");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (wl->conf.mac.ps_mode == value)
++		goto out;
++
++	wl->conf.mac.ps_mode = value;
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++	/* In case we're already in PSM, trigger it again to switch mode
++	 * immediately without waiting for re-association
++	 */
++
++	cc33xx_for_each_wlvif_sta(wl, wlvif) {
++		cc33xx_ps_set_mode(wl, wlvif, value);
++	}
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations ps_mode_ops = {
++	.read = ps_mode_read,
++	.write = ps_mode_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t split_scan_timeout_read(struct file *file,
++					      char __user *user_buf,
++					      size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
++				    wl->conf.host_conf.scan.split_scan_timeout / 1000);
++}
++
++static ssize_t split_scan_timeout_write(struct file *file,
++					const char __user *user_buf,
++					size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in split_scan_timeout");
++		return -EINVAL;
++	}
++
++	if (value == 0)
++		cc33xx_info("split scan will be disabled");
++
++	mutex_lock(&wl->mutex);
++
++	wl->conf.host_conf.scan.split_scan_timeout = value * 1000;
++
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations split_scan_timeout_ops = {
++	.read = split_scan_timeout_read,
++	.write = split_scan_timeout_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++#define DRIVER_STATE_BUF_LEN 1024
++
++#define DRIVER_STATE_PRINT(x, fmt)   \
++	(res += scnprintf(buf + res, DRIVER_STATE_BUF_LEN - res,\
++			  #x " = " fmt "\n", wl->x))
++
++#define DRIVER_STATE_PRINT_GENERIC(x, fmt, args...)   \
++	(res += scnprintf(buf + res, DRIVER_STATE_BUF_LEN - res,\
++			  #x " = " fmt "\n", args))
++
++#define DRIVER_STATE_PRINT_LONG(x) DRIVER_STATE_PRINT(x, "%ld")
++#define DRIVER_STATE_PRINT_INT(x)  DRIVER_STATE_PRINT(x, "%d")
++#define DRIVER_STATE_PRINT_STR(x)  DRIVER_STATE_PRINT(x, "%s")
++#define DRIVER_STATE_PRINT_LHEX(x) DRIVER_STATE_PRINT(x, "0x%lx")
++#define DRIVER_STATE_PRINT_HEX(x)  DRIVER_STATE_PRINT(x, "0x%x")
++
++static ssize_t driver_state_read(struct file *file, char __user *user_buf,
++				 size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int res = 0;
++	ssize_t ret;
++	char *buf;
++	struct cc33xx_vif *wlvif;
++
++
++	buf = kmalloc(DRIVER_STATE_BUF_LEN, GFP_KERNEL);
++	if (!buf)
++		return -ENOMEM;
++
++	mutex_lock(&wl->mutex);
++
++	cc33xx_for_each_wlvif_sta(wl, wlvif) {
++		if (!test_bit(WLVIF_FLAG_STA_ASSOCIATED, &wlvif->flags))
++			continue;
++
++		DRIVER_STATE_PRINT_GENERIC(channel, "%d (%s)", wlvif->channel,
++					   wlvif->p2p ? "P2P-CL" : "STA");
++	}
++
++	cc33xx_for_each_wlvif_ap(wl, wlvif)
++		DRIVER_STATE_PRINT_GENERIC(channel, "%d (%s)", wlvif->channel,
++					   wlvif->p2p ? "P2P-GO" : "AP");
++
++	DRIVER_STATE_PRINT_INT(tx_blocks_available);
++	DRIVER_STATE_PRINT_INT(tx_allocated_blocks);
++	DRIVER_STATE_PRINT_INT(tx_allocated_pkts[0]);
++	DRIVER_STATE_PRINT_INT(tx_allocated_pkts[1]);
++	DRIVER_STATE_PRINT_INT(tx_allocated_pkts[2]);
++	DRIVER_STATE_PRINT_INT(tx_allocated_pkts[3]);
++	DRIVER_STATE_PRINT_INT(tx_frames_cnt);
++	DRIVER_STATE_PRINT_LHEX(tx_frames_map[0]);
++	DRIVER_STATE_PRINT_INT(tx_queue_count[0]);
++	DRIVER_STATE_PRINT_INT(tx_queue_count[1]);
++	DRIVER_STATE_PRINT_INT(tx_queue_count[2]);
++	DRIVER_STATE_PRINT_INT(tx_queue_count[3]);
++	DRIVER_STATE_PRINT_LHEX(flags);
++	DRIVER_STATE_PRINT_INT(rx_counter);
++	DRIVER_STATE_PRINT_INT(state);
++	DRIVER_STATE_PRINT_INT(band);
++	DRIVER_STATE_PRINT_INT(power_level);
++	DRIVER_STATE_PRINT_INT(enable_11a);
++	DRIVER_STATE_PRINT_LHEX(ap_fw_ps_map);
++	DRIVER_STATE_PRINT_LHEX(ap_ps_map);
++	DRIVER_STATE_PRINT_HEX(quirks);
++	/* TODO: ref_clock and tcxo_clock were moved to wl12xx priv */
++
++	mutex_unlock(&wl->mutex);
++
++	ret = simple_read_from_buffer(user_buf, count, ppos, buf, res);
++	kfree(buf);
++	return ret;
++}
++
++#undef DRIVER_STATE_PRINT_INT
++#undef DRIVER_STATE_PRINT_LONG
++#undef DRIVER_STATE_PRINT_HEX
++#undef DRIVER_STATE_PRINT_LHEX
++#undef DRIVER_STATE_PRINT_STR
++#undef DRIVER_STATE_PRINT
++#undef DRIVER_STATE_BUF_LEN
++
++static const struct file_operations driver_state_ops = {
++	.read = driver_state_read,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t vifs_state_read(struct file *file, char __user *user_buf,
++			       size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_vif *wlvif;
++	int ret, res = 0;
++	const int buf_size = 4096;
++	char *buf;
++	char tmp_buf[64];
++
++	buf = kzalloc(buf_size, GFP_KERNEL);
++	if (!buf)
++		return -ENOMEM;
++
++	mutex_lock(&wl->mutex);
++
++#define VIF_STATE_PRINT(x, fmt)				\
++	(res += scnprintf(buf + res, buf_size - res,	\
++			  #x " = " fmt "\n", wlvif->x))
++
++#define VIF_STATE_PRINT_LONG(x)  VIF_STATE_PRINT(x, "%ld")
++#define VIF_STATE_PRINT_INT(x)   VIF_STATE_PRINT(x, "%d")
++#define VIF_STATE_PRINT_STR(x)   VIF_STATE_PRINT(x, "%s")
++#define VIF_STATE_PRINT_LHEX(x)  VIF_STATE_PRINT(x, "0x%lx")
++#define VIF_STATE_PRINT_LLHEX(x) VIF_STATE_PRINT(x, "0x%llx")
++#define VIF_STATE_PRINT_HEX(x)   VIF_STATE_PRINT(x, "0x%x")
++
++#define VIF_STATE_PRINT_NSTR(x, len)				\
++	do {							\
++		memset(tmp_buf, 0, sizeof(tmp_buf));		\
++		memcpy(tmp_buf, wlvif->x,			\
++		       min_t(u8, len, sizeof(tmp_buf) - 1));	\
++		res += scnprintf(buf + res, buf_size - res,	\
++				 #x " = %s\n", tmp_buf);	\
++	} while (0)
++
++	cc33xx_for_each_wlvif(wl, wlvif) {
++		VIF_STATE_PRINT_INT(role_id);
++		VIF_STATE_PRINT_INT(bss_type);
++		VIF_STATE_PRINT_LHEX(flags);
++		VIF_STATE_PRINT_INT(p2p);
++		VIF_STATE_PRINT_INT(dev_role_id);
++		VIF_STATE_PRINT_INT(dev_hlid);
++
++		if (wlvif->bss_type == BSS_TYPE_STA_BSS ||
++		    wlvif->bss_type == BSS_TYPE_IBSS) {
++			VIF_STATE_PRINT_INT(sta.hlid);
++			VIF_STATE_PRINT_INT(sta.basic_rate_idx);
++			VIF_STATE_PRINT_INT(sta.ap_rate_idx);
++			VIF_STATE_PRINT_INT(sta.p2p_rate_idx);
++			VIF_STATE_PRINT_INT(sta.qos);
++		} else {
++			VIF_STATE_PRINT_INT(ap.global_hlid);
++			VIF_STATE_PRINT_INT(ap.bcast_hlid);
++			VIF_STATE_PRINT_LHEX(ap.sta_hlid_map[0]);
++			VIF_STATE_PRINT_INT(ap.mgmt_rate_idx);
++			VIF_STATE_PRINT_INT(ap.bcast_rate_idx);
++			VIF_STATE_PRINT_INT(ap.ucast_rate_idx[0]);
++			VIF_STATE_PRINT_INT(ap.ucast_rate_idx[1]);
++			VIF_STATE_PRINT_INT(ap.ucast_rate_idx[2]);
++			VIF_STATE_PRINT_INT(ap.ucast_rate_idx[3]);
++		}
++		VIF_STATE_PRINT_INT(last_tx_hlid);
++		VIF_STATE_PRINT_INT(tx_queue_count[0]);
++		VIF_STATE_PRINT_INT(tx_queue_count[1]);
++		VIF_STATE_PRINT_INT(tx_queue_count[2]);
++		VIF_STATE_PRINT_INT(tx_queue_count[3]);
++		VIF_STATE_PRINT_LHEX(links_map[0]);
++		VIF_STATE_PRINT_NSTR(ssid, wlvif->ssid_len);
++		VIF_STATE_PRINT_INT(band);
++		VIF_STATE_PRINT_INT(channel);
++		VIF_STATE_PRINT_HEX(bitrate_masks[0]);
++		VIF_STATE_PRINT_HEX(bitrate_masks[1]);
++		VIF_STATE_PRINT_HEX(basic_rate_set);
++		VIF_STATE_PRINT_HEX(basic_rate);
++		VIF_STATE_PRINT_HEX(rate_set);
++		VIF_STATE_PRINT_INT(beacon_int);
++		VIF_STATE_PRINT_INT(default_key);
++		VIF_STATE_PRINT_INT(aid);
++		VIF_STATE_PRINT_INT(psm_entry_retry);
++		VIF_STATE_PRINT_INT(power_level);
++		VIF_STATE_PRINT_INT(rssi_thold);
++		VIF_STATE_PRINT_INT(last_rssi_event);
++		VIF_STATE_PRINT_INT(ba_support);
++		VIF_STATE_PRINT_INT(ba_allowed);
++		VIF_STATE_PRINT_LLHEX(total_freed_pkts);
++	}
++
++#undef VIF_STATE_PRINT_INT
++#undef VIF_STATE_PRINT_LONG
++#undef VIF_STATE_PRINT_HEX
++#undef VIF_STATE_PRINT_LHEX
++#undef VIF_STATE_PRINT_LLHEX
++#undef VIF_STATE_PRINT_STR
++#undef VIF_STATE_PRINT_NSTR
++#undef VIF_STATE_PRINT
++
++	mutex_unlock(&wl->mutex);
++
++	ret = simple_read_from_buffer(user_buf, count, ppos, buf, res);
++	kfree(buf);
++	return ret;
++}
++
++static const struct file_operations vifs_state_ops = {
++	.read = vifs_state_read,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++enum {
++	CONF_WAKE_UP_EVENT_BEACON    = 0x00, /* Wake on every Beacon */
++	CONF_WAKE_UP_EVENT_DTIM      = 0x01, /* Wake on every DTIM */
++	CONF_WAKE_UP_EVENT_N_DTIM    = 0x02, /* Wake every Nth DTIM */
++	CONF_WAKE_UP_EVENT_LIMIT     = CONF_WAKE_UP_EVENT_N_DTIM,
++	/* Not supported: */
++	CONF_WAKE_UP_EVENT_N_BEACONS = 0x03, /* Wake every Nth beacon */
++	CONF_WAKE_UP_EVENT_BITS_MASK = 0x0F
++};
++
++static ssize_t dtim_interval_read(struct file *file, char __user *user_buf,
++				  size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	u8 value;
++
++	if (wl->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_DTIM ||
++	    wl->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_N_DTIM)
++		value = wl->conf.core.listen_interval;
++	else
++		value = 0;
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n", value);
++}
++
++static ssize_t dtim_interval_write(struct file *file,
++				   const char __user *user_buf,
++				   size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_vif *wlvif = NULL;
++	struct ieee80211_sub_if_data *sdata = NULL;
++	struct ieee80211_vif *vif = NULL;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value for dtim_interval");
++		return -EINVAL;
++	}
++
++	if (value < 1 || value > 10) {
++		cc33xx_warning("dtim value is not in valid range");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	wl->conf.core.listen_interval = value;
++
++	if (value == 1)
++		wl->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_DTIM;
++	else
++		wl->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_N_DTIM;
++
++	cc33xx_for_each_wlvif_sta(wl, wlvif) {
++		if (!cc33xx_is_p2p_mgmt(wlvif)) {
++			vif = cc33xx_wlvif_to_vif(wlvif);
++			sdata = vif_to_sdata(vif);
++			cc33xx_debug(DEBUG_CMD, "Setting LSI on interface %s",
++						sdata->name);
++			ret = cc33xx_acx_wake_up_conditions(wl, wlvif,
++						wl->conf.core.wake_up_event,
++						wl->conf.core.listen_interval);
++			if (ret < 0) {
++				vif = cc33xx_wlvif_to_vif(wlvif);
++				sdata = vif_to_sdata(vif);
++				cc33xx_warning("Failed to set LSI on "
++					"interface %s", sdata->name);
++				return ret;
++			}
++		}
++	}
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations dtim_interval_ops = {
++	.read = dtim_interval_read,
++	.write = dtim_interval_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t suspend_dtim_interval_read(struct file *file,
++					  char __user *user_buf,
++					  size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	u8 value;
++
++	if (wl->conf.core.suspend_wake_up_event == CONF_WAKE_UP_EVENT_DTIM ||
++	    wl->conf.core.suspend_wake_up_event == CONF_WAKE_UP_EVENT_N_DTIM)
++		value = wl->conf.core.suspend_listen_interval;
++	else
++		value = 0;
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n", value);
++}
++
++static ssize_t suspend_dtim_interval_write(struct file *file,
++					   const char __user *user_buf,
++					   size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value for suspend_dtim_interval");
++		return -EINVAL;
++	}
++
++	if (value < 1 || value > 10) {
++		cc33xx_warning("suspend_dtim value is not in valid range");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	wl->conf.core.suspend_listen_interval = value;
++	/* for some reason there are different event types for 1 and >1 */
++	if (value == 1)
++		wl->conf.core.suspend_wake_up_event = CONF_WAKE_UP_EVENT_DTIM;
++	else
++		wl->conf.core.suspend_wake_up_event = CONF_WAKE_UP_EVENT_N_DTIM;
++
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations suspend_dtim_interval_ops = {
++	.read = suspend_dtim_interval_read,
++	.write = suspend_dtim_interval_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t beacon_interval_read(struct file *file, char __user *user_buf,
++				    size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	u8 value;
++
++	if (wl->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_BEACON ||
++	    wl->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_N_BEACONS)
++		value = wl->conf.core.listen_interval;
++	else
++		value = 0;
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n", value);
++}
++
++static ssize_t beacon_interval_write(struct file *file,
++				     const char __user *user_buf,
++				     size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 10, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value for beacon_interval");
++		return -EINVAL;
++	}
++
++	if (value < 1 || value > 255) {
++		cc33xx_warning("beacon interval value is not in valid range");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	wl->conf.core.listen_interval = value;
++	/* for some reason there are different event types for 1 and >1 */
++	if (value == 1)
++		wl->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_BEACON;
++	else
++		wl->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_N_BEACONS;
++
++	/*
++	 * we don't reconfigure ACX_WAKE_UP_CONDITIONS now, so it will only
++	 * take effect on the next time we enter psm.
++	 */
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations beacon_interval_ops = {
++	.read = beacon_interval_read,
++	.write = beacon_interval_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t beacon_filtering_write(struct file *file,
++				      const char __user *user_buf,
++				      size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_vif *wlvif;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 0, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value for beacon_filtering!");
++		return -EINVAL;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	cc33xx_for_each_wlvif(wl, wlvif) {
++		ret = cc33xx_acx_beacon_filter_opt(wl, wlvif, !!value);
++	}
++
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations beacon_filtering_ops = {
++	.write = beacon_filtering_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t fw_stats_raw_read(struct file *file, char __user *userbuf,
++				 size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	cc33xx_debugfs_update_stats(wl);
++
++	return simple_read_from_buffer(userbuf, count, ppos,
++				       wl->stats.fw_stats,
++				       sizeof(struct cc33xx_acx_statistics));
++}
++
++static const struct file_operations fw_stats_raw_ops = {
++	.read = fw_stats_raw_read,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t sleep_auth_read(struct file *file, char __user *user_buf,
++				size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
++				    wl->sleep_auth);
++}
++
++static ssize_t sleep_auth_write(struct file *file, const char __user *user_buf,
++				size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 0, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in sleep_auth");
++		return -EINVAL;
++	}
++
++	if (value > CC33XX_PSM_MAX) {
++		cc33xx_warning("sleep_auth must be between 0 and %d",
++			       CC33XX_PSM_MAX);
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	wl->conf.host_conf.conn.sta_sleep_auth = value;
++
++	if (unlikely(wl->state != CC33XX_STATE_ON)) {
++		/* this will show up on "read" in case we are off */
++		wl->sleep_auth = value;
++		goto out;
++	}
++
++	cc33xx_acx_sleep_auth(wl, value);
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations sleep_auth_ops = {
++	.read = sleep_auth_read,
++	.write = sleep_auth_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++//ble_enable
++static ssize_t ble_enable_read(struct file *file, char __user *user_buf,
++					size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
++				wl->ble_enable);
++}
++
++static ssize_t ble_enable_write(struct file *file, const char __user *user_buf,
++				size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 0, &value);
++
++	if (value == wl->ble_enable) {
++		cc33xx_warning("ble_enable is already %d", wl->ble_enable);
++		return -EINVAL;
++	}
++
++	if (value != 1) {
++		cc33xx_warning("illegal value in ble_enable (only value allowed is 1)");
++		cc33xx_warning("ble_enable can't be disabled after being enabled.");
++		return -EINVAL;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON)) {
++		/* this will show up on "read" in case we are off */
++		wl->ble_enable = value;
++		goto out;
++	}
++
++	cc33xx_ble_enable(wl, value);
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++//ble_enable
++
++static const struct file_operations ble_enable_ops = {
++	.read = ble_enable_read,
++	.write = ble_enable_write,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t fw_crash_log_read(struct file *file, char __user *user_buf,
++			size_t count, loff_t *ppos)
++{
++	struct cc33xx *cc = file->private_data;
++	size_t len;
++	int ret;
++
++	if (cc->fw_crash_logs == NULL)
++		return 0;
++
++	len = CC33XX_MAX_FW_LOGS_BUFFER_SIZE;
++
++	mutex_lock(&cc->mutex);
++
++	ret = simple_read_from_buffer(user_buf, count, ppos, cc->fw_crash_logs, len);
++
++	mutex_unlock(&cc->mutex);
++
++	return ret;
++}
++
++//crash_fw_log
++static const struct file_operations fw_crash_log_ops = {
++	.read = fw_crash_log_read,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t set_tsf_read(struct file *file, char __user *user_buf,
++			size_t count, loff_t *ppos)
++{
++	return cc33xx_format_buffer(user_buf, count, ppos, "%llx\n", 0LL);
++}
++
++static ssize_t set_tsf_write(struct file *file, const char __user *user_buf,
++			     size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long long value;
++	int ret;
++
++	ret = kstrtoull_from_user(user_buf, count, 0, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in set_tsf");
++		return -EINVAL;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON)) {
++		goto out;
++	}
++
++	cc33xx_acx_set_tsf(wl, value);
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations set_tsf_ops = {
++	.open = simple_open,
++	.read = set_tsf_read,
++	.write = set_tsf_write,
++	.llseek = default_llseek,
++};
++
++
++static ssize_t twt_action_read(struct file *file, char __user *user_buf,
++			       size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d %d %d %d %d\n",
++				wl->min_wake_duration_usec,
++				wl->min_wake_interval_mantissa, wl->min_wake_interval_exponent,
++				wl->max_wake_interval_mantissa, wl->max_wake_interval_exponent);
++}
++
++static ssize_t twt_action_write(struct file *file,
++				const char __user *user_buf,
++				size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	int min_wake_duration_usec = 0;
++	int min_wake_interval_mantissa = 0;
++	int min_wake_interval_exponent = 0;
++	int max_wake_interval_mantissa = 0;
++	int max_wake_interval_exponent = 0;
++	int twt_action_type;
++	u8 valid_params;
++	int ret;
++	int arg_count;
++	char *buffer;
++
++	buffer = kzalloc(count, GFP_KERNEL);
++	if (!buffer) {
++		ret = -ENOMEM;
++		cc33xx_warning("error in twt_action: %d", ret);
++		return ret;
++	}
++
++	ret = strncpy_from_user(buffer, user_buf, count);
++	if (-EFAULT == ret) {
++		cc33xx_warning("error in twt_action: %d", ret);
++		kfree(buffer);
++		return ret;
++	}
++
++	arg_count = sscanf(buffer, "%d %d %d %d %d %d", &twt_action_type, &min_wake_duration_usec,
++					&min_wake_interval_mantissa, &min_wake_interval_exponent,
++					&max_wake_interval_mantissa, &max_wake_interval_exponent);
++
++	kfree(buffer);
++
++#define TWT_ACTION_SETUP		(1)
++#define TWT_ACTION_SUSPEND		(2)
++#define TWT_ACTION_RESUME		(3)
++#define TWT_ACTION_TERMINATE	(4)
++
++	valid_params = 0;
++	if ((twt_action_type == TWT_ACTION_SETUP) && (arg_count > 1)) {
++		if (min_wake_duration_usec < 256) {
++			cc33xx_warning("error in twt_action: duration cannot be under 256 ");
++			return count;
++		}
++
++		if (min_wake_interval_mantissa <= 0) {
++			cc33xx_warning("error in twt_action: interval mantissa must be over 0 ");
++			return count;
++		}
++		if (min_wake_interval_exponent < 0 || max_wake_interval_mantissa < 0 || max_wake_interval_exponent < 0) {
++			cc33xx_warning("error in twt_action: negative value not allowed ");
++			return count;
++		}
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++
++	// valid input is twt_action [min_wake_duration_usec min_wake_interval_mantissa
++	// min_wake_interval_exponent [max_wake_interval_mantissa max_wake_interval_exponent]]
++	if (twt_action_type != TWT_ACTION_SETUP && arg_count != 1) {
++		cc33xx_warning("illegal arguments in twt_action");
++		cc33xx_warning("twt_action_type: %d", twt_action_type);
++		goto out;
++	}
++	switch (twt_action_type)  {
++		case TWT_ACTION_SETUP: {
++			if (arg_count == 1) {
++			} else if (arg_count == 4) {
++				valid_params |= (MIN_WAKE_DURATION_VALID | MIN_WAKE_INTERVAL_MANTISSA_VALID |
++						MIN_WAKE_INTERVAL_EXPONENT_VALID);
++			} else if (arg_count == 6) {
++				valid_params |= (MIN_WAKE_DURATION_VALID | MIN_WAKE_INTERVAL_MANTISSA_VALID |
++					MIN_WAKE_INTERVAL_EXPONENT_VALID | MAX_WAKE_INTERVAL_MANTISSA_VALID |
++					MAX_WAKE_INTERVAL_EXPONENT_VALID);
++			} else {
++				cc33xx_warning("illegal number of params for twt action setup");
++				goto out;
++			}
++
++			ret = cc33xx_acx_twt_setup(wl, min_wake_duration_usec,
++					min_wake_interval_mantissa, min_wake_interval_exponent,
++					max_wake_interval_mantissa, max_wake_interval_exponent,
++					valid_params);
++
++			break;
++		}
++		case TWT_ACTION_SUSPEND: {
++
++			ret = cc33xx_acx_twt_suspend(wl);
++			break;
++		}
++		case TWT_ACTION_RESUME: {
++
++			ret = cc33xx_acx_twt_resume(wl);
++
++			break;
++		}
++		case TWT_ACTION_TERMINATE: {
++
++			ret = cc33xx_acx_twt_terminate(wl);
++
++			break;
++		}
++
++		default: {
++			cc33xx_warning("illegal twt command");
++			goto out;
++		}
++	}
++
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations twt_action_ops = {
++	.open = simple_open,
++	.read = twt_action_read,
++	.write = twt_action_write,
++	.llseek = default_llseek,
++};
++
++
++static ssize_t dev_mem_read(struct file *file, char __user *user_buf,
++				   size_t count, loff_t *ppos)
++{
++	return 0;
++}
++
++static ssize_t dev_mem_write(struct file *file,
++				    const char __user *user_buf,
++				    size_t count, loff_t *ppos)
++{
++	return 0;
++}
++
++static loff_t dev_mem_seek(struct file *file, loff_t offset, int orig)
++{
++	/* only requests of dword-aligned size and offset are supported */
++	if (offset % 4)
++		return -EINVAL;
++
++	return no_seek_end_llseek(file, offset, orig);
++}
++
++static const struct file_operations dev_mem_ops = {
++	.open = simple_open,
++	.read = dev_mem_read,
++	.write = dev_mem_write,
++	.llseek = dev_mem_seek,
++};
++
++static ssize_t fw_logger_read(struct file *file, char __user *user_buf,
++				     size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
++				    wl->conf.host_conf.fwlog.output);
++}
++
++static ssize_t fw_logger_write(struct file *file, const char __user *user_buf,
++			       size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned long value;
++	int ret;
++
++	ret = kstrtoul_from_user(user_buf, count, 0, &value);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in fw_logger");
++		return -EINVAL;
++	}
++
++	if (value > 2 || value == 0) {
++		cc33xx_warning("fw_logger value must be 1-UART 2-SDIO");
++		return -ERANGE;
++	}
++
++	if (wl->conf.host_conf.fwlog.output == 0) {
++		cc33xx_warning("invalid operation - fw logger disabled by default, "
++			       "please change mode via wlconf");
++		return -EINVAL;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	wl->conf.host_conf.fwlog.output = value;
++
++	cc33xx_cmd_config_fwlog(wl);
++
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations fw_logger_ops = {
++	.open = simple_open,
++	.read = fw_logger_read,
++	.write = fw_logger_write,
++	.llseek = default_llseek,
++};
++
++static ssize_t antenna_select_read(struct file *file,
++					  char __user *user_buf,
++					  size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
++				    wl->antenna_selection);
++}
++
++static ssize_t antenna_select_write(struct file *file,
++				    const char __user *user_buf,
++				    size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++	u8 selection;
++
++	ret = kstrtou8_from_user(user_buf, count, 0, &selection);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in antenna_select");
++		return -EINVAL;
++	}
++
++	if (selection > 1) {
++		cc33xx_warning("selection should be either 0 or 1");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++	ret = cc33xx_acx_set_antenna_select(wl, selection);
++	if (ret == 0)
++		wl->antenna_selection = selection;
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations antenna_select_ops = {
++	.open = simple_open,
++	.read = antenna_select_read,
++	.write = antenna_select_write,
++	.llseek = default_llseek,
++};
++
++static ssize_t get_versions_read(struct file *file, char __user *user_buf,
++				 size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_acx_fw_versions *fw_ver = wl->fw_ver;
++
++	char all_versions_str[MAX_VERSIONS_LEN];
++
++	sprintf(all_versions_str,
++		"Firmware Version: %u.%u.%u",
++		fw_ver->major_version, fw_ver->minor_version, fw_ver->api_version);
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%s\n",
++				    all_versions_str);
++}
++
++static const struct file_operations get_versions_ops = {
++	.read = get_versions_read,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static ssize_t trigger_fw_assert_write(struct file *file,
++				       const char __user *user_buf,
++				       size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++	cc33xx_acx_trigger_fw_assert(wl);
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations trigger_fw_assert_ops = {
++	.open = simple_open,
++	.write = trigger_fw_assert_write,
++	.llseek = default_llseek,
++};
++
++static ssize_t burst_mode_read(struct file *file, char __user *user_buf,
++				      size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++
++	return cc33xx_format_buffer(user_buf, count, ppos,
++				    "%d\n", wl->burst_disable);
++}
++
++static ssize_t burst_mode_write(struct file *file, const char __user *user_buf,
++				size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++	u8 burst_disable;
++
++	ret = kstrtou8_from_user(user_buf, count, 0, &burst_disable);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in burst_mode");
++		return -EINVAL;
++	}
++
++	if (burst_disable > 1) {
++		cc33xx_warning("burst_disable should be either 0 or 1");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON))
++		goto out;
++
++	ret = cc33xx_acx_burst_mode_cfg(wl, burst_disable);
++	if (ret == 0)
++		wl->burst_disable = burst_disable;
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations burst_mode_ops = {
++	.open = simple_open,
++	.read = burst_mode_read,
++	.write = burst_mode_write,
++	.llseek = default_llseek,
++};
++
++/* coex entities bitmap */
++#define  COEX_WIFI_ENABLE        (0x1)
++#define  COEX_BLE_ENABLE         (0x2)
++#define  COEX_SOC_ENABLE         (0x4)
++
++#define  MAX_COEX_STATISTICS_LEN (850)
++
++static ssize_t coex_statistics_read(struct file *file, char __user *user_buf,
++				    size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	struct cc33xx_acx_coex_statistics *coex_stats_cmd;
++	char coex_statistics_str[MAX_COEX_STATISTICS_LEN];
++	struct cc33xx_coex_stat_and_entities *coex_stat_ent;
++	struct cc33xx_coex_statistics *coex_stats;
++	int res, restot = 0, ret = 0;
++
++	cc33xx_debug(DEBUG_CMD, "coex_statistics_read");
++
++	coex_stats_cmd = kzalloc(sizeof(struct cc33xx_acx_coex_statistics),
++					GFP_KERNEL);
++	if (!coex_stats_cmd)
++		return -ENOMEM;
++
++	coex_stat_ent = &coex_stats_cmd->coex_stat;
++	coex_stats = &coex_stat_ent->coex_statistics;
++
++	ret = cc33xx_cmd_interrogate(wl, READ_COEX_STATISTICS, coex_stats_cmd,
++				     sizeof(struct cc33xx_acx_coex_statistics),
++				     sizeof(struct cc33xx_acx_coex_statistics));
++
++	if (ret < 0) {
++		cc33xx_error("failed to send interrogate command");
++		goto out_free;
++	}
++
++	if (coex_stats_cmd->header.cmd.status == CMD_STATUS_INVALID_PARAM) {
++		cc33xx_error("Coex statistics are disabled");
++		goto out_free;
++	}
++
++	res = 0;
++
++	if (coex_stat_ent->coex_entities_bitmap & COEX_WIFI_ENABLE) {
++		res = snprintf(coex_statistics_str, MAX_COEX_STATISTICS_LEN,
++			       "wifi:\nrequest assertion/deassertion: %d/%d\r\n"
++			       "grant assertion/deassertion: %d/%d\r\n"
++			       "prio reject: %d\r\n"
++			       "grant during dual ant assertion/deassertion: "
++			       "%d/%d\r\n\n",
++			       cpu_to_le32(coex_stats->wifi_request_assertion_log),
++			       cpu_to_le32(coex_stats->wifi_request_de_assertion_log),
++			       cpu_to_le32(coex_stats->wifi_grant_assertion_log),
++			       cpu_to_le32(coex_stats->wifi_grant_deassertion_log),
++			       cpu_to_le32(coex_stats->wifi_prio_reject_log),
++			       cpu_to_le32(coex_stats->wifi_grant_during_dual_ant_assertion_log),
++			       cpu_to_le32(coex_stats->wifi_grant_during_dual_ant_deassertion_log));
++		restot = res;
++	}
++
++	if (coex_stat_ent->coex_entities_bitmap & COEX_BLE_ENABLE) {
++		res = snprintf(coex_statistics_str + restot,
++			       MAX_COEX_STATISTICS_LEN - restot, "ble:\n"
++			       "request assertion/deassertion: %d/%d\r\n"
++			       "grant assertion/deassertion: %d/%d\r\n"
++			       "tx high/low prio reject: %d/%d\r\n"
++			       "rx high/low prio reject: %d/%d\r\n\n",
++			       cpu_to_le32(coex_stats->ble_request_assertion_log),
++			       cpu_to_le32(coex_stats->ble_request_deassertion_log),
++			       cpu_to_le32(coex_stats->ble_grant_assertion_log),
++			       cpu_to_le32(coex_stats->ble_grant_deassertion_log),
++			       cpu_to_le32(coex_stats->ble_tx_high_prio_reject_log),
++			       cpu_to_le32(coex_stats->ble_tx_low_prio_reject_log),
++			       cpu_to_le32(coex_stats->ble_rx_high_prio_reject_log),
++			       cpu_to_le32(coex_stats->ble_rx_low_prio_reject_log));
++		restot += res;
++	}
++
++	if (coex_stat_ent->coex_entities_bitmap & COEX_SOC_ENABLE) {
++		res = snprintf(coex_statistics_str + restot,
++			       MAX_COEX_STATISTICS_LEN - restot,
++			       "External SoC:\n"
++			       "request assertion/deassertion: %d/%d\r\n"
++			       "grant assertion/deassertion: %d/%d\r\n"
++			       "high/low prio reject: %d/%d\r\n\n",
++			       cpu_to_le32(coex_stats->soc_request_assertion_log),
++			       cpu_to_le32(coex_stats->soc_request_deassertion_log),
++			       cpu_to_le32(coex_stats->soc_grant_assertion_log),
++			       cpu_to_le32(coex_stats->soc_grant_deassertion_log),
++			       cpu_to_le32(coex_stats->soc_high_prio_reject_log),
++			       cpu_to_le32(coex_stats->soc_low_prio_reject_log));
++		restot += res;
++	}
++
++	ret = simple_read_from_buffer(user_buf, count, ppos,
++				      coex_statistics_str, restot);
++
++out_free:
++	kfree(coex_stats_cmd);
++
++	return ret;
++}
++
++static ssize_t coex_statistics_write(struct file *file,
++				     const char __user *user_buf,
++				     size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	unsigned int value;
++	struct cc33xx_acx_coex_statistics_cfg *pCoexStatictics;
++	int ret;
++
++	ret = kstrtouint_from_user(user_buf, count, 0, &value);
++	if (value > 2) {
++		cc33xx_warning("Parameter value must be 0-Disable Coex counters, "
++			       "1-Enable Coex counters, 2-Reset Coex counters");
++		return -ERANGE;
++	}
++
++	cc33xx_debug(DEBUG_CMD, "coex statistics (%d)", value);
++
++	pCoexStatictics = kzalloc(sizeof(struct cc33xx_acx_coex_statistics_cfg),
++				  GFP_KERNEL);
++	if (!pCoexStatictics) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	pCoexStatictics->coex_statictics = value;
++
++	mutex_lock(&wl->mutex);
++
++	ret = cc33xx_cmd_configure(wl, START_COEX_STATISTICS_CFG,
++				   pCoexStatictics,
++				   sizeof(struct cc33xx_acx_coex_statistics_cfg));
++	if (ret < 0) {
++		cc33xx_error("failed to initiate coex statictics");
++		goto out_free;
++	}
++
++out_free:
++	kfree(pCoexStatictics);
++
++out:
++	mutex_unlock(&wl->mutex);
++
++	return count;
++}
++
++static const struct file_operations coex_statistics_ops = {
++	.open = simple_open,
++	.read = coex_statistics_read,
++	.write = coex_statistics_write,
++	.llseek = default_llseek,
++};
++
++static ssize_t antenna_diversity_enable_read(struct file *file,
++					char __user *user_buf, size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++
++	ret = cc33xx_acx_get_antenna_diversity_status(wl);
++	if (ret < 0) {
++		cc33xx_warning("diversity status read failed");
++		return ret;
++	}
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n", ret);
++}
++
++static ssize_t antenna_diversity_enable_write(struct file *file,
++				const char __user *user_buf, size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++	u8 diversity_enable;
++
++	ret = kstrtou8_from_user(user_buf, count, 0, &diversity_enable);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in antenna_diversity_enable");
++		return -EINVAL;
++	}
++
++	if ((wl->conf.phy.num_of_antennas == 1) && (diversity_enable == 1)) {
++		cc33xx_warning("diversity cannot be enabled when only one antenna on board");
++		return -EINVAL;
++	}
++
++	if (diversity_enable > 1) {
++		cc33xx_warning("diversity_enable should be either 0 or 1");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON)) {
++		goto out;
++	}
++
++	cc33xx_acx_set_antenna_diversity_status(wl, diversity_enable);
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations antenna_diversity_enable_ops = {
++	.open = simple_open,
++	.read = antenna_diversity_enable_read,
++	.write = antenna_diversity_enable_write,
++	.llseek = default_llseek,
++};
++
++static ssize_t antenna_diversity_set_rssi_threshold_read(struct file *file, char __user *user_buf,
++			    size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++	s8 threshold;
++
++	ret = cc33xx_acx_antenna_diversity_get_rssi_threshold(wl, &threshold);
++	if (ret < 0) {
++		cc33xx_warning("diversity rssi threshold read failed");
++		return ret;
++	}
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n", threshold);
++}
++
++static ssize_t antenna_diversity_set_rssi_threshold_write(struct file *file,
++				const char __user *user_buf, size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++	s8 rssi_threshold;
++
++	ret = kstrtos8_from_user(user_buf, count, 0, &rssi_threshold);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in antenna_diversity_set_rssi_threshold");
++		return -EINVAL;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON)) {
++		goto out;
++	}
++
++	cc33xx_acx_antenna_diversity_set_rssi_threshold(wl, rssi_threshold);
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations antenna_diversity_set_rssi_threshold_ops = {
++	.open = simple_open,
++	.read = antenna_diversity_set_rssi_threshold_read,
++	.write = antenna_diversity_set_rssi_threshold_write,
++	.llseek = default_llseek,
++};
++
++static ssize_t antenna_diversity_select_default_antenna_read(struct file *file, char __user *user_buf,
++			size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++
++	ret = cc33xx_acx_antenna_diversity_get_default_antenna(wl);
++	if (ret < 0) {
++		cc33xx_warning("diversity default antenna read failed");
++		return ret;
++	}
++
++	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n", ret);
++}
++
++static ssize_t antenna_diversity_select_default_antenna_write(struct file *file,
++				const char __user *user_buf, size_t count, loff_t *ppos)
++{
++	struct cc33xx *wl = file->private_data;
++	int ret;
++	u8 default_antenna;
++
++	ret = kstrtou8_from_user(user_buf, count, 0, &default_antenna);
++	if (ret < 0) {
++		cc33xx_warning("illegal value in antenna_diversity_select_default_antenna");
++		return -EINVAL;
++	}
++
++	if (wl->conf.phy.num_of_antennas == 1) {
++		cc33xx_warning("cannot change default antenna in board with only one antenna");
++		return -EINVAL;
++	}
++
++	if (default_antenna > 1) {
++		cc33xx_warning("default_antenna should be either 0 or 1");
++		return -ERANGE;
++	}
++
++	mutex_lock(&wl->mutex);
++
++	if (unlikely(wl->state != CC33XX_STATE_ON)) {
++		goto out;
++	}
++
++	cc33xx_acx_antenna_diversity_select_default_antenna(wl, default_antenna);
++
++out:
++	mutex_unlock(&wl->mutex);
++	return count;
++}
++
++static const struct file_operations antenna_diversity_select_default_antenna_ops = {
++	.open = simple_open,
++	.read = antenna_diversity_select_default_antenna_read,
++	.write = antenna_diversity_select_default_antenna_write,
++	.llseek = default_llseek,
++};
++
++static int cc33xx_debugfs_add_files(struct cc33xx *wl,
++			     struct dentry *rootdir)
++{
++	struct dentry *stats, *moddir;
++
++	moddir = rootdir;
++	stats = debugfs_create_dir("fw_stats", rootdir);
++
++	DEBUGFS_ADD(tx_queue_len, rootdir);
++	DEBUGFS_ADD(retry_count, rootdir);
++	DEBUGFS_ADD(excessive_retries, rootdir);
++	DEBUGFS_ADD(gpio_power, rootdir);
++	DEBUGFS_ADD(start_recovery, rootdir);
++	DEBUGFS_ADD(driver_state, rootdir);
++	DEBUGFS_ADD(vifs_state, rootdir);
++	DEBUGFS_ADD(dtim_interval, rootdir);
++	DEBUGFS_ADD(suspend_dtim_interval, rootdir);
++	DEBUGFS_ADD(beacon_interval, rootdir);
++	DEBUGFS_ADD(beacon_filtering, rootdir);
++	DEBUGFS_ADD(dynamic_ps_timeout, rootdir);
++	DEBUGFS_ADD(ps_mode, rootdir);
++	DEBUGFS_ADD(split_scan_timeout, rootdir);
++	DEBUGFS_ADD(fw_stats_raw, rootdir);
++	DEBUGFS_ADD(sleep_auth, rootdir);
++	DEBUGFS_ADD(ble_enable, rootdir);
++	DEBUGFS_ADD(fw_crash_log, rootdir);
++	DEBUGFS_ADD(set_tsf, rootdir);
++	DEBUGFS_ADD(twt_action, rootdir);
++	DEBUGFS_ADD(fw_logger, rootdir);
++	DEBUGFS_ADD(antenna_select, rootdir);
++	DEBUGFS_ADD(get_versions, rootdir);
++	DEBUGFS_ADD(trigger_fw_assert, rootdir);
++	DEBUGFS_ADD(burst_mode, rootdir);
++	DEBUGFS_ADD(coex_statistics, rootdir);
++	DEBUGFS_ADD(clear_fw_stats, stats);
++	DEBUGFS_ADD(antenna_diversity_enable, rootdir);
++	DEBUGFS_ADD(antenna_diversity_set_rssi_threshold, rootdir);
++	DEBUGFS_ADD(antenna_diversity_select_default_antenna, rootdir);
++
++	DEBUGFS_ADD_PREFIX(dev, mem, rootdir);
++
++	DEBUGFS_FWSTATS_ADD(power, sleep_time_count);
++	DEBUGFS_FWSTATS_ADD(power, sleep_time_avg);
++	DEBUGFS_FWSTATS_ADD(power, sleep_cycle_avg);
++	DEBUGFS_FWSTATS_ADD(power, sleep_percent);
++
++	DEBUGFS_ADD(conf, moddir);
++	DEBUGFS_ADD(radar_detection, moddir);
++	cc33xx_debugfs_add_files_helper(moddir);
++	DEBUGFS_ADD(dynamic_fw_traces, moddir);
++
++	return 0;
++}
++
++void cc33xx_debugfs_reset(struct cc33xx *wl)
++{
++	if (!wl->stats.fw_stats)
++		return;
++
++	memset(wl->stats.fw_stats, 0, sizeof(struct cc33xx_acx_statistics));
++	wl->stats.retry_count = 0;
++	wl->stats.excessive_retries = 0;
++}
++
++int cc33xx_debugfs_init(struct cc33xx *wl)
++{
++	int ret;
++	struct dentry *rootdir;
++
++	rootdir = debugfs_create_dir(KBUILD_MODNAME, wl->hw->wiphy->debugfsdir);
++
++	wl->stats.fw_stats = kzalloc(sizeof(struct cc33xx_acx_statistics),
++				     GFP_KERNEL);
++	if (!wl->stats.fw_stats) {
++		ret = -ENOMEM;
++		goto out_remove;
++	}
++
++	wl->stats.fw_stats_next_update = jiffies;
++
++	ret = cc33xx_debugfs_add_files(wl, rootdir);
++	if (ret < 0)
++		goto out_exit;
++
++	goto out;
++
++out_exit:
++	cc33xx_debugfs_exit(wl);
++
++out_remove:
++	debugfs_remove_recursive(rootdir);
++
++out:
++	return ret;
++}
++
++void cc33xx_debugfs_exit(struct cc33xx *wl)
++{
++	kfree(wl->stats.fw_stats);
++	wl->stats.fw_stats = NULL;
++}
+diff --git a/drivers/net/wireless/ti/cc33xx/debugfs.h b/drivers/net/wireless/ti/cc33xx/debugfs.h
+new file mode 100644
+index 000000000000..d003e32cef08
+--- /dev/null
++++ b/drivers/net/wireless/ti/cc33xx/debugfs.h
+@@ -0,0 +1,101 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * This file is part of cc33xx
++ *
++ * Copyright (C) 2009 Nokia Corporation
++ *
++ * Contact: Luciano Coelho <luciano.coelho@nokia.com>
++ */
++
++#ifndef __DEBUGFS_H__
++#define __DEBUGFS_H__
++
++#include "cc33xx.h"
++
++__printf(4, 5) int cc33xx_format_buffer(char __user *userbuf, size_t count,
++					loff_t *ppos, char *fmt, ...);
++
++int cc33xx_debugfs_init(struct cc33xx *wl);
++void cc33xx_debugfs_exit(struct cc33xx *wl);
++void cc33xx_debugfs_reset(struct cc33xx *wl);
++void cc33xx_debugfs_update_stats(struct cc33xx *wl);
++
++#define DEBUGFS_FORMAT_BUFFER_SIZE 256
++
++#define DEBUGFS_READONLY_FILE(name, fmt, value...)			\
++static ssize_t name## _read(struct file *file, char __user *userbuf,	\
++			    size_t count, loff_t *ppos)			\
++{									\
++	struct cc33xx *wl = file->private_data;				\
++	return cc33xx_format_buffer(userbuf, count, ppos,		\
++				    fmt "\n", ##value);			\
++}									\
++									\
++static const struct file_operations name## _ops = {			\
++	.read = name## _read,						\
++	.open = simple_open,						\
++	.llseek	= generic_file_llseek,					\
++};
++
++#define DEBUGFS_ADD(name, parent)					\
++	do {								\
++		debugfs_create_file(#name, 0400, parent,		\
++				    wl, &name## _ops);			\
++	} while (0)
++
++
++#define DEBUGFS_ADD_PREFIX(prefix, name, parent)			\
++	do {								\
++		debugfs_create_file(#name, 0400, parent,		\
++				    wl, &prefix## _## name## _ops);	\
++	} while (0)
++
++#define DEBUGFS_FWSTATS_FILE(sub, name, fmt, struct_type)		\
++static ssize_t sub## _ ##name## _read(struct file *file,		\
++				      char __user *userbuf,		\
++				      size_t count, loff_t *ppos)	\
++{									\
++	struct cc33xx *wl = file->private_data;				\
++	struct struct_type *stats = wl->stats.fw_stats;			\
++									\
++	cc33xx_debugfs_update_stats(wl);				\
++									\
++	return cc33xx_format_buffer(userbuf, count, ppos, fmt "\n",	\
++				    stats->sub.name);			\
++}									\
++									\
++static const struct file_operations sub## _ ##name## _ops = {		\
++	.read = sub## _ ##name## _read,					\
++	.open = simple_open,						\
++	.llseek	= generic_file_llseek,					\
++};
++
++#define DEBUGFS_FWSTATS_FILE_ARRAY(sub, name, len, struct_type)		\
++static ssize_t sub## _ ##name## _read(struct file *file,		\
++				      char __user *userbuf,		\
++				      size_t count, loff_t *ppos)	\
++{									\
++	struct cc33xx *wl = file->private_data;				\
++	struct struct_type *stats = wl->stats.fw_stats;			\
++	char buf[DEBUGFS_FORMAT_BUFFER_SIZE] = "";			\
++	int res, i;							\
++									\
++	cc33xx_debugfs_update_stats(wl);				\
++									\
++	for (i = 0; i < len; i++)					\
++		res = snprintf(buf, sizeof(buf), "%s[%d] = %d\n",	\
++			       buf, i, stats->sub.name[i]);		\
++									\
++	return cc33xx_format_buffer(userbuf, count, ppos, "%s", buf);	\
++}									\
++									\
++static const struct file_operations sub## _ ##name## _ops = {		\
++	.read = sub## _ ##name## _read,					\
++	.open = simple_open,						\
++	.llseek	= generic_file_llseek,					\
++};
++
++#define DEBUGFS_FWSTATS_ADD(sub, name)					\
++	DEBUGFS_ADD(sub## _ ##name, stats)
++
++#endif /* CC33XX_DEBUGFS_H */
+diff --git a/drivers/net/wireless/ti/cc33xx/event.c b/drivers/net/wireless/ti/cc33xx/event.c
+index 099abbeddba4..46f12be78686 100644
+--- a/drivers/net/wireless/ti/cc33xx/event.c
++++ b/drivers/net/wireless/ti/cc33xx/event.c
+@@ -75,7 +75,10 @@ struct cc33xx_event_mailbox {
+ 	/* time sync low lsb*/
+ 	__le16 time_sync_tsf_low_lsb;
+ 
+-	u8 ble_event[260];
++	u8 ble_event[304];
++	u8 csi_data[136];
++	u8 reseed_request_size;
++	u8 reserved[3];
+ 
+ } __packed;
+ 
+diff --git a/drivers/net/wireless/ti/cc33xx/event.h b/drivers/net/wireless/ti/cc33xx/event.h
+index 7952f0b7b4aa..327d15d6d36d 100644
+--- a/drivers/net/wireless/ti/cc33xx/event.h
++++ b/drivers/net/wireless/ti/cc33xx/event.h
+@@ -49,6 +49,9 @@ enum {
+ 	SMART_CONFIG_DECODE_EVENT_ID             = BIT(23),
+ 	TIME_SYNC_EVENT_ID                       = BIT(24),
+ 	FW_LOGGER_INDICATION                     = BIT(25),
++	RESERVED1_ID                             = BIT(26),
++	BLE_EVENT_ID                             = BIT(27),
++	RESEED_EVENT_ID                          = BIT(28),
+ };
+ 
+ /* events the driver might want to wait for */
+diff --git a/drivers/net/wireless/ti/cc33xx/io.c b/drivers/net/wireless/ti/cc33xx/io.c
+index 59696004efe9..ed303a72a510 100644
+--- a/drivers/net/wireless/ti/cc33xx/io.c
++++ b/drivers/net/wireless/ti/cc33xx/io.c
+@@ -26,12 +26,14 @@ void cc33xx_disable_interrupts_nosync(struct cc33xx *cc)
+ 	cc->if_ops->disable_irq(cc->dev);
+ }
+ 
+-void cc33xx_irq(void *cookie);
++void cc33xx_sync_interrupts(struct cc33xx *cc)
++{
++	cc->if_ops->sync_irq(cc->dev);
++}
++
+ void cc33xx_enable_interrupts(struct cc33xx *cc)
+ {
+ 	cc->if_ops->enable_irq(cc->dev);
+-
+-	cc33xx_irq(cc);
+ }
+ 
+ void cc33xx_io_reset(struct cc33xx *cc)
+diff --git a/drivers/net/wireless/ti/cc33xx/io.h b/drivers/net/wireless/ti/cc33xx/io.h
+index cc5abd428d99..4fac5cf89359 100644
+--- a/drivers/net/wireless/ti/cc33xx/io.h
++++ b/drivers/net/wireless/ti/cc33xx/io.h
+@@ -10,6 +10,7 @@ struct cc33xx;
+ 
+ void cc33xx_disable_interrupts_nosync(struct cc33xx *cc);
+ void cc33xx_enable_interrupts(struct cc33xx *cc);
++void cc33xx_sync_interrupts(struct cc33xx *cc);
+ void cc33xx_io_reset(struct cc33xx *cc);
+ void cc33xx_io_init(struct cc33xx *cc);
+ int __must_check cc33xx_raw_read(struct cc33xx *cc, int addr,
+diff --git a/drivers/net/wireless/ti/cc33xx/main.c b/drivers/net/wireless/ti/cc33xx/main.c
+index 983ee08cb717..668cab80bf0e 100644
+--- a/drivers/net/wireless/ti/cc33xx/main.c
++++ b/drivers/net/wireless/ti/cc33xx/main.c
+@@ -20,8 +20,11 @@
+ #include "testmode.h"
+ #include "scan.h"
+ #include "event.h"
++#include "debugfs.h"
+ 
+ #define CC33XX_FW_RX_PACKET_RAM (9 * 1024)
++#define CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC	(3000)
++
+ static int no_recovery     = -1;
+ 
+ u32 cc33xx_debug_level = DEBUG_NO_DATAPATH;
+@@ -226,20 +229,20 @@ static struct ieee80211_rate cc33xx_rates[] = {
+ };
+ 
+ /* can't be const, mac80211 writes to this */
+-static struct ieee80211_channel cc33xx_channels[] = {
++static struct ieee80211_channel cc33xx_channels_2ghz[] = {
++	{ .hw_value = 6, .center_freq = 2437, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 1, .center_freq = 2412, .max_power = CC33XX_MAX_TXPWR },
+-	{ .hw_value = 2, .center_freq = 2417, .max_power = CC33XX_MAX_TXPWR },
++	{ .hw_value = 11, .center_freq = 2462, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 3, .center_freq = 2422, .max_power = CC33XX_MAX_TXPWR },
+-	{ .hw_value = 4, .center_freq = 2427, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 5, .center_freq = 2432, .max_power = CC33XX_MAX_TXPWR },
+-	{ .hw_value = 6, .center_freq = 2437, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 7, .center_freq = 2442, .max_power = CC33XX_MAX_TXPWR },
+-	{ .hw_value = 8, .center_freq = 2447, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 9, .center_freq = 2452, .max_power = CC33XX_MAX_TXPWR },
++	{ .hw_value = 13, .center_freq = 2472, .max_power = CC33XX_MAX_TXPWR },
++	{ .hw_value = 2, .center_freq = 2417, .max_power = CC33XX_MAX_TXPWR },
++	{ .hw_value = 4, .center_freq = 2427, .max_power = CC33XX_MAX_TXPWR },
++	{ .hw_value = 8, .center_freq = 2447, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 10, .center_freq = 2457, .max_power = CC33XX_MAX_TXPWR },
+-	{ .hw_value = 11, .center_freq = 2462, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 12, .center_freq = 2467, .max_power = CC33XX_MAX_TXPWR },
+-	{ .hw_value = 13, .center_freq = 2472, .max_power = CC33XX_MAX_TXPWR },
+ };
+ 
+ static const struct ieee80211_sband_iftype_data iftype_data_2ghz[] = {{
+@@ -302,7 +305,8 @@ static const struct ieee80211_sband_iftype_data iftype_data_2ghz[] = {{
+ 			IEEE80211_HE_PHY_CAP9_NON_TRIGGERED_CQI_FEEDBACK |
+ 			IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_COMP_SIGB |
+ 			IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_NON_COMP_SIGB |
+-			IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US,
++			(IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US <<
++				IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_POS),
+ 		},
+ 		/* Set default Tx/Rx HE MCS NSS Support field.
+ 		 * Indicate support for up to 2 spatial streams and all
+@@ -325,12 +329,35 @@ static const struct ieee80211_sband_iftype_data iftype_data_2ghz[] = {{
+ 
+ /* can't be const, mac80211 writes to this */
+ static struct ieee80211_supported_band cc33xx_band_2ghz = {
+-	.channels = cc33xx_channels,
+-	.n_channels = ARRAY_SIZE(cc33xx_channels),
++	.channels = cc33xx_channels_2ghz,
++	.n_channels = ARRAY_SIZE(cc33xx_channels_2ghz),
+ 	.bitrates = cc33xx_rates,
+ 	.n_bitrates = ARRAY_SIZE(cc33xx_rates),
+ };
+ 
++static struct ieee80211_supported_band cc33xx_band_2ghz_non_he = {
++	.channels = cc33xx_channels_2ghz,
++	.n_channels = ARRAY_SIZE(cc33xx_channels_2ghz),
++	.bitrates = cc33xx_rates,
++	.n_bitrates = ARRAY_SIZE(cc33xx_rates),
++};
++
++static const u8 he_if_types_ext_capa_sta[] = {
++	 [0] = WLAN_EXT_CAPA1_EXT_CHANNEL_SWITCHING,
++	 [2] = WLAN_EXT_CAPA3_MULTI_BSSID_SUPPORT,
++	 [7] = WLAN_EXT_CAPA8_OPMODE_NOTIF,
++	 [9] = WLAN_EXT_CAPA10_TWT_REQUESTER_SUPPORT,
++};
++
++static const struct wiphy_iftype_ext_capab he_iftypes_ext_capa[] = {
++	{
++		.iftype = NL80211_IFTYPE_STATION,
++		.extended_capabilities = he_if_types_ext_capa_sta,
++		.extended_capabilities_mask = he_if_types_ext_capa_sta,
++		.extended_capabilities_len = sizeof(he_if_types_ext_capa_sta),
++	},
++};
++
+ /* 5 GHz data rates for cc33xx */
+ static struct ieee80211_rate cc33xx_rates_5ghz[] = {
+ 	{ .bitrate = 60,
+@@ -380,6 +407,7 @@ static struct ieee80211_channel cc33xx_channels_5ghz[] = {
+ 	{ .hw_value = 132, .center_freq = 5660, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 136, .center_freq = 5680, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 140, .center_freq = 5700, .max_power = CC33XX_MAX_TXPWR },
++	{ .hw_value = 144, .center_freq = 5720, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 149, .center_freq = 5745, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 153, .center_freq = 5765, .max_power = CC33XX_MAX_TXPWR },
+ 	{ .hw_value = 157, .center_freq = 5785, .max_power = CC33XX_MAX_TXPWR },
+@@ -447,7 +475,8 @@ static const struct ieee80211_sband_iftype_data iftype_data_5ghz[] = {{
+ 			IEEE80211_HE_PHY_CAP9_NON_TRIGGERED_CQI_FEEDBACK |
+ 			IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_COMP_SIGB |
+ 			IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_NON_COMP_SIGB |
+-			IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US,
++			(IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US <<
++				IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_POS),
+ 		},
+ 		/* Set default Tx/Rx HE MCS NSS Support field.
+ 		 * Indicate support for up to 2 spatial streams and all
+@@ -486,6 +515,13 @@ static struct ieee80211_supported_band cc33xx_band_5ghz = {
+ 	},
+ };
+ 
++static struct ieee80211_supported_band cc33xx_band_5ghz_non_he = {
++	.channels = cc33xx_channels_5ghz,
++	.n_channels = ARRAY_SIZE(cc33xx_channels_5ghz),
++	.bitrates = cc33xx_rates_5ghz,
++	.n_bitrates = ARRAY_SIZE(cc33xx_rates_5ghz),
++};
++
+ static void __cc33xx_op_remove_interface(struct cc33xx *cc,
+ 					 struct ieee80211_vif *vif,
+ 					 bool reset_tx_queues);
+@@ -800,6 +836,74 @@ static int read_control_message(struct cc33xx *cc, u8 *read_buffer,
+ 	return le16_to_cpu(nab_header->len);
+ }
+ 
++static int general_error_event_get_log(struct cc33xx *cc,
++			struct core_status *core_status)
++{
++	int ret = 0;
++	u8 *read_buffer;
++	const size_t buffer_size = 5000;
++	unsigned long end_time = jiffies + msecs_to_jiffies(CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC);
++	u8 isGeneralError = 0;
++	u32 isTimeout = 0;
++	void *pFwCrashLogs;
++
++
++	read_buffer = kmalloc(buffer_size, GFP_KERNEL);
++	if (!read_buffer)
++		return -ENOMEM;
++
++
++	cc33xx_debug(DEBUG_CMD, "Attempting to Get FW Crash Logs Before Starting Recovery Work");
++	while ((isGeneralError != true) && (isTimeout != true)) {
++		ret = read_control_message(cc, read_buffer, buffer_size);
++		if (ret > 0) {
++			struct NAB_header *nab_header = (struct NAB_header *)read_buffer;
++			if (nab_header->opcode == NAB_GENERAL_ERROR_FW_LOGS_OPCODE) {
++				cc33xx_debug(DEBUG_CMD, "successfully received GENERAL ERROR CRASH FW_LOGS");
++				isGeneralError = 1;
++				break;
++			}
++		}
++		//should sleep here for 100ms if reading is zero
++		if (isGeneralError != true) {
++			msleep(100);
++			isTimeout = time_is_before_eq_jiffies(end_time);
++		}
++
++	}
++
++	if (isTimeout) {
++		cc33xx_debug(DEBUG_CMD, "Timed Out Attempting to read  CRASH FW Logs");
++		goto out;
++	}
++
++	pFwCrashLogs = read_buffer;
++	pFwCrashLogs += sizeof(struct NAB_header);
++
++	if (cc->fw_crash_logs == NULL) {
++		cc->fw_crash_logs = kzalloc(CC33XX_MAX_FW_LOGS_BUFFER_SIZE, GFP_KERNEL);
++		if (!cc->fw_crash_logs) {
++			ret = -ENOMEM;
++			goto err_crashfwlog;
++		}
++	} else {
++		memset(cc->fw_crash_logs, 0, CC33XX_MAX_FW_LOGS_BUFFER_SIZE);
++	}
++
++	//store crash logs into WL
++	memcpy(cc->fw_crash_logs, pFwCrashLogs, CC33XX_MAX_FW_LOGS_BUFFER_SIZE);
++	goto out;
++
++
++err_crashfwlog:
++	kfree(cc->fw_crash_logs);
++	cc->fw_crash_logs = NULL;
++
++out:
++	kfree(read_buffer);
++	return ret;
++}
++
+ static int process_event_and_cmd_result(struct cc33xx *cc,
+ 					struct core_status *core_status)
+ {
+@@ -979,10 +1083,15 @@ static void cc33xx_get_vif_count(struct ieee80211_hw *hw,
+ void cc33xx_queue_recovery_work(struct cc33xx *cc)
+ {
+ 	/* Avoid a recursive recovery */
+-	if (cc->state == CC33XX_STATE_ON) {
++	if (cc->state == CC33XX_STATE_ON && cc->mac80211_registered) {
+ 		cc->state = CC33XX_STATE_RESTARTING;
+ 		set_bit(CC33XX_FLAG_RECOVERY_IN_PROGRESS, &cc->flags);
++		cc33xx_disable_interrupts_nosync(cc);
+ 		ieee80211_queue_work(cc->hw, &cc->recovery_work);
++	} else if (cc->state == CC33XX_STATE_OFF || cc->state == CC33XX_STATE_ON) {
++		cc33xx_error("Fatal error during driver init, cannot recover");
++		cc->state = CC33XX_STATE_FAILED;
++		cc33xx_disable_interrupts_nosync(cc);
+ 	}
+ }
+ 
+@@ -1035,6 +1144,11 @@ static void cc33xx_recovery_work(struct work_struct *work)
+ 
+ 	if (cc->conf.core.no_recovery) {
+ 		cc33xx_info("Recovery disabled by configuration, driver will not restart.");
++		mutex_lock(&cc->mutex);
++
++		general_error_event_get_log(cc, cc->core_status);
++
++		mutex_unlock(&cc->mutex);
+ 		return;
+ 	}
+ 
+@@ -1047,6 +1161,9 @@ static void cc33xx_recovery_work(struct work_struct *work)
+ 	set_bit(CC33XX_FLAG_RECOVERY_IN_PROGRESS, &cc->flags);
+ 
+ 	mutex_lock(&cc->mutex);
++
++	general_error_event_get_log(cc, cc->core_status);
++
+ 	while (!list_empty(&cc->wlvif_list)) {
+ 		wlvif = list_first_entry(&cc->wlvif_list,
+ 					 struct cc33xx_vif, list);
+@@ -1059,6 +1176,8 @@ static void cc33xx_recovery_work(struct work_struct *work)
+ 	}
+ 	mutex_unlock(&cc->mutex);
+ 
++	cc33xx_sync_interrupts(cc);
++
+ 	cc33xx_turn_off(cc);
+ 	msleep(500);
+ 
+@@ -1809,11 +1928,6 @@ static void cc33xx_turn_off(struct cc33xx *cc)
+ 	 */
+ 	cc->state = CC33XX_STATE_OFF;
+ 
+-	/* Use the nosync variant to disable interrupts, so the mutex could be
+-	 * held while doing so without deadlocking.
+-	 */
+-	cc33xx_disable_interrupts_nosync(cc);
+-
+ 	mutex_unlock(&cc->mutex);
+ 
+ 	if (!test_bit(CC33XX_FLAG_RECOVERY_IN_PROGRESS, &cc->flags))
+@@ -1864,6 +1978,8 @@ static void cc33xx_turn_off(struct cc33xx *cc)
+ 	for (i = 0; i < NUM_TX_QUEUES; i++)
+ 		cc->tx_allocated_pkts[i] = 0;
+ 
++	cc33xx_debugfs_reset(cc);
++
+ 	kfree(cc->target_mem_map);
+ 	cc->target_mem_map = NULL;
+ 
+@@ -2291,11 +2407,6 @@ static int cc33xx_op_add_interface(struct ieee80211_hw *hw,
+ 					     &wlvif->dev_role_id);
+ 		if (ret < 0)
+ 			goto out;
+-
+-		/* needed mainly for configuring rate policies */
+-		ret = cc33xx_acx_config_ps(cc, wlvif);
+-		if (ret < 0)
+-			goto out;
+ 	}
+ 
+ 	list_add(&wlvif->list, &cc->wlvif_list);
+@@ -2988,6 +3099,7 @@ static int cc33xx_set_key(struct cc33xx *cc, enum set_key_cmd cmd,
+ 	case WLAN_CIPHER_SUITE_TKIP:
+ 		key_type = KEY_TKIP;
+ 		key_conf->hw_key_idx = key_conf->keyidx;
++		key_conf->flags |= IEEE80211_KEY_FLAG_PUT_IV_SPACE;
+ 		break;
+ 	case WLAN_CIPHER_SUITE_CCMP:
+ 		key_type = KEY_AES;
+@@ -3737,35 +3849,20 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
+ 	}
+ 
+ 	if (changed & BSS_CHANGED_PS) {
+-		if (vif->cfg.ps &&
+-		    test_bit(WLVIF_FLAG_STA_ASSOCIATED, &wlvif->flags) &&
+-		    !test_bit(WLVIF_FLAG_IN_PS, &wlvif->flags)) {
+-			int ps_mode;
+-			char *ps_mode_str;
+-
+-			if (cc->conf.host_conf.conn.forced_ps) {
+-				ps_mode = STATION_POWER_SAVE_MODE;
+-				ps_mode_str = "forced";
+-			} else {
+-				ps_mode = STATION_AUTO_PS_MODE;
+-				ps_mode_str = "auto";
+-			}
+-
+-			cc33xx_debug(DEBUG_PSM, "%s ps enabled", ps_mode_str);
++		ret = 0;
+ 
+-			ret = cc33xx_ps_set_mode(cc, wlvif, ps_mode);
+-			if (ret < 0)
+-				cc33xx_warning("enter %s ps failed %d",
+-					       ps_mode_str, ret);
+-		} else if (!vif->cfg.ps && test_bit(WLVIF_FLAG_IN_PS,
+-						     &wlvif->flags)) {
+-			cc33xx_debug(DEBUG_PSM, "auto ps disabled");
+-
+-			ret = cc33xx_ps_set_mode(cc, wlvif,
+-						 STATION_ACTIVE_MODE);
+-			if (ret < 0)
+-				cc33xx_warning("exit auto ps failed %d", ret);
++		if (cc->conf.mac.ps_mode == STATION_AUTO_PS_MODE) {
++			if (vif->cfg.ps && test_bit(WLVIF_FLAG_STA_ASSOCIATED, &wlvif->flags)) {
++				ret = cc33xx_ps_set_mode(cc, wlvif, STATION_AUTO_PS_MODE);
++			} else if (!vif->cfg.ps) {
++				ret = cc33xx_ps_set_mode(cc, wlvif, STATION_ACTIVE_MODE);
++			}
++		} else {
++			ret = cc33xx_ps_set_mode(cc, wlvif, cc->conf.mac.ps_mode);
+ 		}
++
++		if (ret < 0)
++			cc33xx_warning("exit auto ps failed %d", ret);
+ 	}
+ 
+ 	/* Handle new association with HT. Do this after join. */
+@@ -4091,7 +4188,6 @@ static int cc33xx_op_conf_tx(struct ieee80211_hw *hw,
+ static u64 cc33xx_op_get_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
+ {
+ 	struct cc33xx *cc = hw->priv;
+-	struct cc33xx_vif *wlvif = cc33xx_vif_to_data(vif);
+ 	u64 mactime = ULLONG_MAX;
+ 
+ 	cc33xx_debug(DEBUG_MAC80211, "mac80211 get tsf");
+@@ -4101,8 +4197,6 @@ static u64 cc33xx_op_get_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
+ 	if (unlikely(cc->state != CC33XX_STATE_ON))
+ 		goto out;
+ 
+-	cc33xx_acx_tsf_info(cc, wlvif, &mactime);
+-
+ out:
+ 	mutex_unlock(&cc->mutex);
+ 
+@@ -4733,10 +4827,9 @@ static int cc33xx_op_cancel_remain_on_channel(struct ieee80211_hw *hw,
+ 
+ static void cc33xx_op_sta_rc_update(struct ieee80211_hw *hw,
+ 				    struct ieee80211_vif *vif,
+-				    struct ieee80211_link_sta *link_sta,
++				    struct ieee80211_sta *sta,
+ 				    u32 changed)
+ {
+-	struct ieee80211_sta *sta = link_sta->sta;
+ 	struct cc33xx_vif *wlvif = cc33xx_vif_to_data(vif);
+ 
+ 	if (!(changed & IEEE80211_RC_BW_CHANGED))
+@@ -4892,7 +4985,7 @@ static const struct ieee80211_ops cc33xx_ops = {
+ 	.assign_vif_chanctx = cc33xx_op_assign_vif_chanctx,
+ 	.unassign_vif_chanctx = cc33xx_op_unassign_vif_chanctx,
+ 	.switch_vif_chanctx = cc33xx_op_switch_vif_chanctx,
+-	.link_sta_rc_update = cc33xx_op_sta_rc_update,
++	.sta_rc_update = cc33xx_op_sta_rc_update,
+ 	.sta_statistics = cc33xx_op_sta_statistics,
+ 	.get_expected_throughput = cc33xx_op_get_expected_throughput,
+ 	CFG80211_TESTMODE_CMD(cc33xx_tm_cmd)
+@@ -5026,6 +5119,8 @@ static int cc33xx_register_hw(struct cc33xx *cc)
+ 
+ 	cc->mac80211_registered = true;
+ 
++	cc33xx_debugfs_init(cc);
++
+ out:
+ 	return ret;
+ }
+@@ -5120,7 +5215,7 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
+ 	/* clear channel flags from the previous usage
+ 	 * and restore max_power & max_antenna_gain values.
+ 	 */
+-	for (i = 0; i < ARRAY_SIZE(cc33xx_channels); i++) {
++	for (i = 0; i < ARRAY_SIZE(cc33xx_channels_2ghz); i++) {
+ 		cc33xx_band_2ghz.channels[i].flags = 0;
+ 		cc33xx_band_2ghz.channels[i].max_power = CC33XX_MAX_TXPWR;
+ 		cc33xx_band_2ghz.channels[i].max_antenna_gain = 0;
+@@ -5133,7 +5228,11 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
+ 	}
+ 
+ 	/* Enable/Disable He based on conf file params */
+-	if (!cc->conf.mac.he_enable) {
++	if ((!cc->disable_wifi6) && (cc->conf.mac.he_enable)) {
++		cc->hw->wiphy->iftype_ext_capab = he_iftypes_ext_capa;
++		cc->hw->wiphy->num_iftype_ext_capab =
++			ARRAY_SIZE(he_iftypes_ext_capa);
++	} else {
+ 		cc33xx_band_2ghz.iftype_data = NULL;
+ 		cc33xx_band_2ghz.n_iftype_data = 0;
+ 
+@@ -5144,17 +5243,31 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
+ 	/* We keep local copies of the band structs because we need to
+ 	 * modify them on a per-device basis.
+ 	 */
+-	memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz,
+-	       sizeof(cc33xx_band_2ghz));
+-	memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
++	if (!cc->disable_wifi6 && (cc->conf.mac.he_enable)) {
++		memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz,
++			sizeof(cc33xx_band_2ghz));
++		memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
++			&cc->ht_cap[NL80211_BAND_2GHZ],
++			sizeof(*cc->ht_cap));
++
++		memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz,
++			sizeof(cc33xx_band_5ghz));
++		memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
++			&cc->ht_cap[NL80211_BAND_5GHZ],
++			sizeof(*cc->ht_cap));
++	} else {
++		memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz_non_he,
++	       sizeof(cc33xx_band_2ghz_non_he));
++	    memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
+ 	       &cc->ht_cap[NL80211_BAND_2GHZ],
+ 	       sizeof(*cc->ht_cap));
+ 
+-	memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz,
+-	       sizeof(cc33xx_band_5ghz));
+-	memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
++	    memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz_non_he,
++	       sizeof(cc33xx_band_5ghz_non_he));
++	    memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
+ 	       &cc->ht_cap[NL80211_BAND_5GHZ],
+ 	       sizeof(*cc->ht_cap));
++	}
+ 
+ 	ieee80211_set_sband_iftype_data(&cc->bands[NL80211_BAND_2GHZ], iftype_data_2ghz);
+ 	ieee80211_set_sband_iftype_data(&cc->bands[NL80211_BAND_5GHZ], iftype_data_5ghz);
+@@ -5210,7 +5323,7 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
+ static struct ieee80211_hw *cc33xx_alloc_hw(u32 aggr_buf_size)
+ {
+ 	struct ieee80211_hw *hw;
+-	struct cc33xx *cc;
++	struct cc33xx *cc = NULL;
+ 	int i, j;
+ 	unsigned int order;
+ 
+@@ -5268,6 +5381,8 @@ static struct ieee80211_hw *cc33xx_alloc_hw(u32 aggr_buf_size)
+ 	cc->active_link_count = 0;
+ 	cc->fwlog_size = 0;
+ 
++	cc->fw_crash_logs = NULL;
++
+ 	/* The system link is always allocated */
+ 	__set_bit(CC33XX_SYSTEM_HLID, cc->links_map);
+ 
+@@ -5327,6 +5442,7 @@ static struct ieee80211_hw *cc33xx_alloc_hw(u32 aggr_buf_size)
+ 	destroy_workqueue(cc->freezable_netstack_wq);
+ 
+ err_hw_alloc:
++	cc33xx_debugfs_exit(cc);
+ 	return NULL;
+ }
+ 
+@@ -5339,10 +5455,16 @@ static int cc33xx_free_hw(struct cc33xx *cc)
+ 
+ 	kfree(cc->buffer_32);
+ 	kfree(cc->core_status);
++
++	kfree(cc->fw_crash_logs);
++	cc->fw_crash_logs = NULL;
++
+ 	free_page((unsigned long)cc->fwlog);
+ 	dev_kfree_skb(cc->dummy_packet);
+ 	free_pages((unsigned long)cc->aggr_buf, get_order(cc->aggr_buf_size));
+ 
++	cc33xx_debugfs_exit(cc);
++
+ 	kfree(cc->nvs_mac_addr);
+ 	cc->nvs_mac_addr = NULL;
+ 
+@@ -5390,7 +5512,9 @@ static int read_version_info(struct cc33xx *cc)
+ 		     cc->fw_ver->api_version,
+ 		     cc->fw_ver->build_version);
+ 
+-	cc33xx_debug(DEBUG_BOOT, "Wireless PHY version %u.%u.%u.%u.%u.%u",
++	cc33xx_debug(DEBUG_BOOT, "Wireless PHY version %u.%u.%u.%u.%u.%u.%u.%u",
++		     cc->fw_ver->phy_version[7],
++		     cc->fw_ver->phy_version[6],
+ 		     cc->fw_ver->phy_version[5],
+ 		     cc->fw_ver->phy_version[4],
+ 		     cc->fw_ver->phy_version[3],
+@@ -5549,6 +5673,16 @@ static int cc33xx_setup(struct cc33xx *cc)
+ 	if (ret < 0)
+ 		return ret;
+ 
++	if (cc->conf.core.max_rx_ampdu_len == 0) {
++		cc33xx_siso40_ht_cap_2ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_8K;
++		cc33xx_siso40_ht_cap_5ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_8K;
++		cc33xx_siso20_ht_cap.ampdu_factor = IEEE80211_HT_MAX_AMPDU_8K;
++	} else if (cc->conf.core.max_rx_ampdu_len == 1) {
++		cc33xx_siso40_ht_cap_2ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_16K;
++		cc33xx_siso40_ht_cap_5ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_16K;
++		cc33xx_siso20_ht_cap.ampdu_factor = IEEE80211_HT_MAX_AMPDU_16K;
++	}
++
+ 	if (cc->conf.host_conf.ht.mode == HT_MODE_DEFAULT) {
+ 		cc33xx_set_ht_cap(cc, NL80211_BAND_2GHZ,
+ 				  &cc33xx_siso40_ht_cap_2ghz);
+@@ -5649,6 +5783,8 @@ static void cc33xx_remove(struct platform_device *pdev)
+ 
+ 	device_init_wakeup(cc->dev, false);
+ 	cc33xx_unregister_hw(cc);
++	cc33xx_disable_interrupts_nosync(cc);
++	cc33xx_sync_interrupts(cc);
+ 	cc33xx_turn_off(cc);
+ 
+ out:
+diff --git a/drivers/net/wireless/ti/cc33xx/ps.c b/drivers/net/wireless/ti/cc33xx/ps.c
+index 768f1f2fc3f1..9f53f0d4081d 100644
+--- a/drivers/net/wireless/ti/cc33xx/ps.c
++++ b/drivers/net/wireless/ti/cc33xx/ps.c
+@@ -20,7 +20,6 @@ int cc33xx_ps_set_mode(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 		if (ret < 0)
+ 			return ret;
+ 
+-		set_bit(WLVIF_FLAG_IN_PS, &wlvif->flags);
+ 		break;
+ 
+ 	case STATION_ACTIVE_MODE:
+@@ -28,7 +27,6 @@ int cc33xx_ps_set_mode(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 		if (ret < 0)
+ 			return ret;
+ 
+-		clear_bit(WLVIF_FLAG_IN_PS, &wlvif->flags);
+ 		break;
+ 
+ 	default:
+diff --git a/drivers/net/wireless/ti/cc33xx/rx.c b/drivers/net/wireless/ti/cc33xx/rx.c
+index b6ee293fbb0b..34cea549648e 100644
+--- a/drivers/net/wireless/ti/cc33xx/rx.c
++++ b/drivers/net/wireless/ti/cc33xx/rx.c
+@@ -67,6 +67,9 @@ static void cc33xx_rx_status(struct cc33xx *cc,
+ 			cc33xx_warning("Michael MIC error. Desc: 0x%x",
+ 				       desc_err_code);
+ 		}
++
++		if (desc->status & CC33XX_RX_DESC_NEW_KEY)
++			status->flag |= RX_FLAG_PN_VALIDATED;
+ 	}
+ 
+ 	if (beacon || probe_rsp)
+diff --git a/drivers/net/wireless/ti/cc33xx/rx.h b/drivers/net/wireless/ti/cc33xx/rx.h
+index 46ff6867749f..523a35288d15 100644
+--- a/drivers/net/wireless/ti/cc33xx/rx.h
++++ b/drivers/net/wireless/ti/cc33xx/rx.h
+@@ -25,13 +25,15 @@
+  *
+  * Bits 0-2 - error code
+  * Bits 3-5 - process_id tag (AP mode FW)
+- * Bits 6-7 - reserved
++ * Bits 6   - new key
++ * Bits 7   - reserved
+  */
+ enum {
+ 	CC33XX_RX_DESC_SUCCESS		= 0x00,
+ 	CC33XX_RX_DESC_DECRYPT_FAIL	= 0x01,
+ 	CC33XX_RX_DESC_MIC_FAIL		= 0x02,
+-	CC33XX_RX_DESC_STATUS_MASK	= 0x07
++	CC33XX_RX_DESC_STATUS_MASK	= 0x07,
++	CC33XX_RX_DESC_NEW_KEY		= 0x40
+ };
+ 
+ /* Account for the padding inserted by the FW in case of RX_ALIGNMENT
+diff --git a/drivers/net/wireless/ti/cc33xx/sdio.c b/drivers/net/wireless/ti/cc33xx/sdio.c
+index 835e627e2514..9e76b9795ff8 100644
+--- a/drivers/net/wireless/ti/cc33xx/sdio.c
++++ b/drivers/net/wireless/ti/cc33xx/sdio.c
+@@ -22,6 +22,7 @@
+ struct cc33xx_sdio_glue {
+ 	struct device *dev;
+ 	struct platform_device *core;
++	struct work_struct inband_irq_work;
+ };
+ 
+ static void cc33xx_sdio_claim(struct device *child)
+@@ -130,6 +131,16 @@ static int cc33xx_sdio_power_on(struct cc33xx_sdio_glue *glue)
+ 	return 0;
+ }
+ 
++static bool mmc_inband_polling_host(struct sdio_func *func)
++{
++	struct mmc_host *host = func->card->host;
++
++	/* Indicates the MMC host uses a dedicated thread to poll
++	for SDIO in-band IRQs and run the IRQ handlers */
++
++	return !(host->caps2 & MMC_CAP2_SDIO_IRQ_NOTHREAD);
++}
++
+ static int cc33xx_sdio_power_off(struct cc33xx_sdio_glue *glue)
+ {
+ 	struct sdio_func *func = dev_to_sdio_func(glue->dev);
+@@ -154,6 +165,15 @@ static int cc33xx_sdio_set_power(struct device *child, bool enable)
+ 		return cc33xx_sdio_power_off(glue);
+ }
+ 
++static void inband_irq_work(struct work_struct *work)
++{
++	struct cc33xx_sdio_glue *glue = container_of(work, struct cc33xx_sdio_glue, inband_irq_work);
++	struct platform_device *pdev = glue->core;
++	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
++
++	pdev_data->irq_handler(pdev);
++}
++
+ /**
+  *	inband_irq_handler - Called from the MMC subsystem when the
+  *	function's IRQ is signaled.
+@@ -170,7 +190,10 @@ static void inband_irq_handler(struct sdio_func *func)
+ 	if (WARN_ON(!pdev_data->irq_handler))
+ 		return;
+ 
+-	pdev_data->irq_handler(pdev);
++	if (mmc_inband_polling_host(func))
++		schedule_work(&glue->inband_irq_work);
++	else
++		pdev_data->irq_handler(pdev);
+ }
+ 
+ static void cc33xx_enable_async_interrupt(struct sdio_func *func)
+@@ -205,6 +228,18 @@ static void cc33xx_sdio_disable_irq(struct device *child)
+ 	sdio_release_host(func);
+ }
+ 
++static void cc33xx_sdio_sync_irq(struct device *child)
++{
++	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
++	struct sdio_func *func = dev_to_sdio_func(glue->dev);
++	struct mmc_host *host = func->card->host;
++
++	if (mmc_inband_polling_host(func))
++		flush_work(&glue->inband_irq_work);
++	else
++		flush_work(&host->sdio_irq_work);
++}
++
+ static void cc33xx_enable_line_irq(struct device *child)
+ {
+ 	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
+@@ -223,6 +258,15 @@ static void cc33xx_disable_line_irq(struct device *child)
+ 	disable_irq_nosync(pdev_data->gpio_irq_num);
+ }
+ 
++static void cc33xx_sync_line_irq(struct device *child)
++{
++	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
++	struct platform_device *pdev = glue->core;
++	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
++
++	synchronize_irq(pdev_data->gpio_irq_num);
++}
++
+ static void cc33xx_set_irq_handler(struct device *child, void *handler)
+ {
+ 	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
+@@ -242,6 +286,7 @@ static const struct cc33xx_if_operations sdio_ops_gpio_irq = {
+ 	.set_irq_handler	= cc33xx_set_irq_handler,
+ 	.disable_irq		= cc33xx_disable_line_irq,
+ 	.enable_irq		= cc33xx_enable_line_irq,
++	.sync_irq		= cc33xx_sync_line_irq,
+ };
+ 
+ static const struct cc33xx_if_operations sdio_ops_inband_irq = {
+@@ -254,6 +299,7 @@ static const struct cc33xx_if_operations sdio_ops_inband_irq = {
+ 	.set_irq_handler	= cc33xx_set_irq_handler,
+ 	.disable_irq		= cc33xx_sdio_disable_irq,
+ 	.enable_irq		= cc33xx_sdio_enable_irq,
++	.sync_irq		= cc33xx_sdio_sync_irq,
+ };
+ 
+ #ifdef CONFIG_OF
+@@ -389,6 +435,9 @@ static int sdio_cc33xx_probe(struct sdio_func *func,
+ 
+ 		pdev_data->if_ops = &sdio_ops_gpio_irq;
+ 	} else {
++		if (mmc_inband_polling_host(func))
++			INIT_WORK(&glue->inband_irq_work, inband_irq_work);
++
+ 		pdev_data->if_ops = &sdio_ops_inband_irq;
+ 	}
+ 
+diff --git a/drivers/net/wireless/ti/cc33xx/spi.c b/drivers/net/wireless/ti/cc33xx/spi.c
+new file mode 100644
+index 000000000000..dc8469438f53
+--- /dev/null
++++ b/drivers/net/wireless/ti/cc33xx/spi.c
+@@ -0,0 +1,690 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * This file is part of cc33xx
++ *
++ * Copyright (C) 2008-2009 Nokia Corporation
++ *
++ * Contact: Luciano Coelho <luciano.coelho@nokia.com>
++ */
++
++#include <linux/crc7.h>
++#include <linux/spi/spi.h>
++#include <linux/of_irq.h>
++#include <linux/regulator/consumer.h>
++
++#include "cc33xx.h"
++#include "io.h"
++
++enum {
++	WSPI_CMD_READ				= 0x40000000,
++	WSPI_CMD_WRITE				= 0x00000000,
++	WSPI_CMD_FIXED				= 0x20000000,
++	WSPI_CMD_BYTE_LENGTH		= 0x1FFE0000,
++	WSPI_CMD_BYTE_LENGTH_OFFSET	= 17,
++	WSPI_CMD_BYTE_ADDR			= 0x0001FFFF
++};
++
++enum {
++	WSPI_INIT_CMD_CRC_LEN		= 5,
++	WSPI_INIT_CMD_START			= 0x00,
++	WSPI_INIT_CMD_TX			= 0x40,
++	WSPI_INIT_CMD_FIXEDBUSY_LEN	= 0x07,
++	WSPI_INIT_CMD_EN_FIXEDBUSY	= 0x80,
++	WSPI_INIT_CMD_DIS_FIXEDBUSY	= 0x00,
++	WSPI_INIT_CMD_OPS			= 0x08,
++	WSPI_INIT_CMD_IOD			= 0x40,
++	WSPI_INIT_CMD_IP			= 0x20,
++	WSPI_INIT_CMD_CS			= 0x10,
++	WSPI_INIT_CMD_WS			= 0x08,
++	WSPI_INIT_CMD_WSPI			= 0x01,
++	WSPI_INIT_CMD_END			= 0x01,
++	WSPI_INIT_CMD_LEN			= 8,
++};
++
++#define HW_ACCESS_WSPI_FIXED_BUSY_LEN \
++		((CC33XX_BUSY_WORD_LEN - 4) / sizeof(u32))
++#define HW_ACCESS_WSPI_INIT_CMD_MASK	0
++
++/* HW limitation: maximum possible chunk size is 4095 bytes */
++/* Actual size will have to be 32 bit aligned */
++#define WSPI_MAX_CHUNK_SIZE		4092
++
++static const struct cc33xx_family_data cc33xx_data = {
++	.name = "cc33xx",
++	.cfg_name = "ti-connectivity/cc33xx-conf.bin",
++	.nvs_name = "ti-connectivity/cc33xx-nvs.bin",
++};
++
++struct cc33xx_spi_glue {
++	struct device *dev;
++	struct platform_device *core;
++	struct regulator *reg; /* Power regulator */
++	pid_t locking_pid;
++	int lock_count;
++};
++
++/* Must be allocated from DMA-safe memory */
++struct spi_transaction_buffers {
++	u32 spi_cmd;
++	u32 busyword;
++};
++
++static void __cc33xx_spi_lock(struct cc33xx_spi_glue *glue)
++{
++	if (glue->locking_pid != current->pid) {
++		spi_bus_lock(to_spi_device(glue->dev)->controller);
++		glue->locking_pid = current->pid;
++		glue->lock_count = 1;
++	} else {
++		glue->lock_count++;
++	}
++}
++
++static void __cc33xx_spi_unlock(struct cc33xx_spi_glue *glue)
++{
++	BUG_ON(glue->locking_pid != current->pid);
++	BUG_ON(!glue->lock_count);
++
++	glue->lock_count--;
++	if (!glue->lock_count) {
++		glue->locking_pid = 0;
++		spi_bus_unlock(to_spi_device(glue->dev)->controller);
++	}
++}
++
++static void cc33xx_spi_reset(struct device *child)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	u8 *cmd;
++	struct spi_transfer t;
++	struct spi_message m;
++
++	cmd = kzalloc(WSPI_INIT_CMD_LEN, GFP_KERNEL);
++	if (!cmd) {
++		dev_err(child->parent,
++			"could not allocate cmd for spi reset\n");
++		return;
++	}
++
++	memset(&t, 0, sizeof(t));
++	spi_message_init(&m);
++
++	memset(cmd, 0xff, WSPI_INIT_CMD_LEN);
++
++	t.tx_buf = cmd;
++	t.len = WSPI_INIT_CMD_LEN;
++	spi_message_add_tail(&t, &m);
++
++	spi_sync(to_spi_device(glue->dev), &m);
++
++	kfree(cmd);
++}
++
++static void cc33xx_spi_init(struct device *child)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	struct spi_transfer t;
++	struct spi_message m;
++	struct spi_device *spi = to_spi_device(glue->dev);
++	u8 *cmd = kzalloc(WSPI_INIT_CMD_LEN, GFP_KERNEL);
++
++	if (!cmd) {
++		dev_err(child->parent,
++			"could not allocate cmd for spi init\n");
++		return;
++	}
++
++	memset(&t, 0, sizeof(t));
++	spi_message_init(&m);
++
++	/*
++	 * Set WSPI_INIT_COMMAND
++	 * the data is being send from the MSB to LSB
++	 */
++	cmd[0] = 0xff;
++	cmd[1] = 0xff;
++	cmd[2] = WSPI_INIT_CMD_START | WSPI_INIT_CMD_TX;
++	cmd[3] = 0;
++	cmd[4] = 0;
++	cmd[5] = HW_ACCESS_WSPI_INIT_CMD_MASK << 3;
++	cmd[5] |= HW_ACCESS_WSPI_FIXED_BUSY_LEN & WSPI_INIT_CMD_FIXEDBUSY_LEN;
++	cmd[5] |= WSPI_INIT_CMD_OPS;
++
++	cmd[6] = WSPI_INIT_CMD_IOD | WSPI_INIT_CMD_IP | WSPI_INIT_CMD_CS
++		| WSPI_INIT_CMD_WSPI | WSPI_INIT_CMD_WS;
++
++	if (HW_ACCESS_WSPI_FIXED_BUSY_LEN == 0)
++		cmd[6] |= WSPI_INIT_CMD_DIS_FIXEDBUSY;
++	else
++		cmd[6] |= WSPI_INIT_CMD_EN_FIXEDBUSY;
++
++	cmd[7] = crc7_be(0, cmd + 2, WSPI_INIT_CMD_CRC_LEN) | WSPI_INIT_CMD_END;
++
++	/*
++	 * The above is the logical order; it must actually be stored
++	 * in the buffer byte-swapped.
++	 */
++	__swab32s((u32 *)cmd);
++	__swab32s((u32 *)cmd + 1);
++
++	t.tx_buf = cmd;
++	t.len = WSPI_INIT_CMD_LEN;
++	spi_message_add_tail(&t, &m);
++
++	spi_sync(to_spi_device(glue->dev), &m);
++
++	/* Send extra clocks with inverted CS (high). this is required
++	 * by the wilink family in order to successfully enter WSPI mode.
++	 */
++	spi->mode ^= SPI_CS_HIGH;
++	memset(&m, 0, sizeof(m));
++	spi_message_init(&m);
++
++	cmd[0] = 0xff;
++	cmd[1] = 0xff;
++	cmd[2] = 0xff;
++	cmd[3] = 0xff;
++	__swab32s((u32 *)cmd);
++
++	t.tx_buf = cmd;
++	t.len = 4;
++	spi_message_add_tail(&t, &m);
++
++	spi_sync(to_spi_device(glue->dev), &m);
++
++	/* Restore chip select configuration to normal */
++	spi->mode ^= SPI_CS_HIGH;
++	kfree(cmd);
++}
++
++#define CC33XX_BUSY_READ_TIMEOUT_MSEC 50
++
++static int cc33xx_spi_read_busy(struct device *child, u32 *busy_buf)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	unsigned long end_time = jiffies + msecs_to_jiffies(CC33XX_BUSY_READ_TIMEOUT_MSEC);
++	bool read_timeout = false;
++	struct spi_transfer t[1];
++	struct spi_message m;
++
++	/*
++	 * Read further busy words from SPI until a non-busy word is
++	 * encountered, then read the data itself into the buffer.
++	 */
++
++	while (!read_timeout) {
++		read_timeout = time_is_before_eq_jiffies(end_time);
++		spi_message_init(&m);
++		memset(t, 0, sizeof(t));
++		t[0].rx_buf = busy_buf;
++		t[0].len = sizeof(u32);
++		t[0].cs_change = true;
++		spi_message_add_tail(&t[0], &m);
++		spi_sync_locked(to_spi_device(glue->dev), &m);
++
++		if (*busy_buf & 0x1)
++			return 0;
++	}
++
++	/* The SPI bus is unresponsive, the read failed. */
++	dev_err(child->parent, "SPI read busy-word timeout!\n");
++	return -ETIMEDOUT;
++}
++
++static int __must_check cc33xx_spi_raw_read(struct device *child, int addr,
++					    void *buf, size_t len, bool fixed)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	struct spi_transaction_buffers *txn_buffers;
++	struct spi_transfer t[2];
++	struct spi_message m;
++	int ret;
++	u32 *busy_buf;
++	u32 *cmd;
++
++	if (unlikely(len > WSPI_MAX_CHUNK_SIZE)) {
++		WARN_ON(1);
++		return -EFAULT;
++	}
++
++	txn_buffers = kzalloc(sizeof(*txn_buffers), GFP_KERNEL);
++	if (!txn_buffers)
++		return -ENOMEM;
++
++	__cc33xx_spi_lock(glue);
++
++	cmd = &txn_buffers->spi_cmd;
++	busy_buf = &txn_buffers->busyword;
++
++	*cmd = 0;
++	*cmd |= WSPI_CMD_READ;
++	*cmd |= (len << WSPI_CMD_BYTE_LENGTH_OFFSET) &
++		WSPI_CMD_BYTE_LENGTH;
++	*cmd |= addr & WSPI_CMD_BYTE_ADDR;
++
++	if (fixed)
++		*cmd |= WSPI_CMD_FIXED;
++
++	spi_message_init(&m);
++	memset(t, 0, sizeof(t));
++
++	t[0].tx_buf = cmd;
++	t[0].len = 4;
++	t[0].cs_change = false;
++	spi_message_add_tail(&t[0], &m);
++
++	/* Busy and non busy words read */
++	t[1].rx_buf = busy_buf;
++	t[1].len = CC33XX_BUSY_WORD_LEN;
++	t[1].cs_change = false;
++	spi_message_add_tail(&t[1], &m);
++
++	spi_sync_locked(to_spi_device(glue->dev), &m);
++
++	if (unlikely((*busy_buf & 0x1) == 0)) {
++		if (cc33xx_spi_read_busy(child, busy_buf) != 0) {
++			memset(buf, 0, len);
++			ret = -EIO;
++			goto out;
++		}
++	}
++
++	spi_message_init(&m);
++	memset(t, 0, sizeof(t));
++
++	t[0].rx_buf = buf;
++	t[0].len = len;
++	t[0].cs_change = false;
++	spi_message_add_tail(&t[0], &m);
++
++	spi_sync_locked(to_spi_device(glue->dev), &m);
++
++	ret = 0;
++
++out:
++	__cc33xx_spi_unlock(glue);
++	kfree(txn_buffers);
++	return ret;
++}
++
++static int __cc33xx_spi_raw_write(struct device *child, int addr,
++				  void *buf, size_t len, bool fixed)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	struct spi_transfer t[2];
++	struct spi_transaction_buffers *txn_buffers;
++	struct spi_message m;
++	u32 *cmd;
++	u32 *busy_buf;
++	u32 chunk_len;
++	int ret;
++
++	txn_buffers = kzalloc(sizeof(*txn_buffers), GFP_KERNEL);
++	if (!txn_buffers)
++		return -ENOMEM;
++
++	cmd = &txn_buffers->spi_cmd;
++	busy_buf = &txn_buffers->busyword;
++
++	__cc33xx_spi_lock(glue);
++
++	while (len > 0) {
++		chunk_len = min_t(size_t, WSPI_MAX_CHUNK_SIZE, len);
++
++		*cmd = 0;
++		*cmd |= WSPI_CMD_WRITE;
++		*cmd |= (chunk_len << WSPI_CMD_BYTE_LENGTH_OFFSET) &
++			WSPI_CMD_BYTE_LENGTH;
++		*cmd |= addr & WSPI_CMD_BYTE_ADDR;
++
++		if (fixed)
++			*cmd |= WSPI_CMD_FIXED;
++
++		spi_message_init(&m);
++		memset(t, 0, sizeof(t));
++
++		t[0].tx_buf = cmd;
++		t[0].len = 4;
++		t[0].cs_change = false;
++		spi_message_add_tail(&t[0], &m);
++
++		/* Busy and non busy words read */
++		t[1].rx_buf = busy_buf;
++		t[1].len = CC33XX_BUSY_WORD_LEN;
++		t[1].cs_change = false;
++		spi_message_add_tail(&t[1], &m);
++
++		spi_sync_locked(to_spi_device(glue->dev), &m);
++
++		if (unlikely((*busy_buf & 0x1) == 0)) {
++			if (cc33xx_spi_read_busy(child, busy_buf) != 0) {
++				memset(buf, 0, chunk_len);
++				ret = -EIO;
++				goto out;
++			}
++		}
++
++		spi_message_init(&m);
++		memset(t, 0, sizeof(t));
++
++		t[0].tx_buf = buf;
++		t[0].len = chunk_len;
++		t[0].cs_change = false;
++		spi_message_add_tail(&t[0], &m);
++
++		spi_sync_locked(to_spi_device(glue->dev), &m);
++
++		if (!fixed)
++			addr += chunk_len;
++		buf += chunk_len;
++		len -= chunk_len;
++	}
++
++	ret = 0;
++
++out:
++	__cc33xx_spi_unlock(glue);
++	kfree(txn_buffers);
++	return ret;
++}
++
++static inline int __must_check cc33xx_spi_raw_write(struct device *child,
++						    int addr, void *buf,
++						    size_t len, bool fixed)
++{
++	return __cc33xx_spi_raw_write(child, addr, buf, len, fixed);
++}
++
++/**
++ * cc33xx_spi_set_power - power on/off the cc33xx unit
++ * @child: cc33xx device handle.
++ * @enable: true/false to power on/off the unit.
++ *
++ * use the WiFi enable regulator to enable/disable the WiFi unit.
++ */
++static int cc33xx_spi_set_power(struct device *child, bool enable)
++{
++	int ret = 0;
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++
++	WARN_ON(!glue->reg);
++
++	/* Update regulator state */
++	if (enable) {
++		ret = regulator_enable(glue->reg);
++		if (ret)
++			dev_err(child, "Power enable failure\n");
++	} else {
++		ret =  regulator_disable(glue->reg);
++		if (ret)
++			dev_err(child, "Power disable failure\n");
++	}
++
++	return ret;
++}
++
++/**
++ * cc33xx_spi_set_block_size
++ *
++ * This function is not needed for spi mode, but need to be present.
++ * Without it defined the wlcore fallback to use the wrong packet
++ * allignment on tx.
++ */
++static void cc33xx_spi_set_block_size(struct device *child,
++				      unsigned int blksz)
++{
++}
++
++static size_t cc33xx_spi_get_max_transfer_len(struct device *child)
++{
++	return WSPI_MAX_CHUNK_SIZE;
++}
++
++static void cc33xx_spi_set_irq_handler(struct device *child, void *irq_handler)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	struct platform_device *pdev = glue->core;
++	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
++
++	pdev_data->irq_handler = irq_handler;
++}
++
++static void cc33xx_spi_enable_irq(struct device *child)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	struct platform_device *pdev = glue->core;
++	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
++
++	enable_irq(pdev_data->gpio_irq_num);
++}
++
++static void cc33xx_spi_disable_irq(struct device *child)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	struct platform_device *pdev = glue->core;
++	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
++
++	disable_irq_nosync(pdev_data->gpio_irq_num);
++}
++
++static void cc33xx_spi_sync_irq(struct device *child)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++	struct platform_device *pdev = glue->core;
++	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
++
++	synchronize_irq(pdev_data->gpio_irq_num);
++}
++
++static void cc33xx_spi_interface_claim(struct device *child)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++
++	__cc33xx_spi_lock(glue);
++}
++
++static void cc33xx_spi_interface_release(struct device *child)
++{
++	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
++
++	__cc33xx_spi_unlock(glue);
++}
++
++static irqreturn_t cc33xx_spi_irq_hard_handler(int irq, void *cookie)
++{
++	return IRQ_WAKE_THREAD;
++}
++
++static irqreturn_t cc33xx_spi_irq_handler(int irq, void *cookie)
++{
++	struct spi_device *spi = cookie;
++	struct cc33xx_spi_glue *glue = spi_get_drvdata(spi);
++	struct platform_device *pdev = glue->core;
++	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
++
++	BUG_ON(!pdev_data->irq_handler);
++	pdev_data->irq_handler(pdev);
++
++	return IRQ_HANDLED;
++}
++
++static struct cc33xx_if_operations spi_ops = {
++	.read				= cc33xx_spi_raw_read,
++	.write				= cc33xx_spi_raw_write,
++	.reset				= cc33xx_spi_reset,
++	.init				= cc33xx_spi_init,
++	.power				= cc33xx_spi_set_power,
++	.set_block_size		= cc33xx_spi_set_block_size,
++	.get_max_transaction_len	= cc33xx_spi_get_max_transfer_len,
++	.set_irq_handler		= cc33xx_spi_set_irq_handler,
++	.enable_irq			= cc33xx_spi_enable_irq,
++	.disable_irq			= cc33xx_spi_disable_irq,
++	.interface_claim		= cc33xx_spi_interface_claim,
++	.interface_release		= cc33xx_spi_interface_release,
++	.sync_irq			= cc33xx_spi_sync_irq,
++};
++
++static const struct of_device_id wlcore_spi_of_match_table[] = {
++	{ .compatible = "ti,cc33xx", .data = &cc33xx_data},
++	{ }
++};
++MODULE_DEVICE_TABLE(of, wlcore_spi_of_match_table);
++
++/**
++ * wlcore_probe_of - DT node parsing.
++ * @spi: SPI slave device parameters.
++ * @res: resource parameters.
++ * @glue: cc33xx SPI bus to slave device glue parameters.
++ * @pdev_data: wlcore device parameters
++ */
++static int wlcore_probe_of(struct spi_device *spi, struct cc33xx_spi_glue *glue,
++			   int *irq, struct cc33xx_platdev_data *pdev_data)
++{
++	struct device_node *dt_node = spi->dev.of_node;
++	const struct of_device_id *of_id;
++
++	of_id = of_match_node(wlcore_spi_of_match_table, dt_node);
++	if (!of_id)
++		return -ENODEV;
++
++	pdev_data->family = of_id->data;
++	dev_info(&spi->dev, "selected chip family is %s\n",
++		 pdev_data->family->name);
++
++	*irq = irq_of_parse_and_map(dt_node, 0);
++	if (*irq == 0) {
++		dev_err(&spi->dev, "Could not parse IRQ property");
++		return -ENODEV;
++	}
++
++	if (of_find_property(dt_node, "clock-xtal", NULL))
++		pdev_data->ref_clock_xtal = true;
++
++	return 0;
++}
++
++static int spi_cc33xx_probe(struct spi_device *spi)
++{
++	struct cc33xx_spi_glue *glue;
++	struct cc33xx_platdev_data *pdev_data;
++	int gpio_irq, irq_flags;
++	int ret;
++
++	pdev_data = devm_kzalloc(&spi->dev, sizeof(*pdev_data), GFP_KERNEL);
++	if (!pdev_data)
++		return -ENOMEM;
++
++	pdev_data->if_ops = &spi_ops;
++
++	glue = devm_kzalloc(&spi->dev, sizeof(*glue), GFP_KERNEL);
++	if (!glue)
++		return -ENOMEM;
++
++	glue->dev = &spi->dev;
++
++	spi_set_drvdata(spi, glue);
++
++	/* This is the only SPI value that we need to set here, the rest
++	 * comes from the board-peripherals file
++	 */
++	spi->bits_per_word = 32;
++
++	glue->reg = devm_regulator_get(&spi->dev, "vwlan");
++	if (PTR_ERR(glue->reg) == -EPROBE_DEFER)
++		return -EPROBE_DEFER;
++	if (IS_ERR(glue->reg)) {
++		dev_err(glue->dev, "can't get regulator\n");
++		return PTR_ERR(glue->reg);
++	}
++
++	ret = wlcore_probe_of(spi, glue, &gpio_irq, pdev_data);
++	if (ret) {
++		dev_err(glue->dev,
++			"can't get device tree parameters (%d)\n", ret);
++		return ret;
++	}
++
++	irq_flags = irqd_get_trigger_type(irq_get_irq_data(gpio_irq));
++
++	irq_set_status_flags(gpio_irq, IRQ_NOAUTOEN);
++
++	if (irq_flags & (IRQF_TRIGGER_HIGH | IRQF_TRIGGER_LOW))
++		irq_flags |= IRQF_ONESHOT;
++
++	ret = request_threaded_irq(
++		gpio_irq, cc33xx_spi_irq_hard_handler, cc33xx_spi_irq_handler,
++		irq_flags, pdev_data->family->name, spi);
++	if (ret) {
++		dev_err(glue->dev, "can't register GPIO IRQ handler\n");
++		goto out_dev_put;
++	}
++
++	pdev_data->gpio_irq_num = gpio_irq;
++
++	ret = spi_setup(spi);
++	if (ret < 0) {
++		dev_err(glue->dev, "spi_setup failed\n");
++		return ret;
++	}
++
++	glue->core = platform_device_alloc(pdev_data->family->name,
++					   PLATFORM_DEVID_AUTO);
++	if (!glue->core) {
++		dev_err(glue->dev, "can't allocate platform_device\n");
++		return -ENOMEM;
++	}
++
++	glue->core->dev.parent = &spi->dev;
++
++	ret = platform_device_add_data(glue->core, pdev_data,
++				       sizeof(*pdev_data));
++	if (ret) {
++		dev_err(glue->dev, "can't add platform data\n");
++		goto out_dev_put;
++	}
++
++	ret = platform_device_add(glue->core);
++	if (ret) {
++		dev_err(glue->dev, "can't register platform device\n");
++		goto out_dev_put;
++	}
++
++	return 0;
++
++out_dev_put:
++	platform_device_put(glue->core);
++	return ret;
++}
++
++static void cc33xx_remove(struct spi_device *spi)
++{
++	struct cc33xx_spi_glue *glue = spi_get_drvdata(spi);
++	struct platform_device *pdev = glue->core;
++	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
++
++	platform_device_unregister(glue->core);
++
++	free_irq(pdev_data->gpio_irq_num, spi);
++}
++
++static const struct spi_device_id cc33xx_spi_ids[] = {
++	{ "cc33xx" },
++	{ },
++};
++MODULE_DEVICE_TABLE(spi, cc33xx_spi_ids);
++
++static struct spi_driver cc33xx_spi_driver = {
++	.driver = {
++		.name		= "cc33xx_spi",
++		.of_match_table = of_match_ptr(wlcore_spi_of_match_table),
++	},
++	.id_table	= cc33xx_spi_ids,
++	.probe		= spi_cc33xx_probe,
++	.remove		= cc33xx_remove,
++};
++
++module_spi_driver(cc33xx_spi_driver);
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Luciano Coelho <coelho@ti.com>");
++MODULE_AUTHOR("Juuso Oikarinen <juuso.oikarinen@nokia.com>");
++MODULE_ALIAS("spi:cc33xx");
+diff --git a/drivers/net/wireless/ti/cc33xx/tx.c b/drivers/net/wireless/ti/cc33xx/tx.c
+index 37f8b63c99e0..9837e806b489 100644
+--- a/drivers/net/wireless/ti/cc33xx/tx.c
++++ b/drivers/net/wireless/ti/cc33xx/tx.c
+@@ -10,6 +10,10 @@
+ #include "tx.h"
+ #include "cc33xx.h"
+ 
++#define NAB_SEND_CMD			0x940d
++#define NAB_SEND_FLAGS			0x08
++#define CC33xx_INTERNAL_DESC_SIZE	200
++
+ static int cc33xx_set_default_wep_key(struct cc33xx *cc,
+ 				      struct cc33xx_vif *wlvif, u8 id)
+ {
+-- 
+2.53.0
+
