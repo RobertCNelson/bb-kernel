@@ -541,7 +541,7 @@ drivers () {
 ###
 backports
 drivers
-cc33xx_drivers
+#cc33xx_drivers
 
 packaging () {
 	echo "Update: package scripts"
