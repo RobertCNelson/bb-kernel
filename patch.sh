@@ -218,7 +218,7 @@ k3_dtbo_makefile_append () {
 }
 
 beagleboard_dtbs () {
-	branch="v7.0.x"
+	branch="v7.1.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
