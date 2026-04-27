@@ -8,7 +8,7 @@
 #https://packages.debian.org/source/sid/linux
 #
 #abi="6.19"
-#kernel="6.19.13-1"
+#kernel="6.19.14-1"
 #
 abi="7.0"
 kernel="7.0.1-1~exp1"
