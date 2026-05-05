@@ -408,4 +408,22 @@ cd ${DIR}/KERNEL/
 
 ./scripts/config --module CONFIG_MWIFIEX_SDIO
 
+#v7.1-rc1
+
+./scripts/config --disable CONFIG_ATM_CLIP
+./scripts/config --disable CONFIG_ATM_LANE
+
+./scripts/config --disable CONFIG_HAMRADIO
+
+./scripts/config --disable CONFIG_CAIF
+
+./scripts/config --disable CONFIG_ATM_DUMMY
+./scripts/config --disable CONFIG_ATM_NICSTAR
+./scripts/config --disable CONFIG_ATM_IA
+./scripts/config --disable CONFIG_ATM_FORE200E
+
+./scripts/config --disable CONFIG_NET_VENDOR_ALTEON
+
+./scripts/config --disable CONFIG_ISDN
+
 cd ${DIR}/
