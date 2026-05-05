@@ -65,7 +65,7 @@ KERNEL_TAG=${KERNEL_REL}.204
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/5.15/
 kernel_rt=".202-rt94"
 #Kernel Build
-BUILD=${build_prefix}48.2
+BUILD=${build_prefix}49
 
 #v6.X-rcX + upto SHA
 #prev_KERNEL_SHA=""
