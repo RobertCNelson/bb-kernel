@@ -221,7 +221,7 @@ beagleboard_dtbs () {
 	branch="v6.19.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
-	regenerate="enable"
+	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		cd ../
 		if [ -d ./${work_dir} ] ; then
