@@ -171,7 +171,7 @@ fi
 . "${DIR}/.CC"
 echo "CROSS_COMPILE=${CC}"
 if [ -f /usr/bin/ccache ] ; then
-	echo "ccache [enabled]"
+	echo "ccache: $(ccache --print-version)"
 	CC="ccache ${CC}"
 fi
 
