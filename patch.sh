@@ -281,6 +281,15 @@ arm_dtbo_makefile_append_last () {
 	fi
 }
 
+regenerate_arm_dtbo_list () {
+	cd ../${work_dir}/src/arm/overlays/
+	echo "-----------------------------"
+	for f in *.dtso; do echo "device=\"${f%.dtso}\" ; arm_dtbo_makefile_append"; done
+	echo "-----------------------------"
+	cd -
+	exit 2
+}
+
 beagleboard_dtbs () {
 	branch="v5.15.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
@@ -308,8 +317,7 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#ls ../${work_dir}/src/arm/overlays/ | grep dtso
-		#exit 2
+		#regenerate_arm_dtbo_list
 
 		device="AM3359-PWM012" ; arm_dtbo_makefile_append
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
@@ -364,6 +372,7 @@ beagleboard_dtbs () {
 		device="PB-MIKROBUS-0" ; arm_dtbo_makefile_append
 		device="PB-MIKROBUS-1" ; arm_dtbo_makefile_append_last
 
+		#am335x Devices
 		device="am335x-bonegreen-gateway.dtb" ; arm_dtb_makefile_append
 
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
