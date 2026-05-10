@@ -112,6 +112,8 @@ git_kernel () {
 	echo "scripts/git: [$(cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g')]"
 	if [ ! "${SHARED_GIT}" ] ; then
 		${git_bin} fetch || true
+	else
+		echo "scripts/git: LINUX_GIT fetch disabled via SHARED_GIT variable"
 	fi
 	echo "-----------------------------"
 	cd "${DIR}/" || exit
