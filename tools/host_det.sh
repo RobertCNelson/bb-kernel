@@ -55,6 +55,8 @@ redhat_reqs () {
 	check_rpm
 	pkg="gcc"
 	check_rpm
+	pkg="elfutils-libelf-devel"
+	check_rpm
 	pkg="fakeroot"
 	check_rpm
 	pkg="flex"
