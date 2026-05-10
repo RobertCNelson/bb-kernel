@@ -379,6 +379,7 @@ beagleboard_dtbs () {
 		device="PB-MIKROBUS-0" ; arm_dtbo_makefile_append
 		device="PB-MIKROBUS-1" ; arm_dtbo_makefile_append
 
+		#am335x Devices
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 		device="am335x-boneblack-revd.dtb" ; arm_dtb_makefile_append
 		device="am335x-bonegreen-eco.dtb" ; arm_dtb_makefile_append
@@ -386,10 +387,6 @@ beagleboard_dtbs () {
 		#device="am335x-sancloud-bbe-uboot.dtb" ; arm_dtb_makefile_append
 		#device="am335x-sancloud-bbe-lite-uboot.dtb" ; arm_dtb_makefile_append
 		#device="am335x-sancloud-bbe-extended-wifi-uboot.dtb" ; arm_dtb_makefile_append
-
-		#device="k3-am625-beagleplay-cc33xx.dtb" ; k3_dtb_makefile_append
-		#device="k3-am625-pocketbeagle2.dtb" ; k3_dtb_makefile_append
-		#device="k3-j721e-beagleboneai64-no-shared-mem.dtb" ; k3_dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
