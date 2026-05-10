@@ -217,6 +217,39 @@ k3_dtbo_makefile_append () {
 	fi
 }
 
+k3_makefile_patch_cleanup_overlays () {
+	cat arch/arm64/boot/dts/ti/Makefile | grep -v 'DTC_FLAGS_k3' | grep -v '# Enable' > arch/arm64/boot/dts/ti/Makefile.bak
+	cat arch/arm64/boot/dts/ti/Makefile | grep 'DTC_FLAGS_k3' > arch/arm64/boot/dts/ti/Makefile.dtc
+	rm arch/arm64/boot/dts/ti/Makefile
+	mv arch/arm64/boot/dts/ti/Makefile.bak arch/arm64/boot/dts/ti/Makefile
+	echo "" >> arch/arm64/boot/dts/ti/Makefile
+	echo "# Enable support for device-tree overlays" >> arch/arm64/boot/dts/ti/Makefile
+	cat arch/arm64/boot/dts/ti/Makefile.dtc >> arch/arm64/boot/dts/ti/Makefile
+	rm arch/arm64/boot/dts/ti/Makefile.dtc
+	echo "DTC_FLAGS_k3-am62-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
+	echo "DTC_FLAGS_k3-am6232-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
+	echo "DTC_FLAGS_k3-am67a-beagley-ai += -@" >> arch/arm64/boot/dts/ti/Makefile
+	echo "DTC_FLAGS_k3-j721e-beagleboneai64 += -@" >> arch/arm64/boot/dts/ti/Makefile
+}
+
+regenerate_arm_dtbo_list () {
+	cd ../${work_dir}/src/arm/overlays/
+	echo "-----------------------------"
+	for f in *.dtso; do echo "device=\"${f%.dtso}\" ; arm_dtbo_makefile_append"; done
+	echo "-----------------------------"
+	cd -
+	exit 2
+}
+
+regenerate_arm64_dtbo_list () {
+	cd ../${work_dir}/src/arm64/overlays/
+	echo "-----------------------------"
+	for f in *.dtso; do echo "device=\"${f%.dtso}\" ; k3_dtbo_makefile_append"; done
+	echo "-----------------------------"
+	cd -
+	exit 2
+}
+
 beagleboard_dtbs () {
 	branch="v7.1.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
@@ -247,8 +280,7 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
 
-		#ls ../${work_dir}/src/arm/overlays/ | grep dtso
-		#exit 2
+		#regenerate_arm_dtbo_list
 
 		device="AM3359-PWM012" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
@@ -300,41 +332,25 @@ beagleboard_dtbs () {
 		device="M-BB-BBG-00A0" ; arm_dtbo_makefile_append
 		device="M-BB-BBGG-00A0" ; arm_dtbo_makefile_append
 
+		#am335x Devices
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
 		device="am335x-boneblack-revd.dtb" ; arm_dtb_makefile_append
 
-		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
-
-		#ls src/arm64/overlays/ | grep pocketbeagle2
+		#regenerate_arm64_dtbo_list
 
 		device="k3-am6232-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+		device="k3-am625-beagleplay-bcfserial-no-firmware" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-ardupilot-cape" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-led-all" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-mspm0swd" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-pru0-out" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-spi2-eth-wiz-click" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
-
-		#ls src/arm64/overlays/ | grep beagleplay
-
-		device="k3-am625-beagleplay-bcfserial-no-firmware" ; k3_dtbo_makefile_append
-
-		#ls src/arm64/overlays/ | grep sancloud
-
-		device="k3-am625-sancloud-bbe-2.dtb" ; k3_dtb_makefile_append
-
-		#ls src/arm64/overlays/ | grep beagley
-
-		device="k3-am67a-beagley-ai-csi0-imx219" ; k3_dtbo_makefile_append
-		device="k3-am67a-beagley-ai-csi0-ov5640" ; k3_dtbo_makefile_append
-		device="k3-am67a-beagley-ai-csi1-imx219" ; k3_dtbo_makefile_append
-		device="k3-am67a-beagley-ai-dsi-rpi-7inch-panel" ; k3_dtbo_makefile_append
-		device="k3-am67a-beagley-ai-hdmi-dss0-dpi1" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-400000" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-ads1115" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-rtc-rv3028" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-ssd1306" ; k3_dtbo_makefile_append
-		device="k3-am67a-beagley-ai-lincolntech-185lcd-panel" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-mikroe-eth" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-mikroe-microsd" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-pps-gpio18" ; k3_dtbo_makefile_append
@@ -363,15 +379,13 @@ beagleboard_dtbs () {
 		device="k3-am67a-beagley-ai-spi0-2cs" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-spidev0" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-uart-ttyama0" ; k3_dtbo_makefile_append
-
-		#ls ../${work_dir}/src/arm64/overlays/ | grep beagleboneai64
-		#exit 2
-
 		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap1" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap2" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-eqep0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-eqep1" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-io-pins" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_13-p8_19" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-pwm-epwm0-p8_19" ; k3_dtbo_makefile_append
@@ -388,6 +402,11 @@ beagleboard_dtbs () {
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs1-no-miso" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi7-cs0" ; k3_dtbo_makefile_append
+
+
+		#K3 Devices
+		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
+		device="k3-am625-sancloud-bbe-2.dtb" ; k3_dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
