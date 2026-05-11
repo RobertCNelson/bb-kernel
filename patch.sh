@@ -217,21 +217,6 @@ k3_dtbo_makefile_append () {
 	fi
 }
 
-k3_makefile_patch_cleanup_overlays () {
-	cat arch/arm64/boot/dts/ti/Makefile | grep -v 'DTC_FLAGS_k3' | grep -v '# Enable' > arch/arm64/boot/dts/ti/Makefile.bak
-	cat arch/arm64/boot/dts/ti/Makefile | grep 'DTC_FLAGS_k3' > arch/arm64/boot/dts/ti/Makefile.dtc
-	rm arch/arm64/boot/dts/ti/Makefile
-	mv arch/arm64/boot/dts/ti/Makefile.bak arch/arm64/boot/dts/ti/Makefile
-	echo "" >> arch/arm64/boot/dts/ti/Makefile
-	echo "# Enable support for device-tree overlays" >> arch/arm64/boot/dts/ti/Makefile
-	cat arch/arm64/boot/dts/ti/Makefile.dtc >> arch/arm64/boot/dts/ti/Makefile
-	rm arch/arm64/boot/dts/ti/Makefile.dtc
-	echo "DTC_FLAGS_k3-am62-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
-	echo "DTC_FLAGS_k3-am6232-pocketbeagle2 += -@" >> arch/arm64/boot/dts/ti/Makefile
-	echo "DTC_FLAGS_k3-am67a-beagley-ai += -@" >> arch/arm64/boot/dts/ti/Makefile
-	echo "DTC_FLAGS_k3-j721e-beagleboneai64 += -@" >> arch/arm64/boot/dts/ti/Makefile
-}
-
 regenerate_arm_dtbo_list () {
 	cd ../${work_dir}/src/arm/overlays/
 	echo "-----------------------------"
