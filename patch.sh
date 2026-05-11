@@ -403,7 +403,6 @@ beagleboard_dtbs () {
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs1-no-miso" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi7-cs0" ; k3_dtbo_makefile_append
 
-
 		#K3 Devices
 		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
 		device="k3-am625-sancloud-bbe-2.dtb" ; k3_dtb_makefile_append
