@@ -110,7 +110,12 @@ git_kernel () {
 	echo "-----------------------------"
 	echo "scripts/git: Debug: LINUX_GIT is setup as: [${LINUX_GIT}]."
 	echo "scripts/git: [$(cat .git/config | grep url | sed 's/\t//g' | sed 's/ //g')]"
-	${git_bin} fetch || true
+	if [ ! "${SHARED_GIT}" ] ; then
+		echo "scripts/git: LINUX_GIT: fetch --tags"
+		${git_bin} fetch --tags || true
+	else
+		echo "scripts/git: LINUX_GIT fetch disabled via SHARED_GIT variable"
+	fi
 	echo "-----------------------------"
 	cd "${DIR}/" || exit
 
