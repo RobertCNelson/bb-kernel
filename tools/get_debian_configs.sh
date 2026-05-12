@@ -13,8 +13,8 @@ bookworm_kernel_tag="6.1.170-3"
 trixie_kernel_branch="6.12"
 trixie_kernel_tag="6.12.86-1"
 #
-forky_kernel_branch="6.19"
-forky_kernel_tag="6.19.14-1"
+forky_kernel_branch="7.0"
+forky_kernel_tag="7.0.4-1"
 #
 sid_kernel_branch="7.0"
 sid_kernel_tag="7.0.4-1"
