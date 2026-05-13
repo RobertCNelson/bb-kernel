@@ -29,6 +29,7 @@ DEBARCH=armhf
 #toolchain="gcc_13_arm"
 #toolchain="gcc_14_arm"
 toolchain="gcc_15_arm"
+#toolchain="gcc_16_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
@@ -40,6 +41,7 @@ toolchain="gcc_15_arm"
 #toolchain="gcc_13_aarch64"
 #toolchain="gcc_14_aarch64"
 #toolchain="gcc_15_aarch64"
+#toolchain="gcc_16_aarch64"
 #riscv64
 #KERNEL_ARCH=riscv
 #DEBARCH=riscv64
@@ -51,6 +53,7 @@ toolchain="gcc_15_arm"
 #toolchain="gcc_13_riscv64"
 #toolchain="gcc_14_riscv64"
 #toolchain="gcc_15_riscv64"
+#toolchain="gcc_16_riscv64"
 
 #Wireless:
 #https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git
