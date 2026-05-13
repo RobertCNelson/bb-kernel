@@ -28,8 +28,8 @@ DEBARCH=armhf
 #toolchain="gcc_12_arm"
 #toolchain="gcc_13_arm"
 #toolchain="gcc_14_arm"
-toolchain="gcc_15_arm"
-#toolchain="gcc_16_arm"
+#toolchain="gcc_15_arm"
+toolchain="gcc_16_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
