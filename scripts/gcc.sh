@@ -88,6 +88,7 @@ gcc_toolchain () {
 	gcc13="13.4.0"
 	gcc14="14.3.0"
 	gcc15="15.2.0"
+	gcc16="16.1.0"
 
 	case "${toolchain}" in
 	gcc_arm_gnueabihf_8|gcc_arm_eabi_8|gcc_8_arm)
@@ -138,6 +139,12 @@ gcc_toolchain () {
 		datestamp="2025.${gcc_selected}-${gcc_prefix}"
 		dl_gcc_generic
 		;;
+	gcc_16_arm)
+		gcc_selected=${gcc16}
+		gcc_prefix="arm-linux-gnueabi"
+		datestamp="2026.${gcc_selected}-${gcc_prefix}"
+		dl_gcc_generic
+		;;
 	gcc_arm_aarch64_gnu_8|gcc_8_aarch64)
 		gcc_selected=${gcc8}
 		gcc_prefix="aarch64-linux"
@@ -186,6 +193,12 @@ gcc_toolchain () {
 		datestamp="2025.${gcc_selected}-${gcc_prefix}-gcc"
 		dl_gcc_generic
 		;;
+	gcc_16_aarch64)
+		gcc_selected=${gcc16}
+		gcc_prefix="aarch64-linux"
+		datestamp="2026.${gcc_selected}-${gcc_prefix}-gcc"
+		dl_gcc_generic
+		;;
 	gcc_8_riscv64)
 		gcc_selected=${gcc8}
 		gcc_prefix="riscv64-linux"
@@ -232,6 +245,12 @@ gcc_toolchain () {
 		gcc_selected=${gcc15}
 		gcc_prefix="riscv64-linux"
 		datestamp="2025.${gcc_selected}-${gcc_prefix}-gcc"
+		dl_gcc_generic
+		;;
+	gcc_16_riscv64)
+		gcc_selected=${gcc16}
+		gcc_prefix="riscv64-linux"
+		datestamp="2026.${gcc_selected}-${gcc_prefix}-gcc"
 		dl_gcc_generic
 		;;
 	*)
