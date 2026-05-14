@@ -5,19 +5,22 @@
 # SPDX-License-Identifier: MIT
 
 #
-#https://packages.debian.org/source/trixie/linux
+#https://packages.debian.org/source/sid/linux
+#
+bookworm_kernel_branch="6.1"
+bookworm_kernel_tag="6.1.170-3"
 #
 trixie_kernel_branch="6.12"
 trixie_kernel_tag="6.12.86-1"
 #
-forky_kernel_branch="6.19"
-forky_kernel_tag="6.19.14-1"
+forky_kernel_branch="7.0"
+forky_kernel_tag="7.0.4-1"
 #
 sid_kernel_branch="7.0"
 sid_kernel_tag="7.0.4-1"
 #
 exp_kernel_branch="7.1"
-exp_kernel_tag="7.1~rc2-1~exp1"
+exp_kernel_tag="7.1~rc3-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
@@ -43,9 +46,9 @@ dl_deb () {
 	fi
 
 	if [ -f ./dl/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb ] ; then
-		echo "[linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb]"
 		dpkg -x ./dl/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb ./dl/tmp/
 		if [ -f ./dl/tmp/usr/src/linux-config-${kernel_branch}/config.${dpkg_arch}_${config}.xz ] ; then
+			echo "[linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb]"
 			xzcat -v ./dl/tmp/usr/src/linux-config-${kernel_branch}/config.${dpkg_arch}_${config}.xz > ./patches/debian.config
 		else
 			tree ./dl/tmp/usr/src/linux-config-${kernel_branch}/
@@ -63,8 +66,8 @@ dl_distro () {
 	dl_deb
 }
 
-kernel_branch="${trixie_kernel_branch}"
-kernel_tag="${trixie_kernel_tag}"
+kernel_branch="${forky_kernel_branch}"
+kernel_tag="${forky_kernel_tag}"
 dl_distro
 
 rm -rf ./dl/ || true
