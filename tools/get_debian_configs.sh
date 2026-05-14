@@ -62,12 +62,12 @@ dl_deb () {
 
 dl_distro () {
 	dpkg_arch="armhf"
-	config="rt_armmp"
+	config="none_armmp"
 	dl_deb
 }
 
-kernel_branch="${trixie_kernel_branch}"
-kernel_tag="${trixie_kernel_tag}"
+kernel_branch="${forky_kernel_branch}"
+kernel_tag="${forky_kernel_tag}"
 dl_distro
 
 rm -rf ./dl/ || true
