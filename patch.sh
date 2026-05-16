@@ -180,11 +180,7 @@ rt () {
 			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 			rm -f patch-${rt_patch}.patch.xz
 			rm -f localversion-rt
-			rm -f drivers/tty/serial/8250/8250_port.c.orig
-			rm -f include/net/act_api.h.orig
-			rm -f include/net/sch_generic.h.orig
-			rm -f net/ipv6/route.c.orig
-			rm -f net/sched/sch_ets.c.orig
+			rm -f include/linux/sched.h.orig
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
