@@ -114,6 +114,7 @@ rt () {
 			rm -f patch-${rt_patch}.patch.xz
 			rm -f localversion-rt
 			rm -f net/core/skbuff.c.orig
+			rm -f include/linux/sched.h.orig
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
