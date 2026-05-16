@@ -29,6 +29,7 @@ toolchain="gcc_12_arm"
 #toolchain="gcc_13_arm"
 #toolchain="gcc_14_arm"
 #toolchain="gcc_15_arm"
+#toolchain="gcc_16_arm"
 #arm64
 #KERNEL_ARCH=arm64
 #DEBARCH=arm64
@@ -40,6 +41,7 @@ toolchain="gcc_12_arm"
 #toolchain="gcc_13_aarch64"
 #toolchain="gcc_14_aarch64"
 #toolchain="gcc_15_aarch64"
+#toolchain="gcc_16_aarch64"
 #riscv64
 #KERNEL_ARCH=riscv
 #DEBARCH=riscv64
@@ -51,6 +53,7 @@ toolchain="gcc_12_arm"
 #toolchain="gcc_13_riscv64"
 #toolchain="gcc_14_riscv64"
 #toolchain="gcc_15_riscv64"
+#toolchain="gcc_16_riscv64"
 
 #Wireless:
 #https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git
@@ -61,15 +64,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.1
-KERNEL_TAG=${KERNEL_REL}.172
+KERNEL_TAG=${KERNEL_REL}.173
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.1/
 kernel_rt=".167-rt62"
 #Kernel Build
-BUILD=${build_prefix}49
-
-#v6.X-rcX + upto SHA
-#prev_KERNEL_SHA=""
-#KERNEL_SHA=""
+BUILD=${build_prefix}49.1
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"

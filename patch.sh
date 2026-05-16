@@ -182,6 +182,7 @@ rt () {
 			rm -f localversion-rt
 			rm -f drivers/net/virtio_net.c.orig
 			rm -f net/core/dev.c.orig
+			rm -f include/linux/sched.h.orig
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
