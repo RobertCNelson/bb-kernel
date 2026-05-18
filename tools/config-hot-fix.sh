@@ -433,4 +433,7 @@ cd ${DIR}/KERNEL/
 
 ./scripts/config --disable CONFIG_ISDN
 
+# Re-enable serial dma
+./scripts/config --enable CONFIG_SERIAL_8250_DMA
+
 cd ${DIR}/
