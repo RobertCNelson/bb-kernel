@@ -264,6 +264,9 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.dtsi arch/arm64/boot/dts/ti/
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
+		if [ -f ./include/dt-bindings/board/am335x-bbw-bbb-base.h ] ; then
+			rm -rf ./include/dt-bindings/board/am335x-bbw-bbb-base.h || true
+		fi
 
 		#regenerate_arm_dtbo_list
 
@@ -273,6 +276,8 @@ beagleboard_dtbs () {
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-LCD7-01-00A3" ; arm_dtbo_makefile_append
 		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
 		device="BB-EHRPWM0-P9_29-P9_31" ; arm_dtbo_makefile_append
