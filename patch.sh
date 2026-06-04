@@ -116,6 +116,9 @@ rt () {
 			rm -f net/core/skbuff.c.orig
 			rm -f include/linux/sched.h.orig
 			rm -f kernel/locking/rtmutex.c.orig
+			rm -f drivers/gpu/drm/i915/gt/intel_reset.c.orig
+			rm -f kernel/futex/requeue.c.orig
+			rm -f kernel/time/hrtimer.c.orig
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
@@ -283,16 +286,22 @@ beagleboard_dtbs () {
 		cp -v ../${work_dir}/src/arm64/ti/*.dtsi arch/arm64/boot/dts/ti/
 		cp -v ../${work_dir}/src/arm64/ti/*.h arch/arm64/boot/dts/ti/
 		cp -vr ../${work_dir}/include/dt-bindings/* ./include/dt-bindings/
+		if [ -f ./include/dt-bindings/board/am335x-bbw-bbb-base.h ] ; then
+			rm -rf ./include/dt-bindings/board/am335x-bbw-bbb-base.h || true
+		fi
 
 		#regenerate_arm_dtbo_list
 
 		device="AM3359-PWM012" ; arm_dtbo_makefile_append
+		device="AM335X-PRU-P9-25" ; arm_dtbo_makefile_append
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-LCD7-01-00A3" ; arm_dtbo_makefile_append
 		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
 		device="BB-EHRPWM0-P9_29-P9_31" ; arm_dtbo_makefile_append
@@ -307,6 +316,7 @@ beagleboard_dtbs () {
 		device="BB-HDMI-IT66122-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C1-ADS1015-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-FAST-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-MCP7940X-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-RTC-DS3231" ; arm_dtbo_makefile_append
