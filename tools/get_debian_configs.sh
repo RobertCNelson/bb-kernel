@@ -7,9 +7,6 @@
 #
 #https://packages.debian.org/source/sid/linux
 #
-bookworm_kernel_branch="6.1"
-bookworm_kernel_tag="6.1.174-1"
-#
 trixie_kernel_branch="6.12"
 trixie_kernel_tag="6.12.90-2"
 #
@@ -17,11 +14,11 @@ forky_kernel_branch="7.0"
 forky_kernel_tag="7.0.10-1"
 #
 sid_kernel_branch="7.0"
-sid_kernel_tag="7.0.10-1"
+sid_kernel_tag="7.0.12-2"
 #
 exp_kernel_branch="7.1"
 #exp_kernel_tag="7.0.1-1~exp1"
-exp_kernel_tag="7.1~rc5-1~exp1"
+exp_kernel_tag="7.1~rc7-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
