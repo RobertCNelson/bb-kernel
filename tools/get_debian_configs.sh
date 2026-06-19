@@ -11,7 +11,7 @@ trixie_kernel_branch="6.12"
 trixie_kernel_tag="6.12.90-2"
 #
 forky_kernel_branch="7.0"
-forky_kernel_tag="7.0.10-1"
+forky_kernel_tag="7.0.12-2"
 #
 sid_kernel_branch="7.0"
 sid_kernel_tag="7.0.12-2"
