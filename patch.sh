@@ -236,7 +236,7 @@ regenerate_arm64_dtbo_list () {
 }
 
 beagleboard_dtbs () {
-	branch="v7.1.x"
+	branch="v7.2.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
