@@ -524,39 +524,6 @@ post_ti_backports () {
 }
 
 backports () {
-	backport_tag="v6.18-rc5"
-
-	subsystem="tps65219"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/input/misc/tps65219-pwrbutton.c ./drivers/input/misc/
-		cp -v ~/linux-src/drivers/mfd/tps65219.c ./drivers/mfd/
-		cp -v ~/linux-src/drivers/gpio/gpio-tps65219.c ./drivers/gpio/
-		cp -v ~/linux-src/drivers/regulator/tps65219-regulator.c ./drivers/regulator/
-		cp -v ~/linux-src/Documentation/devicetree/bindings/regulator/ti,tps65219.yaml ./Documentation/devicetree/bindings/regulator/
-		cp -v ~/linux-src/include/linux/mfd/tps65219.h ./include/linux/mfd/
-
-		post_backports
-	#else
-		patch_backports
-	fi
-
-	backport_tag="v6.18-rc5"
-
-	subsystem="it66121"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_backports
-
-		cp -v ~/linux-src/drivers/gpu/drm/bridge/ite-it66121.c ./drivers/gpu/drm/bridge/
-
-		post_backports
-	#else
-		patch_backports
-	fi
-
 	backport_tag="rpi-6.18.y"
 
 	subsystem="rpi-backports"
