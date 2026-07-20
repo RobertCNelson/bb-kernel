@@ -246,8 +246,8 @@ git_shallow () {
 . "${DIR}/system.sh"
 
 if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
-	linux_repo="http://forgejo.gfnd.rcn-ee.org:3000/kernel.org/mirror-linux-stable.git"
-	linux_stable_repo="http://forgejo.gfnd.rcn-ee.org:3000/kernel.org/mirror-linux-stable.git"
+	linux_repo="https://forgejo.gfnd.rcn-ee.org:3000/kernel.org/mirror-linux-stable.git"
+	linux_stable_repo="https://forgejo.gfnd.rcn-ee.org:3000/kernel.org/mirror-linux-stable.git"
 fi
 
 git_bin=$(which git)
