@@ -68,7 +68,7 @@ KERNEL_TAG=${KERNEL_REL}.96
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.12/
 kernel_rt=".96-rt19"
 #Kernel Build
-BUILD=${build_prefix}63.1
+BUILD=${build_prefix}64
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
