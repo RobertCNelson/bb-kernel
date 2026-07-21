@@ -1,14 +1,14 @@
-From d8b1d07580036703c103d13330cf949215c3526a Mon Sep 17 00:00:00 2001
+From 249224c4730ec6bc72e28498d12c10a85d2a0ed8 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Thu, 4 Jun 2026 12:09:28 -0500
+Date: Tue, 21 Jul 2026 14:12:54 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.6.135-rt74.patch.xz
+patch-6.6.144-rt76.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  arch/arm/Kconfig                              |    6 +-
- arch/arm/mm/fault.c                           |    6 +
+ arch/arm/mm/fault.c                           |    5 +
  arch/arm/vfp/vfpmodule.c                      |   74 +-
  arch/arm64/Kconfig                            |    1 +
  arch/powerpc/Kconfig                          |    2 +
@@ -64,7 +64,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/bcm63xx_uart.c             |   22 +-
  drivers/tty/serial/cpm_uart.c                 |    8 +-
  drivers/tty/serial/digicolor-usart.c          |   18 +-
- drivers/tty/serial/dz.c                       |   32 +-
+ drivers/tty/serial/dz.c                       |   48 +-
  drivers/tty/serial/fsl_linflexuart.c          |   26 +-
  drivers/tty/serial/fsl_lpuart.c               |   88 +-
  drivers/tty/serial/icom.c                     |   26 +-
@@ -93,7 +93,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  drivers/tty/serial/rda-uart.c                 |   34 +-
  drivers/tty/serial/rp2.c                      |   20 +-
  drivers/tty/serial/sa1100.c                   |   20 +-
- drivers/tty/serial/samsung_tty.c              |   50 +-
+ drivers/tty/serial/samsung_tty.c              |    8 +
  drivers/tty/serial/sb1250-duart.c             |   12 +-
  drivers/tty/serial/serial-tegra.c             |   32 +-
  drivers/tty/serial/serial_core.c              |   92 +-
@@ -170,7 +170,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/core/dev.c                                |   39 +-
  net/core/skbuff.c                             |    7 +-
  net/ipv6/route.c                              |   13 +-
- 163 files changed, 5009 insertions(+), 1507 deletions(-)
+ 163 files changed, 5009 insertions(+), 1480 deletions(-)
  create mode 100644 kernel/printk/nbcon.c
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
@@ -212,10 +212,10 @@ index be3b0f83eee5..4f8e3a7a245d 100644
  	select HAVE_REGS_AND_STACK_ACCESS_API
  	select HAVE_RSEQ
 diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
-index ed1a25f457e4..90c9ecd71271 100644
+index 87ed5da30e44..cbb026710891 100644
 --- a/arch/arm/mm/fault.c
 +++ b/arch/arm/mm/fault.c
-@@ -411,6 +411,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
+@@ -451,6 +451,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
  	if (addr < TASK_SIZE)
  		return do_page_fault(addr, fsr, regs);
  
@@ -225,16 +225,15 @@ index ed1a25f457e4..90c9ecd71271 100644
  	if (user_mode(regs))
  		goto bad_area;
  
-@@ -481,6 +484,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
+@@ -522,6 +525,8 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
  static int
  do_sect_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
  {
 +	if (interrupts_enabled(regs))
 +		local_irq_enable();
-+
- 	do_bad_area(addr, fsr, regs);
- 	return 0;
- }
+ 	/*
+ 	 * If this is a kernel address, but from user mode, then userspace
+ 	 * is trying bad stuff. Invoke the branch predictor handling.
 diff --git a/arch/arm/vfp/vfpmodule.c b/arch/arm/vfp/vfpmodule.c
 index 7e8773a2d99d..9fde36fcb80c 100644
 --- a/arch/arm/vfp/vfpmodule.c
@@ -435,7 +434,7 @@ index 7e8773a2d99d..9fde36fcb80c 100644
  EXPORT_SYMBOL(kernel_neon_end);
  
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index 1be9f1f6b320..ef8c4dfc041e 100644
+index 723e73042c1a..4058c36c435e 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
 @@ -97,6 +97,7 @@ config ARM64
@@ -899,7 +898,7 @@ index b524cf27213d..d1f9ba39ec88 100644
  		raw_local_irq_disable();
  	}
 diff --git a/drivers/block/zram/zram_drv.c b/drivers/block/zram/zram_drv.c
-index 6584c1ca5a17..1b6fde5f5014 100644
+index 0c422e4179ad..3aabeb51c3ed 100644
 --- a/drivers/block/zram/zram_drv.c
 +++ b/drivers/block/zram/zram_drv.c
 @@ -57,6 +57,41 @@ static void zram_free_page(struct zram *zram, size_t index);
@@ -1854,7 +1853,7 @@ index 745a7399c959..cc47fb426d98 100644
  
  int serial8250_tx_dma(struct uart_8250_port *p)
 diff --git a/drivers/tty/serial/8250/8250_dw.c b/drivers/tty/serial/8250/8250_dw.c
-index 60a05bfecde3..6c34a68cea8f 100644
+index d1cf00cd945d..b099f97f2fb1 100644
 --- a/drivers/tty/serial/8250/8250_dw.c
 +++ b/drivers/tty/serial/8250/8250_dw.c
 @@ -290,20 +290,20 @@ static int dw8250_handle_irq(struct uart_port *p)
@@ -2777,7 +2776,7 @@ index c246503c9f80..9c3568b5059a 100644
  		uart_parse_options(options, &baud, &parity, &bits, &flow);
  	else if (probe)
 diff --git a/drivers/tty/serial/altera_jtaguart.c b/drivers/tty/serial/altera_jtaguart.c
-index 5fab4c978891..7090b251dd4d 100644
+index 9a4fab8ff767..8e09eb937411 100644
 --- a/drivers/tty/serial/altera_jtaguart.c
 +++ b/drivers/tty/serial/altera_jtaguart.c
 @@ -147,14 +147,14 @@ static irqreturn_t altera_jtaguart_interrupt(int irq, void *data)
@@ -3554,10 +3553,10 @@ index 128b5479e813..5004125f3045 100644
  	/* Wait for transmitter to become empty */
  	do {
 diff --git a/drivers/tty/serial/dz.c b/drivers/tty/serial/dz.c
-index 667f52e83277..6df7af9edc1c 100644
+index 08f2414bf1d9..a8c25c1aea00 100644
 --- a/drivers/tty/serial/dz.c
 +++ b/drivers/tty/serial/dz.c
-@@ -268,9 +268,9 @@ static inline void dz_transmit_chars(struct dz_mux *mux)
+@@ -264,9 +264,9 @@ static inline void dz_transmit_chars(struct dz_mux *mux)
  	}
  	/* If nothing to do or stopped or hardware stopped. */
  	if (uart_circ_empty(xmit) || uart_tx_stopped(&dport->port)) {
@@ -3569,7 +3568,7 @@ index 667f52e83277..6df7af9edc1c 100644
  		return;
  	}
  
-@@ -287,9 +287,9 @@ static inline void dz_transmit_chars(struct dz_mux *mux)
+@@ -283,9 +283,9 @@ static inline void dz_transmit_chars(struct dz_mux *mux)
  
  	/* Are we are done. */
  	if (uart_circ_empty(xmit)) {
@@ -3581,7 +3580,7 @@ index 667f52e83277..6df7af9edc1c 100644
  	}
  }
  
-@@ -415,14 +415,14 @@ static int dz_startup(struct uart_port *uport)
+@@ -411,14 +411,14 @@ static int dz_startup(struct uart_port *uport)
  		return ret;
  	}
  
@@ -3598,7 +3597,7 @@ index 667f52e83277..6df7af9edc1c 100644
  
  	return 0;
  }
-@@ -443,9 +443,9 @@ static void dz_shutdown(struct uart_port *uport)
+@@ -439,9 +439,9 @@ static void dz_shutdown(struct uart_port *uport)
  	int irq_guard;
  	u16 tmp;
  
@@ -3610,7 +3609,7 @@ index 667f52e83277..6df7af9edc1c 100644
  
  	irq_guard = atomic_add_return(-1, &mux->irq_guard);
  	if (!irq_guard) {
-@@ -491,14 +491,14 @@ static void dz_break_ctl(struct uart_port *uport, int break_state)
+@@ -487,14 +487,14 @@ static void dz_break_ctl(struct uart_port *uport, int break_state)
  	unsigned long flags;
  	unsigned short tmp, mask = 1 << dport->port.line;
  
@@ -3627,7 +3626,7 @@ index 667f52e83277..6df7af9edc1c 100644
  }
  
  static int dz_encode_baud_rate(unsigned int baud)
-@@ -608,7 +608,7 @@ static void dz_set_termios(struct uart_port *uport, struct ktermios *termios,
+@@ -637,7 +637,7 @@ static void dz_set_termios(struct uart_port *uport, struct ktermios *termios,
  	if (termios->c_cflag & CREAD)
  		cflag |= DZ_RXENAB;
  
@@ -3636,7 +3635,7 @@ index 667f52e83277..6df7af9edc1c 100644
  
  	uart_update_timeout(uport, termios->c_cflag, baud);
  
-@@ -631,7 +631,7 @@ static void dz_set_termios(struct uart_port *uport, struct ktermios *termios,
+@@ -660,9 +660,29 @@ static void dz_set_termios(struct uart_port *uport, struct ktermios *termios,
  	if (termios->c_iflag & IGNBRK)
  		dport->port.ignore_status_mask |= DZ_BREAK;
  
@@ -3644,23 +3643,30 @@ index 667f52e83277..6df7af9edc1c 100644
 +	uart_port_unlock_irqrestore(&dport->port, flags);
  }
  
- /*
-@@ -645,12 +645,12 @@ static void dz_pm(struct uart_port *uport, unsigned int state,
- 	struct dz_port *dport = to_dport(uport);
- 	unsigned long flags;
- 
--	spin_lock_irqsave(&dport->port.lock, flags);
++/*
++ * Hack alert!
++ * Required solely so that the initial PROM-based console
++ * works undisturbed in parallel with this one.
++ */
++static void dz_pm(struct uart_port *uport, unsigned int state,
++		  unsigned int oldstate)
++{
++	struct dz_port *dport = to_dport(uport);
++	unsigned long flags;
++
 +	uart_port_lock_irqsave(&dport->port, &flags);
- 	if (state < 3)
- 		dz_start_tx(&dport->port);
- 	else
- 		dz_stop_tx(&dport->port);
--	spin_unlock_irqrestore(&dport->port.lock, flags);
++	if (state < 3)
++		dz_start_tx(&dport->port);
++	else
++		dz_stop_tx(&dport->port);
 +	uart_port_unlock_irqrestore(&dport->port, flags);
- }
- 
- 
-@@ -811,7 +811,7 @@ static void dz_console_putchar(struct uart_port *uport, unsigned char ch)
++}
++
++
+ static const char *dz_type(struct uart_port *uport)
+ {
+ 	return "DZ";
+@@ -831,7 +851,7 @@ static void dz_console_putchar(struct uart_port *uport, unsigned char ch)
  	unsigned short csr, tcr, trdy, mask;
  	int loops = 10000;
  
@@ -3669,7 +3675,7 @@ index 667f52e83277..6df7af9edc1c 100644
  	csr = dz_in(dport, DZ_CSR);
  	dz_out(dport, DZ_CSR, csr & ~DZ_TIE);
  	tcr = dz_in(dport, DZ_TCR);
-@@ -819,7 +819,7 @@ static void dz_console_putchar(struct uart_port *uport, unsigned char ch)
+@@ -839,7 +859,7 @@ static void dz_console_putchar(struct uart_port *uport, unsigned char ch)
  	mask = tcr;
  	dz_out(dport, DZ_TCR, mask);
  	iob();
@@ -3786,7 +3792,7 @@ index 249cb380c3c6..7fa809a405e8 100644
  
  /*
 diff --git a/drivers/tty/serial/fsl_lpuart.c b/drivers/tty/serial/fsl_lpuart.c
-index 70fa1e6aebe1..686bfb2cfe65 100644
+index 22abb62303eb..70daec9f20a1 100644
 --- a/drivers/tty/serial/fsl_lpuart.c
 +++ b/drivers/tty/serial/fsl_lpuart.c
 @@ -532,9 +532,9 @@ static void lpuart_dma_tx_complete(void *arg)
@@ -3939,7 +3945,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  	}
  }
  
-@@ -1819,14 +1819,14 @@ static void lpuart_hw_setup(struct lpuart_port *sport)
+@@ -1828,14 +1828,14 @@ static void lpuart_hw_setup(struct lpuart_port *sport)
  {
  	unsigned long flags;
  
@@ -3956,7 +3962,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  }
  
  static int lpuart_startup(struct uart_port *port)
-@@ -1876,7 +1876,7 @@ static void lpuart32_hw_setup(struct lpuart_port *sport)
+@@ -1885,7 +1885,7 @@ static void lpuart32_hw_setup(struct lpuart_port *sport)
  {
  	unsigned long flags;
  
@@ -3965,7 +3971,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	lpuart32_hw_disable(sport);
  
-@@ -1886,7 +1886,7 @@ static void lpuart32_hw_setup(struct lpuart_port *sport)
+@@ -1895,7 +1895,7 @@ static void lpuart32_hw_setup(struct lpuart_port *sport)
  	lpuart32_setup_watermark_enable(sport);
  	lpuart32_configure(sport);
  
@@ -3974,7 +3980,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  }
  
  static int lpuart32_startup(struct uart_port *port)
-@@ -1949,7 +1949,7 @@ static void lpuart_shutdown(struct uart_port *port)
+@@ -1958,7 +1958,7 @@ static void lpuart_shutdown(struct uart_port *port)
  	unsigned char temp;
  	unsigned long flags;
  
@@ -3983,7 +3989,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	/* disable Rx/Tx and interrupts */
  	temp = readb(port->membase + UARTCR2);
-@@ -1957,7 +1957,7 @@ static void lpuart_shutdown(struct uart_port *port)
+@@ -1966,7 +1966,7 @@ static void lpuart_shutdown(struct uart_port *port)
  			UARTCR2_TIE | UARTCR2_TCIE | UARTCR2_RIE);
  	writeb(temp, port->membase + UARTCR2);
  
@@ -3992,7 +3998,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	lpuart_dma_shutdown(sport);
  }
-@@ -1969,7 +1969,7 @@ static void lpuart32_shutdown(struct uart_port *port)
+@@ -1978,7 +1978,7 @@ static void lpuart32_shutdown(struct uart_port *port)
  	unsigned long temp;
  	unsigned long flags;
  
@@ -4001,7 +4007,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	/* clear status */
  	temp = lpuart32_read(&sport->port, UARTSTAT);
-@@ -1986,7 +1986,7 @@ static void lpuart32_shutdown(struct uart_port *port)
+@@ -1995,7 +1995,7 @@ static void lpuart32_shutdown(struct uart_port *port)
  			UARTCTRL_TIE | UARTCTRL_TCIE | UARTCTRL_RIE | UARTCTRL_SBK);
  	lpuart32_write(port, temp, UARTCTRL);
  
@@ -4010,7 +4016,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	lpuart_dma_shutdown(sport);
  }
-@@ -2086,7 +2086,7 @@ lpuart_set_termios(struct uart_port *port, struct ktermios *termios,
+@@ -2095,7 +2095,7 @@ lpuart_set_termios(struct uart_port *port, struct ktermios *termios,
  	if (old && sport->lpuart_dma_rx_use)
  		lpuart_dma_rx_free(&sport->port);
  
@@ -4019,7 +4025,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	sport->port.read_status_mask = 0;
  	if (termios->c_iflag & INPCK)
-@@ -2141,7 +2141,7 @@ lpuart_set_termios(struct uart_port *port, struct ktermios *termios,
+@@ -2150,7 +2150,7 @@ lpuart_set_termios(struct uart_port *port, struct ktermios *termios,
  			sport->lpuart_dma_rx_use = false;
  	}
  
@@ -4028,7 +4034,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  }
  
  static void __lpuart32_serial_setbrg(struct uart_port *port,
-@@ -2321,7 +2321,7 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
+@@ -2330,7 +2330,7 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
  	if (old && sport->lpuart_dma_rx_use)
  		lpuart_dma_rx_free(&sport->port);
  
@@ -4037,7 +4043,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	sport->port.read_status_mask = 0;
  	if (termios->c_iflag & INPCK)
-@@ -2379,7 +2379,7 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
+@@ -2388,7 +2388,7 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
  			sport->lpuart_dma_rx_use = false;
  	}
  
@@ -4046,7 +4052,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  }
  
  static const char *lpuart_type(struct uart_port *port)
-@@ -2497,9 +2497,9 @@ lpuart_console_write(struct console *co, const char *s, unsigned int count)
+@@ -2506,9 +2506,9 @@ lpuart_console_write(struct console *co, const char *s, unsigned int count)
  	int locked = 1;
  
  	if (oops_in_progress)
@@ -4058,7 +4064,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	/* first save CR2 and then disable interrupts */
  	cr2 = old_cr2 = readb(sport->port.membase + UARTCR2);
-@@ -2515,7 +2515,7 @@ lpuart_console_write(struct console *co, const char *s, unsigned int count)
+@@ -2524,7 +2524,7 @@ lpuart_console_write(struct console *co, const char *s, unsigned int count)
  	writeb(old_cr2, sport->port.membase + UARTCR2);
  
  	if (locked)
@@ -4067,7 +4073,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  }
  
  static void
-@@ -2527,9 +2527,9 @@ lpuart32_console_write(struct console *co, const char *s, unsigned int count)
+@@ -2536,9 +2536,9 @@ lpuart32_console_write(struct console *co, const char *s, unsigned int count)
  	int locked = 1;
  
  	if (oops_in_progress)
@@ -4079,7 +4085,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  	/* first save CR2 and then disable interrupts */
  	cr = old_cr = lpuart32_read(&sport->port, UARTCTRL);
-@@ -2545,7 +2545,7 @@ lpuart32_console_write(struct console *co, const char *s, unsigned int count)
+@@ -2554,7 +2554,7 @@ lpuart32_console_write(struct console *co, const char *s, unsigned int count)
  	lpuart32_write(&sport->port, old_cr, UARTCTRL);
  
  	if (locked)
@@ -4088,7 +4094,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  }
  
  /*
-@@ -3110,7 +3110,7 @@ static int lpuart_suspend(struct device *dev)
+@@ -3119,7 +3119,7 @@ static int lpuart_suspend(struct device *dev)
  	uart_suspend_port(&lpuart_reg, &sport->port);
  
  	if (lpuart_uport_is_active(sport)) {
@@ -4097,7 +4103,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  		if (lpuart_is_32(sport)) {
  			/* disable Rx/Tx and interrupts */
  			temp = lpuart32_read(&sport->port, UARTCTRL);
-@@ -3122,7 +3122,7 @@ static int lpuart_suspend(struct device *dev)
+@@ -3131,7 +3131,7 @@ static int lpuart_suspend(struct device *dev)
  			temp &= ~(UARTCR2_TE | UARTCR2_TIE | UARTCR2_TCIE);
  			writeb(temp, sport->port.membase + UARTCR2);
  		}
@@ -4106,7 +4112,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  
  		if (sport->lpuart_dma_rx_use) {
  			/*
-@@ -3135,7 +3135,7 @@ static int lpuart_suspend(struct device *dev)
+@@ -3144,7 +3144,7 @@ static int lpuart_suspend(struct device *dev)
  			lpuart_dma_rx_free(&sport->port);
  
  			/* Disable Rx DMA to use UART port as wakeup source */
@@ -4115,7 +4121,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  			if (lpuart_is_32(sport)) {
  				temp = lpuart32_read(&sport->port, UARTBAUD);
  				lpuart32_write(&sport->port, temp & ~UARTBAUD_RDMAE,
-@@ -3144,11 +3144,11 @@ static int lpuart_suspend(struct device *dev)
+@@ -3153,11 +3153,11 @@ static int lpuart_suspend(struct device *dev)
  				writeb(readb(sport->port.membase + UARTCR5) &
  				       ~UARTCR5_RDMAS, sport->port.membase + UARTCR5);
  			}
@@ -4129,7 +4135,7 @@ index 70fa1e6aebe1..686bfb2cfe65 100644
  			if (lpuart_is_32(sport)) {
  				temp = lpuart32_read(&sport->port, UARTBAUD);
  				temp &= ~UARTBAUD_TDMAE;
-@@ -3158,7 +3158,7 @@ static int lpuart_suspend(struct device *dev)
+@@ -3167,7 +3167,7 @@ static int lpuart_suspend(struct device *dev)
  				temp &= ~UARTCR5_TDMAS;
  				writeb(temp, sport->port.membase + UARTCR5);
  			}
@@ -6004,10 +6010,10 @@ index e99970a9437f..919f5e5aa0f1 100644
  	local_irq_restore(flags);
  }
 diff --git a/drivers/tty/serial/pch_uart.c b/drivers/tty/serial/pch_uart.c
-index 7b868ea48ad5..b6fda8cc992a 100644
+index 25e88eb32a48..a11220ae167f 100644
 --- a/drivers/tty/serial/pch_uart.c
 +++ b/drivers/tty/serial/pch_uart.c
-@@ -1347,7 +1347,7 @@ static void pch_uart_set_termios(struct uart_port *port,
+@@ -1354,7 +1354,7 @@ static void pch_uart_set_termios(struct uart_port *port,
  	baud = uart_get_baud_rate(port, termios, old, 0, port->uartclk / 16);
  
  	spin_lock_irqsave(&priv->lock, flags);
@@ -6016,7 +6022,7 @@ index 7b868ea48ad5..b6fda8cc992a 100644
  
  	uart_update_timeout(port, termios->c_cflag, baud);
  	rtn = pch_uart_hal_set_line(priv, baud, parity, bits, stb);
-@@ -1360,7 +1360,7 @@ static void pch_uart_set_termios(struct uart_port *port,
+@@ -1367,7 +1367,7 @@ static void pch_uart_set_termios(struct uart_port *port,
  		tty_termios_encode_baud_rate(termios, baud, baud);
  
  out:
@@ -6025,7 +6031,7 @@ index 7b868ea48ad5..b6fda8cc992a 100644
  	spin_unlock_irqrestore(&priv->lock, flags);
  }
  
-@@ -1581,10 +1581,10 @@ pch_console_write(struct console *co, const char *s, unsigned int count)
+@@ -1588,10 +1588,10 @@ pch_console_write(struct console *co, const char *s, unsigned int count)
  		port_locked = 0;
  	} else if (oops_in_progress) {
  		priv_locked = spin_trylock(&priv->lock);
@@ -6038,7 +6044,7 @@ index 7b868ea48ad5..b6fda8cc992a 100644
  	}
  
  	/*
-@@ -1604,7 +1604,7 @@ pch_console_write(struct console *co, const char *s, unsigned int count)
+@@ -1611,7 +1611,7 @@ pch_console_write(struct console *co, const char *s, unsigned int count)
  	iowrite8(ier, priv->membase + UART_IER);
  
  	if (port_locked)
@@ -6440,7 +6446,7 @@ index 73c60f5ea027..46e70e155aab 100644
  	clk_disable(up->clk);
  
 diff --git a/drivers/tty/serial/qcom_geni_serial.c b/drivers/tty/serial/qcom_geni_serial.c
-index f820a09cb5c3..a7db08431ef3 100644
+index ab5b4c6c29de..a10654495484 100644
 --- a/drivers/tty/serial/qcom_geni_serial.c
 +++ b/drivers/tty/serial/qcom_geni_serial.c
 @@ -492,9 +492,9 @@ static void qcom_geni_serial_console_write(struct console *co, const char *s,
@@ -6464,7 +6470,7 @@ index f820a09cb5c3..a7db08431ef3 100644
  }
  
  static void handle_rx_console(struct uart_port *uport, u32 bytes, bool drop)
-@@ -992,7 +992,7 @@ static irqreturn_t qcom_geni_serial_isr(int isr, void *dev)
+@@ -1002,7 +1002,7 @@ static irqreturn_t qcom_geni_serial_isr(int isr, void *dev)
  	if (uport->suspended)
  		return IRQ_NONE;
  
@@ -6774,214 +6780,45 @@ index ad011f1e2f4d..be7bcd75d9f4 100644
  
  static const char *sa1100_type(struct uart_port *port)
 diff --git a/drivers/tty/serial/samsung_tty.c b/drivers/tty/serial/samsung_tty.c
-index 5a4d88e13471..a82b65155f6e 100644
+index a9bafe94a1f1..3a6a66c326a6 100644
 --- a/drivers/tty/serial/samsung_tty.c
 +++ b/drivers/tty/serial/samsung_tty.c
-@@ -248,7 +248,7 @@ static void s3c24xx_serial_rx_enable(struct uart_port *port)
- 	unsigned int ucon, ufcon;
+@@ -245,8 +245,11 @@ static void s3c24xx_serial_rx_enable(struct uart_port *port)
+ {
+ 	struct s3c24xx_uart_port *ourport = to_ourport(port);
  	int count = 10000;
++	unsigned long flags;
+ 	u32 ucon, ufcon;
  
--	spin_lock_irqsave(&port->lock, flags);
 +	uart_port_lock_irqsave(port, &flags);
- 
++
  	while (--count && !s3c24xx_serial_txempty_nofifo(port))
  		udelay(100);
-@@ -262,7 +262,7 @@ static void s3c24xx_serial_rx_enable(struct uart_port *port)
+ 
+@@ -259,18 +262,23 @@ static void s3c24xx_serial_rx_enable(struct uart_port *port)
  	wr_regl(port, S3C2410_UCON, ucon);
  
  	ourport->rx_enabled = 1;
--	spin_unlock_irqrestore(&port->lock, flags);
 +	uart_port_unlock_irqrestore(port, flags);
  }
  
  static void s3c24xx_serial_rx_disable(struct uart_port *port)
-@@ -271,14 +271,14 @@ static void s3c24xx_serial_rx_disable(struct uart_port *port)
- 	unsigned long flags;
- 	unsigned int ucon;
+ {
+ 	struct s3c24xx_uart_port *ourport = to_ourport(port);
++	unsigned long flags;
+ 	u32 ucon;
  
--	spin_lock_irqsave(&port->lock, flags);
 +	uart_port_lock_irqsave(port, &flags);
- 
++
  	ucon = rd_regl(port, S3C2410_UCON);
  	ucon &= ~S3C2410_UCON_RXIRQMODE;
  	wr_regl(port, S3C2410_UCON, ucon);
  
  	ourport->rx_enabled = 0;
--	spin_unlock_irqrestore(&port->lock, flags);
 +	uart_port_unlock_irqrestore(port, flags);
  }
  
  static void s3c24xx_serial_stop_tx(struct uart_port *port)
-@@ -344,7 +344,7 @@ static void s3c24xx_serial_tx_dma_complete(void *args)
- 				dma->tx_transfer_addr, dma->tx_size,
- 				DMA_TO_DEVICE);
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 
- 	uart_xmit_advance(port, count);
- 	ourport->tx_in_progress = 0;
-@@ -353,7 +353,7 @@ static void s3c24xx_serial_tx_dma_complete(void *args)
- 		uart_write_wakeup(port);
- 
- 	s3c24xx_serial_start_next_tx(ourport);
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static void enable_tx_dma(struct s3c24xx_uart_port *ourport)
-@@ -619,7 +619,7 @@ static void s3c24xx_serial_rx_dma_complete(void *args)
- 	received  = dma->rx_bytes_requested - state.residue;
- 	async_tx_ack(dma->rx_desc);
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 
- 	if (received)
- 		s3c24xx_uart_copy_rx_to_tty(ourport, t, received);
-@@ -631,7 +631,7 @@ static void s3c24xx_serial_rx_dma_complete(void *args)
- 
- 	s3c64xx_start_rx_dma(ourport);
- 
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static void s3c64xx_start_rx_dma(struct s3c24xx_uart_port *ourport)
-@@ -722,7 +722,7 @@ static irqreturn_t s3c24xx_serial_rx_chars_dma(void *dev_id)
- 	utrstat = rd_regl(port, S3C2410_UTRSTAT);
- 	rd_regl(port, S3C2410_UFSTAT);
- 
--	spin_lock(&port->lock);
-+	uart_port_lock(port);
- 
- 	if (!(utrstat & S3C2410_UTRSTAT_TIMEOUT)) {
- 		s3c64xx_start_rx_dma(ourport);
-@@ -751,7 +751,7 @@ static irqreturn_t s3c24xx_serial_rx_chars_dma(void *dev_id)
- 	wr_regl(port, S3C2410_UTRSTAT, S3C2410_UTRSTAT_TIMEOUT);
- 
- finish:
--	spin_unlock(&port->lock);
-+	uart_port_unlock(port);
- 
- 	return IRQ_HANDLED;
- }
-@@ -849,9 +849,9 @@ static irqreturn_t s3c24xx_serial_rx_chars_pio(void *dev_id)
- 	struct s3c24xx_uart_port *ourport = dev_id;
- 	struct uart_port *port = &ourport->port;
- 
--	spin_lock(&port->lock);
-+	uart_port_lock(port);
- 	s3c24xx_serial_rx_drain_fifo(ourport);
--	spin_unlock(&port->lock);
-+	uart_port_unlock(port);
- 
- 	return IRQ_HANDLED;
- }
-@@ -932,11 +932,11 @@ static irqreturn_t s3c24xx_serial_tx_irq(int irq, void *id)
- 	struct s3c24xx_uart_port *ourport = id;
- 	struct uart_port *port = &ourport->port;
- 
--	spin_lock(&port->lock);
-+	uart_port_lock(port);
- 
- 	s3c24xx_serial_tx_chars(ourport);
- 
--	spin_unlock(&port->lock);
-+	uart_port_unlock(port);
- 	return IRQ_HANDLED;
- }
- 
-@@ -1032,7 +1032,7 @@ static void s3c24xx_serial_break_ctl(struct uart_port *port, int break_state)
- 	unsigned long flags;
- 	unsigned int ucon;
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 
- 	ucon = rd_regl(port, S3C2410_UCON);
- 
-@@ -1043,7 +1043,7 @@ static void s3c24xx_serial_break_ctl(struct uart_port *port, int break_state)
- 
- 	wr_regl(port, S3C2410_UCON, ucon);
- 
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static int s3c24xx_serial_request_dma(struct s3c24xx_uart_port *p)
-@@ -1302,7 +1302,7 @@ static int s3c64xx_serial_startup(struct uart_port *port)
- 	ourport->rx_enabled = 1;
- 	ourport->tx_enabled = 0;
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 
- 	ufcon = rd_regl(port, S3C2410_UFCON);
- 	ufcon |= S3C2410_UFCON_RESETRX | S5PV210_UFCON_RXTRIG8;
-@@ -1312,7 +1312,7 @@ static int s3c64xx_serial_startup(struct uart_port *port)
- 
- 	enable_rx_pio(ourport);
- 
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- 
- 	/* Enable Rx Interrupt */
- 	s3c24xx_clear_bit(port, S3C64XX_UINTM_RXD, S3C64XX_UINTM);
-@@ -1340,7 +1340,7 @@ static int apple_s5l_serial_startup(struct uart_port *port)
- 	ourport->rx_enabled = 1;
- 	ourport->tx_enabled = 0;
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 
- 	ufcon = rd_regl(port, S3C2410_UFCON);
- 	ufcon |= S3C2410_UFCON_RESETRX | S5PV210_UFCON_RXTRIG8;
-@@ -1350,7 +1350,7 @@ static int apple_s5l_serial_startup(struct uart_port *port)
- 
- 	enable_rx_pio(ourport);
- 
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- 
- 	/* Enable Rx Interrupt */
- 	s3c24xx_set_bit(port, APPLE_S5L_UCON_RXTHRESH_ENA, S3C2410_UCON);
-@@ -1625,7 +1625,7 @@ static void s3c24xx_serial_set_termios(struct uart_port *port,
- 		ulcon |= S3C2410_LCON_PNONE;
- 	}
- 
--	spin_lock_irqsave(&port->lock, flags);
-+	uart_port_lock_irqsave(port, &flags);
- 
- 	dev_dbg(port->dev,
- 		"setting ulcon to %08x, brddiv to %d, udivslot %08x\n",
-@@ -1683,7 +1683,7 @@ static void s3c24xx_serial_set_termios(struct uart_port *port,
- 	if ((termios->c_cflag & CREAD) == 0)
- 		port->ignore_status_mask |= RXSTAT_DUMMY_READ;
- 
--	spin_unlock_irqrestore(&port->lock, flags);
-+	uart_port_unlock_irqrestore(port, flags);
- }
- 
- static const char *s3c24xx_serial_type(struct uart_port *port)
-@@ -2375,14 +2375,14 @@ s3c24xx_serial_console_write(struct console *co, const char *s,
- 	if (cons_uart->sysrq)
- 		locked = false;
- 	else if (oops_in_progress)
--		locked = spin_trylock_irqsave(&cons_uart->lock, flags);
-+		locked = uart_port_trylock_irqsave(cons_uart, &flags);
- 	else
--		spin_lock_irqsave(&cons_uart->lock, flags);
-+		uart_port_lock_irqsave(cons_uart, &flags);
- 
- 	uart_console_write(cons_uart, s, count, s3c24xx_serial_console_putchar);
- 
- 	if (locked)
--		spin_unlock_irqrestore(&cons_uart->lock, flags);
-+		uart_port_unlock_irqrestore(cons_uart, flags);
- }
- 
- /* Shouldn't be __init, as it can be instantiated from other module */
 diff --git a/drivers/tty/serial/sb1250-duart.c b/drivers/tty/serial/sb1250-duart.c
 index f3cd69346482..dbec29d9a6c3 100644
 --- a/drivers/tty/serial/sb1250-duart.c
@@ -7627,7 +7464,7 @@ index be08fb6f749c..eaa980722455 100644
  
  static void
 diff --git a/drivers/tty/serial/sh-sci.c b/drivers/tty/serial/sh-sci.c
-index dab5658d9d54..4e4ec569394f 100644
+index 4becdd1b90f9..f04692259f2a 100644
 --- a/drivers/tty/serial/sh-sci.c
 +++ b/drivers/tty/serial/sh-sci.c
 @@ -1227,7 +1227,7 @@ static void sci_dma_tx_complete(void *arg)
@@ -10549,7 +10386,7 @@ index 9419a79e8833..897b03afb7d1 100644
  
  /*
 diff --git a/kernel/locking/rtmutex.c b/kernel/locking/rtmutex.c
-index def1f8fbc85c..8b4f80fc5423 100644
+index 6df2f674712a..5468b2a8e8e5 100644
 --- a/kernel/locking/rtmutex.c
 +++ b/kernel/locking/rtmutex.c
 @@ -218,6 +218,11 @@ static __always_inline bool rt_mutex_cmpxchg_acquire(struct rt_mutex_base *lock,
@@ -10585,7 +10422,7 @@ index def1f8fbc85c..8b4f80fc5423 100644
  static __always_inline bool rt_mutex_cmpxchg_release(struct rt_mutex_base *lock,
  						     struct task_struct *old,
  						     struct task_struct *new)
-@@ -1616,7 +1635,7 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
+@@ -1619,7 +1638,7 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
  		raw_spin_unlock_irq(&lock->wait_lock);
  
  		if (!owner || !rtmutex_spin_on_owner(lock, waiter, owner))
@@ -10594,7 +10431,7 @@ index def1f8fbc85c..8b4f80fc5423 100644
  
  		raw_spin_lock_irq(&lock->wait_lock);
  		set_current_state(state);
-@@ -1646,7 +1665,7 @@ static void __sched rt_mutex_handle_deadlock(int res, int detect_deadlock,
+@@ -1649,7 +1668,7 @@ static void __sched rt_mutex_handle_deadlock(int res, int detect_deadlock,
  
  	while (1) {
  		set_current_state(TASK_INTERRUPTIBLE);
@@ -10603,7 +10440,7 @@ index def1f8fbc85c..8b4f80fc5423 100644
  	}
  }
  
-@@ -1741,6 +1760,15 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
+@@ -1744,6 +1763,15 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
  	unsigned long flags;
  	int ret;
  
@@ -10619,7 +10456,7 @@ index def1f8fbc85c..8b4f80fc5423 100644
  	/*
  	 * Technically we could use raw_spin_[un]lock_irq() here, but this can
  	 * be called in early boot if the cmpxchg() fast path is disabled
-@@ -1752,6 +1780,7 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
+@@ -1755,6 +1783,7 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
  	raw_spin_lock_irqsave(&lock->wait_lock, flags);
  	ret = __rt_mutex_slowlock_locked(lock, ww_ctx, state);
  	raw_spin_unlock_irqrestore(&lock->wait_lock, flags);
@@ -10627,7 +10464,7 @@ index def1f8fbc85c..8b4f80fc5423 100644
  
  	return ret;
  }
-@@ -1759,7 +1788,9 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
+@@ -1762,7 +1791,9 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
  static __always_inline int __rt_mutex_lock(struct rt_mutex_base *lock,
  					   unsigned int state)
  {
@@ -14968,10 +14805,10 @@ index 65ff0254659a..27bc11e69003 100644
  
  extern struct rt_bandwidth def_rt_bandwidth;
 diff --git a/kernel/signal.c b/kernel/signal.c
-index 49c8c24b444d..107953e8a90c 100644
+index 3a484ea4bab6..22d4b5894aab 100644
 --- a/kernel/signal.c
 +++ b/kernel/signal.c
-@@ -2331,15 +2331,35 @@ static int ptrace_stop(int exit_code, int why, unsigned long message,
+@@ -2332,15 +2332,35 @@ static int ptrace_stop(int exit_code, int why, unsigned long message,
  		do_notify_parent_cldstop(current, false, why);
  
  	/*
@@ -15211,7 +15048,7 @@ index 4a2aeaa85af3..ad3cad537541 100644
  
  /*
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index 6b35666a4e0b..7ff555a51a0b 100644
+index f57baf67726d..5b4cf9745982 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
 @@ -2709,6 +2709,8 @@ unsigned int tracing_gen_ctx_irq_test(unsigned int irqs_status)
@@ -15325,10 +15162,10 @@ index 405b448bd91f..c6d550b8ad2e 100644
  
  		init_gro_hash(&sd->backlog);
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 8b05866e93b1..21f9d5aaa0d6 100644
+index c5e2ae6d0406..3a006d57c679 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -6875,8 +6875,13 @@ nodefer:	__kfree_skb(skb);
+@@ -6889,8 +6889,13 @@ nodefer:	__kfree_skb(skb);
  	/* Make sure to trigger NET_RX_SOFTIRQ on the remote CPU
  	 * if we are unlucky enough (this seems very unlikely).
  	 */
@@ -15344,10 +15181,10 @@ index 8b05866e93b1..21f9d5aaa0d6 100644
  
  static void skb_splice_csum_page(struct sk_buff *skb, struct page *page,
 diff --git a/net/ipv6/route.c b/net/ipv6/route.c
-index c5b71baf95e7..abb41bd726ed 100644
+index 6d80e17c04c0..f160026a4ba4 100644
 --- a/net/ipv6/route.c
 +++ b/net/ipv6/route.c
-@@ -1472,7 +1472,18 @@ static struct rt6_info *rt6_make_pcpu_route(struct net *net,
+@@ -1475,7 +1475,18 @@ static struct rt6_info *rt6_make_pcpu_route(struct net *net,
  
  	p = this_cpu_ptr(res->nh->rt6i_pcpu);
  	prev = cmpxchg(p, NULL, pcpu_rt);

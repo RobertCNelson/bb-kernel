@@ -113,12 +113,6 @@ rt () {
 			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 			rm -f patch-${rt_patch}.patch.xz
 			rm -f localversion-rt
-			rm -f net/core/skbuff.c.orig
-			rm -f include/linux/sched.h.orig
-			rm -f kernel/locking/rtmutex.c.orig
-			rm -f drivers/gpu/drm/i915/gt/intel_reset.c.orig
-			rm -f kernel/futex/requeue.c.orig
-			rm -f kernel/time/hrtimer.c.orig
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
@@ -559,12 +553,13 @@ backports () {
 
 	backport_tag="rpi-6.6.y"
 
-	subsystem="edt-ft5x06"
+	subsystem="rpi-backports"
 	#regenerate="enable"
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_rpibackports
 
 		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
+		cp -v ~/linux-rpi/drivers/regulator/rpi-panel-v2-regulator.c ./drivers/regulator/
 
 		post_rpibackports
 	else
