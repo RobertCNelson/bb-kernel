@@ -1,15 +1,15 @@
-From 096c52a11d89a2d820976f5e4ebe031e188945b5 Mon Sep 17 00:00:00 2001
+From 2d931ebe9ddbb4c4f4fa93120b85545a648de043 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Wed, 10 Jun 2026 09:48:43 -0500
+Date: Tue, 21 Jul 2026 11:53:19 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.12.89-rt18.patch.xz
+patch-6.12.96-rt19.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
  Documentation/trace/ftrace.rst                |   7 +-
  arch/arm/Kconfig                              |   6 +-
- arch/arm/mm/fault.c                           |   6 +
+ arch/arm/mm/fault.c                           |   6 +-
  arch/arm/vfp/vfpmodule.c                      |  74 +++++---
  arch/powerpc/Kconfig                          |   3 +
  arch/powerpc/include/asm/stackprotector.h     |   7 +-
@@ -62,7 +62,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/time/timer.c                           |   2 +-
  kernel/trace/trace.c                          |   2 +
  kernel/trace/trace_output.c                   |  15 +-
- 55 files changed, 784 insertions(+), 158 deletions(-)
+ 55 files changed, 783 insertions(+), 159 deletions(-)
 
 diff --git a/Documentation/trace/ftrace.rst b/Documentation/trace/ftrace.rst
 index 4073ca48af4a..16892b844108 100644
@@ -126,29 +126,36 @@ index cc8beccc4e86..3ef700892940 100644
  	select HAVE_REGS_AND_STACK_ACCESS_API
  	select HAVE_RSEQ
 diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
-index ab01b51de559..cd030e2734e5 100644
+index 16b5a7d21480..dd78cbef87c8 100644
 --- a/arch/arm/mm/fault.c
 +++ b/arch/arm/mm/fault.c
-@@ -474,6 +474,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
- 	if (addr < TASK_SIZE)
- 		return do_page_fault(addr, fsr, regs);
+@@ -191,7 +191,8 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
  
-+	if (interrupts_enabled(regs))
-+		local_irq_enable();
-+
- 	if (user_mode(regs))
- 		goto bad_area;
- 
-@@ -544,6 +547,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
- static int
- do_sect_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
+ /*
+  * Something tried to access memory that isn't in our memory map..
+- * User mode accesses just cause a SIGSEGV
++ * User mode accesses just cause a SIGSEGV. Ensure interrupts are enabled
++ * for preempt RT.
+  */
+ static void
+ __do_user_fault(unsigned long addr, unsigned int fsr, unsigned int sig,
+@@ -199,6 +200,8 @@ __do_user_fault(unsigned long addr, unsigned int fsr, unsigned int sig,
  {
-+	if (interrupts_enabled(regs))
-+		local_irq_enable();
+ 	struct task_struct *tsk = current;
+ 
++	local_irq_enable();
 +
- 	do_bad_area(addr, fsr, regs);
- 	return 0;
- }
+ #ifdef CONFIG_DEBUG_USER
+ 	if (((user_debug & UDBG_SEGV) && (sig == SIGSEGV)) ||
+ 	    ((user_debug & UDBG_BUS)  && (sig == SIGBUS))) {
+@@ -269,6 +272,7 @@ do_kernel_address_page_fault(struct mm_struct *mm, unsigned long addr,
+ 		 * should not be faulting in kernel space, which includes the
+ 		 * vector/khelper page. Handle the branch predictor hardening
+ 		 * while interrupts are still disabled, then send a SIGSEGV.
++		 * Note that __do_user_fault() will enable interrupts.
+ 		 */
+ 		harden_branch_predictor();
+ 		__do_user_fault(addr, fsr, SIGSEGV, SEGV_MAPERR, regs);
 diff --git a/arch/arm/vfp/vfpmodule.c b/arch/arm/vfp/vfpmodule.c
 index b68efe643a12..d44867fc0c5e 100644
 --- a/arch/arm/vfp/vfpmodule.c
@@ -1739,27 +1746,27 @@ index 1bab21b4718f..8d3bee77cacc 100644
  	NULL
  };
 diff --git a/kernel/locking/rtmutex.c b/kernel/locking/rtmutex.c
-index 66f9fb25d4be..c483a0e264cf 100644
+index 9e99b9548e0a..5945a0bbe882 100644
 --- a/kernel/locking/rtmutex.c
 +++ b/kernel/locking/rtmutex.c
-@@ -1604,6 +1604,7 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
- 					   unsigned int state,
+@@ -1618,6 +1618,7 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
  					   struct hrtimer_sleeper *timeout,
- 					   struct rt_mutex_waiter *waiter)
+ 					   struct rt_mutex_waiter *waiter,
+ 					   struct wake_q_head *wake_q)
 +	__releases(&lock->wait_lock) __acquires(&lock->wait_lock)
  {
  	struct rt_mutex *rtm = container_of(lock, struct rt_mutex, rtmutex);
  	struct task_struct *owner;
-@@ -1808,6 +1809,7 @@ static __always_inline int __rt_mutex_lock(struct rt_mutex_base *lock,
-  * @lock:	The underlying RT mutex
+@@ -1837,6 +1838,7 @@ static __always_inline int __rt_mutex_lock(struct rt_mutex_base *lock,
   */
- static void __sched rtlock_slowlock_locked(struct rt_mutex_base *lock)
+ static void __sched rtlock_slowlock_locked(struct rt_mutex_base *lock,
+ 					   struct wake_q_head *wake_q)
 +	__releases(&lock->wait_lock) __acquires(&lock->wait_lock)
  {
  	struct rt_mutex_waiter waiter;
  	struct task_struct *owner;
 diff --git a/kernel/locking/spinlock_rt.c b/kernel/locking/spinlock_rt.c
-index 38e292454fcc..d1cf8b2b6dca 100644
+index 014143934e00..db1e11b45de6 100644
 --- a/kernel/locking/spinlock_rt.c
 +++ b/kernel/locking/spinlock_rt.c
 @@ -51,7 +51,7 @@ static __always_inline void __rt_spin_lock(spinlock_t *lock)
@@ -1780,7 +1787,7 @@ index 38e292454fcc..d1cf8b2b6dca 100644
  {
  	spin_release(&lock->dep_map, _RET_IP_);
  	migrate_enable();
-@@ -225,7 +225,7 @@ int __sched rt_write_trylock(rwlock_t *rwlock)
+@@ -226,7 +226,7 @@ int __sched rt_write_trylock(rwlock_t *rwlock)
  }
  EXPORT_SYMBOL(rt_write_trylock);
  
@@ -1789,7 +1796,7 @@ index 38e292454fcc..d1cf8b2b6dca 100644
  {
  	rtlock_might_resched();
  	rwlock_acquire_read(&rwlock->dep_map, 0, 0, _RET_IP_);
-@@ -235,7 +235,7 @@ void __sched rt_read_lock(rwlock_t *rwlock)
+@@ -236,7 +236,7 @@ void __sched rt_read_lock(rwlock_t *rwlock)
  }
  EXPORT_SYMBOL(rt_read_lock);
  
@@ -1798,7 +1805,7 @@ index 38e292454fcc..d1cf8b2b6dca 100644
  {
  	rtlock_might_resched();
  	rwlock_acquire(&rwlock->dep_map, 0, 0, _RET_IP_);
-@@ -246,7 +246,7 @@ void __sched rt_write_lock(rwlock_t *rwlock)
+@@ -247,7 +247,7 @@ void __sched rt_write_lock(rwlock_t *rwlock)
  EXPORT_SYMBOL(rt_write_lock);
  
  #ifdef CONFIG_DEBUG_LOCK_ALLOC
@@ -1807,7 +1814,7 @@ index 38e292454fcc..d1cf8b2b6dca 100644
  {
  	rtlock_might_resched();
  	rwlock_acquire(&rwlock->dep_map, subclass, 0, _RET_IP_);
-@@ -257,7 +257,7 @@ void __sched rt_write_lock_nested(rwlock_t *rwlock, int subclass)
+@@ -258,7 +258,7 @@ void __sched rt_write_lock_nested(rwlock_t *rwlock, int subclass)
  EXPORT_SYMBOL(rt_write_lock_nested);
  #endif
  
@@ -1816,7 +1823,7 @@ index 38e292454fcc..d1cf8b2b6dca 100644
  {
  	rwlock_release(&rwlock->dep_map, _RET_IP_);
  	migrate_enable();
-@@ -266,7 +266,7 @@ void __sched rt_read_unlock(rwlock_t *rwlock)
+@@ -267,7 +267,7 @@ void __sched rt_read_unlock(rwlock_t *rwlock)
  }
  EXPORT_SYMBOL(rt_read_unlock);
  
@@ -1843,7 +1850,7 @@ index bb75dbf5c800..609687fd742d 100644
  
  	/* Don't allow time recalculation while creating a new task. */
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 1b1ddd24cb22..b8c64564718e 100644
+index 49dbb52842c9..312d9e2b1bc0 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -944,10 +944,9 @@ static inline void hrtick_rq_init(struct rq *rq)
@@ -1963,7 +1970,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
  		smp_send_reschedule(cpu);
  	else
  		trace_sched_wake_idle_without_ipi(cpu);
-@@ -5620,6 +5666,10 @@ void sched_tick(void)
+@@ -5626,6 +5672,10 @@ void sched_tick(void)
  	update_rq_clock(rq);
  	hw_pressure = arch_scale_hw_pressure(cpu_of(rq));
  	update_hw_load_avg(rq_clock_task(rq), rq, hw_pressure);
@@ -1974,7 +1981,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
  	curr->sched_class->task_tick(rq, curr, 0);
  	if (sched_feat(LATENCY_WARN))
  		resched_latency = cpu_resched_latency(rq);
-@@ -7383,6 +7433,8 @@ EXPORT_SYMBOL(__cond_resched_rwlock_write);
+@@ -7387,6 +7437,8 @@ EXPORT_SYMBOL(__cond_resched_rwlock_write);
   *   preempt_schedule           <- NOP
   *   preempt_schedule_notrace   <- NOP
   *   irqentry_exit_cond_resched <- NOP
@@ -1983,7 +1990,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
   *
   * VOLUNTARY:
   *   cond_resched               <- __cond_resched
-@@ -7390,6 +7442,8 @@ EXPORT_SYMBOL(__cond_resched_rwlock_write);
+@@ -7394,6 +7446,8 @@ EXPORT_SYMBOL(__cond_resched_rwlock_write);
   *   preempt_schedule           <- NOP
   *   preempt_schedule_notrace   <- NOP
   *   irqentry_exit_cond_resched <- NOP
@@ -1992,7 +1999,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
   *
   * FULL:
   *   cond_resched               <- RET0
-@@ -7397,6 +7451,26 @@ EXPORT_SYMBOL(__cond_resched_rwlock_write);
+@@ -7401,6 +7455,26 @@ EXPORT_SYMBOL(__cond_resched_rwlock_write);
   *   preempt_schedule           <- preempt_schedule
   *   preempt_schedule_notrace   <- preempt_schedule_notrace
   *   irqentry_exit_cond_resched <- irqentry_exit_cond_resched
@@ -2019,7 +2026,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
   */
  
  enum {
-@@ -7404,30 +7478,45 @@ enum {
+@@ -7408,30 +7482,45 @@ enum {
  	preempt_dynamic_none,
  	preempt_dynamic_voluntary,
  	preempt_dynamic_full,
@@ -2067,7 +2074,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
  #else
  #error "Unsupported PREEMPT_DYNAMIC mechanism"
  #endif
-@@ -7447,6 +7536,8 @@ static void __sched_dynamic_update(int mode)
+@@ -7451,6 +7540,8 @@ static void __sched_dynamic_update(int mode)
  	preempt_dynamic_enable(preempt_schedule);
  	preempt_dynamic_enable(preempt_schedule_notrace);
  	preempt_dynamic_enable(irqentry_exit_cond_resched);
@@ -2076,7 +2083,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
  
  	switch (mode) {
  	case preempt_dynamic_none:
-@@ -7456,6 +7547,8 @@ static void __sched_dynamic_update(int mode)
+@@ -7460,6 +7551,8 @@ static void __sched_dynamic_update(int mode)
  		preempt_dynamic_disable(preempt_schedule);
  		preempt_dynamic_disable(preempt_schedule_notrace);
  		preempt_dynamic_disable(irqentry_exit_cond_resched);
@@ -2085,7 +2092,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
  		if (mode != preempt_dynamic_mode)
  			pr_info("Dynamic Preempt: none\n");
  		break;
-@@ -7467,6 +7560,8 @@ static void __sched_dynamic_update(int mode)
+@@ -7471,6 +7564,8 @@ static void __sched_dynamic_update(int mode)
  		preempt_dynamic_disable(preempt_schedule);
  		preempt_dynamic_disable(preempt_schedule_notrace);
  		preempt_dynamic_disable(irqentry_exit_cond_resched);
@@ -2094,7 +2101,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
  		if (mode != preempt_dynamic_mode)
  			pr_info("Dynamic Preempt: voluntary\n");
  		break;
-@@ -7478,9 +7573,37 @@ static void __sched_dynamic_update(int mode)
+@@ -7482,9 +7577,37 @@ static void __sched_dynamic_update(int mode)
  		preempt_dynamic_enable(preempt_schedule);
  		preempt_dynamic_enable(preempt_schedule_notrace);
  		preempt_dynamic_enable(irqentry_exit_cond_resched);
@@ -2132,7 +2139,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
  	}
  
  	preempt_dynamic_mode = mode;
-@@ -7543,6 +7666,10 @@ static void __init preempt_dynamic_init(void)
+@@ -7547,6 +7670,10 @@ static void __init preempt_dynamic_init(void)
  			sched_dynamic_update(preempt_dynamic_none);
  		} else if (IS_ENABLED(CONFIG_PREEMPT_VOLUNTARY)) {
  			sched_dynamic_update(preempt_dynamic_voluntary);
@@ -2143,7 +2150,7 @@ index 1b1ddd24cb22..b8c64564718e 100644
  		} else {
  			/* Default static call setting, nothing to do */
  			WARN_ON_ONCE(!IS_ENABLED(CONFIG_PREEMPT));
-@@ -7563,6 +7690,8 @@ static void __init preempt_dynamic_init(void)
+@@ -7567,6 +7694,8 @@ static void __init preempt_dynamic_init(void)
  PREEMPT_MODEL_ACCESSOR(none);
  PREEMPT_MODEL_ACCESSOR(voluntary);
  PREEMPT_MODEL_ACCESSOR(full);
