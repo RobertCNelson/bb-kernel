@@ -8,7 +8,7 @@
 #https://packages.debian.org/source/sid/linux
 #
 trixie_kernel_branch="6.12"
-trixie_kernel_tag="6.12.95-1"
+trixie_kernel_tag="6.12.96-1"
 #
 forky_kernel_branch="7.1"
 forky_kernel_tag="7.1.3-1"
