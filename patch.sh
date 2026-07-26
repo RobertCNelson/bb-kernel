@@ -309,6 +309,7 @@ beagleboard_dtbs () {
 		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
 		device="BBORG_RELAY-00A2" ; arm_dtbo_makefile_append
 		device="BB-SPIDEV0-00A0" ; arm_dtbo_makefile_append
+		device="BB-SPIDEV1-00A0-CS1" ; arm_dtbo_makefile_append
 		device="BB-SPIDEV1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
@@ -328,6 +329,7 @@ beagleboard_dtbs () {
 
 		#regenerate_arm64_dtbo_list
 
+		device="k3-am6232-pocketbeagle2-gamepup-a4" ; k3_dtbo_makefile_append
 		device="k3-am6232-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
 		device="k3-am625-beagleplay-bcfserial-no-firmware" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-ardupilot-cape" ; k3_dtbo_makefile_append
