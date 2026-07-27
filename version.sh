@@ -64,11 +64,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.12
-KERNEL_TAG=${KERNEL_REL}.96
+KERNEL_TAG=${KERNEL_REL}.98
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.12/
 kernel_rt=".96-rt19"
 #Kernel Build
-BUILD=${build_prefix}64
+BUILD=${build_prefix}64.1
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
