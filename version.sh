@@ -68,7 +68,7 @@ KERNEL_TAG=${KERNEL_REL}.177
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.1/
 kernel_rt=".177-rt65"
 #Kernel Build
-BUILD=${build_prefix}50.1
+BUILD=${build_prefix}51
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
