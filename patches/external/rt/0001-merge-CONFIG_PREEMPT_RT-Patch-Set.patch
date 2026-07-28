@@ -1,9 +1,9 @@
-From 922d6fb0f5e2bb10eeba229122d510b848cec6e3 Mon Sep 17 00:00:00 2001
+From 99dd8165fb13aea4e28eb58f81e51ef519ce1e5a Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 15 May 2026 19:15:44 -0500
+Date: Tue, 28 Jul 2026 13:58:05 -0500
 Subject: [PATCH] merge: CONFIG_PREEMPT_RT Patch Set
 
-patch-6.1.167-rt62.patch.xz
+patch-6.1.177-rt65.patch.xz
 
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
@@ -12,7 +12,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/arm/kernel/asm-offsets.c                 |   1 +
  arch/arm/kernel/entry-armv.S                  |  19 +-
  arch/arm/kernel/signal.c                      |   3 +-
- arch/arm/mm/fault.c                           |   6 +
+ arch/arm/mm/fault.c                           |   5 +
  arch/arm64/Kconfig                            |   2 +
  arch/arm64/include/asm/preempt.h              |  25 +-
  arch/arm64/include/asm/thread_info.h          |   8 +-
@@ -28,6 +28,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  arch/x86/Kconfig                              |   2 +
  arch/x86/include/asm/preempt.h                |  33 +-
  arch/x86/include/asm/thread_info.h            |   5 +
+ arch/x86/kvm/vmx/vmx_ops.h                    |   5 +
  drivers/block/zram/zram_drv.c                 |  36 +
  drivers/block/zram/zram_drv.h                 |   3 +
  drivers/char/tpm/tpm_tis.c                    |  29 +-
@@ -123,8 +124,7 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  include/linux/entry-common.h                  |   8 +-
  include/linux/interrupt.h                     |  29 +
  include/linux/io-mapping.h                    |  20 +-
- include/linux/lockdep.h                       |  15 +-
- include/linux/lockdep_types.h                 |   1 +
+ include/linux/lockdep.h                       |   1 -
  include/linux/netdevice.h                     |   4 +
  include/linux/preempt.h                       |  54 +-
  include/linux/printk.h                        |  15 +
@@ -140,7 +140,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/entry/common.c                         |   4 +-
  kernel/hung_task.c                            |  11 +-
  kernel/ksysfs.c                               |  12 +
- kernel/locking/lockdep.c                      |  28 +-
  kernel/locking/rwbase_rt.c                    |   9 -
  kernel/panic.c                                |  10 +-
  kernel/printk/internal.h                      |   2 +
@@ -163,7 +162,6 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  kernel/trace/trace_output.c                   |  18 +-
  kernel/watchdog.c                             |   4 +
  kernel/watchdog_hld.c                         |   4 +
- lib/debugobjects.c                            |  15 +-
  mm/page_alloc.c                               |  15 +-
  net/8021q/vlan_dev.c                          |   4 +-
  net/bridge/br_multicast.c                     |   4 +-
@@ -183,7 +181,8 @@ Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
  net/netfilter/nf_tables_api.c                 |   4 +-
  net/openvswitch/datapath.c                    |   4 +-
  net/openvswitch/flow_table.c                  |   9 +-
- 176 files changed, 2416 insertions(+), 668 deletions(-)
+ tools/lib/bpf/libbpf.c                        |   2 +-
+ 175 files changed, 2372 insertions(+), 660 deletions(-)
 
 diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index f0352e5675dd..0563dd25d67e 100644
@@ -275,7 +274,7 @@ index 820bc05685ba..274096fae415 100644
    DEFINE(TI_CPU_DOMAIN,		offsetof(struct thread_info, cpu_domain));
    DEFINE(TI_CPU_SAVE,		offsetof(struct thread_info, cpu_context));
 diff --git a/arch/arm/kernel/entry-armv.S b/arch/arm/kernel/entry-armv.S
-index 2ea37314e8a8..301f18636fc6 100644
+index a76a8852c668..4633ae2ef7af 100644
 --- a/arch/arm/kernel/entry-armv.S
 +++ b/arch/arm/kernel/entry-armv.S
 @@ -223,11 +223,18 @@ __irq_svc:
@@ -330,10 +329,10 @@ index e07f359254c3..b50a3248e79f 100644
  		} else {
  			if (unlikely(!user_mode(regs)))
 diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
-index 16a7765511f8..dfe21371d492 100644
+index d0681285dbda..475696e5b9a2 100644
 --- a/arch/arm/mm/fault.c
 +++ b/arch/arm/mm/fault.c
-@@ -407,6 +407,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
+@@ -447,6 +447,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
  	if (addr < TASK_SIZE)
  		return do_page_fault(addr, fsr, regs);
  
@@ -343,18 +342,17 @@ index 16a7765511f8..dfe21371d492 100644
  	if (user_mode(regs))
  		goto bad_area;
  
-@@ -477,6 +480,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
+@@ -518,6 +521,8 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
  static int
  do_sect_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
  {
 +	if (interrupts_enabled(regs))
 +		local_irq_enable();
-+
- 	do_bad_area(addr, fsr, regs);
- 	return 0;
- }
+ 	/*
+ 	 * If this is a kernel address, but from user mode, then userspace
+ 	 * is trying bad stuff. Invoke the branch predictor handling.
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index d889a466468c..177aa58512e1 100644
+index 9cb8867eb120..67ab7ee96bc7 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
 @@ -93,6 +93,7 @@ config ARM64
@@ -849,6 +847,22 @@ index f0cb881c1d69..fd8fb76f324f 100644
  #define _TIF_POLLING_NRFLAG	(1 << TIF_POLLING_NRFLAG)
  #define _TIF_IO_BITMAP		(1 << TIF_IO_BITMAP)
  #define _TIF_SPEC_FORCE_UPDATE	(1 << TIF_SPEC_FORCE_UPDATE)
+diff --git a/arch/x86/kvm/vmx/vmx_ops.h b/arch/x86/kvm/vmx/vmx_ops.h
+index d23705df6a52..60aeddf6a5c1 100644
+--- a/arch/x86/kvm/vmx/vmx_ops.h
++++ b/arch/x86/kvm/vmx/vmx_ops.h
+@@ -11,6 +11,11 @@
+ #include "../x86.h"
+ 
+ void vmread_error(unsigned long field, bool fault);
++/* regparm(0) overrides -mregparm=3 so args are stack-passed, matching asm callers */
++#ifdef CONFIG_X86_32
++__attribute__((regparm(0)))
++#endif
++void vmread_error_trampoline(unsigned long field, bool fault);
+ void vmwrite_error(unsigned long field, unsigned long value);
+ void vmclear_error(struct vmcs *vmcs, u64 phys_addr);
+ void vmptrld_error(struct vmcs *vmcs, u64 phys_addr);
 diff --git a/drivers/block/zram/zram_drv.c b/drivers/block/zram/zram_drv.c
 index bef5388e4e28..2e3ee890ffe7 100644
 --- a/drivers/block/zram/zram_drv.c
@@ -1119,10 +1133,10 @@ index 321dbecba0f3..ea8ffea8d311 100644
  	}
  
 diff --git a/drivers/gpu/drm/i915/gt/intel_reset.c b/drivers/gpu/drm/i915/gt/intel_reset.c
-index 10b930eaa8cb..6108a449cd19 100644
+index 612c9e66e039..3222e233d776 100644
 --- a/drivers/gpu/drm/i915/gt/intel_reset.c
 +++ b/drivers/gpu/drm/i915/gt/intel_reset.c
-@@ -174,13 +174,13 @@ static int i915_do_reset(struct intel_gt *gt,
+@@ -175,13 +175,13 @@ static int i915_do_reset(struct intel_gt *gt,
  	/* Assert reset for at least 20 usec, and wait for acknowledgement. */
  	pci_write_config_byte(pdev, I915_GDRST, GRDOM_RESET_ENABLE);
  	udelay(50);
@@ -1138,7 +1152,7 @@ index 10b930eaa8cb..6108a449cd19 100644
  
  	return err;
  }
-@@ -200,7 +200,7 @@ static int g33_do_reset(struct intel_gt *gt,
+@@ -201,7 +201,7 @@ static int g33_do_reset(struct intel_gt *gt,
  	struct pci_dev *pdev = to_pci_dev(gt->i915->drm.dev);
  
  	pci_write_config_byte(pdev, I915_GDRST, GRDOM_RESET_ENABLE);
@@ -1147,7 +1161,7 @@ index 10b930eaa8cb..6108a449cd19 100644
  }
  
  static int g4x_do_reset(struct intel_gt *gt,
-@@ -217,7 +217,7 @@ static int g4x_do_reset(struct intel_gt *gt,
+@@ -218,7 +218,7 @@ static int g4x_do_reset(struct intel_gt *gt,
  
  	pci_write_config_byte(pdev, I915_GDRST,
  			      GRDOM_MEDIA | GRDOM_RESET_ENABLE);
@@ -1156,7 +1170,7 @@ index 10b930eaa8cb..6108a449cd19 100644
  	if (ret) {
  		GT_TRACE(gt, "Wait for media reset failed\n");
  		goto out;
-@@ -225,7 +225,7 @@ static int g4x_do_reset(struct intel_gt *gt,
+@@ -226,7 +226,7 @@ static int g4x_do_reset(struct intel_gt *gt,
  
  	pci_write_config_byte(pdev, I915_GDRST,
  			      GRDOM_RENDER | GRDOM_RESET_ENABLE);
@@ -1165,7 +1179,7 @@ index 10b930eaa8cb..6108a449cd19 100644
  	if (ret) {
  		GT_TRACE(gt, "Wait for render reset failed\n");
  		goto out;
-@@ -718,9 +718,7 @@ int __intel_gt_reset(struct intel_gt *gt, intel_engine_mask_t engine_mask)
+@@ -719,9 +719,7 @@ int __intel_gt_reset(struct intel_gt *gt, intel_engine_mask_t engine_mask)
  	intel_uncore_forcewake_get(gt->uncore, FORCEWAKE_ALL);
  	for (retry = 0; ret == -ETIMEDOUT && retry < retries; retry++) {
  		GT_TRACE(gt, "engine_mask=%x\n", engine_mask);
@@ -1469,10 +1483,10 @@ index e53ab9b5482e..2ff9e5c982e7 100644
  
  static void bcm_sysport_netif_start(struct net_device *dev)
 diff --git a/drivers/net/ethernet/cortina/gemini.c b/drivers/net/ethernet/cortina/gemini.c
-index 729a69007ec4..61ddcc428317 100644
+index 3f0e63c7342b..3ce815d52843 100644
 --- a/drivers/net/ethernet/cortina/gemini.c
 +++ b/drivers/net/ethernet/cortina/gemini.c
-@@ -1974,7 +1974,7 @@ static void gmac_get_stats64(struct net_device *netdev,
+@@ -1991,7 +1991,7 @@ static void gmac_get_stats64(struct net_device *netdev,
  
  	/* Racing with RX NAPI */
  	do {
@@ -1481,7 +1495,7 @@ index 729a69007ec4..61ddcc428317 100644
  
  		stats->rx_packets = port->stats.rx_packets;
  		stats->rx_bytes = port->stats.rx_bytes;
-@@ -1986,11 +1986,11 @@ static void gmac_get_stats64(struct net_device *netdev,
+@@ -2003,11 +2003,11 @@ static void gmac_get_stats64(struct net_device *netdev,
  		stats->rx_crc_errors = port->stats.rx_crc_errors;
  		stats->rx_frame_errors = port->stats.rx_frame_errors;
  
@@ -1495,7 +1509,7 @@ index 729a69007ec4..61ddcc428317 100644
  
  		stats->tx_errors = port->stats.tx_errors;
  		stats->tx_packets = port->stats.tx_packets;
-@@ -2000,15 +2000,15 @@ static void gmac_get_stats64(struct net_device *netdev,
+@@ -2017,15 +2017,15 @@ static void gmac_get_stats64(struct net_device *netdev,
  		stats->rx_missed_errors = port->stats.rx_missed_errors;
  		stats->rx_fifo_errors = port->stats.rx_fifo_errors;
  
@@ -1514,7 +1528,7 @@ index 729a69007ec4..61ddcc428317 100644
  
  	stats->rx_dropped += stats->rx_missed_errors;
  }
-@@ -2077,18 +2077,18 @@ static void gmac_get_ethtool_stats(struct net_device *netdev,
+@@ -2094,18 +2094,18 @@ static void gmac_get_ethtool_stats(struct net_device *netdev,
  	/* Racing with MIB interrupt */
  	do {
  		p = values;
@@ -1536,7 +1550,7 @@ index 729a69007ec4..61ddcc428317 100644
  
  		for (i = 0; i < RX_STATUS_NUM; i++)
  			*p++ = port->rx_stats[i];
-@@ -2096,13 +2096,13 @@ static void gmac_get_ethtool_stats(struct net_device *netdev,
+@@ -2113,13 +2113,13 @@ static void gmac_get_ethtool_stats(struct net_device *netdev,
  			*p++ = port->rx_csum_stats[i];
  		*p++ = port->rx_napi_exits;
  
@@ -1552,7 +1566,7 @@ index 729a69007ec4..61ddcc428317 100644
  
  		for (i = 0; i < TX_MAX_FRAGS; i++) {
  			*values++ = port->tx_frag_stats[i];
-@@ -2111,7 +2111,7 @@ static void gmac_get_ethtool_stats(struct net_device *netdev,
+@@ -2128,7 +2128,7 @@ static void gmac_get_ethtool_stats(struct net_device *netdev,
  		*values++ = port->tx_frags_linearized;
  		*values++ = port->tx_hw_csummed;
  
@@ -1901,7 +1915,7 @@ index 1aed31bc2e8a..78e85b11d1a6 100644
  	/* Once we successfully copy the stats in, update the data pointer */
  	*data += size;
 diff --git a/drivers/net/ethernet/intel/i40e/i40e_main.c b/drivers/net/ethernet/intel/i40e/i40e_main.c
-index be4471072fe2..548dbe934c9e 100644
+index fd148771f5f3..1ceab18d783f 100644
 --- a/drivers/net/ethernet/intel/i40e/i40e_main.c
 +++ b/drivers/net/ethernet/intel/i40e/i40e_main.c
 @@ -431,10 +431,10 @@ static void i40e_get_netdev_stats_struct_tx(struct i40e_ring *ring,
@@ -2001,7 +2015,7 @@ index f4ac2b164b3e..892c6a4f03bb 100644
  	/* Once we successfully copy the stats in, update the data pointer */
  	*data += size;
 diff --git a/drivers/net/ethernet/intel/ice/ice_main.c b/drivers/net/ethernet/intel/ice/ice_main.c
-index 2737050aae21..36215275c642 100644
+index 8cd072c30015..f22b3d7ba3b6 100644
 --- a/drivers/net/ethernet/intel/ice/ice_main.c
 +++ b/drivers/net/ethernet/intel/ice/ice_main.c
 @@ -6425,10 +6425,10 @@ ice_fetch_u64_stats_per_ring(struct u64_stats_sync *syncp,
@@ -2261,10 +2275,10 @@ index ccfa6b91aac6..296915414a7c 100644
  	}
  }
 diff --git a/drivers/net/ethernet/intel/ixgbevf/ixgbevf_main.c b/drivers/net/ethernet/intel/ixgbevf/ixgbevf_main.c
-index 290207f15808..d052240a51ac 100644
+index 630525be69c8..f86e048ced66 100644
 --- a/drivers/net/ethernet/intel/ixgbevf/ixgbevf_main.c
 +++ b/drivers/net/ethernet/intel/ixgbevf/ixgbevf_main.c
-@@ -4385,10 +4385,10 @@ static void ixgbevf_get_tx_ring_stats(struct rtnl_link_stats64 *stats,
+@@ -4386,10 +4386,10 @@ static void ixgbevf_get_tx_ring_stats(struct rtnl_link_stats64 *stats,
  
  	if (ring) {
  		do {
@@ -2277,7 +2291,7 @@ index 290207f15808..d052240a51ac 100644
  		stats->tx_bytes += bytes;
  		stats->tx_packets += packets;
  	}
-@@ -4411,10 +4411,10 @@ static void ixgbevf_get_stats(struct net_device *netdev,
+@@ -4412,10 +4412,10 @@ static void ixgbevf_get_stats(struct net_device *netdev,
  	for (i = 0; i < adapter->num_rx_queues; i++) {
  		ring = adapter->rx_ring[i];
  		do {
@@ -2330,7 +2344,7 @@ index eb4ebaa1c92f..327f03f80836 100644
  		es->skb_alloc_error += skb_alloc_error;
  		es->refill_error += refill_error;
 diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
-index b42c2c498faa..3a22eacc86c7 100644
+index 675616142c4f..148d97d199e5 100644
 --- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
 +++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
 @@ -2033,7 +2033,7 @@ mvpp2_get_xdp_stats(struct mvpp2_port *port, struct mvpp2_pcpu_stats *xdp_stats)
@@ -2351,7 +2365,7 @@ index b42c2c498faa..3a22eacc86c7 100644
  
  		xdp_stats->xdp_redirect += xdp_redirect;
  		xdp_stats->xdp_pass   += xdp_pass;
-@@ -5140,12 +5140,12 @@ mvpp2_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
+@@ -5159,12 +5159,12 @@ mvpp2_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
  
  		cpu_stats = per_cpu_ptr(port->stats, cpu);
  		do {
@@ -2452,7 +2466,7 @@ index 2aec55dd07c6..f7492ce22956 100644
  		stats->rx_packets	+= rx_packets;
  		stats->rx_bytes		+= rx_bytes;
 diff --git a/drivers/net/ethernet/microsoft/mana/mana_en.c b/drivers/net/ethernet/microsoft/mana/mana_en.c
-index 3f46a6edcee5..72e7e0a39184 100644
+index 0f84cc4586f0..ef6eb56f63c4 100644
 --- a/drivers/net/ethernet/microsoft/mana/mana_en.c
 +++ b/drivers/net/ethernet/microsoft/mana/mana_en.c
 @@ -316,10 +316,10 @@ static void mana_get_stats64(struct net_device *ndev,
@@ -2908,7 +2922,7 @@ index 20c584f46ec0..c3d05b681b3b 100644
  		data[i++] = bytes;
  		data[i++] = xdp_drop;
 diff --git a/drivers/net/ifb.c b/drivers/net/ifb.c
-index 1c64d5347b8e..78253ad57b2e 100644
+index e5b0f87f9c43..c549845f60f1 100644
 --- a/drivers/net/ifb.c
 +++ b/drivers/net/ifb.c
 @@ -162,18 +162,18 @@ static void ifb_stats64(struct net_device *dev,
@@ -2934,7 +2948,7 @@ index 1c64d5347b8e..78253ad57b2e 100644
  		stats->tx_packets += packets;
  		stats->tx_bytes += bytes;
  	}
-@@ -245,12 +245,12 @@ static void ifb_fill_stats_data(u64 **data,
+@@ -244,12 +244,12 @@ static void ifb_fill_stats_data(u64 **data,
  	int j;
  
  	do {
@@ -2987,10 +3001,10 @@ index 8dc6a4df93c7..6aa00f62b1f9 100644
  		*packets += tpackets;
  	}
 diff --git a/drivers/net/macsec.c b/drivers/net/macsec.c
-index e954b46ebe86..c62a06579951 100644
+index e8654b7c23bb..9586c72fb9ae 100644
 --- a/drivers/net/macsec.c
 +++ b/drivers/net/macsec.c
-@@ -2842,9 +2842,9 @@ static void get_rx_sc_stats(struct net_device *dev,
+@@ -2843,9 +2843,9 @@ static void get_rx_sc_stats(struct net_device *dev,
  
  		stats = per_cpu_ptr(rx_sc->stats, cpu);
  		do {
@@ -3002,7 +3016,7 @@ index e954b46ebe86..c62a06579951 100644
  
  		sum->InOctetsValidated += tmp.InOctetsValidated;
  		sum->InOctetsDecrypted += tmp.InOctetsDecrypted;
-@@ -2923,9 +2923,9 @@ static void get_tx_sc_stats(struct net_device *dev,
+@@ -2924,9 +2924,9 @@ static void get_tx_sc_stats(struct net_device *dev,
  
  		stats = per_cpu_ptr(macsec_priv(dev)->secy.tx_sc.stats, cpu);
  		do {
@@ -3014,7 +3028,7 @@ index e954b46ebe86..c62a06579951 100644
  
  		sum->OutPktsProtected   += tmp.OutPktsProtected;
  		sum->OutPktsEncrypted   += tmp.OutPktsEncrypted;
-@@ -2979,9 +2979,9 @@ static void get_secy_stats(struct net_device *dev, struct macsec_dev_stats *sum)
+@@ -2980,9 +2980,9 @@ static void get_secy_stats(struct net_device *dev, struct macsec_dev_stats *sum)
  
  		stats = per_cpu_ptr(macsec_priv(dev)->stats, cpu);
  		do {
@@ -3027,10 +3041,10 @@ index e954b46ebe86..c62a06579951 100644
  		sum->OutPktsUntagged  += tmp.OutPktsUntagged;
  		sum->InPktsUntagged   += tmp.InPktsUntagged;
 diff --git a/drivers/net/macvlan.c b/drivers/net/macvlan.c
-index 24e36d78a23a..64981965456d 100644
+index 14018be5e7e7..a032621f05b2 100644
 --- a/drivers/net/macvlan.c
 +++ b/drivers/net/macvlan.c
-@@ -954,13 +954,13 @@ static void macvlan_dev_get_stats64(struct net_device *dev,
+@@ -955,13 +955,13 @@ static void macvlan_dev_get_stats64(struct net_device *dev,
  		for_each_possible_cpu(i) {
  			p = per_cpu_ptr(vlan->pcpu_stats, i);
  			do {
@@ -3235,7 +3249,7 @@ index b62b76963137..010810f093c5 100644
  	}
  }
 diff --git a/drivers/net/vrf.c b/drivers/net/vrf.c
-index 75e95f6dd816..6747c8fc8332 100644
+index 51b34882827e..73262751348f 100644
 --- a/drivers/net/vrf.c
 +++ b/drivers/net/vrf.c
 @@ -149,13 +149,13 @@ static void vrf_get_stats64(struct net_device *dev,
@@ -3255,7 +3269,7 @@ index 75e95f6dd816..6747c8fc8332 100644
  		stats->tx_packets += tpkts;
  		stats->tx_dropped += tdrops;
 diff --git a/drivers/net/vxlan/vxlan_vnifilter.c b/drivers/net/vxlan/vxlan_vnifilter.c
-index c6d4fae958ca..a658efacb6f6 100644
+index abf96d60eb30..347f814a7735 100644
 --- a/drivers/net/vxlan/vxlan_vnifilter.c
 +++ b/drivers/net/vxlan/vxlan_vnifilter.c
 @@ -129,9 +129,9 @@ static void vxlan_vnifilter_stats_get(const struct vxlan_vni_node *vninode,
@@ -3324,10 +3338,10 @@ index dd40e0d98d7e..9b3851050c19 100644
  		tot->rx_packets += rx_packets;
  		tot->tx_packets += tx_packets;
 diff --git a/drivers/spi/spi.c b/drivers/spi/spi.c
-index 98f720652e07..ac166e3c7df7 100644
+index 4fbf5925bdb8..4949b14c7583 100644
 --- a/drivers/spi/spi.c
 +++ b/drivers/spi/spi.c
-@@ -127,10 +127,10 @@ do {									\
+@@ -129,10 +129,10 @@ do {									\
  		unsigned int start;					\
  		pcpu_stats = per_cpu_ptr(in, i);			\
  		do {							\
@@ -4488,37 +4502,10 @@ index 66a774d2710e..b08532b8fba7 100644
  
  static inline void __iomem *
 diff --git a/include/linux/lockdep.h b/include/linux/lockdep.h
-index 43d8734ac0eb..48187867427b 100644
+index 90aa802a3066..48187867427b 100644
 --- a/include/linux/lockdep.h
 +++ b/include/linux/lockdep.h
-@@ -339,6 +339,16 @@ extern void lock_unpin_lock(struct lockdep_map *lock, struct pin_cookie);
- #define lockdep_repin_lock(l,c)	lock_repin_lock(&(l)->dep_map, (c))
- #define lockdep_unpin_lock(l,c)	lock_unpin_lock(&(l)->dep_map, (c))
- 
-+/*
-+ * Must use lock_map_aquire_try() with override maps to avoid
-+ * lockdep thinking they participate in the block chain.
-+ */
-+#define DEFINE_WAIT_OVERRIDE_MAP(_name, _wait_type)	\
-+	struct lockdep_map _name = {			\
-+		.name = #_name "-wait-type-override",	\
-+		.wait_type_inner = _wait_type,		\
-+		.lock_type = LD_LOCK_WAIT_OVERRIDE, }
-+
- #else /* !CONFIG_LOCKDEP */
- 
- static inline void lockdep_init_task(struct task_struct *task)
-@@ -427,6 +437,9 @@ extern int lockdep_is_held(const void *);
- #define lockdep_repin_lock(l, c)		do { (void)(l); (void)(c); } while (0)
- #define lockdep_unpin_lock(l, c)		do { (void)(l); (void)(c); } while (0)
- 
-+#define DEFINE_WAIT_OVERRIDE_MAP(_name, _wait_type)	\
-+	struct lockdep_map __maybe_unused _name = {}
-+
- #endif /* !LOCKDEP */
- 
- enum xhlock_context_t {
-@@ -435,7 +448,6 @@ enum xhlock_context_t {
+@@ -448,7 +448,6 @@ enum xhlock_context_t {
  	XHLOCK_CTX_NR,
  };
  
@@ -4526,26 +4513,6 @@ index 43d8734ac0eb..48187867427b 100644
  /*
   * To initialize a lockdep_map statically use this macro.
   * Note that _name must not be NULL.
-@@ -552,6 +564,7 @@ do {									\
- #define rwsem_release(l, i)			lock_release(l, i)
- 
- #define lock_map_acquire(l)			lock_acquire_exclusive(l, 0, 0, NULL, _THIS_IP_)
-+#define lock_map_acquire_try(l)			lock_acquire_exclusive(l, 0, 1, NULL, _THIS_IP_)
- #define lock_map_acquire_read(l)		lock_acquire_shared_recursive(l, 0, 0, NULL, _THIS_IP_)
- #define lock_map_acquire_tryread(l)		lock_acquire_shared_recursive(l, 0, 1, NULL, _THIS_IP_)
- #define lock_map_release(l)			lock_release(l, _THIS_IP_)
-diff --git a/include/linux/lockdep_types.h b/include/linux/lockdep_types.h
-index d22430840b53..59f4fb1626ea 100644
---- a/include/linux/lockdep_types.h
-+++ b/include/linux/lockdep_types.h
-@@ -33,6 +33,7 @@ enum lockdep_wait_type {
- enum lockdep_lock_type {
- 	LD_LOCK_NORMAL = 0,	/* normal, catch all */
- 	LD_LOCK_PERCPU,		/* percpu */
-+	LD_LOCK_WAIT_OVERRIDE,	/* annotation */
- 	LD_LOCK_MAX,
- };
- 
 diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
 index e0df5fc67279..4371c91bfc4f 100644
 --- a/include/linux/netdevice.h
@@ -4670,7 +4637,7 @@ index 9aa6358a1a16..e9f0d08733f4 100644
  #endif /* CONFIG_SMP */
  
 diff --git a/include/linux/printk.h b/include/linux/printk.h
-index b1a12916f036..3c4ab778fab6 100644
+index 271850718884..eaecb6b260d3 100644
 --- a/include/linux/printk.h
 +++ b/include/linux/printk.h
 @@ -168,6 +168,9 @@ extern void __printk_safe_exit(void);
@@ -4703,10 +4670,10 @@ index b1a12916f036..3c4ab778fab6 100644
  {
  	return 0;
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index 3efada5573ea..4627e11f65f3 100644
+index bb29e0e26d37..459798f03a8d 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
-@@ -2063,6 +2063,43 @@ static inline int test_tsk_need_resched(struct task_struct *tsk)
+@@ -2067,6 +2067,43 @@ static inline int test_tsk_need_resched(struct task_struct *tsk)
  	return unlikely(test_tsk_thread_flag(tsk,TIF_NEED_RESCHED));
  }
  
@@ -5099,68 +5066,6 @@ index 65dba9076f31..ab18048e2186 100644
  #endif
  	NULL
  };
-diff --git a/kernel/locking/lockdep.c b/kernel/locking/lockdep.c
-index 5f8ce961cd9a..463834778b4b 100644
---- a/kernel/locking/lockdep.c
-+++ b/kernel/locking/lockdep.c
-@@ -2245,6 +2245,9 @@ static inline bool usage_match(struct lock_list *entry, void *mask)
- 
- static inline bool usage_skip(struct lock_list *entry, void *mask)
- {
-+	if (entry->class->lock_type == LD_LOCK_NORMAL)
-+		return false;
-+
- 	/*
- 	 * Skip local_lock() for irq inversion detection.
- 	 *
-@@ -2271,14 +2274,16 @@ static inline bool usage_skip(struct lock_list *entry, void *mask)
- 	 * As a result, we will skip local_lock(), when we search for irq
- 	 * inversion bugs.
- 	 */
--	if (entry->class->lock_type == LD_LOCK_PERCPU) {
--		if (DEBUG_LOCKS_WARN_ON(entry->class->wait_type_inner < LD_WAIT_CONFIG))
--			return false;
-+	if (entry->class->lock_type == LD_LOCK_PERCPU &&
-+	    DEBUG_LOCKS_WARN_ON(entry->class->wait_type_inner < LD_WAIT_CONFIG))
-+		return false;
- 
--		return true;
--	}
-+	/*
-+	 * Skip WAIT_OVERRIDE for irq inversion detection -- it's not actually
-+	 * a lock and only used to override the wait_type.
-+	 */
- 
--	return false;
-+	return true;
- }
- 
- /*
-@@ -4745,7 +4750,8 @@ static int check_wait_context(struct task_struct *curr, struct held_lock *next)
- 
- 	for (; depth < curr->lockdep_depth; depth++) {
- 		struct held_lock *prev = curr->held_locks + depth;
--		u8 prev_inner = hlock_class(prev)->wait_type_inner;
-+		struct lock_class *class = hlock_class(prev);
-+		u8 prev_inner = class->wait_type_inner;
- 
- 		if (prev_inner) {
- 			/*
-@@ -4755,6 +4761,14 @@ static int check_wait_context(struct task_struct *curr, struct held_lock *next)
- 			 * Also due to trylocks.
- 			 */
- 			curr_inner = min(curr_inner, prev_inner);
-+
-+			/*
-+			 * Allow override for annotations -- this is typically
-+			 * only valid/needed for code that only exists when
-+			 * CONFIG_PREEMPT_RT=n.
-+			 */
-+			if (unlikely(class->lock_type == LD_LOCK_WAIT_OVERRIDE))
-+				curr_inner = prev_inner;
- 		}
- 	}
- 
 diff --git a/kernel/locking/rwbase_rt.c b/kernel/locking/rwbase_rt.c
 index c201aadb9301..25ec0239477c 100644
 --- a/kernel/locking/rwbase_rt.c
@@ -6640,7 +6545,7 @@ index 6ebef11c8876..23a8cfed1a72 100644
  EXPORT_SYMBOL_GPL(hw_protection_shutdown);
  
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 09ffe1b96643..3a023560025e 100644
+index 56111b42da2a..2825595a8686 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
 @@ -1043,6 +1043,46 @@ void resched_curr(struct rq *rq)
@@ -6993,7 +6898,7 @@ index 0115183ee74e..3c5945c3e80a 100644
  
  /*
 diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
-index 6f66a9b1aaa9..320d330ec38d 100644
+index a6c2b8f3045e..d11eddb9057b 100644
 --- a/kernel/sched/sched.h
 +++ b/kernel/sched/sched.h
 @@ -2358,6 +2358,15 @@ extern void reweight_task(struct task_struct *p, const struct load_weight *lw);
@@ -7013,10 +6918,10 @@ index 6f66a9b1aaa9..320d330ec38d 100644
  extern void init_rt_bandwidth(struct rt_bandwidth *rt_b, u64 period, u64 runtime);
  extern bool sched_rt_bandwidth_account(struct rt_rq *rt_rq);
 diff --git a/kernel/signal.c b/kernel/signal.c
-index 723c84d162dd..ae3c903c6b20 100644
+index 98dbe713829e..bf97176110d4 100644
 --- a/kernel/signal.c
 +++ b/kernel/signal.c
-@@ -2303,13 +2303,13 @@ static int ptrace_stop(int exit_code, int why, unsigned long message,
+@@ -2304,13 +2304,13 @@ static int ptrace_stop(int exit_code, int why, unsigned long message,
  	/*
  	 * Don't want to allow preemption here, because
  	 * sys_ptrace() needs this task to be inactive.
@@ -7197,10 +7102,10 @@ index fadc6bbda27b..50afb10062b4 100644
  }
  early_initcall(spawn_ksoftirqd);
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index 002b29e566cb..089490d1d968 100644
+index d56e18b13374..5d6fcaf83236 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
-@@ -1867,7 +1867,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
+@@ -1871,7 +1871,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  	if (!ktime_before(now, cpu_base->softirq_expires_next)) {
  		cpu_base->softirq_expires_next = KTIME_MAX;
  		cpu_base->softirq_activated = 1;
@@ -7209,7 +7114,7 @@ index 002b29e566cb..089490d1d968 100644
  	}
  
  	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
-@@ -1962,7 +1962,7 @@ void hrtimer_run_queues(void)
+@@ -1966,7 +1966,7 @@ void hrtimer_run_queues(void)
  	if (!ktime_before(now, cpu_base->softirq_expires_next)) {
  		cpu_base->softirq_expires_next = KTIME_MAX;
  		cpu_base->softirq_activated = 1;
@@ -7245,7 +7150,7 @@ index 4a2aeaa85af3..73943ac4992f 100644
  
  /*
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index 25f31d7718c6..532862608be7 100644
+index 5ef1c79dc5c9..23b7a18b843b 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
 @@ -2645,11 +2645,19 @@ unsigned int tracing_gen_ctx_irq_test(unsigned int irqs_status)
@@ -7441,39 +7346,11 @@ index 8ba4b269ab89..0cbe90634654 100644
  		__this_cpu_write(hard_watchdog_warn, true);
  		return;
  	}
-diff --git a/lib/debugobjects.c b/lib/debugobjects.c
-index 8c3b483a8fb4..e7c5889094d3 100644
---- a/lib/debugobjects.c
-+++ b/lib/debugobjects.c
-@@ -601,10 +601,21 @@ static void debug_objects_fill_pool(void)
- {
- 	/*
- 	 * On RT enabled kernels the pool refill must happen in preemptible
--	 * context:
-+	 * context -- for !RT kernels we rely on the fact that spinlock_t and
-+	 * raw_spinlock_t are basically the same type and this lock-type
-+	 * inversion works just fine.
- 	 */
--	if (!IS_ENABLED(CONFIG_PREEMPT_RT) || preemptible())
-+	if (!IS_ENABLED(CONFIG_PREEMPT_RT) || preemptible()) {
-+		/*
-+		 * Annotate away the spinlock_t inside raw_spinlock_t warning
-+		 * by temporarily raising the wait-type to WAIT_SLEEP, matching
-+		 * the preemptible() condition above.
-+		 */
-+		static DEFINE_WAIT_OVERRIDE_MAP(fill_pool_map, LD_WAIT_SLEEP);
-+		lock_map_acquire_try(&fill_pool_map);
- 		fill_pool();
-+		lock_map_release(&fill_pool_map);
-+	}
- }
- 
- static void
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index 4c17b9ceff80..f451d33a5dee 100644
+index 93c63b5fad28..d7659a07ecc1 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
-@@ -6700,19 +6700,17 @@ static void __build_all_zonelists(void *data)
+@@ -6701,19 +6701,17 @@ static void __build_all_zonelists(void *data)
  	unsigned long flags;
  
  	/*
@@ -7498,7 +7375,7 @@ index 4c17b9ceff80..f451d33a5dee 100644
  
  #ifdef CONFIG_NUMA
  	memset(node_load, 0, sizeof(node_load));
-@@ -6749,9 +6747,8 @@ static void __build_all_zonelists(void *data)
+@@ -6750,9 +6748,8 @@ static void __build_all_zonelists(void *data)
  #endif
  	}
  
@@ -7530,10 +7407,10 @@ index c08228d48834..a7126e1c21fe 100644
  		stats->rx_packets	+= rxpackets;
  		stats->rx_bytes		+= rxbytes;
 diff --git a/net/bridge/br_multicast.c b/net/bridge/br_multicast.c
-index 140dbcfc8b94..eb759d34f268 100644
+index 9b54fe10d280..41d08d12d095 100644
 --- a/net/bridge/br_multicast.c
 +++ b/net/bridge/br_multicast.c
-@@ -5010,9 +5010,9 @@ void br_multicast_get_stats(const struct net_bridge *br,
+@@ -5031,9 +5031,9 @@ void br_multicast_get_stats(const struct net_bridge *br,
  		unsigned int start;
  
  		do {
@@ -7643,7 +7520,7 @@ index 87a252b13c5c..9616eb7cfeed 100644
  
  		init_gro_hash(&sd->backlog);
 diff --git a/net/core/drop_monitor.c b/net/core/drop_monitor.c
-index fef94f3b03de..2eade9268caf 100644
+index 768a79428dc9..96ce3e846ff3 100644
 --- a/net/core/drop_monitor.c
 +++ b/net/core/drop_monitor.c
 @@ -1432,9 +1432,9 @@ static void net_dm_stats_read(struct net_dm_stats *stats)
@@ -7727,10 +7604,10 @@ index c8d137ef5980..b71ccaec0991 100644
  
  static int
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index ef24911af05a..733dff681db4 100644
+index f41dd20991c3..0e5c54fe81d8 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -6698,6 +6698,11 @@ nodefer:	__kfree_skb(skb);
+@@ -6721,6 +6721,11 @@ nodefer:	__kfree_skb(skb);
  	/* Make sure to trigger NET_RX_SOFTIRQ on the remote CPU
  	 * if we are unlucky enough (this seems very unlikely).
  	 */
@@ -7796,10 +7673,10 @@ index 4f3c932e37ed..6164cb06fbdd 100644
  	return v;
  }
 diff --git a/net/ipv6/route.c b/net/ipv6/route.c
-index 987ef0954e2e..99aa395ff042 100644
+index 2b861eacee30..bd4dc11471d7 100644
 --- a/net/ipv6/route.c
 +++ b/net/ipv6/route.c
-@@ -1465,7 +1465,18 @@ static struct rt6_info *rt6_make_pcpu_route(struct net *net,
+@@ -1468,7 +1468,18 @@ static struct rt6_info *rt6_make_pcpu_route(struct net *net,
  
  	p = this_cpu_ptr(res->nh->rt6i_pcpu);
  	prev = cmpxchg(p, NULL, pcpu_rt);
@@ -7884,10 +7761,10 @@ index 2d29d230f569..56b84f65ae54 100644
  		stats->rx_packets	+= local.rx_packets;
  		stats->rx_bytes		+= local.rx_bytes;
 diff --git a/net/netfilter/ipvs/ip_vs_ctl.c b/net/netfilter/ipvs/ip_vs_ctl.c
-index 6cc50f05c46c..6134d33ab14f 100644
+index 15a083dd4597..f83ff0d15941 100644
 --- a/net/netfilter/ipvs/ip_vs_ctl.c
 +++ b/net/netfilter/ipvs/ip_vs_ctl.c
-@@ -2299,13 +2299,13 @@ static int ip_vs_stats_percpu_show(struct seq_file *seq, void *v)
+@@ -2302,13 +2302,13 @@ static int ip_vs_stats_percpu_show(struct seq_file *seq, void *v)
  		u64 conns, inpkts, outpkts, inbytes, outbytes;
  
  		do {
@@ -7904,10 +7781,10 @@ index 6cc50f05c46c..6134d33ab14f 100644
  		seq_printf(seq, "%3X %8LX %8LX %8LX %16LX %16LX\n",
  			   i, (u64)conns, (u64)inpkts,
 diff --git a/net/netfilter/nf_tables_api.c b/net/netfilter/nf_tables_api.c
-index fb3d529ebf5a..ef589390bf6f 100644
+index a8904f73c597..018412b56d08 100644
 --- a/net/netfilter/nf_tables_api.c
 +++ b/net/netfilter/nf_tables_api.c
-@@ -1714,10 +1714,10 @@ static int nft_dump_stats(struct sk_buff *skb, struct nft_stats __percpu *stats)
+@@ -1720,10 +1720,10 @@ static int nft_dump_stats(struct sk_buff *skb, struct nft_stats __percpu *stats)
  	for_each_possible_cpu(cpu) {
  		cpu_stats = per_cpu_ptr(stats, cpu);
  		do {
@@ -7921,7 +7798,7 @@ index fb3d529ebf5a..ef589390bf6f 100644
  		total.bytes += bytes;
  	}
 diff --git a/net/openvswitch/datapath.c b/net/openvswitch/datapath.c
-index a2d8b1b4c83e..4fa781b5dd6d 100644
+index 0c0d89470145..eacceb3a6afa 100644
 --- a/net/openvswitch/datapath.c
 +++ b/net/openvswitch/datapath.c
 @@ -716,9 +716,9 @@ static void get_dp_stats(const struct datapath *dp, struct ovs_dp_stats *stats,
@@ -7965,6 +7842,19 @@ index d4a2db0b2299..0a0e4c283f02 100644
  
  			masks_and_count[i].counter += counter;
  		}
+diff --git a/tools/lib/bpf/libbpf.c b/tools/lib/bpf/libbpf.c
+index 7bd6aff6e260..33b214a91338 100644
+--- a/tools/lib/bpf/libbpf.c
++++ b/tools/lib/bpf/libbpf.c
+@@ -10748,7 +10748,7 @@ static int resolve_full_path(const char *file, char *result, size_t result_sz)
+ 		if (!search_paths[i])
+ 			continue;
+ 		for (s = search_paths[i]; s != NULL; s = strchr(s, ':')) {
+-			char *next_path;
++			const char *next_path;
+ 			int seg_len;
+ 
+ 			if (s[0] == ':')
 -- 
 2.53.0
 
