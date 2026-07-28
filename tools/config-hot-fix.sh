@@ -438,4 +438,10 @@ cd ${DIR}/KERNEL/
 
 ./scripts/config --disable CONFIG_ISDN
 
+./scripts/config --disable CONFIG_NET_VENDOR_AMAZON
+./scripts/config --disable CONFIG_NET_VENDOR_HISILICON
+./scripts/config --disable CONFIG_NET_VENDOR_HUAWEI
+./scripts/config --disable CONFIG_NET_VENDOR_META
+./scripts/config --disable CONFIG_NET_VENDOR_MICROSOFT
+
 cd ${DIR}/
