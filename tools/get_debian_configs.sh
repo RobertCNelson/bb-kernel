@@ -14,11 +14,11 @@ forky_kernel_branch="7.1"
 forky_kernel_tag="7.1.3-1"
 #
 sid_kernel_branch="7.1"
-sid_kernel_tag="7.1.4-1"
+sid_kernel_tag="7.1.5-1"
 #
 exp_kernel_branch="7.2"
 #exp_kernel_tag="7.1.2-1~exp1"
-exp_kernel_tag="7.2~rc3-1~exp1"
+exp_kernel_tag="7.2~rc5-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
@@ -64,8 +64,11 @@ dl_distro () {
 	dl_deb
 }
 
-kernel_branch="${forky_kernel_branch}"
-kernel_tag="${forky_kernel_tag}"
+#kernel_branch="${forky_kernel_branch}"
+#kernel_tag="${forky_kernel_tag}"
+
+kernel_branch="${sid_kernel_branch}"
+kernel_tag="${sid_kernel_tag}"
 dl_distro
 
 rm -rf ./dl/ || true
