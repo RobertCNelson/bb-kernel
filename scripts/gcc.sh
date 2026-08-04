@@ -47,6 +47,7 @@ dl_generic () {
 	if [ ! -f "${gcc_dir}/${filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
 		if [ ! -f "${gcc_dir}/${gcc_filename_prefix}.tar.xz" ] ; then
+			echo "log: [${gcc_html_path}${gcc_filename_prefix}.tar.xz]"
 			${WGET} "${gcc_html_path}${gcc_filename_prefix}.tar.xz"
 		fi
 		if [ -d "${gcc_dir}/${filename_prefix}" ] ; then
@@ -69,7 +70,9 @@ dl_generic () {
 }
 
 dl_gcc_generic () {
-	gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
+	gcc_html_path="https://rcn-ee.net/mirror/crosstool/${gcc_selected}/"
+	#gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
+
 	gcc_filename_prefix="x86_64-gcc-${gcc_selected}-nolibc-${gcc_prefix}"
 	extracted_dir="gcc-${gcc_selected}-nolibc/${gcc_prefix}"
 
