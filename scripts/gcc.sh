@@ -69,7 +69,11 @@ dl_generic () {
 }
 
 dl_gcc_generic () {
-	gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
+	if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
+		gcc_html_path="http://192.168.1.98/mirror/rcn-ee.us/mirror/crosstool/"
+	else
+		gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
+	fi
 	gcc_filename_prefix="x86_64-gcc-${gcc_selected}-nolibc-${gcc_prefix}"
 	extracted_dir="gcc-${gcc_selected}-nolibc/${gcc_prefix}"
 
