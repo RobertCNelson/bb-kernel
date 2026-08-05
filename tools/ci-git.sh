@@ -10,6 +10,7 @@ if [ ! -f /opt/linux-src/.git/logs/HEAD.lock ] ; then
         cd -
     else
         echo "log: ci-git.sh disabled as /opt/linux-src/.git/logs/refs/heads/master.lock exits"
+    fi
 else
     echo "log: ci-git.sh disabled as /opt/linux-src/.git/logs/HEAD.lock exits"
 fi
