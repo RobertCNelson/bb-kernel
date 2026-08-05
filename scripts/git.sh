@@ -132,13 +132,6 @@ git_kernel () {
 
 	cd "${DIR}/KERNEL/" || exit
 
-	#Debian Jessie: git version 2.0.0.rc0
-	#Disable git's default setting of running `git gc --auto` in the background as the patch.sh script can fail.
-	${git_bin} config --local --list | grep gc.autodetach >/dev/null 2>&1 || ${git_bin} config --local gc.autodetach 0
-
-	#disable git's auto Cleanup, ./KERNEL is a throw away branch...
-	${git_bin} config --local --list | grep gc.auto >/dev/null 2>&1 || ${git_bin} config --local gc.auto 0
-
 	if [ ! "${git_config_user_email}" ] ; then
 		${git_bin} config --local user.email you@example.com
 	fi

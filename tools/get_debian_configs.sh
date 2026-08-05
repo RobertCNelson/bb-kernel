@@ -14,7 +14,7 @@ forky_kernel_branch="7.1"
 forky_kernel_tag="7.1.3-1"
 #
 sid_kernel_branch="7.1"
-sid_kernel_tag="7.1.5-1"
+sid_kernel_tag="7.1.6-1"
 #
 exp_kernel_branch="7.2"
 #exp_kernel_tag="7.2.1-1~exp1"
