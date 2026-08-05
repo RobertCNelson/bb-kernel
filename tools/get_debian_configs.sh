@@ -11,16 +11,16 @@ bookworm_kernel_branch="6.1.0-43"
 bookworm_kernel_tag="6.1.162-1"
 #
 trixie_kernel_branch="6.12"
-trixie_kernel_tag="6.12.86-1"
+trixie_kernel_tag="6.12.100-1"
 #
-forky_kernel_branch="6.19"
-forky_kernel_tag="6.19.14-1"
+forky_kernel_branch="7.1"
+forky_kernel_tag="7.1.3-1"
 #
-sid_kernel_branch="7.0"
-sid_kernel_tag="7.0.4-1"
+sid_kernel_branch="7.1"
+sid_kernel_tag="7.1.5-1"
 #
-exp_kernel_branch="7.1"
-exp_kernel_tag="7.1~rc2-1~exp1"
+exp_kernel_branch="7.2"
+exp_kernel_tag="7.2~rc5-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
