@@ -167,11 +167,6 @@ git_kernel () {
 
 	${git_bin} checkout "v${KERNEL_TAG}" -b "v${KERNEL_TAG}${BUILD}"
 
-	if [ "${TOPOFTREE}" ] ; then
-		${git_bin} pull --no-edit "${linux_repo}" master || true
-		${git_bin} pull --no-edit "${linux_repo}" master --tags || true
-	fi
-
 	${git_bin} describe
 
 	cd "${DIR}/" || exit
