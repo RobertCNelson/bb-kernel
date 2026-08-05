@@ -14,6 +14,17 @@ debian_stable_git="2.20.1"
 #git: --no-edit
 #git: --no-rebase
 
+
+check_git_identity() {
+    if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
+        echo "Error: Git user.email or user.name is not configured."
+        echo "Please set them using:"
+        echo "  git config --global user.email \"you@example.com\""
+        echo "  git config --global user.name \"Your Name\""
+        exit 1
+    fi
+}
+
 git_is_old () {
 	echo "-----------------------------"
 	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`]; Please Install atleast [${debian_stable_git}] [https://git-scm.com/]"
@@ -132,13 +143,7 @@ git_kernel () {
 
 	cd "${DIR}/KERNEL/" || exit
 
-	if [ ! "${git_config_user_email}" ] ; then
-		${git_bin} config --local user.email you@example.com
-	fi
-
-	if [ ! "${git_config_user_name}" ] ; then
-		${git_bin} config --local user.name "Your Name"
-	fi
+	check_git_identity
 
 	if [ "${RUN_BISECT}" ] ; then
 		${git_bin} bisect reset || true
