@@ -14,7 +14,6 @@ debian_stable_git="2.20.1"
 #git: --no-edit
 #git: --no-rebase
 
-
 check_git_identity() {
     if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
         echo "Error: Git user.email or user.name is not configured."
@@ -161,20 +160,12 @@ git_kernel () {
 
 	${git_bin} tag | grep "v${KERNEL_TAG}" | grep -v rc >/dev/null 2>&1 || git_kernel_torvalds
 
-	if [ "${KERNEL_SHA}" ] ; then
-		git_kernel_torvalds
-	fi
-
 	test_for_branch=$(${git_bin} branch --list "v${KERNEL_TAG}${BUILD}")
 	if [ "x${test_for_branch}" != "x" ] ; then
 		${git_bin} branch "v${KERNEL_TAG}${BUILD}" -D
 	fi
 
-	if [ ! "${KERNEL_SHA}" ] ; then
-		${git_bin} checkout "v${KERNEL_TAG}" -b "v${KERNEL_TAG}${BUILD}"
-	else
-		${git_bin} checkout "${KERNEL_SHA}" -b "v${KERNEL_TAG}${BUILD}"
-	fi
+	${git_bin} checkout "v${KERNEL_TAG}" -b "v${KERNEL_TAG}${BUILD}"
 
 	if [ "${TOPOFTREE}" ] ; then
 		${git_bin} pull --no-edit "${linux_repo}" master || true
