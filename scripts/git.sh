@@ -14,6 +14,47 @@ debian_stable_git="2.20.1"
 #git: --no-edit
 #git: --no-rebase
 
+git_is_old () {
+	echo "-----------------------------"
+	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`]; Please Install atleast [${debian_stable_git}] [https://git-scm.com/]"
+	echo "-----------------------------"
+	exit 2
+}
+
+check_git_version () {
+	git_major=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f1)
+	git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
+	git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
+
+	#debian Stable:
+	#https://packages.debian.org/stretch/git (9) -> 2.11.0
+	#https://packages.debian.org/buster/git (10) -> 2.20.1
+	#https://packages.debian.org/bullseye/git (11) -> 2.30.2
+	#https://packages.debian.org/bookworm/git (12) -> 2.39.5
+	#https://packages.ubuntu.com/bionic/git (18.04) -> 2.17.1
+	#https://packages.ubuntu.com/focal/git (20.04) -> 2.25.1
+	#https://packages.ubuntu.com/jammy/git (22.04) -> 2.34.1
+	#https://packages.ubuntu.com/noble/git (24.04) -> 2.43.0
+
+	compare_major="2"
+	compare_minor="20"
+	compare_sub="1"
+
+	if [ "${git_major}" -lt "${compare_major}" ] ; then
+		git_is_old
+	elif [ "${git_major}" -eq "${compare_major}" ] ; then
+		if [ "${git_minor}" -lt "${compare_minor}" ] ; then
+			git_is_old
+		elif [ "${git_minor}" -eq "${compare_minor}" ] ; then
+			if [ "${git_sub}" -lt "${compare_sub}" ] ; then
+				git_is_old
+			fi
+		fi
+	fi
+
+	echo "scripts/git: [`LC_ALL=C ${git_bin} --version`]"
+}
+
 check_git_identity() {
 	if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
 		echo "Error: Git user.email or user.name is not configured."
@@ -22,13 +63,6 @@ check_git_identity() {
 		echo "  git config --global user.name \"Your Name\""
 		exit 1
 	fi
-}
-
-git_is_old () {
-	echo "-----------------------------"
-	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`]; Please Install atleast [${debian_stable_git}] [https://git-scm.com/]"
-	echo "-----------------------------"
-	exit 2
 }
 
 git_kernel_stable () {
@@ -227,38 +261,7 @@ if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
 fi
 
 git_bin=$(which git)
-
-git_major=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f1)
-git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
-git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
-
-#debian Stable:
-#https://packages.debian.org/stretch/git (9) -> 2.11.0
-#https://packages.debian.org/buster/git (10) -> 2.20.1
-#https://packages.debian.org/bullseye/git (11) -> 2.30.2
-#https://packages.debian.org/bookworm/git (12) -> 2.39.5
-#https://packages.ubuntu.com/bionic/git (18.04) -> 2.17.1
-#https://packages.ubuntu.com/focal/git (20.04) -> 2.25.1
-#https://packages.ubuntu.com/jammy/git (22.04) -> 2.34.1
-#https://packages.ubuntu.com/noble/git (24.04) -> 2.43.0
-
-compare_major="2"
-compare_minor="20"
-compare_sub="1"
-
-if [ "${git_major}" -lt "${compare_major}" ] ; then
-	git_is_old
-elif [ "${git_major}" -eq "${compare_major}" ] ; then
-	if [ "${git_minor}" -lt "${compare_minor}" ] ; then
-		git_is_old
-	elif [ "${git_minor}" -eq "${compare_minor}" ] ; then
-		if [ "${git_sub}" -lt "${compare_sub}" ] ; then
-			git_is_old
-		fi
-	fi
-fi
-
-echo "scripts/git: [`LC_ALL=C ${git_bin} --version`]"
+check_git_version
 
 unset git_config_user_email
 git_config_user_email=$(${git_bin} config --global --get user.email || true)
