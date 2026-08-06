@@ -56,13 +56,25 @@ check_git_version () {
 }
 
 check_git_identity() {
-	local missing=()
-	[[ -z "$(git config user.name)" ]] && missing+=("user.name")
-	[[ -z "$(git config user.email)" ]] && missing+=("user.email")
+	missing=""
 
-	if [ ${#missing[@]} -ne 0 ]; then
-		echo "Error: Missing Git configuration: ${missing[*]}" >&2
-		echo "To fix this, run:" >&2
+	# Check user.name
+	if [ -z "$(${git_bin} config user.name)" ]; then
+		missing="user.name"
+	fi
+
+	# Check user.email
+	if [ -z "$(${git_bin} config user.email)" ]; then
+		if [ -n "$missing" ]; then
+			missing="$missing user.email"
+		else
+			missing="user.email"
+		fi
+	fi
+
+	if [ -n "$missing" ]; then
+		echo "Error: Missing Git configuration: $missing" >&2
+		echo "Please set them using:" >&2
 		echo "  git config --global user.name \"Your Name\"" >&2
 		echo "  git config --global user.email \"you@example.com\"" >&2
 		exit 1
