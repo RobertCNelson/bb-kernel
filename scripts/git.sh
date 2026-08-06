@@ -81,14 +81,6 @@ check_git_identity() {
 	fi
 }
 
-git_kernel_stable () {
-	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
-		echo "-----------------------------"
-		echo "scripts/git: fetching from: ${linux_stable_repo}"
-		${git_bin} fetch "${linux_stable_repo}" master --tags
-	fi
-}
-
 git_kernel_org_stable_tag_backup () {
 	#We want to hit git.kernel.org last for least bandwidth hit...
 	backup_stable_repo="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
@@ -183,7 +175,6 @@ git_kernel () {
 	fi
 
 	cd "${DIR}/KERNEL/" || exit
-
 
 	if [ "${RUN_BISECT}" ] ; then
 		${git_bin} bisect reset || true
