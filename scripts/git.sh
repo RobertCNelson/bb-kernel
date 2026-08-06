@@ -168,7 +168,6 @@ git_kernel () {
 
 	cd "${DIR}/KERNEL/" || exit
 
-	check_git_identity
 
 	if [ "${RUN_BISECT}" ] ; then
 		${git_bin} bisect reset || true
@@ -262,18 +261,7 @@ fi
 
 git_bin=$(which git)
 check_git_version
-
-unset git_config_user_email
-git_config_user_email=$(${git_bin} config --global --get user.email || true)
-if [ ! "${git_config_user_email}" ] ; then
-	${git_bin} config --local user.email you@example.com
-fi
-
-unset git_config_user_name
-git_config_user_name=$(${git_bin} config --global --get user.name || true)
-if [ ! "${git_config_user_name}" ] ; then
-	${git_bin} config --local user.name "Your Name"
-fi
+check_git_identity
 
 if [ ! -f "${DIR}/.yakbuild" ] ; then
 	git_kernel
