@@ -150,7 +150,7 @@ git_kernel () {
 	echo "log: [${git_bin} pull --no-rebase --no-edit]"
 	${git_bin} pull --no-rebase --no-edit || true
 
-	${git_bin} tag | grep "v${KERNEL_TAG}" | grep -v rc >/dev/null 2>&1 || git_kernel_stable_tag
+	${git_bin} rev-parse --verify "refs/tags/v${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable_tag
 
 	test_for_branch=$(${git_bin} branch --list "v${KERNEL_TAG}${BUILD}")
 	if [ "x${test_for_branch}" != "x" ] ; then
