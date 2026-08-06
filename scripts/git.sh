@@ -14,6 +14,16 @@ debian_stable_git="2.20.1"
 #git: --no-edit
 #git: --no-rebase
 
+check_git_identity() {
+	if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
+		echo "Error: Git user.email or user.name is not configured."
+		echo "Please set them using:"
+		echo "  git config --global user.email \"you@example.com\""
+		echo "  git config --global user.name \"Your Name\""
+		exit 1
+	fi
+}
+
 git_is_old () {
 	echo "-----------------------------"
 	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`]; Please Install atleast [${debian_stable_git}] [https://git-scm.com/]"
@@ -48,14 +58,6 @@ git_kernel_stable_tag () {
 	echo "-----------------------------"
 	echo "scripts/git: fetching v${KERNEL_TAG} from: ${linux_stable_repo}"
 	${git_bin} fetch "${linux_stable_repo}" tag v${KERNEL_TAG} --no-tags || git_kernel_stable_tag_backup
-}
-
-git_kernel_torvalds () {
-	echo "-----------------------------"
-	echo "scripts/git: pulling from: ${linux_repo}"
-	echo "log: [${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags]"
-	${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags
-	${git_bin} fetch "${linux_repo}" tag v${KERNEL_TAG} --no-tags || git_kernel_stable_tag
 }
 
 check_and_or_clone () {
@@ -132,20 +134,7 @@ git_kernel () {
 
 	cd "${DIR}/KERNEL/" || exit
 
-	#Debian Jessie: git version 2.0.0.rc0
-	#Disable git's default setting of running `git gc --auto` in the background as the patch.sh script can fail.
-	${git_bin} config --local --list | grep gc.autodetach >/dev/null 2>&1 || ${git_bin} config --local gc.autodetach 0
-
-	#disable git's auto Cleanup, ./KERNEL is a throw away branch...
-	${git_bin} config --local --list | grep gc.auto >/dev/null 2>&1 || ${git_bin} config --local gc.auto 0
-
-	if [ ! "${git_config_user_email}" ] ; then
-		${git_bin} config --local user.email you@example.com
-	fi
-
-	if [ ! "${git_config_user_name}" ] ; then
-		${git_bin} config --local user.name "Your Name"
-	fi
+	check_git_identity
 
 	if [ "${RUN_BISECT}" ] ; then
 		${git_bin} bisect reset || true
@@ -161,27 +150,14 @@ git_kernel () {
 	echo "log: [${git_bin} pull --no-rebase --no-edit]"
 	${git_bin} pull --no-rebase --no-edit || true
 
-	${git_bin} tag | grep "v${KERNEL_TAG}" | grep -v rc >/dev/null 2>&1 || git_kernel_torvalds
-
-	if [ "${KERNEL_SHA}" ] ; then
-		git_kernel_torvalds
-	fi
+	${git_bin} rev-parse --verify "refs/tags/v${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable_tag
 
 	test_for_branch=$(${git_bin} branch --list "v${KERNEL_TAG}${BUILD}")
 	if [ "x${test_for_branch}" != "x" ] ; then
 		${git_bin} branch "v${KERNEL_TAG}${BUILD}" -D
 	fi
 
-	if [ ! "${KERNEL_SHA}" ] ; then
-		${git_bin} checkout "v${KERNEL_TAG}" -b "v${KERNEL_TAG}${BUILD}"
-	else
-		${git_bin} checkout "${KERNEL_SHA}" -b "v${KERNEL_TAG}${BUILD}"
-	fi
-
-	if [ "${TOPOFTREE}" ] ; then
-		${git_bin} pull --no-edit "${linux_repo}" master || true
-		${git_bin} pull --no-edit "${linux_repo}" master --tags || true
-	fi
+	${git_bin} checkout "v${KERNEL_TAG}" -b "v${KERNEL_TAG}${BUILD}"
 
 	${git_bin} describe
 
@@ -246,8 +222,8 @@ git_shallow () {
 . "${DIR}/system.sh"
 
 if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
-	linux_repo="http://forgejo.gfnd.rcn-ee.org:3000/kernel.org/mirror-linux-stable.git"
-	linux_stable_repo="http://forgejo.gfnd.rcn-ee.org:3000/kernel.org/mirror-linux-stable.git"
+	linux_repo="https://forgejo.gfnd.rcn-ee.org:3000/kernel.org/mirror-linux-stable.git"
+	linux_stable_repo="https://forgejo.gfnd.rcn-ee.org:3000/kernel.org/mirror-linux-stable.git"
 fi
 
 git_bin=$(which git)
