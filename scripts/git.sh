@@ -14,16 +14,6 @@ debian_stable_git="2.20.1"
 #git: --no-edit
 #git: --no-rebase
 
-check_git_identity() {
-	if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
-		echo "Error: Git user.email or user.name is not configured."
-		echo "Please set them using:"
-		echo "  git config --global user.email \"you@example.com\""
-		echo "  git config --global user.name \"Your Name\""
-		exit 1
-	fi
-}
-
 git_is_old () {
 	echo "-----------------------------"
 	echo "scripts/git: git is too old: [`LC_ALL=C ${git_bin} --version | awk '{print $3}'`]; Please Install atleast [${debian_stable_git}] [https://git-scm.com/]"
@@ -31,11 +21,63 @@ git_is_old () {
 	exit 2
 }
 
-git_kernel_stable () {
-	if [ ! "${USE_LOCAL_GIT_MIRROR}" ] ; then
-		echo "-----------------------------"
-		echo "scripts/git: fetching from: ${linux_stable_repo}"
-		${git_bin} fetch "${linux_stable_repo}" master --tags
+check_git_version () {
+	git_major=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f1)
+	git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
+	git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
+
+	#debian Stable:
+	#https://packages.debian.org/stretch/git (9) -> 2.11.0
+	#https://packages.debian.org/buster/git (10) -> 2.20.1
+	#https://packages.debian.org/bullseye/git (11) -> 2.30.2
+	#https://packages.debian.org/bookworm/git (12) -> 2.39.5
+	#https://packages.ubuntu.com/bionic/git (18.04) -> 2.17.1
+	#https://packages.ubuntu.com/focal/git (20.04) -> 2.25.1
+	#https://packages.ubuntu.com/jammy/git (22.04) -> 2.34.1
+	#https://packages.ubuntu.com/noble/git (24.04) -> 2.43.0
+
+	compare_major="2"
+	compare_minor="20"
+	compare_sub="1"
+
+	if [ "${git_major}" -lt "${compare_major}" ] ; then
+		git_is_old
+	elif [ "${git_major}" -eq "${compare_major}" ] ; then
+		if [ "${git_minor}" -lt "${compare_minor}" ] ; then
+			git_is_old
+		elif [ "${git_minor}" -eq "${compare_minor}" ] ; then
+			if [ "${git_sub}" -lt "${compare_sub}" ] ; then
+				git_is_old
+			fi
+		fi
+	fi
+
+	echo "scripts/git: [`LC_ALL=C ${git_bin} --version`]"
+}
+
+check_git_identity() {
+	missing=""
+
+	# Check user.name
+	if [ -z "$(${git_bin} config user.name)" ]; then
+		missing="user.name"
+	fi
+
+	# Check user.email
+	if [ -z "$(${git_bin} config user.email)" ]; then
+		if [ -n "$missing" ]; then
+			missing="$missing user.email"
+		else
+			missing="user.email"
+		fi
+	fi
+
+	if [ -n "$missing" ]; then
+		echo "Error: Missing Git configuration: $missing" >&2
+		echo "Please set them using:" >&2
+		echo "  git config --global user.name \"Your Name\"" >&2
+		echo "  git config --global user.email \"you@example.com\"" >&2
+		exit 1
 	fi
 }
 
@@ -134,30 +176,29 @@ git_kernel () {
 
 	cd "${DIR}/KERNEL/" || exit
 
-	check_git_identity
-
 	if [ "${RUN_BISECT}" ] ; then
 		${git_bin} bisect reset || true
 	fi
 
-	${git_bin} am --abort || echo "${git_bin} tree is clean..."
-	${git_bin} add --all
-	${git_bin} commit --allow-empty -a -m 'empty cleanup commit'
-
+	${git_bin} am --abort 2>/dev/null || true
 	${git_bin} reset --hard HEAD
+	${git_bin} clean -fd
 	${git_bin} checkout master -f
 
 	echo "log: [${git_bin} pull --no-rebase --no-edit]"
 	${git_bin} pull --no-rebase --no-edit || true
 
-	${git_bin} tag | grep "v${KERNEL_TAG}" | grep -v rc >/dev/null 2>&1 || git_kernel_stable_tag
+	${git_bin} rev-parse --verify "refs/tags/v${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable_tag
 
-	test_for_branch=$(${git_bin} branch --list "v${KERNEL_TAG}${BUILD}")
-	if [ "x${test_for_branch}" != "x" ] ; then
-		${git_bin} branch "v${KERNEL_TAG}${BUILD}" -D
+	target_branch="v${KERNEL_TAG}${BUILD}"
+
+	if ${git_bin} show-ref --verify --quiet "refs/heads/${target_branch}"; then
+		echo "scripts/git: Deleting existing local branch ${target_branch}"
+		${git_bin} branch -D "${target_branch}"
 	fi
 
-	${git_bin} checkout "v${KERNEL_TAG}" -b "v${KERNEL_TAG}${BUILD}"
+	echo "scripts/git: Checking out ${KERNEL_TAG} into ${target_branch}"
+	${git_bin} checkout "v${KERNEL_TAG}" -b "${target_branch}"
 
 	${git_bin} describe
 
@@ -227,50 +268,8 @@ if [ "${USE_LOCAL_GIT_MIRROR}" ] ; then
 fi
 
 git_bin=$(which git)
-
-git_major=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f1)
-git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
-git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
-
-#debian Stable:
-#https://packages.debian.org/stretch/git (9) -> 2.11.0
-#https://packages.debian.org/buster/git (10) -> 2.20.1
-#https://packages.debian.org/bullseye/git (11) -> 2.30.2
-#https://packages.debian.org/bookworm/git (12) -> 2.39.5
-#https://packages.ubuntu.com/bionic/git (18.04) -> 2.17.1
-#https://packages.ubuntu.com/focal/git (20.04) -> 2.25.1
-#https://packages.ubuntu.com/jammy/git (22.04) -> 2.34.1
-#https://packages.ubuntu.com/noble/git (24.04) -> 2.43.0
-
-compare_major="2"
-compare_minor="20"
-compare_sub="1"
-
-if [ "${git_major}" -lt "${compare_major}" ] ; then
-	git_is_old
-elif [ "${git_major}" -eq "${compare_major}" ] ; then
-	if [ "${git_minor}" -lt "${compare_minor}" ] ; then
-		git_is_old
-	elif [ "${git_minor}" -eq "${compare_minor}" ] ; then
-		if [ "${git_sub}" -lt "${compare_sub}" ] ; then
-			git_is_old
-		fi
-	fi
-fi
-
-echo "scripts/git: [`LC_ALL=C ${git_bin} --version`]"
-
-unset git_config_user_email
-git_config_user_email=$(${git_bin} config --global --get user.email || true)
-if [ ! "${git_config_user_email}" ] ; then
-	${git_bin} config --local user.email you@example.com
-fi
-
-unset git_config_user_name
-git_config_user_name=$(${git_bin} config --global --get user.name || true)
-if [ ! "${git_config_user_name}" ] ; then
-	${git_bin} config --local user.name "Your Name"
-fi
+check_git_version
+check_git_identity
 
 if [ ! -f "${DIR}/.yakbuild" ] ; then
 	git_kernel
