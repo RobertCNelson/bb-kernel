@@ -15,13 +15,13 @@ debian_stable_git="2.20.1"
 #git: --no-rebase
 
 check_git_identity() {
-    if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
-        echo "Error: Git user.email or user.name is not configured."
-        echo "Please set them using:"
-        echo "  git config --global user.email \"you@example.com\""
-        echo "  git config --global user.name \"Your Name\""
-        exit 1
-    fi
+	if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
+		echo "Error: Git user.email or user.name is not configured."
+		echo "Please set them using:"
+		echo "  git config --global user.email \"you@example.com\""
+		echo "  git config --global user.name \"Your Name\""
+		exit 1
+	fi
 }
 
 git_is_old () {
