@@ -56,11 +56,15 @@ check_git_version () {
 }
 
 check_git_identity() {
-	if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
-		echo "Error: Git user.email or user.name is not configured."
-		echo "Please set them using:"
-		echo "  git config --global user.email \"you@example.com\""
-		echo "  git config --global user.name \"Your Name\""
+	local missing=()
+	[[ -z "$(git config user.name)" ]] && missing+=("user.name")
+	[[ -z "$(git config user.email)" ]] && missing+=("user.email")
+
+	if [ ${#missing[@]} -ne 0 ]; then
+		echo "Error: Missing Git configuration: ${missing[*]}" >&2
+		echo "To fix this, run:" >&2
+		echo "  git config --global user.name \"Your Name\"" >&2
+		echo "  git config --global user.email \"you@example.com\"" >&2
 		exit 1
 	fi
 }
