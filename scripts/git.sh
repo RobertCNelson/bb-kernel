@@ -190,12 +190,15 @@ git_kernel () {
 
 	${git_bin} rev-parse --verify "refs/tags/v${KERNEL_TAG}" >/dev/null 2>&1 || git_kernel_stable_tag
 
-	test_for_branch=$(${git_bin} branch --list "v${KERNEL_TAG}${BUILD}")
-	if [ "x${test_for_branch}" != "x" ] ; then
-		${git_bin} branch "v${KERNEL_TAG}${BUILD}" -D
+	target_branch="v${KERNEL_TAG}${BUILD}"
+
+	if ${git_bin} show-ref --verify --quiet "refs/heads/${target_branch}"; then
+		echo "scripts/git: Deleting existing local branch ${target_branch}"
+		${git_bin} branch -D "${target_branch}"
 	fi
 
-	${git_bin} checkout "v${KERNEL_TAG}" -b "v${KERNEL_TAG}${BUILD}"
+	echo "scripts/git: Checking out ${KERNEL_TAG} into ${target_branch}"
+	${git_bin} checkout "v${KERNEL_TAG}" -b "${target_branch}"
 
 	${git_bin} describe
 
