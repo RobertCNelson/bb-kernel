@@ -60,14 +60,6 @@ git_kernel_stable_tag () {
 	${git_bin} fetch "${linux_stable_repo}" tag v${KERNEL_TAG} --no-tags || git_kernel_stable_tag_backup
 }
 
-git_kernel_torvalds () {
-	echo "-----------------------------"
-	echo "scripts/git: pulling from: ${linux_repo}"
-	echo "log: [${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags]"
-	${git_bin} pull --no-rebase --no-edit "${linux_repo}" master --tags
-	${git_bin} fetch "${linux_repo}" tag v${KERNEL_TAG} --no-tags || git_kernel_stable_tag
-}
-
 check_and_or_clone () {
 	#For Legacy: moving to "${DIR}/ignore/linux-src/" for all new installs
 	if [ ! "${LINUX_GIT}" ] && [ -f "${HOME}/linux-src/.git/config" ] ; then
@@ -158,7 +150,7 @@ git_kernel () {
 	echo "log: [${git_bin} pull --no-rebase --no-edit]"
 	${git_bin} pull --no-rebase --no-edit || true
 
-	${git_bin} tag | grep "v${KERNEL_TAG}" | grep -v rc >/dev/null 2>&1 || git_kernel_torvalds
+	${git_bin} tag | grep "v${KERNEL_TAG}" | grep -v rc >/dev/null 2>&1 || git_kernel_stable_tag
 
 	test_for_branch=$(${git_bin} branch --list "v${KERNEL_TAG}${BUILD}")
 	if [ "x${test_for_branch}" != "x" ] ; then
