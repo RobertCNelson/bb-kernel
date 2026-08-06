@@ -180,11 +180,9 @@ git_kernel () {
 		${git_bin} bisect reset || true
 	fi
 
-	${git_bin} am --abort || echo "${git_bin} tree is clean..."
-	${git_bin} add --all
-	${git_bin} commit --allow-empty -a -m 'empty cleanup commit'
-
+	${git_bin} am --abort 2>/dev/null || true
 	${git_bin} reset --hard HEAD
+	${git_bin} clean -fd
 	${git_bin} checkout master -f
 
 	echo "log: [${git_bin} pull --no-rebase --no-edit]"
