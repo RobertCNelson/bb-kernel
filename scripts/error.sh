@@ -37,11 +37,7 @@ else
 	fi
 fi
 
-if [ ! "${KERNEL_SHA}" ] ; then
-	echo "kernel: [v${KERNEL_TAG}${BUILD}]"
-else
-	echo "kernel: [v${KERNEL_TAG}${BUILD}] + [${KERNEL_SHA}]"
-fi
+echo "kernel: [v${KERNEL_TAG}${BUILD}]"
 
 echo "uname -m"
 uname -m
