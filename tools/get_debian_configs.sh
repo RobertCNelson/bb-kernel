@@ -8,13 +8,13 @@
 #https://packages.debian.org/source/sid/linux
 #
 trixie_kernel_branch="6.12"
-trixie_kernel_tag="6.12.100-1"
+trixie_kernel_tag="6.12.101-1"
 #
 forky_kernel_branch="7.1"
-forky_kernel_tag="7.1.3-1"
+forky_kernel_tag="7.1.7-1"
 #
 sid_kernel_branch="7.1"
-sid_kernel_tag="7.1.5-1"
+sid_kernel_tag="7.1.7-1"
 #
 exp_kernel_branch="7.2"
 #exp_kernel_tag="7.2.1-1~exp1"
