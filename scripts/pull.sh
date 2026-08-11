@@ -4,6 +4,6 @@
 #
 # SPDX-License-Identifier: MIT
 
-git pull --no-edit https://github.com/RobertCNelson/bb-kernel.git am33x-v6.18
-git pull --no-edit https://gitlab.com/RobertCNelson/bb-kernel.git am33x-v6.18
+git pull --no-edit https://github.com/RobertCNelson/bb-kernel.git am33x-v6.12
+git pull --no-edit https://gitlab.com/RobertCNelson/bb-kernel.git am33x-v6.12
 
