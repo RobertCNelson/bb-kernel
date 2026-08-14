@@ -59,7 +59,7 @@ dl_generic () {
 			CC=""
 			;;
 		*)
-			CC="${target_dir}/bin/${gcc_prefix}-"
+			CC="${gcc_dir}/${filename_prefix}/${binary}"
 			;;
 	esac
 }
