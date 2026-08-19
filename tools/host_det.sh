@@ -681,27 +681,6 @@ fi
 
 ARCH=$(uname -m)
 
-echo "-----------------------------"
-unset NEEDS_COMMAND
-check_for_command () {
-	if ! which "$1" >/dev/null 2>&1 ; then
-		echo "You're missing command $1"
-		NEEDS_COMMAND=1
-	else
-		version=$(LC_ALL=C $1 $2 | head -n 1)
-		echo "$1: $version"
-	fi
-}
-
-unset NEEDS_COMMAND
-check_for_command xz --version
-
-if [ "${NEEDS_COMMAND}" ] ; then
-	echo "Please install missing commands"
-	echo "-----------------------------"
-	exit 2
-fi
-
 case "$BUILD_HOST" in
     redhat*)
 	    redhat_reqs || error "Failed dependency check"
