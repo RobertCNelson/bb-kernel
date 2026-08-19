@@ -568,15 +568,14 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		jammy|noble|plucky|questing|resolute)
+		jammy|noble|resolute|stonking)
 			#22.04 jammy: (EOL: June 2027) lts: jammy -> noble
 			#24.04 noble: (EOL: June 2029) lts: noble -> resolute
-			#25.04 plucky: (EOL: January 2026)
-			#25.10 questing: (EOL: July 2026)
 			#26.04 resolute: (EOL: July 2031) lts: resolute -> xyz
+			#26.10 stonking: (EOL: June 2027)
 			unset warn_eol_distro
 			;;
-		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|focal|groovy|hirsute|impish|kinetic|lunar|mantic|oracular)
+		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|focal|groovy|hirsute|impish|kinetic|lunar|mantic|oracular|plucky|questing)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
@@ -606,6 +605,8 @@ debian_regs () {
 			#23.04 lunar: (EOL: January 2024)
 			#23.10 mantic: (EOL: July 2024)
 			#24.10 oracular: (EOL: July 2025)
+			#25.04 plucky: (EOL: January 15, 2026)
+			#25.10 questing: (EOL: July 9th 2026)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
