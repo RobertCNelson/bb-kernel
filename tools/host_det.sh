@@ -153,6 +153,8 @@ debian_regs () {
 	check_dpkg
 	pkg="flex"
 	check_dpkg
+	pkg="kmod"
+	check_dpkg
 	pkg="lsb-release"
 	check_dpkg
 	pkg="lz4"
