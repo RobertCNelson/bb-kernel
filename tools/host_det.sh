@@ -147,7 +147,11 @@ debian_regs () {
 	check_dpkg
 	pkg="build-essential"
 	check_dpkg
+	pkg="ca-certificates"
+	check_dpkg
 	pkg="cpio"
+	check_dpkg
+	pkg="device-tree-compiler"
 	check_dpkg
 	pkg="fakeroot"
 	check_dpkg
