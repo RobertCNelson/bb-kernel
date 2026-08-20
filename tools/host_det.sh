@@ -161,8 +161,8 @@ debian_regs () {
 	check_dpkg
 	pkg="lsb-release"
 	check_dpkg
-	pkg="lz4"
-	check_dpkg
+#	pkg="lz4"
+#	check_dpkg
 	pkg="man-db"
 	check_dpkg
 	#git
