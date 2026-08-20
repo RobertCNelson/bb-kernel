@@ -280,6 +280,7 @@ beagleboard_dtbs () {
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD7-01-00A3" ; arm_dtbo_makefile_append
+		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
 		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
 		device="BB-EHRPWM0-P9_29-P9_31" ; arm_dtbo_makefile_append
@@ -533,6 +534,8 @@ drivers () {
 	#dir 'drivers/it66121_drm_connector_v2'
 
 	#dir 'drivers/it66122'
+
+	dir 'drivers/panel'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
