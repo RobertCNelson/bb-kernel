@@ -66,6 +66,7 @@ dl_distro () {
 
 #kernel_branch="${sid_kernel_branch}"
 #kernel_tag="${sid_kernel_tag}"
+
 kernel_branch="${exp_kernel_branch}"
 kernel_tag="${exp_kernel_tag}"
 dl_distro
