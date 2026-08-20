@@ -280,6 +280,7 @@ beagleboard_dtbs () {
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD7-01-00A3" ; arm_dtbo_makefile_append
+		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
 		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
 		device="BB-EHRPWM0-P9_29-P9_31" ; arm_dtbo_makefile_append
@@ -541,6 +542,20 @@ backports () {
 		post_rpibackports
 	else
 		dir 'backports/rpi-backports'
+	fi
+
+	backport_tag="v7.1.9"
+
+	subsystem="panel-simple"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/gpu/drm/panel/panel-simple.c ./drivers/gpu/drm/panel/
+
+		post_backports
+	else
+		dir 'backports/panel-simple'
 	fi
 
 	backport_tag="12.00.00.07"
