@@ -61,8 +61,6 @@ redhat_reqs () {
 	check_rpm
 	pkg="flex"
 	check_rpm
-	pkg="lz4"
-	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
 	pkg="wget2-wget"
@@ -161,8 +159,6 @@ debian_regs () {
 	check_dpkg
 	pkg="lsb-release"
 	check_dpkg
-#	pkg="lz4"
-#	check_dpkg
 	pkg="man-db"
 	check_dpkg
 	#git
@@ -510,6 +506,16 @@ debian_regs () {
 			#22.2
 			#http://packages.linuxmint.com/index.php
 			deb_distro="noble"
+			;;
+		zena)
+			#22.3
+			#http://packages.linuxmint.com/index.php
+			deb_distro="noble"
+			;;
+		alfa)
+			#23
+			#http://packages.linuxmint.com/index.php
+			deb_distro="resolute"
 			;;
 		esac
 
