@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 ccache -sv
 df -h /dev/shm

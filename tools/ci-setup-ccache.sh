@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 tar --zstd -xf ccache.tar.zst -C / || true
 df -h /dev/shm
