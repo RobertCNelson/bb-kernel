@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/bin/bash -x
 
 tar --zstd -xf ccache.tar.zst -C / || true
 df -h /dev/shm
-ccache -M 5G
+ccache -M 4G
 ccache -sv
 ccache -z
