@@ -544,7 +544,7 @@ backports () {
 		dir 'backports/rpi-backports'
 	fi
 
-	backport_tag="v7.1.9"
+	backport_tag="v7.1.10"
 
 	subsystem="panel-simple"
 	#regenerate="enable"
