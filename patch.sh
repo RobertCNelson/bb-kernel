@@ -600,6 +600,8 @@ cc33xx_drivers () {
 drivers () {
 	dir 'branding/boris'
 
+	dir 'drivers/davinci-mcasp'
+
 	dir 'drivers/tilcdc-4.12.x/'
 	dir 'drivers/tilcdc/'
 
