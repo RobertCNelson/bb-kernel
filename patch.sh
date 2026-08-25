@@ -536,6 +536,7 @@ drivers () {
 	dir 'drivers/it66122-v72'
 
 	dir 'drivers/panel'
+	dir 'drivers/mcasp'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
 }
