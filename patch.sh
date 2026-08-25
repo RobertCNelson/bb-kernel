@@ -608,6 +608,8 @@ drivers () {
 	dir 'drivers/it66121_drm_connector'
 	dir 'drivers/it66122'
 
+	dir 'drivers/it66122-v72'
+
 	dir 'drivers/panel'
 
 	dir 'drivers/wkup_m3_ipc'
