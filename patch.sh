@@ -291,9 +291,12 @@ beagleboard_dtbs () {
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-4D4C-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-4D5R-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD7-01-00A3" ; arm_dtbo_makefile_append
+		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
 		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
 		device="BB-EHRPWM0-P9_29-P9_31" ; arm_dtbo_makefile_append
@@ -473,7 +476,7 @@ post_backports () {
 	fi
 
 	${git_bin} add .
-	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	${git_bin} commit -a -m "backports ${subsystem} from linux" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
@@ -506,7 +509,7 @@ post_rpibackports () {
 	fi
 
 	${git_bin} add .
-	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	${git_bin} commit -a -m "backports ${subsystem} from raspberrypi-linux" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
@@ -562,7 +565,7 @@ backports () {
 
 		post_rpibackports
 	else
-		patch_backports
+		dir 'backports/rpi-backports'
 	fi
 
 	#dir 'drivers/ti/uio_revert'
@@ -597,11 +600,17 @@ cc33xx_drivers () {
 drivers () {
 	dir 'branding/boris'
 
+	dir 'drivers/davinci-mcasp'
+
 	dir 'drivers/tilcdc-4.12.x/'
 	dir 'drivers/tilcdc/'
 
 	dir 'drivers/it66121_drm_connector'
 	dir 'drivers/it66122'
+
+	dir 'drivers/it66122-v72'
+
+	dir 'drivers/panel'
 
 	dir 'drivers/wkup_m3_ipc'
 	dir 'external/ti-amx3-cm3-pm-firmware'
