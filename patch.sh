@@ -544,7 +544,7 @@ backports () {
 		dir 'backports/rpi-backports'
 	fi
 
-	backport_tag="v7.1.10"
+	backport_tag="v7.1.11"
 
 	subsystem="panel-simple"
 	#regenerate="enable"
@@ -594,8 +594,6 @@ drivers () {
 
 	dir 'drivers/it66121/'
 
-#	dir 'drivers/tilcdc_bridge'
-
 	dir 'drivers/it66121_drm_connector'
 	#dir 'drivers/it66121_drm_connector_v2'
 
@@ -604,7 +602,6 @@ drivers () {
 	dir 'drivers/panel'
 
 	dir 'external/ti-amx3-cm3-pm-firmware'
-#	dir 'drivers/remoteproc'
 }
 
 ###
