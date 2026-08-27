@@ -21,7 +21,7 @@ else
 fi
 
 check_glibc () {
-    [ -f "./glibc_version" ] && rm "./glibc_version"
+	[ -f "./glibc_version" ] && rm "./glibc_version"
 	gcc scripts/glibc_version.c -o glibc_version
 	version=$(LC_ALL=C ./glibc_version | awk '{print $3}')
 	echo "glibc: $version"
@@ -54,12 +54,14 @@ dl_generic () {
 		echo "Using Existing Toolchain: ${toolchain}"
 	fi
 
-	if [ "x${ARCH}" = "xarmv7l" ] || [ "x${ARCH}" = "xaarch64" ] ; then
-		#using native gcc
-		CC=
-	else
-		CC="${gcc_dir}/${filename_prefix}/${binary}"
-	fi
+	case "$ARCH" in
+		armv7l|aarch64|riscv64)
+			CC=""
+			;;
+		*)
+			CC="${gcc_dir}/${filename_prefix}/${binary}"
+			;;
+	esac
 }
 
 dl_gcc_generic () {
@@ -262,17 +264,17 @@ fi
 # Map Kernel Arch to validation string
 check=""
 case "${KERNEL_ARCH}" in
-    arm)    check="arm" ;;
-    arm64)  check="aarch64" ;;
-    riscv)  check="riscv" ;;
+	arm)    check="arm" ;;
+	arm64)  check="aarch64" ;;
+	riscv)  check="riscv" ;;
 esac
 
 if [ -z "${check}" ] ; then
 	echo "ERROR: fix: scripts/gcc.sh..."
 	exit 2
 else
-    # Validate compiler targets
-    GCC_TEST=$(LC_ALL=C "${CC}"gcc -v 2>&1 | grep "Target:" | grep "${check}" || true)
+	# Validate compiler targets
+	GCC_TEST=$(LC_ALL=C "${CC}"gcc -v 2>&1 | grep "Target:" | grep "${check}" || true)
 fi
 
 if [ -z "${GCC_TEST}" ] ; then

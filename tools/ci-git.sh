@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 if [ ! -f /opt/linux-src/.git/logs/HEAD.lock ] ; then
 	if [ ! -f /opt/linux-src/.git/logs/refs/heads/master.lock ] ; then
