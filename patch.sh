@@ -531,11 +531,6 @@ drivers () {
 	dir 'drivers/davinci-mcasp'
 	dir 'drivers/mcasp'
 
-	#dir 'drivers/tilcdc/'
-
-	#dir 'drivers/it66121_drm_connector'
-	#dir 'drivers/it66121_drm_connector_v2'
-
 	dir 'drivers/it66122-v72'
 
 	dir 'drivers/panel'
