@@ -293,9 +293,12 @@ beagleboard_dtbs () {
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-4D4C-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-4D5R-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD7-01-00A3" ; arm_dtbo_makefile_append
+		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
 		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
 		device="BB-EHRPWM0-P9_29-P9_31" ; arm_dtbo_makefile_append
@@ -476,7 +479,7 @@ post_backports () {
 	fi
 
 	${git_bin} add .
-	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	${git_bin} commit -a -m "backports ${subsystem} from linux" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
@@ -509,7 +512,7 @@ post_rpibackports () {
 	fi
 
 	${git_bin} add .
-	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	${git_bin} commit -a -m "backports ${subsystem} from raspberrypi-linux" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
