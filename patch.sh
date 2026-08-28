@@ -568,9 +568,9 @@ backports () {
 		dir 'backports/rpi-backports'
 	fi
 
-	#dir 'drivers/ti/uio_revert'
+	dir 'drivers/ti/uio_revert'
 
-	backport_tag="v6.6.114"
+	backport_tag="v6.6.154"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -580,9 +580,8 @@ backports () {
 		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
 
 		post_backports
-	#else
-		patch_backports
-
+	else
+		dir 'backports/uio'
 		dir 'drivers/ti/uio'
 	fi
 }
