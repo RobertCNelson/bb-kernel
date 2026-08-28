@@ -61,11 +61,11 @@ dl_distro () {
 	dl_deb
 }
 
-kernel_branch="${sid_kernel_branch}"
-kernel_tag="${sid_kernel_tag}"
+#kernel_branch="${sid_kernel_branch}"
+#kernel_tag="${sid_kernel_tag}"
 
-#kernel_branch="${exp_kernel_branch}"
-#kernel_tag="${exp_kernel_tag}"
+kernel_branch="${exp_kernel_branch}"
+kernel_tag="${exp_kernel_tag}"
 dl_distro
 
 rm -rf ./dl/ || true
