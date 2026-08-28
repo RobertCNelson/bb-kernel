@@ -271,6 +271,7 @@ beagleboard_dtbs () {
 		#regenerate_arm_dtbo_list
 
 		device="AM3359-PWM012" ; arm_dtbo_makefile_append
+		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
@@ -544,7 +545,7 @@ backports () {
 		dir 'backports/rpi-backports'
 	fi
 
-	backport_tag="v7.1.11"
+	backport_tag="v7.1.12"
 
 	subsystem="panel-simple"
 	#regenerate="enable"
@@ -572,6 +573,23 @@ backports () {
 	else
 		patch_backports
 	fi
+
+	dir 'drivers/ti/uio_revert'
+
+	backport_tag="v6.6.154"
+
+	subsystem="uio"
+	#regenerate="enable"
+	if [ "x${regenerate}" = "xenable" ] ; then
+		pre_backports
+
+		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
+
+		post_backports
+	else
+		dir 'backports/uio'
+		dir 'drivers/ti/uio'
+	fi
 }
 
 cc33xx_drivers () {
@@ -595,7 +613,6 @@ drivers () {
 	dir 'drivers/it66121/'
 
 	dir 'drivers/it66121_drm_connector'
-	#dir 'drivers/it66121_drm_connector_v2'
 
 	dir 'drivers/it66122-v72'
 
