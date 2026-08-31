@@ -236,7 +236,7 @@ regenerate_arm64_dtbo_list () {
 }
 
 beagleboard_dtbs () {
-	branch="v7.2.x"
+	branch="v7.3.x"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
 	#regenerate="enable"
@@ -402,7 +402,6 @@ beagleboard_dtbs () {
 		#K3 Devices
 		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
 		device="k3-am625-sancloud-bbe-2.dtb" ; k3_dtb_makefile_append
-		device="k3-am62l3-beaglebadge.dtb" ; k3_dtb_makefile_append
 
 		${git_bin} add -f arch/arm/boot/dts/
 		${git_bin} add -f arch/arm64/boot/dts/
@@ -497,7 +496,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="rpi-7.2.y"
+	backport_tag="rpi-7.3.y"
 
 	subsystem="rpi-backports"
 	#regenerate="enable"
