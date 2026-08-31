@@ -11,11 +11,11 @@ forky_kernel_branch="7.1"
 forky_kernel_tag="7.1.8-2"
 #
 sid_kernel_branch="7.1"
-sid_kernel_tag="7.1.10-1"
+sid_kernel_tag="7.1.12-1"
 #
 exp_kernel_branch="7.2"
-#exp_kernel_tag="7.2.1-1~exp1"
-exp_kernel_tag="7.2~rc7-1~exp1"
+exp_kernel_tag="7.2.2-1~exp1"
+#exp_kernel_tag="7.2~rc7-1~exp1"
 #
 
 mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
