@@ -90,7 +90,8 @@ external_git () {
 mainline_patches () {
 	#exit 2
 	#dir 'mainline/pocketbeagle2'
-	dir 'mainline/greenecho'
+	#dir 'mainline/greenecho'
+	dir 'mainline/beagleboneblackrevd'
 	#exit 2
 }
 
@@ -258,6 +259,8 @@ beagleboard_dtbs () {
 		rm -rf arch/arm64/boot/dts/ti/overlays/ || true
 		omap_makefile_patch_of_overlays
 
+		rm -rf ../${work_dir}/src/arm/ti/omap/am335x-boneblack-revd.dts || true
+		rm -rf ../${work_dir}/src/arm/ti/omap/am335x-boneblack-ite-hdmi.dtsi || true
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dts arch/arm/boot/dts/ti/omap/
 		cp -v ../${work_dir}/src/arm/ti/omap/*.dtsi arch/arm/boot/dts/ti/omap/
 		cp -v ../${work_dir}/src/arm64/ti/*.dts arch/arm64/boot/dts/ti/
@@ -329,7 +332,7 @@ beagleboard_dtbs () {
 
 		#am335x Devices
 		device="am335x-boneblack-uboot.dtb" ; arm_dtb_makefile_append
-		device="am335x-boneblack-revd.dtb" ; arm_dtb_makefile_append
+		#device="am335x-boneblack-revd.dtb" ; arm_dtb_makefile_append
 
 		#regenerate_arm64_dtbo_list
 
@@ -431,7 +434,7 @@ local_patch () {
 }
 
 #external_git
-#mainline_patches
+mainline_patches
 rt
 wireless_regdb
 beagleboard_dtbs
