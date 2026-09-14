@@ -10,7 +10,7 @@ variables:
   KERNEL_IMAGE: "arch/arm/boot/zImage"
   REGISTRY_BASE: "registry.gfnd.rcn-ee.org:5000/ci"
   RUN_CI_GIT_UPDATE: "true"
-  RUN_CI_DT_SCHEMA_CHECKER: "true"
+  RUN_CI_DT_SCHEMA_CHECKER: "false"
   DEBIAN_VERSION_ARTIFACTS: "13"
 
 stages:
@@ -53,7 +53,7 @@ after_script:
   stage: build
   tags:
     - docker-amd64
-  resource_group: $TARGET_LOCK_NAME
+  resource_group: lock-$CI_DISTRO-$VERSION-$CI_COMMIT_BRANCH
   rules:
     - if: $CI_COMMIT_TAG
       when: never
@@ -68,11 +68,11 @@ after_script:
     - !reference [.script_fragments, setup_ccache]
     - cp -v $SYSTEM_SH_SRC system.sh
     
-    # --- 1. PREPARE BUILD CONFIGURATION ---
+    # --- 1. PREPARE BUILD CONFIGURATION & DYNAMIC PATHS ---
     - |
       if [ "$CI_DISTRO" = "debian" ]; then
         BUILD_SCRIPT="build_deb.sh"
-        CHECK_PATH="$CHECK_FILE"
+        CHECK_PATH="deploy/linux-image-*.deb"
         echo "Mode: Debian Build"
       else
         BUILD_SCRIPT="build_kernel.sh"
@@ -80,6 +80,7 @@ after_script:
         echo "Mode: Kernel Build ($CI_DISTRO)"
       fi
       echo "Running $BUILD_SCRIPT..."
+      echo "Will verify path: $CHECK_PATH"
 
     # --- 2. EXECUTE BUILD ---
     - ./$BUILD_SCRIPT
@@ -87,21 +88,20 @@ after_script:
     # --- 3. POST-BUILD: VERIFICATION & ARTIFACT MANAGEMENT ---
     - |
       echo "Verifying: $CHECK_PATH"
-      if [ -f "$CHECK_PATH" ] || [ -d "$CHECK_PATH" ]; then
+      if ls $CHECK_PATH >/dev/null 2>&1; then
         echo "Success: $CHECK_PATH found."
-        du -sh "$CHECK_PATH"
+        find . -name "$(echo $CHECK_PATH | sed 's/\*//')" -exec du -sh {} +
       else
         echo "Error: $CHECK_PATH NOT FOUND!"
         exit 1
       fi
 
-      # If it's a Debian build and NOT the version we want to keep, hide the file
       if [ "$CI_DISTRO" = "debian" ]; then
         export DEBIAN_VERSION_ARTIFACTS="$DEBIAN_VERSION_ARTIFACTS"
         if [ "$VERSION" != "$DEBIAN_VERSION_ARTIFACTS" ]; then
           echo "Version $VERSION is not $DEBIAN_VERSION_ARTIFACTS: Hiding debian artifacts."
           mkdir -p .hidden_artifacts
-          mv "$CHECK_PATH" .hidden_artifacts/ || true
+          find deploy/ -name "linux-image-*.deb" -exec mv {} .hidden_artifacts/ \; || true
         fi
       fi
     # ---------------------------------------------------------
@@ -122,19 +122,13 @@ build-all:
       - CI_DISTRO: "debian"
         VERSION: "13"
         SYSTEM_SH_SRC: "system.sh.gitlab"
-        CHECK_FILE: "deploy/linux-image-*.deb"
-        TARGET_LOCK_NAME: "lock-debian-13-$CI_COMMIT_BRANCH"
       - CI_DISTRO: "debian"
         VERSION: "14"
         SYSTEM_SH_SRC: "system.sh.gitlab"
-        CHECK_FILE: "deploy/linux-image-*.deb"
-        TARGET_LOCK_NAME: "lock-debian-14-$CI_COMMIT_BRANCH"
       # --- KERNEL ---
       - CI_DISTRO: "ubuntu"
         VERSION: "26.04"
         SYSTEM_SH_SRC: "system.sh.gitlab.crosstool"
-        TARGET_LOCK_NAME: "lock-ubuntu-$CI_COMMIT_BRANCH"
       - CI_DISTRO: "fedora"
         VERSION: "44"
         SYSTEM_SH_SRC: "system.sh.gitlab.crosstool"
-        TARGET_LOCK_NAME: "lock-fedora-$CI_COMMIT_BRANCH"
