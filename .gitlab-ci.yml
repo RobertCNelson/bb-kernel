@@ -11,6 +11,7 @@ variables:
   REGISTRY_BASE: "registry.gfnd.rcn-ee.org:5000/ci"
   RUN_CI_GIT_UPDATE: "false"
   RUN_CI_DT_SCHEMA_CHECKER: "false"
+  DEBIAN_VERSION_ARTIFACTS: "13"
 
 stages:
   - build
@@ -26,7 +27,7 @@ before_script:
   - . version.sh && echo $BRANCH
 
 after_script:
-    - rm -rf $CI_PROJECT_DIR/KERNEL/
+  - rm -rf $CI_PROJECT_DIR/KERNEL/
 
 .script_fragments:
   setup_dt_schema:
@@ -48,77 +49,85 @@ after_script:
   cleanup_ccache:
     - ./tools/ci-cleanup-ccache.sh
 
-.base_build:
+.unified_build_template:
   stage: build
   tags:
     - docker-amd64
-  resource_group: $TARGET_LOCK_NAME
+  resource_group: lock-$CI_DISTRO-$VERSION-$CI_COMMIT_BRANCH
   rules:
     - if: $CI_COMMIT_TAG
       when: never
     - when: always
-
-.debian_build_template:
-  extends: .base_build
-  variables:
-    SYSTEM_SH_SRC: "system.sh.gitlab"
-    CHECK_FILE: "deploy/linux-image-*.deb"
   cache:
-    key: "$CI_PROJECT_NAME-$CI_COMMIT_BRANCH-debian-$CI_DISTRO-amd64"
-    paths:
-      - ccache.tar.zst
-  script:
-    - !reference [.script_fragments, setup_dt_schema]
-    - !reference [.script_fragments, setup_ccache]
-    - cp -v $SYSTEM_SH_SRC system.sh
-    - ./build_deb.sh
-    - du -sh $CHECK_FILE || exit 1
-    - !reference [.script_fragments, cleanup_ccache]
-
-.kernel_build_template:
-  extends: .base_build
-  variables:
-    SYSTEM_SH_SRC: "system.sh.gitlab.crosstool"
-    CHECK_FILE: "KERNEL/$KERNEL_IMAGE"
-  cache:
-    key: "$CI_PROJECT_NAME-$CI_COMMIT_BRANCH-$CI_DISTRO-amd64"
+    key: "$CI_PROJECT_NAME-$CI_COMMIT_BRANCH-$CI_DISTRO-$VERSION-amd64"
     paths:
       - ccache.tar.zst
       - dl/*.tar.xz
   script:
+    - !reference [.script_fragments, setup_dt_schema]
     - !reference [.script_fragments, setup_ccache]
-    - cp -v $SYSTEM_SH_SRC system.sh
-    - ./build_kernel.sh
-    - du -sh $CHECK_FILE || exit 1
+    
+    # --- 1. PREPARE BUILD CONFIGURATION & SOURCE FILES ---
+    - |
+      if [ "$CI_DISTRO" = "debian" ]; then
+        BUILD_SCRIPT="build_deb.sh"
+        CHECK_PATH="deploy/linux-image-*.deb"
+        SRC_FILE="system.sh.gitlab"
+        echo "Mode: Debian Build"
+      else
+        BUILD_SCRIPT="build_kernel.sh"
+        CHECK_PATH="KERNEL/$KERNEL_IMAGE"
+        SRC_FILE="system.sh.gitlab.crosstool"
+        echo "Mode: Kernel Build ($CI_DISTRO)"
+      fi
+      
+      echo "Using source file: $SRC_FILE"
+      cp -v "$SRC_FILE" system.sh
+      echo "Running $BUILD_SCRIPT..."
+
+    # --- 2. EXECUTE BUILD ---
+    - ./$BUILD_SCRIPT
+
+    # --- 3. POST-BUILD: VERIFICATION & ARTIFACT MANAGEMENT ---
+    - |
+      echo "Verifying: $CHECK_PATH"
+      if ls $CHECK_PATH >/dev/null 2>&1; then
+        echo "Success: $CHECK_PATH found."
+        find . -name "$(echo $CHECK_PATH | sed 's/\*//')" -exec du -sh {} +
+      else
+        echo "Error: $CHECK_PATH NOT FOUND!"
+        exit 1
+      fi
+
+      if [ "$CI_DISTRO" = "debian" ]; then
+        export DEBIAN_VERSION_ARTIFACTS="$DEBIAN_VERSION_ARTIFACTS"
+        if [ "$VERSION" != "$DEBIAN_VERSION_ARTIFACTS" ]; then
+          echo "Version $VERSION is not $DEBIAN_VERSION_ARTIFACTS: Hiding debian artifacts."
+          mkdir -p .hidden_artifacts
+          find deploy/ -name "linux-image-*.deb" -exec mv {} .hidden_artifacts/ \; || true
+        fi
+      fi
+    # ---------------------------------------------------------
+
     - !reference [.script_fragments, cleanup_ccache]
 
-build-debian-13-amd64:
-  extends: .debian_build_template
-  image: $REGISTRY_BASE/beagle-devscripts-kernel-debian-13-amd64:latest
-  variables:
-    TARGET_LOCK_NAME: "lock-debian-13-$CI_COMMIT_BRANCH"
-    CI_DISTRO: "13"
+build-all:
+  extends: .unified_build_template
+  image: $REGISTRY_BASE/beagle-devscripts-kernel-$CI_DISTRO-$VERSION-amd64:latest
   artifacts:
     expire_in: 1 week
-    name: "$CI_PROJECT_NAME-$CI_COMMIT_BRANCH-debian-13-$CI_JOB_ID"
+    name: "$CI_PROJECT_NAME-$CI_COMMIT_BRANCH-$CI_DISTRO-$VERSION-$CI_JOB_ID"
     paths:
       - "deploy/linux-image-*.deb"
-
-build-debian-14-amd64:
-  extends: .debian_build_template
-  image: $REGISTRY_BASE/beagle-devscripts-kernel-debian-14-amd64:latest
-  variables:
-    TARGET_LOCK_NAME: "lock-debian-14-$CI_COMMIT_BRANCH"
-    CI_DISTRO: "14"
-
-build-kernel:
-  extends: .kernel_build_template
   parallel:
     matrix:
+      # --- DEBIAN ---
+      - CI_DISTRO: "debian"
+        VERSION: "13"
+      - CI_DISTRO: "debian"
+        VERSION: "14"
+      # --- KERNEL ---
       - CI_DISTRO: "ubuntu"
         VERSION: "26.04"
       - CI_DISTRO: "fedora"
         VERSION: "44"
-  image: $REGISTRY_BASE/beagle-devscripts-kernel-$CI_DISTRO-$VERSION-amd64:latest
-  variables:
-    TARGET_LOCK_NAME: "lock-$CI_DISTRO-$CI_COMMIT_BRANCH"

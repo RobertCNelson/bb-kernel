@@ -8,7 +8,7 @@
 #https://packages.debian.org/source/sid/linux
 #
 forky_kernel_branch="7.1"
-forky_kernel_tag="7.1.12-1"
+forky_kernel_tag="7.1.13-1"
 #
 sid_kernel_branch="7.1"
 sid_kernel_tag="7.1.13-1"

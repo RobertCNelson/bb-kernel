@@ -112,6 +112,12 @@ rt () {
 			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 			rm -f patch-${rt_patch}.patch.xz
 			rm -f localversion-rt
+			#v6.12.101
+			rm -f kernel/locking/spinlock_rt.c.orig
+			#v6.12.103
+			rm -f kernel/trace/trace.c.orig
+			#v6.12.106
+			rm -f include/linux/sched.h.orig
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
