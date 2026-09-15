@@ -180,7 +180,6 @@ rt () {
 			xzcat patch-${rt_patch}.patch.xz | patch -p1 || rt_cleanup
 			rm -f patch-${rt_patch}.patch.xz
 			rm -f localversion-rt
-			rm -f include/linux/sched.h.orig
 			${git_bin} add .
 			${git_bin} commit -a -m 'merge: CONFIG_PREEMPT_RT Patch Set' -m "patch-${rt_patch}.patch.xz" -s
 			${git_bin} format-patch -1 -o ../patches/external/rt/
@@ -316,14 +315,18 @@ beagleboard_dtbs () {
 		#regenerate_arm_dtbo_list
 
 		device="AM3359-PWM012" ; arm_dtbo_makefile_append
+		device="AM335X-PRU-P9-25" ; arm_dtbo_makefile_append
 		device="AM335X-PRU-UIO-00A0" ; arm_dtbo_makefile_append
+		device="AM57XX-PRU-UIO-00A0" ; arm_dtbo_makefile_append
 		device="BB-ADC-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBBW-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGG-WL1835-00A0" ; arm_dtbo_makefile_append
 		device="BB-BBGW-WL1835-00A0" ; arm_dtbo_makefile_append
+		device="BB-BONE-4D4C-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-4D5R-01-00A1" ; arm_dtbo_makefile_append
 		device="BB-BONE-eMMC1-01-00A0" ; arm_dtbo_makefile_append
 		device="BB-BONE-LCD4-01-00A1" ; arm_dtbo_makefile_append
+		device="BB-BONE-LCD7-01-00A3" ; arm_dtbo_makefile_append
 		device="BB-BONE-NH7C-01-A0" ; arm_dtbo_makefile_append
 		device="BB-CAN0-00A0" ; arm_dtbo_makefile_append
 		device="BB-CAN1-00A0" ; arm_dtbo_makefile_append
@@ -335,8 +338,12 @@ beagleboard_dtbs () {
 		device="BB-EQEP1" ; arm_dtbo_makefile_append
 		device="BB-EQEP2B" ; arm_dtbo_makefile_append
 		device="BB-EQEP2" ; arm_dtbo_makefile_append
+		device="BB-GREEN-HDMI-00A0" ; arm_dtbo_makefile_append
+		device="BB-HDMI-IT66121-00A0" ; arm_dtbo_makefile_append
+		device="BB-HDMI-IT66122-00A0" ; arm_dtbo_makefile_append
 		device="BB-HDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-00A0" ; arm_dtbo_makefile_append
+		device="BB-I2C1-ADS1015-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-FAST-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-MCP7940X-00A0" ; arm_dtbo_makefile_append
 		device="BB-I2C1-RTC-DS3231" ; arm_dtbo_makefile_append
@@ -348,11 +355,14 @@ beagleboard_dtbs () {
 		device="BB-I2C2-MPU6050" ; arm_dtbo_makefile_append
 		device="BB-I2C2-RTC-DS3231" ; arm_dtbo_makefile_append
 		device="BB-LCD-ADAFRUIT-24-SPI1-00A0" ; arm_dtbo_makefile_append
+		device="BB-NHDMI-IT66121-00A0" ; arm_dtbo_makefile_append
+		device="BB-NHDMI-IT66122-00A0" ; arm_dtbo_makefile_append
 		device="BB-NHDMI-TDA998x-00A0" ; arm_dtbo_makefile_append
 		device="BBORG_COMMS-00A2" ; arm_dtbo_makefile_append
 		device="BBORG_FAN-A000" ; arm_dtbo_makefile_append
 		device="BBORG_RELAY-00A2" ; arm_dtbo_makefile_append
 		device="BB-SPIDEV0-00A0" ; arm_dtbo_makefile_append
+		device="BB-SPIDEV1-00A0-CS1" ; arm_dtbo_makefile_append
 		device="BB-SPIDEV1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART1-00A0" ; arm_dtbo_makefile_append
 		device="BB-UART2-00A0" ; arm_dtbo_makefile_append
@@ -434,7 +444,7 @@ post_backports () {
 	fi
 
 	${git_bin} add .
-	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	${git_bin} commit -a -m "backports ${subsystem} from linux" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
@@ -467,7 +477,7 @@ post_rpibackports () {
 	fi
 
 	${git_bin} add .
-	${git_bin} commit -a -m "backports: ${subsystem}: from: linux.git" -m "Reference: ${backport_tag}" -s
+	${git_bin} commit -a -m "backports ${subsystem} from raspberrypi-linux" -m "Reference: ${backport_tag}" -s
 	if [ ! -d ../patches/backports/${subsystem}/ ] ; then
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
@@ -476,7 +486,7 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="v5.10.213"
+	backport_tag="v5.10.270"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -487,7 +497,7 @@ backports () {
 
 		post_backports
 	else
-		patch_backports
+		dir 'backports/uio'
 		dir 'drivers/ti/uio'
 	fi
 
@@ -502,7 +512,7 @@ backports () {
 
 		post_backports
 	else
-		patch_backports
+		dir 'backports/it66121'
 
 		#i2c (v6.1.x)
 		${git} "${DIR}/patches/mainline/i2c/0001-i2c-core-Introduce-i2c_client_get_device_id-helper-f.patch"

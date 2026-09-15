@@ -8,12 +8,9 @@ ARCH=$(uname -m)
 DIR=$PWD
 
 . "${DIR}/system.sh"
-
-#For:
-#toolchain
 . "${DIR}/version.sh"
 
-if [  -f "${DIR}/.yakbuild" ] ; then
+if [ -f "${DIR}/.yakbuild" ] ; then
 	. "${DIR}/recipe.sh"
 fi
 
@@ -24,20 +21,16 @@ else
 fi
 
 check_glibc () {
-	if [ -f ./glibc_version ] ; then
-		rm ./glibc_version || true
-	fi
-
+	[ -f "./glibc_version" ] && rm "./glibc_version"
 	gcc scripts/glibc_version.c -o glibc_version
-
 	version=$(LC_ALL=C ./glibc_version | awk '{print $3}')
 	echo "glibc: $version"
 }
 
 dl_generic () {
 	binary="bin/${gcc_prefix}-"
-
 	WGET="wget -c --directory-prefix=${gcc_dir}/"
+
 	if [ "x${extracted_dir}" = "x" ] ; then
 		filename_prefix=${gcc_filename_prefix}
 	else
@@ -47,6 +40,7 @@ dl_generic () {
 	if [ ! -f "${gcc_dir}/${filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
 		if [ ! -f "${gcc_dir}/${gcc_filename_prefix}.tar.xz" ] ; then
+			echo "log: [${gcc_html_path}${gcc_filename_prefix}.tar.xz]"
 			${WGET} "${gcc_html_path}${gcc_filename_prefix}.tar.xz"
 		fi
 		if [ -d "${gcc_dir}/${filename_prefix}" ] ; then
@@ -60,19 +54,20 @@ dl_generic () {
 		echo "Using Existing Toolchain: ${toolchain}"
 	fi
 
-	if [ "x${ARCH}" = "xarmv7l" ] || [ "x${ARCH}" = "xaarch64" ] ; then
-		#using native gcc
-		CC=
-	else
-		CC="${gcc_dir}/${filename_prefix}/${binary}"
-	fi
+	case "$ARCH" in
+		armv7l|aarch64|riscv64)
+			CC=""
+			;;
+		*)
+			CC="${gcc_dir}/${filename_prefix}/${binary}"
+			;;
+	esac
 }
 
 dl_gcc_generic () {
-	gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
+	gcc_html_path="https://rcn-ee.net/mirror/crosstool/${gcc_selected}/"
 	gcc_filename_prefix="x86_64-gcc-${gcc_selected}-nolibc-${gcc_prefix}"
 	extracted_dir="gcc-${gcc_selected}-nolibc/${gcc_prefix}"
-
 	dl_generic
 }
 
@@ -86,9 +81,9 @@ gcc_toolchain () {
 	gcc11="11.5.0"
 	gcc12="12.5.0"
 	gcc13="13.4.0"
-	gcc14="14.3.0"
-	gcc15="15.2.0"
-	gcc16="16.1.0"
+	gcc14="14.4.0"
+	gcc15="15.3.0"
+	gcc16="16.2.0"
 
 	case "${toolchain}" in
 	gcc_arm_gnueabihf_8|gcc_arm_eabi_8|gcc_8_arm)
@@ -266,25 +261,23 @@ if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] && [ "x${ARCH}" != "xaarch6
 	gcc_toolchain
 fi
 
-unset check
-if [ "x${KERNEL_ARCH}" = "xarm" ] ; then
-	check="arm"
-fi
-if [ "x${KERNEL_ARCH}" = "xarm64" ] ; then
-	check="aarch64"
-fi
-if [ "x${KERNEL_ARCH}" = "xriscv" ] ; then
-	check="riscv"
-fi
+# Map Kernel Arch to validation string
+check=""
+case "${KERNEL_ARCH}" in
+	arm)    check="arm" ;;
+	arm64)  check="aarch64" ;;
+	riscv)  check="riscv" ;;
+esac
 
-if [ "x${check}" = "x" ] ; then
+if [ -z "${check}" ] ; then
 	echo "ERROR: fix: scripts/gcc.sh..."
 	exit 2
 else
-	GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep ${check} || true)
+	# Validate compiler targets
+	GCC_TEST=$(LC_ALL=C "${CC}"gcc -v 2>&1 | grep "Target:" | grep "${check}" || true)
 fi
 
-if [ "x${GCC_TEST}" = "x" ] ; then
+if [ -z "${GCC_TEST}" ] ; then
 	echo "-----------------------------"
 	echo "scripts/gcc: Error: The GCC Cross Compiler you setup in system.sh (CC variable) is invalid."
 	echo "-----------------------------"
