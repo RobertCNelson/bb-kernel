@@ -61,8 +61,6 @@ redhat_reqs () {
 	check_rpm
 	pkg="flex"
 	check_rpm
-	pkg="lz4"
-	check_rpm
 	pkg="ncurses-devel"
 	check_rpm
 	pkg="wget2-wget"
@@ -147,15 +145,19 @@ debian_regs () {
 	check_dpkg
 	pkg="build-essential"
 	check_dpkg
+	pkg="ca-certificates"
+	check_dpkg
 	pkg="cpio"
+	check_dpkg
+	pkg="device-tree-compiler"
 	check_dpkg
 	pkg="fakeroot"
 	check_dpkg
 	pkg="flex"
 	check_dpkg
-	pkg="lsb-release"
+	pkg="kmod"
 	check_dpkg
-	pkg="lz4"
+	pkg="lsb-release"
 	check_dpkg
 	pkg="man-db"
 	check_dpkg
@@ -505,6 +507,16 @@ debian_regs () {
 			#http://packages.linuxmint.com/index.php
 			deb_distro="noble"
 			;;
+		zena)
+			#22.3
+			#http://packages.linuxmint.com/index.php
+			deb_distro="noble"
+			;;
+		alfa)
+			#23
+			#http://packages.linuxmint.com/index.php
+			deb_distro="resolute"
+			;;
 		esac
 
 		#Devuan: Compatibility Matrix
@@ -568,15 +580,14 @@ debian_regs () {
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
-		jammy|noble|plucky|questing|resolute)
+		jammy|noble|resolute|stonking)
 			#22.04 jammy: (EOL: June 2027) lts: jammy -> noble
 			#24.04 noble: (EOL: June 2029) lts: noble -> resolute
-			#25.04 plucky: (EOL: January 2026)
-			#25.10 questing: (EOL: July 2026)
 			#26.04 resolute: (EOL: July 2031) lts: resolute -> xyz
+			#26.10 stonking: (EOL: June 2027)
 			unset warn_eol_distro
 			;;
-		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|focal|groovy|hirsute|impish|kinetic|lunar|mantic|oracular)
+		hardy|lucid|maverick|natty|oneiric|precise|quantal|raring|saucy|trusty|utopic|vivid|wily|xenial|yakkety|zesty|artful|bionic|cosmic|disco|eoan|focal|groovy|hirsute|impish|kinetic|lunar|mantic|oracular|plucky|questing)
 			#8.04 hardy: (EOL: May 2013) lts: hardy -> lucid
 			#10.04 lucid: (EOL: April 2015) lts: lucid -> precise
 			#10.10 maverick: (EOL: April 10, 2012)
@@ -606,6 +617,8 @@ debian_regs () {
 			#23.04 lunar: (EOL: January 2024)
 			#23.10 mantic: (EOL: July 2024)
 			#24.10 oracular: (EOL: July 2025)
+			#25.04 plucky: (EOL: January 15, 2026)
+			#25.10 questing: (EOL: July 9th 2026)
 			warn_eol_distro=1
 			stop_pkg_search=1
 			;;
@@ -680,27 +693,6 @@ if [  -f "${DIR}/.yakbuild" ] ; then
 fi
 
 ARCH=$(uname -m)
-
-echo "-----------------------------"
-unset NEEDS_COMMAND
-check_for_command () {
-	if ! which "$1" >/dev/null 2>&1 ; then
-		echo "You're missing command $1"
-		NEEDS_COMMAND=1
-	else
-		version=$(LC_ALL=C $1 $2 | head -n 1)
-		echo "$1: $version"
-	fi
-}
-
-unset NEEDS_COMMAND
-check_for_command xz --version
-
-if [ "${NEEDS_COMMAND}" ] ; then
-	echo "Please install missing commands"
-	echo "-----------------------------"
-	exit 2
-fi
 
 case "$BUILD_HOST" in
     redhat*)
