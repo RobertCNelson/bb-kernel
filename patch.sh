@@ -494,6 +494,13 @@ post_rpibackports () {
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
+
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		cd ~/linux-rpi/
+		${git_bin} branch -D ${backport_tag}
+		cd -
+	fi
+
 	exit 2
 }
 
