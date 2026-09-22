@@ -10,8 +10,8 @@
 forky_kernel_branch="7.1"
 forky_kernel_tag="7.1.13-1"
 #
-sid_kernel_branch="7.1"
-sid_kernel_tag="7.1.13-1"
+sid_kernel_branch="7.2"
+sid_kernel_tag="7.2.6-1"
 #
 exp_kernel_branch="7.2"
 exp_kernel_tag="7.2.3-1~exp1"
