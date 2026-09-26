@@ -11,7 +11,7 @@ forky_kernel_branch="7.1"
 forky_kernel_tag="7.1.13-1"
 #
 sid_kernel_branch="7.2"
-sid_kernel_tag="7.2.6-1"
+sid_kernel_tag="7.2.8-1"
 #
 exp_kernel_branch="7.2"
 exp_kernel_tag="7.2.3-1~exp1"
@@ -60,6 +60,9 @@ dl_distro () {
 	config="none_armmp"
 	dl_deb
 }
+
+#kernel_branch="${forky_kernel_branch}"
+#kernel_tag="${forky_kernel_tag}"
 
 kernel_branch="${sid_kernel_branch}"
 kernel_tag="${sid_kernel_tag}"
