@@ -1,73 +1,85 @@
 #!/bin/bash
 
 # SPDX-FileCopyrightText: Robert Nelson <robertcnelson@gmail.com>
-#
 # SPDX-License-Identifier: MIT
 
-#
 #https://packages.debian.org/source/sid/linux
-#
-forky_kernel_branch="7.1"
-forky_kernel_tag="7.1.13-1"
-#
-sid_kernel_branch="7.2"
-sid_kernel_tag="7.2.6-1"
-#
-exp_kernel_branch="7.2"
-exp_kernel_tag="7.2.3-1~exp1"
-#exp_kernel_tag="7.2~rc7-1~exp1"
-#
 
-mirror_site="http://192.168.1.10/debian/pool/main/l/linux"
-debian_site="http://deb.debian.org/debian/pool/main/l/linux"
-debian_security_site="http://deb.debian.org/debian-security/pool/main/l/linux"
-incoming_site="http://incoming.debian.org/debian-buildd/pool/main/l/linux"
+# SELECT DISTRO: (forky, sid, or exp)
+SELECTED_DISTRO="sid"
 
-dl_deb () {
-	if [ ! -f ./dl/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb ] ; then
-		wget -cq --directory-prefix=./dl/ ${mirror_site}/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb
-	fi
+case "$SELECTED_DISTRO" in
+	forky)
+		KERNEL_BRANCH="7.2"
+		KERNEL_TAG="7.2.6-1"
+		;;
+	sid)
+		KERNEL_BRANCH="7.2"
+		KERNEL_TAG="7.2.8-1"
+		;;
+	exp)
+		KERNEL_BRANCH="7.2"
+		KERNEL_TAG="7.2.3-1~exp1"
+		;;
+	*)
+		echo "Error: Invalid selection. Choose 'forky', 'sid', or 'exp'."
+		exit 1
+		;;
+esac
 
-	if [ ! -f ./dl/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb ] ; then
-		wget -cq --directory-prefix=./dl/ ${debian_site}/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb
-	fi
+DPKG_ARCH="armhf"
+CONFIG_NAME="none_armmp"
 
-	if [ ! -f ./dl/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb ] ; then
-		wget -cq --directory-prefix=./dl/ ${incoming_site}/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb
-	fi
+SITES=(
+	"http://192.168.1.10/debian/pool/main/l/linux"
+	"http://deb.debian.org/debian/pool/main/l/linux"
+	"http://incoming.debian.org/debian-buildd/pool/main/l/linux"
+	"http://deb.debian.org/debian-security/pool/main/l/linux"
+)
 
-	if [ ! -f ./dl/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb ] ; then
-		wget -cq --directory-prefix=./dl/ ${debian_security_site}/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb
-	fi
+DEB_FILENAME="linux-config-${KERNEL_BRANCH}_${KERNEL_TAG}_${DPKG_ARCH}.deb"
+DL_DIR="./dl"
+TMP_DIR="${DL_DIR}/tmp"
+PATCH_DIR="./patches"
 
-	if [ -f ./dl/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb ] ; then
-		dpkg -x ./dl/linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb ./dl/tmp/
-		if [ -f ./dl/tmp/usr/src/linux-config-${kernel_branch}/config.${dpkg_arch}_${config}.xz ] ; then
-			echo "[linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb]"
-			xzcat -v ./dl/tmp/usr/src/linux-config-${kernel_branch}/config.${dpkg_arch}_${config}.xz > ./patches/debian.config
+dl_deb() {
+	mkdir -p "$DL_DIR" "$TMP_DIR" "$PATCH_DIR"
+	local downloaded=false
+
+	echo "Targeting [$SELECTED_DISTRO]: $DEB_FILENAME"
+
+	for site in "${SITES[@]}"; do
+		if [[ ! -f "$DL_DIR/$DEB_FILENAME" ]]; then
+			wget -cq --directory-prefix="$DL_DIR" "${site}/${DEB_FILENAME}"
+		fi
+
+		if [[ -f "$DL_DIR/$DEB_FILENAME" ]]; then
+			downloaded=true
+			break
+		fi
+	done
+
+	if [ "$downloaded" = true ]; then
+		echo "[Found: $DEB_FILENAME]"
+		dpkg -x "$DL_DIR/$DEB_FILENAME" "$TMP_DIR/"
+
+		local target_config="$TMP_DIR/usr/src/linux-config-${KERNEL_BRANCH}/config.${DPKG_ARCH}_${CONFIG_NAME}.xz"
+
+		if [[ -f "$target_config" ]]; then
+			echo "Extracting config to $PATCH_DIR/debian.config..."
+			xzcat -v "$target_config" > "$PATCH_DIR/debian.config"
 		else
-			tree ./dl/tmp/usr/src/linux-config-${kernel_branch}/
+			echo "Error: Config file not found in package!"
+			tree "$TMP_DIR/usr/src/linux-config-${KERNEL_BRANCH}/"
 			exit 2
 		fi
-		rm -rf ./dl/tmp/ || true
 	else
-		echo "[linux-config-${kernel_branch}_${kernel_tag}_${dpkg_arch}.deb] NOT BUILT YET"
+		echo "Error: [$DEB_FILENAME] NOT FOUND in any mirrors."
+		exit 3
 	fi
 }
 
-dl_distro () {
-	dpkg_arch="armhf"
-	config="none_armmp"
-	dl_deb
-}
-
-kernel_branch="${sid_kernel_branch}"
-kernel_tag="${sid_kernel_tag}"
-
-#kernel_branch="${exp_kernel_branch}"
-#kernel_tag="${exp_kernel_tag}"
-dl_distro
-
-rm -rf ./dl/ || true
+dl_deb
+rm -rf "$DL_DIR"
 
 #
