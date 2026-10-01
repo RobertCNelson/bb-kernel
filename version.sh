@@ -18,17 +18,8 @@ branch_postfix=""
 #Cross Compilers
 #https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/
 
-#arm
+# Options: arm, arm64, riscv
 KERNEL_ARCH=arm
-DEBARCH=armhf
-
-#arm64
-#KERNEL_ARCH=arm64
-#DEBARCH=arm64
-
-#riscv64
-#KERNEL_ARCH=riscv
-#DEBARCH=riscv64
 
 # Options: 8, 9, 10, 11, 12, 13, 14, 15, 16
 toolchain_version="16"
