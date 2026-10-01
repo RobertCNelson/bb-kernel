@@ -7,7 +7,8 @@
 DIR=$PWD
 
 CORES=$(getconf _NPROCESSORS_ONLN)
-debian_stable_git="2.20.1"
+debian_stable_git="2.30.2"
+compare_major="23002"
 #git hard requirements:
 #git: --local
 #git: --list
@@ -26,30 +27,20 @@ check_git_version () {
 	git_minor=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f2)
 	git_sub=$(LC_ALL=C ${git_bin} --version | awk '{print $3}' | cut -d. -f3)
 
-	#debian Stable:
-	#https://packages.debian.org/stretch/git (9) -> 2.11.0
-	#https://packages.debian.org/buster/git (10) -> 2.20.1
+	#Debian:
 	#https://packages.debian.org/bullseye/git (11) -> 2.30.2
 	#https://packages.debian.org/bookworm/git (12) -> 2.39.5
-	#https://packages.ubuntu.com/bionic/git (18.04) -> 2.17.1
-	#https://packages.ubuntu.com/focal/git (20.04) -> 2.25.1
+	#https://packages.debian.org/trixie/git (13) -> 2.47.3
+
+	#Ubuntu:
 	#https://packages.ubuntu.com/jammy/git (22.04) -> 2.34.1
 	#https://packages.ubuntu.com/noble/git (24.04) -> 2.43.0
+	#https://packages.ubuntu.com/resolute/git (26.04) -> 2.53.0
 
-	compare_major="2"
-	compare_minor="20"
-	compare_sub="1"
+	git_current_val=$(( (git_major * 10000) + (git_minor * 100) + git_sub ))
 
-	if [ "${git_major}" -lt "${compare_major}" ] ; then
+	if [ "${git_current_val}" -lt "${compare_major}" ] ; then
 		git_is_old
-	elif [ "${git_major}" -eq "${compare_major}" ] ; then
-		if [ "${git_minor}" -lt "${compare_minor}" ] ; then
-			git_is_old
-		elif [ "${git_minor}" -eq "${compare_minor}" ] ; then
-			if [ "${git_sub}" -lt "${compare_sub}" ] ; then
-				git_is_old
-			fi
-		fi
 	fi
 
 	echo "scripts/git: [`LC_ALL=C ${git_bin} --version`]"
