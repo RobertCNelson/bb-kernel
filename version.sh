@@ -17,42 +17,12 @@ branch_postfix=""
 #
 #Cross Compilers
 #https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/
-#arm
+
+# Options: arm, arm64, riscv
 KERNEL_ARCH=arm
-DEBARCH=armhf
-#toolchain="gcc_8_arm"
-#toolchain="gcc_9_arm"
-#toolchain="gcc_10_arm"
-#toolchain="gcc_11_arm"
-#toolchain="gcc_12_arm"
-#toolchain="gcc_13_arm"
-#toolchain="gcc_14_arm"
-toolchain="gcc_15_arm"
-#toolchain="gcc_16_arm"
-#arm64
-#KERNEL_ARCH=arm64
-#DEBARCH=arm64
-#toolchain="gcc_8_aarch64"
-#toolchain="gcc_9_aarch64"
-#toolchain="gcc_10_aarch64"
-#toolchain="gcc_11_aarch64"
-#toolchain="gcc_12_aarch64"
-#toolchain="gcc_13_aarch64"
-#toolchain="gcc_14_aarch64"
-#toolchain="gcc_15_aarch64"
-#toolchain="gcc_16_aarch64"
-#riscv64
-#KERNEL_ARCH=riscv
-#DEBARCH=riscv64
-#toolchain="gcc_8_riscv64"
-#toolchain="gcc_9_riscv64"
-#toolchain="gcc_10_riscv64"
-#toolchain="gcc_11_riscv64"
-#toolchain="gcc_12_riscv64"
-#toolchain="gcc_13_riscv64"
-#toolchain="gcc_14_riscv64"
-#toolchain="gcc_15_riscv64"
-#toolchain="gcc_16_riscv64"
+
+# Options: 8, 9, 10, 11, 12, 13, 14, 15, 16
+toolchain_version="15"
 
 #Wireless:
 #https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git
