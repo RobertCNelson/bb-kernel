@@ -11,7 +11,7 @@ SELECTED_DISTRO="sid"
 case "$SELECTED_DISTRO" in
 	forky)
 		KERNEL_BRANCH="7.2"
-		KERNEL_TAG="7.2.6-1"
+		KERNEL_TAG="7.2.8-1"
 		;;
 	sid)
 		KERNEL_BRANCH="7.2"
