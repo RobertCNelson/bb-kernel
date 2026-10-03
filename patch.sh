@@ -517,6 +517,13 @@ post_rpibackports () {
 		mkdir -p ../patches/backports/${subsystem}/
 	fi
 	${git_bin} format-patch -1 -o ../patches/backports/${subsystem}/
+
+	if [ ! "x${backport_tag}" = "x" ] ; then
+		cd ~/linux-rpi/
+		${git_bin} branch -D ${backport_tag}
+		cd -
+	fi
+
 	exit 2
 }
 
@@ -563,7 +570,9 @@ backports () {
 	if [ "x${regenerate}" = "xenable" ] ; then
 		pre_rpibackports
 
+		cp -v ~/linux-rpi/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c ./drivers/gpu/drm/panel/
 		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
+		cp -v ~/linux-rpi/drivers/input/touchscreen/goodix.c ./drivers/input/touchscreen/
 		cp -v ~/linux-rpi/drivers/regulator/rpi-panel-v2-regulator.c ./drivers/regulator/
 
 		post_rpibackports
