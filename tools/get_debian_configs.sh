@@ -15,7 +15,7 @@ case "$SELECTED_DISTRO" in
 		;;
 	sid)
 		KERNEL_BRANCH="7.2"
-		KERNEL_TAG="7.2.8-1"
+		KERNEL_TAG="7.2.9-1"
 		;;
 	exp)
 		KERNEL_BRANCH="7.2"
