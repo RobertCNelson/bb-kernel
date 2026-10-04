@@ -1,4 +1,8 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: Robert Nelson <robertcnelson@gmail.com>
+# SPDX-License-Identifier: MIT
+
 #
 ARCH=$(uname -m)
 
@@ -12,43 +16,17 @@ branch_postfix=""
 #https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v5.10-rc1
 #
 #Cross Compilers
-#arm
+#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/
+
+# Options: arm, arm64, riscv
 KERNEL_ARCH=arm
-DEBARCH=armhf
-#toolchain="gcc_8_arm"
-#toolchain="gcc_9_arm"
-toolchain="gcc_10_arm"
-#toolchain="gcc_11_arm"
-#toolchain="gcc_12_arm"
-#toolchain="gcc_13_arm"
-#toolchain="gcc_14_arm"
-#toolchain="gcc_15_arm"
-#arm64
-#KERNEL_ARCH=arm64
-#DEBARCH=arm64
-#toolchain="gcc_8_aarch64"
-#toolchain="gcc_9_aarch64"
-#toolchain="gcc_10_aarch64"
-#toolchain="gcc_11_aarch64"
-#toolchain="gcc_12_aarch64"
-#toolchain="gcc_13_aarch64"
-#toolchain="gcc_14_aarch64"
-#toolchain="gcc_15_aarch64"
-#riscv64
-#KERNEL_ARCH=riscv
-#DEBARCH=riscv64
-#toolchain="gcc_8_riscv64"
-#toolchain="gcc_9_riscv64"
-#toolchain="gcc_10_riscv64"
-#toolchain="gcc_11_riscv64"
-#toolchain="gcc_12_riscv64"
-#toolchain="gcc_13_riscv64"
-#toolchain="gcc_14_riscv64"
-#toolchain="gcc_15_riscv64"
+
+# Options: 8, 9, 10, 11, 12, 13, 14, 15, 16
+toolchain_version="10"
 
 #Wireless:
-#https://mirrors.edge.kernel.org/pub/software/network/wireless-regdb/
-WIRELESS_REGDB="2025.10.07"
+#https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git
+WIRELESS_REGDB="2026-09-03"
 
 #Kernel
 linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
@@ -60,10 +38,6 @@ KERNEL_TAG=${KERNEL_REL}.240
 kernel_rt=".240-rt134"
 #Kernel Build
 BUILD=${build_prefix}80.12
-
-#v6.X-rcX + upto SHA
-#prev_KERNEL_SHA=""
-#KERNEL_SHA=""
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"

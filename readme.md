@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2009 Robert Nelson <robertcnelson@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 This is just a set of scripts to rebuild a known working kernel for ARM devices.
 
 Script Bugs: "robertcnelson+bugs@gmail.com"
