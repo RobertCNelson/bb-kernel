@@ -1,5 +1,9 @@
 #!/bin/sh -e
 
+# SPDX-FileCopyrightText: Robert Nelson <robertcnelson@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 DIR=$PWD
 
 config_enable () {
@@ -301,7 +305,7 @@ config="CONFIG_USB_TI_CPPI41_DMA" ; config_disable
 ./scripts/config --enable CONFIG_KERNEL_XZ
 
 #configure CONFIG_EXTRA_FIRMWARE
-./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin am43x-evm-scale-data.bin"
+./scripts/config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s am335x-pm-firmware.elf am335x-bone-scale-data.bin am335x-evm-scale-data.bin"
 ./scripts/config --enable CONFIG_FW_LOADER_COMPRESS
 ./scripts/config --enable CONFIG_FW_LOADER_COMPRESS_XZ
 ./scripts/config --enable CONFIG_FW_LOADER_COMPRESS_ZSTD

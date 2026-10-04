@@ -1,35 +1,16 @@
 #!/bin/sh -e
+
+# SPDX-FileCopyrightText: 2009 Robert Nelson <robertcnelson@gmail.com>
 #
-# Copyright (c) 2009-2025 Robert Nelson <robertcnelson@gmail.com>
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 ARCH=$(uname -m)
 DIR=$PWD
 
 . "${DIR}/system.sh"
-
-#For:
-#toolchain
 . "${DIR}/version.sh"
 
-if [  -f "${DIR}/.yakbuild" ] ; then
+if [ -f "${DIR}/.yakbuild" ] ; then
 	. "${DIR}/recipe.sh"
 fi
 
@@ -40,20 +21,16 @@ else
 fi
 
 check_glibc () {
-	if [ -f ./glibc_version ] ; then
-		rm ./glibc_version || true
-	fi
-
+	[ -f "./glibc_version" ] && rm "./glibc_version"
 	gcc scripts/glibc_version.c -o glibc_version
-
 	version=$(LC_ALL=C ./glibc_version | awk '{print $3}')
 	echo "glibc: $version"
 }
 
 dl_generic () {
 	binary="bin/${gcc_prefix}-"
-
 	WGET="wget -c --directory-prefix=${gcc_dir}/"
+
 	if [ "x${extracted_dir}" = "x" ] ; then
 		filename_prefix=${gcc_filename_prefix}
 	else
@@ -63,6 +40,7 @@ dl_generic () {
 	if [ ! -f "${gcc_dir}/${filename_prefix}/${datestamp}" ] ; then
 		echo "Installing Toolchain: ${toolchain}"
 		if [ ! -f "${gcc_dir}/${gcc_filename_prefix}.tar.xz" ] ; then
+			echo "log: [${gcc_html_path}${gcc_filename_prefix}.tar.xz]"
 			${WGET} "${gcc_html_path}${gcc_filename_prefix}.tar.xz"
 		fi
 		if [ -d "${gcc_dir}/${filename_prefix}" ] ; then
@@ -76,19 +54,20 @@ dl_generic () {
 		echo "Using Existing Toolchain: ${toolchain}"
 	fi
 
-	if [ "x${ARCH}" = "xarmv7l" ] || [ "x${ARCH}" = "xaarch64" ] ; then
-		#using native gcc
-		CC=
-	else
-		CC="${gcc_dir}/${filename_prefix}/${binary}"
-	fi
+	case "$ARCH" in
+		armv7l|aarch64|riscv64)
+			CC=""
+			;;
+		*)
+			CC="${gcc_dir}/${filename_prefix}/${binary}"
+			;;
+	esac
 }
 
 dl_gcc_generic () {
-	gcc_html_path="https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/${gcc_selected}/"
+	gcc_html_path="https://rcn-ee.net/mirror/crosstool/${gcc_selected}/"
 	gcc_filename_prefix="x86_64-gcc-${gcc_selected}-nolibc-${gcc_prefix}"
 	extracted_dir="gcc-${gcc_selected}-nolibc/${gcc_prefix}"
-
 	dl_generic
 }
 
@@ -96,165 +75,39 @@ gcc_toolchain () {
 	unset extracted_dir
 
 	#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/
-	gcc8="8.5.0"
-	gcc9="9.5.0"
-	gcc10="10.5.0"
-	gcc11="11.5.0"
-	gcc12="12.5.0"
-	gcc13="13.4.0"
-	gcc14="14.3.0"
-	gcc15="15.2.0"
+	case "${toolchain_version}" in
+		8)  gcc_selected="8.5.0"  ; gcc_date="2018" ;;
+		9)  gcc_selected="9.5.0"  ; gcc_date="2019" ;;
+		10) gcc_selected="10.5.0" ; gcc_date="2020" ;;
+		11) gcc_selected="11.5.0" ; gcc_date="2021" ;;
+		12) gcc_selected="12.5.0" ; gcc_date="2022" ;;
+		13) gcc_selected="13.5.0" ; gcc_date="2023" ;;
+		14) gcc_selected="14.4.0" ; gcc_date="2024" ;;
+		15) gcc_selected="15.3.0" ; gcc_date="2025" ;;
+		16) gcc_selected="16.2.0" ; gcc_date="2026" ;;
+		*)  echo "Error: Invalid toolchain_version in version.sh"; exit 1 ;;
+	esac
 
-	case "${toolchain}" in
-	gcc_arm_gnueabihf_8|gcc_arm_eabi_8|gcc_8_arm)
-		gcc_selected=${gcc8}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2018.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_arm_gnueabihf_9|gcc_arm_eabi_9|gcc_9_arm)
-		gcc_selected=${gcc9}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2019.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_arm_gnueabihf_10|gcc_arm_eabi_10|gcc_10_arm)
-		gcc_selected=${gcc10}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2020.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_11_arm)
-		gcc_selected=${gcc11}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2021.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_12_arm)
-		gcc_selected=${gcc12}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2022.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_13_arm)
-		gcc_selected=${gcc13}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2023.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_14_arm)
-		gcc_selected=${gcc14}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2024.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_15_arm)
-		gcc_selected=${gcc15}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2025.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_arm_aarch64_gnu_8|gcc_8_aarch64)
-		gcc_selected=${gcc8}
-		gcc_prefix="aarch64-linux"
-		datestamp="2018.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_arm_aarch64_gnu_9|gcc_9_aarch64)
-		gcc_selected=${gcc9}
-		gcc_prefix="aarch64-linux"
-		datestamp="2019.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_arm_aarch64_gnu_10|gcc_10_aarch64)
-		gcc_selected=${gcc10}
-		gcc_prefix="aarch64-linux"
-		datestamp="2020.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_11_aarch64)
-		gcc_selected=${gcc11}
-		gcc_prefix="aarch64-linux"
-		datestamp="2021.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_12_aarch64)
-		gcc_selected=${gcc12}
-		gcc_prefix="aarch64-linux"
-		datestamp="2022.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_13_aarch64)
-		gcc_selected=${gcc13}
-		gcc_prefix="aarch64-linux"
-		datestamp="2023.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_14_aarch64)
-		gcc_selected=${gcc14}
-		gcc_prefix="aarch64-linux"
-		datestamp="2024.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_15_aarch64)
-		gcc_selected=${gcc15}
-		gcc_prefix="aarch64-linux"
-		datestamp="2025.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_8_riscv64)
-		gcc_selected=${gcc8}
-		gcc_prefix="riscv64-linux"
-		datestamp="2018.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_9_riscv64)
-		gcc_selected=${gcc9}
-		gcc_prefix="riscv64-linux"
-		datestamp="2019.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_10_riscv64)
-		gcc_selected=${gcc10}
-		gcc_prefix="riscv64-linux"
-		datestamp="2020.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_11_riscv64)
-		gcc_selected=${gcc11}
-		gcc_prefix="riscv64-linux"
-		datestamp="2021.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_12_riscv64)
-		gcc_selected=${gcc12}
-		gcc_prefix="riscv64-linux"
-		datestamp="2022.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_13_riscv64)
-		gcc_selected=${gcc13}
-		gcc_prefix="riscv64-linux"
-		datestamp="2023.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_14_riscv64)
-		gcc_selected=${gcc14}
-		gcc_prefix="riscv64-linux"
-		datestamp="2024.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_15_riscv64)
-		gcc_selected=${gcc15}
-		gcc_prefix="riscv64-linux"
-		datestamp="2025.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	*)
-		echo "bug: maintainer forgot to set:"
-		echo "toolchain=\"xzy\" in version.sh"
-		exit 1
-		;;
+	case "${KERNEL_ARCH}" in
+		arm)
+			gcc_prefix="arm-linux-gnueabi"
+			datestamp="${gcc_date}.${gcc_selected}-${gcc_prefix}"
+			dl_gcc_generic
+			;;
+		arm64)
+			gcc_prefix="aarch64-linux"
+			datestamp="${gcc_date}.${gcc_selected}-${gcc_prefix}-gcc"
+			dl_gcc_generic
+			;;
+		riscv)
+			gcc_prefix="riscv64-linux"
+			datestamp="${gcc_date}.${gcc_selected}-${gcc_prefix}-gcc"
+			dl_gcc_generic
+			;;
+		*)
+			echo "Error: Unsupported KERNEL_ARCH: ${KERNEL_ARCH}"
+			exit 1
+			;;
 	esac
 }
 
@@ -263,25 +116,23 @@ if [ "x${CC}" = "x" ] && [ "x${ARCH}" != "xarmv7l" ] && [ "x${ARCH}" != "xaarch6
 	gcc_toolchain
 fi
 
-unset check
-if [ "x${KERNEL_ARCH}" = "xarm" ] ; then
-	check="arm"
-fi
-if [ "x${KERNEL_ARCH}" = "xarm64" ] ; then
-	check="aarch64"
-fi
-if [ "x${KERNEL_ARCH}" = "xriscv" ] ; then
-	check="riscv"
-fi
+# Map Kernel Arch to validation string
+check=""
+case "${KERNEL_ARCH}" in
+	arm)    check="arm" ;;
+	arm64)  check="aarch64" ;;
+	riscv)  check="riscv" ;;
+esac
 
-if [ "x${check}" = "x" ] ; then
+if [ -z "${check}" ] ; then
 	echo "ERROR: fix: scripts/gcc.sh..."
 	exit 2
 else
-	GCC_TEST=$(LC_ALL=C "${CC}gcc" -v 2>&1 | grep "Target:" | grep ${check} || true)
+	# Validate compiler targets
+	GCC_TEST=$(LC_ALL=C "${CC}"gcc -v 2>&1 | grep "Target:" | grep "${check}" || true)
 fi
 
-if [ "x${GCC_TEST}" = "x" ] ; then
+if [ -z "${GCC_TEST}" ] ; then
 	echo "-----------------------------"
 	echo "scripts/gcc: Error: The GCC Cross Compiler you setup in system.sh (CC variable) is invalid."
 	echo "-----------------------------"
