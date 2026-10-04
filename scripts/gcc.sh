@@ -75,184 +75,39 @@ gcc_toolchain () {
 	unset extracted_dir
 
 	#https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/
-	gcc8="8.5.0"
-	gcc9="9.5.0"
-	gcc10="10.5.0"
-	gcc11="11.5.0"
-	gcc12="12.5.0"
-	gcc13="13.4.0"
-	gcc14="14.4.0"
-	gcc15="15.3.0"
-	gcc16="16.2.0"
+	case "${toolchain_version}" in
+		8)  gcc_selected="8.5.0"  ; gcc_date="2018" ;;
+		9)  gcc_selected="9.5.0"  ; gcc_date="2019" ;;
+		10) gcc_selected="10.5.0" ; gcc_date="2020" ;;
+		11) gcc_selected="11.5.0" ; gcc_date="2021" ;;
+		12) gcc_selected="12.5.0" ; gcc_date="2022" ;;
+		13) gcc_selected="13.5.0" ; gcc_date="2023" ;;
+		14) gcc_selected="14.4.0" ; gcc_date="2024" ;;
+		15) gcc_selected="15.3.0" ; gcc_date="2025" ;;
+		16) gcc_selected="16.2.0" ; gcc_date="2026" ;;
+		*)  echo "Error: Invalid toolchain_version in version.sh"; exit 1 ;;
+	esac
 
-	case "${toolchain}" in
-	gcc_arm_gnueabihf_8|gcc_arm_eabi_8|gcc_8_arm)
-		gcc_selected=${gcc8}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2018.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_arm_gnueabihf_9|gcc_arm_eabi_9|gcc_9_arm)
-		gcc_selected=${gcc9}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2019.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_arm_gnueabihf_10|gcc_arm_eabi_10|gcc_10_arm)
-		gcc_selected=${gcc10}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2020.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_11_arm)
-		gcc_selected=${gcc11}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2021.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_12_arm)
-		gcc_selected=${gcc12}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2022.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_13_arm)
-		gcc_selected=${gcc13}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2023.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_14_arm)
-		gcc_selected=${gcc14}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2024.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_15_arm)
-		gcc_selected=${gcc15}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2025.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_16_arm)
-		gcc_selected=${gcc16}
-		gcc_prefix="arm-linux-gnueabi"
-		datestamp="2026.${gcc_selected}-${gcc_prefix}"
-		dl_gcc_generic
-		;;
-	gcc_arm_aarch64_gnu_8|gcc_8_aarch64)
-		gcc_selected=${gcc8}
-		gcc_prefix="aarch64-linux"
-		datestamp="2018.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_arm_aarch64_gnu_9|gcc_9_aarch64)
-		gcc_selected=${gcc9}
-		gcc_prefix="aarch64-linux"
-		datestamp="2019.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_arm_aarch64_gnu_10|gcc_10_aarch64)
-		gcc_selected=${gcc10}
-		gcc_prefix="aarch64-linux"
-		datestamp="2020.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_11_aarch64)
-		gcc_selected=${gcc11}
-		gcc_prefix="aarch64-linux"
-		datestamp="2021.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_12_aarch64)
-		gcc_selected=${gcc12}
-		gcc_prefix="aarch64-linux"
-		datestamp="2022.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_13_aarch64)
-		gcc_selected=${gcc13}
-		gcc_prefix="aarch64-linux"
-		datestamp="2023.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_14_aarch64)
-		gcc_selected=${gcc14}
-		gcc_prefix="aarch64-linux"
-		datestamp="2024.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_15_aarch64)
-		gcc_selected=${gcc15}
-		gcc_prefix="aarch64-linux"
-		datestamp="2025.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_16_aarch64)
-		gcc_selected=${gcc16}
-		gcc_prefix="aarch64-linux"
-		datestamp="2026.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_8_riscv64)
-		gcc_selected=${gcc8}
-		gcc_prefix="riscv64-linux"
-		datestamp="2018.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_9_riscv64)
-		gcc_selected=${gcc9}
-		gcc_prefix="riscv64-linux"
-		datestamp="2019.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_10_riscv64)
-		gcc_selected=${gcc10}
-		gcc_prefix="riscv64-linux"
-		datestamp="2020.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_11_riscv64)
-		gcc_selected=${gcc11}
-		gcc_prefix="riscv64-linux"
-		datestamp="2021.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_12_riscv64)
-		gcc_selected=${gcc12}
-		gcc_prefix="riscv64-linux"
-		datestamp="2022.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_13_riscv64)
-		gcc_selected=${gcc13}
-		gcc_prefix="riscv64-linux"
-		datestamp="2023.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_14_riscv64)
-		gcc_selected=${gcc14}
-		gcc_prefix="riscv64-linux"
-		datestamp="2024.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_15_riscv64)
-		gcc_selected=${gcc15}
-		gcc_prefix="riscv64-linux"
-		datestamp="2025.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	gcc_16_riscv64)
-		gcc_selected=${gcc16}
-		gcc_prefix="riscv64-linux"
-		datestamp="2026.${gcc_selected}-${gcc_prefix}-gcc"
-		dl_gcc_generic
-		;;
-	*)
-		echo "bug: maintainer forgot to set:"
-		echo "toolchain=\"xzy\" in version.sh"
-		exit 1
-		;;
+	case "${KERNEL_ARCH}" in
+		arm)
+			gcc_prefix="arm-linux-gnueabi"
+			datestamp="${gcc_date}.${gcc_selected}-${gcc_prefix}"
+			dl_gcc_generic
+			;;
+		arm64)
+			gcc_prefix="aarch64-linux"
+			datestamp="${gcc_date}.${gcc_selected}-${gcc_prefix}-gcc"
+			dl_gcc_generic
+			;;
+		riscv)
+			gcc_prefix="riscv64-linux"
+			datestamp="${gcc_date}.${gcc_selected}-${gcc_prefix}-gcc"
+			dl_gcc_generic
+			;;
+		*)
+			echo "Error: Unsupported KERNEL_ARCH: ${KERNEL_ARCH}"
+			exit 1
+			;;
 	esac
 }
 
