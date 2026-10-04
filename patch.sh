@@ -563,23 +563,6 @@ backports () {
 		${git} "${DIR}/patches/mainline/ite-it66121/0018-drm-bridge-ite66121-Register-HPD-interrupt-handler-o.patch"
 	fi
 
-	backport_tag="rpi-6.6.y"
-
-	subsystem="rpi-backports"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
-		pre_rpibackports
-
-		cp -v ~/linux-rpi/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c ./drivers/gpu/drm/panel/
-		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
-		cp -v ~/linux-rpi/drivers/input/touchscreen/goodix.c ./drivers/input/touchscreen/
-		cp -v ~/linux-rpi/drivers/regulator/rpi-panel-v2-regulator.c ./drivers/regulator/
-
-		post_rpibackports
-	else
-		dir 'backports/rpi-backports'
-	fi
-
 	dir 'greybus/gb-beagleplay'
 }
 
