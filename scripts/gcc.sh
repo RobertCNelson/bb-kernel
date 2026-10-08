@@ -81,7 +81,7 @@ gcc_toolchain () {
 		10) gcc_selected="10.5.0" ; gcc_date="2020" ;;
 		11) gcc_selected="11.5.0" ; gcc_date="2021" ;;
 		12) gcc_selected="12.5.0" ; gcc_date="2022" ;;
-		13) gcc_selected="13.4.0" ; gcc_date="2023" ;;
+		13) gcc_selected="13.5.0" ; gcc_date="2023" ;;
 		14) gcc_selected="14.4.0" ; gcc_date="2024" ;;
 		15) gcc_selected="15.3.0" ; gcc_date="2025" ;;
 		16) gcc_selected="16.2.0" ; gcc_date="2026" ;;
