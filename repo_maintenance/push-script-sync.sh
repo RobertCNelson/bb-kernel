@@ -8,6 +8,8 @@ DIR=$PWD
 git_bin=$(which git)
 
 if [ -e ${DIR}/version.sh ]; then
+	./tools/get_vulnerability.sh
+
 	unset BRANCH
 	. ${DIR}/version.sh
 
