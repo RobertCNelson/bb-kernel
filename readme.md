@@ -55,3 +55,6 @@ then run (to rebuild with your changes):
 ./tools/rebuild.sh
 ```
 
+3rd party:
+
+tools/markdown.tmpl from: https://github.com/anchore/grype/blob/main/templates/markdown.tmpl
