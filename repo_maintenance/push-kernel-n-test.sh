@@ -35,6 +35,8 @@ DIR=$PWD
 git_bin=$(which git)
 
 if [ -e ${DIR}/version.sh ]; then
+	./tools/get_vulnerability.sh
+
 	unset BRANCH
 	unset KERNEL_TAG
 	. ${DIR}/version.sh
