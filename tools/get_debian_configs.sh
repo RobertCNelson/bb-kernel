@@ -6,7 +6,7 @@
 #https://packages.debian.org/source/sid/linux
 
 # SELECT DISTRO: (forky, sid, or exp)
-SELECTED_DISTRO="sid"
+SELECTED_DISTRO="exp"
 
 case "$SELECTED_DISTRO" in
 	forky)
@@ -18,8 +18,9 @@ case "$SELECTED_DISTRO" in
 		KERNEL_TAG="7.2.9-1"
 		;;
 	exp)
-		KERNEL_BRANCH="7.2"
-		KERNEL_TAG="7.2.3-1~exp1"
+		KERNEL_BRANCH="7.3"
+		#KERNEL_TAG="7.2.3-1~exp1"
+		KERNEL_TAG="7.3~rc6-1~exp1"
 		;;
 	*)
 		echo "Error: Invalid selection. Choose 'forky', 'sid', or 'exp'."

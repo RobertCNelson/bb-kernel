@@ -2,7 +2,7 @@
 
 - Name: unknown
 - Type: cpe
-- Date: 2026-10-08T19:14:04.842178664-05:00
+- Date: 2026-10-09T11:48:58.304058254-05:00
 - Kernel Version: 7.3-rc6
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version |
@@ -24,7 +24,6 @@
 | linux_kernel | CVE-2023-6240 | Medium |  | [] |
 | linux_kernel | CVE-2022-4543 | Medium |  | [] |
 | linux_kernel | CVE-2022-3523 | Medium |  | [] |
-| linux_kernel | CVE-2023-39176 | High |  | [] |
 | linux_kernel | CVE-2022-38096 | Medium |  | [] |
 | linux_kernel | CVE-2022-3646 | Medium |  | [] |
 | linux_kernel | CVE-2018-10876 | Medium |  | [] |
