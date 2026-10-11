@@ -6,7 +6,7 @@
 #https://packages.debian.org/source/sid/linux
 
 # SELECT DISTRO: (forky, sid, or exp)
-SELECTED_DISTRO="sid"
+SELECTED_DISTRO="exp"
 
 case "$SELECTED_DISTRO" in
 	forky)
