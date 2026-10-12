@@ -2,23 +2,11 @@
 
 - Name: unknown
 - Type: cpe
-- Date: 2026-10-12T10:09:03.942634674-05:00
+- Date: 2026-10-12T13:15:39.911832897-05:00
 - Kernel Version: 7.3-rc7
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
 |---------|------------------|----------|-------|-------------------------|---------|
-| linux_kernel | [CVE-2016-0774](https://nvd.nist.gov/vuln/detail/CVE-2016-0774) | Medium |  | [] | The (1) pipe_read and (2) pipe_write implementations in fs/p |
-| linux_kernel | [CVE-2016-3695](https://nvd.nist.gov/vuln/detail/CVE-2016-3695) | Medium |  | [] | The einj_error_inject function in drivers/acpi/apei/einj.c i |
-| linux_kernel | [CVE-2016-3699](https://nvd.nist.gov/vuln/detail/CVE-2016-3699) | High |  | [] | The Linux kernel, as used in Red Hat Enterprise Linux 7.2 an |
-| linux_kernel | [CVE-2017-1000255](https://nvd.nist.gov/vuln/detail/CVE-2017-1000255) | Medium |  | [] | On Linux running on PowerPC hardware (Power8 or later) a use |
-| linux_kernel | [CVE-2017-1000377](https://nvd.nist.gov/vuln/detail/CVE-2017-1000377) | Medium |  | [] | An issue was discovered in the size of the default stack gua |
-| linux_kernel | [CVE-2017-6264](https://nvd.nist.gov/vuln/detail/CVE-2017-6264) | High |  | [] | An elevation of privilege vulnerability exists in the NVIDIA |
-| linux_kernel | [CVE-2018-10840](https://nvd.nist.gov/vuln/detail/CVE-2018-10840) | Medium |  | [] | Linux kernel is vulnerable to a heap-based buffer overflow i |
-| linux_kernel | [CVE-2018-10876](https://nvd.nist.gov/vuln/detail/CVE-2018-10876) | Medium |  | [] | A flaw was found in Linux kernel in the ext4 filesystem code |
-| linux_kernel | [CVE-2018-10882](https://nvd.nist.gov/vuln/detail/CVE-2018-10882) | Medium |  | [] | A flaw was found in the Linux kernel's ext4 filesystem. A lo |
-| linux_kernel | [CVE-2018-10902](https://nvd.nist.gov/vuln/detail/CVE-2018-10902) | High |  | [] | It was found that the raw midi kernel driver does not protec |
-| linux_kernel | [CVE-2018-14625](https://nvd.nist.gov/vuln/detail/CVE-2018-14625) | High |  | [] | A flaw was found in the Linux Kernel where an attacker may b |
-| linux_kernel | [CVE-2018-6559](https://nvd.nist.gov/vuln/detail/CVE-2018-6559) | Low |  | [] | The Linux kernel, as used in Ubuntu 18.04 LTS and Ubuntu 18. |
 | linux_kernel | [CVE-2019-14899](https://nvd.nist.gov/vuln/detail/CVE-2019-14899) | High |  | [] | A vulnerability was discovered in Linux, FreeBSD, OpenBSD, M |
 | linux_kernel | [CVE-2019-3016](https://nvd.nist.gov/vuln/detail/CVE-2019-3016) | Medium |  | [] | In a Linux KVM guest that has PV TLB enabled, a process in t |
 | linux_kernel | [CVE-2019-3819](https://nvd.nist.gov/vuln/detail/CVE-2019-3819) | Medium |  | [] | A flaw was found in the Linux kernel in the function hid_deb |
@@ -27,7 +15,6 @@
 | linux_kernel | [CVE-2020-16119](https://nvd.nist.gov/vuln/detail/CVE-2020-16119) | High |  | [] | Use-after-free vulnerability in the Linux kernel exploitable |
 | linux_kernel | [CVE-2020-1749](https://nvd.nist.gov/vuln/detail/CVE-2020-1749) | High |  | [] | A flaw was found in the Linux kernel's implementation of som |
 | linux_kernel | [CVE-2020-27815](https://nvd.nist.gov/vuln/detail/CVE-2020-27815) | High | fixed | [4.9.249 4.14.213 4.19.164 5.4.86 5.10.4] | A flaw was found in the JFS filesystem code in the Linux Ker |
-| linux_kernel | [CVE-2020-8834](https://nvd.nist.gov/vuln/detail/CVE-2020-8834) | Medium |  | [] | KVM in the Linux kernel on Power8 processors has a conflicti |
 | linux_kernel | [CVE-2021-20194](https://nvd.nist.gov/vuln/detail/CVE-2021-20194) | High |  | [] | There is a vulnerability in the linux kernel versions higher |
 | linux_kernel | [CVE-2021-20265](https://nvd.nist.gov/vuln/detail/CVE-2021-20265) | Medium |  | [] | A flaw was found in the way memory resources were freed in t |
 | linux_kernel | [CVE-2021-3564](https://nvd.nist.gov/vuln/detail/CVE-2021-3564) | Medium |  | [] | A flaw double-free memory corruption in the Linux kernel HCI |
