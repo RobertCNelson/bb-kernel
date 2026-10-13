@@ -2,21 +2,12 @@
 
 - Name: unknown
 - Type: cpe
-- Date: 2026-10-12T13:15:39.911832897-05:00
+- Date: 2026-10-13T09:11:47.513122981-05:00
 - Kernel Version: 7.3-rc7
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
 |---------|------------------|----------|-------|-------------------------|---------|
 | linux_kernel | [CVE-2019-14899](https://nvd.nist.gov/vuln/detail/CVE-2019-14899) | High |  | [] | A vulnerability was discovered in Linux, FreeBSD, OpenBSD, M |
-| linux_kernel | [CVE-2019-3016](https://nvd.nist.gov/vuln/detail/CVE-2019-3016) | Medium |  | [] | In a Linux KVM guest that has PV TLB enabled, a process in t |
-| linux_kernel | [CVE-2019-3819](https://nvd.nist.gov/vuln/detail/CVE-2019-3819) | Medium |  | [] | A flaw was found in the Linux kernel in the function hid_deb |
-| linux_kernel | [CVE-2019-3887](https://nvd.nist.gov/vuln/detail/CVE-2019-3887) | Medium |  | [] | A flaw was found in the way KVM hypervisor handled x2APIC Ma |
-| linux_kernel | [CVE-2020-10742](https://nvd.nist.gov/vuln/detail/CVE-2020-10742) | Medium |  | [] | A flaw was found in the Linux kernel. An index buffer overfl |
-| linux_kernel | [CVE-2020-16119](https://nvd.nist.gov/vuln/detail/CVE-2020-16119) | High |  | [] | Use-after-free vulnerability in the Linux kernel exploitable |
-| linux_kernel | [CVE-2020-1749](https://nvd.nist.gov/vuln/detail/CVE-2020-1749) | High |  | [] | A flaw was found in the Linux kernel's implementation of som |
-| linux_kernel | [CVE-2020-27815](https://nvd.nist.gov/vuln/detail/CVE-2020-27815) | High | fixed | [4.9.249 4.14.213 4.19.164 5.4.86 5.10.4] | A flaw was found in the JFS filesystem code in the Linux Ker |
-| linux_kernel | [CVE-2021-20194](https://nvd.nist.gov/vuln/detail/CVE-2021-20194) | High |  | [] | There is a vulnerability in the linux kernel versions higher |
-| linux_kernel | [CVE-2021-20265](https://nvd.nist.gov/vuln/detail/CVE-2021-20265) | Medium |  | [] | A flaw was found in the way memory resources were freed in t |
 | linux_kernel | [CVE-2021-3564](https://nvd.nist.gov/vuln/detail/CVE-2021-3564) | Medium |  | [] | A flaw double-free memory corruption in the Linux kernel HCI |
 | linux_kernel | [CVE-2021-3714](https://nvd.nist.gov/vuln/detail/CVE-2021-3714) | Medium |  | [] | A flaw was found in the Linux kernels memory deduplication m |
 | linux_kernel | [CVE-2021-3759](https://nvd.nist.gov/vuln/detail/CVE-2021-3759) | Medium |  | [] | A memory overflow vulnerability was found in the Linux kerne |
