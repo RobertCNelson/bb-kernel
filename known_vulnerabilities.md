@@ -2,39 +2,31 @@
 
 - Name: unknown
 - Type: cpe
-- Date: 2026-10-15T10:49:35.757269654-05:00
+- Date: 2026-10-15T10:51:46.120512753-05:00
 - Kernel Version: 7.2.10
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
 |---------|------------------|----------|-------|-------------------------|---------|
 | linux_kernel | [CVE-2016-0774](https://security-tracker.debian.org/tracker/CVE-2016-0774) | Medium |  | [] | The (1) pipe_read and (2) pipe_write implementations in fs/p |
 | linux_kernel | [CVE-2016-3695](https://security-tracker.debian.org/tracker/CVE-2016-3695) | Medium |  | [] | The einj_error_inject function in drivers/acpi/apei/einj.c i |
-| linux_kernel | [CVE-2016-3699](https://security-tracker.debian.org/tracker/CVE-2016-3699) | High |  | [] | The Linux kernel, as used in Red Hat Enterprise Linux 7.2 an |
-| linux_kernel | [CVE-2017-1000255](https://security-tracker.debian.org/tracker/CVE-2017-1000255) | Medium |  | [] | On Linux running on PowerPC hardware (Power8 or later) a use |
-| linux_kernel | [CVE-2017-1000377](https://security-tracker.debian.org/tracker/CVE-2017-1000377) | Medium |  | [] | An issue was discovered in the size of the default stack gua |
-| linux_kernel | [CVE-2017-6264](https://security-tracker.debian.org/tracker/CVE-2017-6264) | High |  | [] | An elevation of privilege vulnerability exists in the NVIDIA |
 | linux_kernel | [CVE-2018-10840](https://security-tracker.debian.org/tracker/CVE-2018-10840) | Medium |  | [] | Linux kernel is vulnerable to a heap-based buffer overflow i |
 | linux_kernel | [CVE-2018-10876](https://security-tracker.debian.org/tracker/CVE-2018-10876) | Medium |  | [] | A flaw was found in Linux kernel in the ext4 filesystem code |
 | linux_kernel | [CVE-2018-10882](https://security-tracker.debian.org/tracker/CVE-2018-10882) | Medium |  | [] | A flaw was found in the Linux kernel's ext4 filesystem. A lo |
 | linux_kernel | [CVE-2018-10902](https://security-tracker.debian.org/tracker/CVE-2018-10902) | High |  | [] | It was found that the raw midi kernel driver does not protec |
 | linux_kernel | [CVE-2018-14625](https://security-tracker.debian.org/tracker/CVE-2018-14625) | High |  | [] | A flaw was found in the Linux Kernel where an attacker may b |
-| linux_kernel | [CVE-2018-6559](https://security-tracker.debian.org/tracker/CVE-2018-6559) | Low |  | [] | The Linux kernel, as used in Ubuntu 18.04 LTS and Ubuntu 18. |
 | linux_kernel | [CVE-2019-14899](https://security-tracker.debian.org/tracker/CVE-2019-14899) | High |  | [] | A vulnerability was discovered in Linux, FreeBSD, OpenBSD, M |
 | linux_kernel | [CVE-2019-3016](https://security-tracker.debian.org/tracker/CVE-2019-3016) | Medium |  | [] | In a Linux KVM guest that has PV TLB enabled, a process in t |
 | linux_kernel | [CVE-2019-3819](https://security-tracker.debian.org/tracker/CVE-2019-3819) | Medium |  | [] | A flaw was found in the Linux kernel in the function hid_deb |
 | linux_kernel | [CVE-2019-3887](https://security-tracker.debian.org/tracker/CVE-2019-3887) | Medium |  | [] | A flaw was found in the way KVM hypervisor handled x2APIC Ma |
-| linux_kernel | [CVE-2020-10742](https://security-tracker.debian.org/tracker/CVE-2020-10742) | Medium |  | [] | A flaw was found in the Linux kernel. An index buffer overfl |
 | linux_kernel | [CVE-2020-16119](https://security-tracker.debian.org/tracker/CVE-2020-16119) | High |  | [] | Use-after-free vulnerability in the Linux kernel exploitable |
 | linux_kernel | [CVE-2020-1749](https://security-tracker.debian.org/tracker/CVE-2020-1749) | High |  | [] | A flaw was found in the Linux kernel's implementation of som |
 | linux_kernel | [CVE-2020-27815](https://security-tracker.debian.org/tracker/CVE-2020-27815) | High | fixed | [4.9.249 4.14.213 4.19.164 5.4.86 5.10.4] | A flaw was found in the JFS filesystem code in the Linux Ker |
-| linux_kernel | [CVE-2020-8834](https://security-tracker.debian.org/tracker/CVE-2020-8834) | Medium |  | [] | KVM in the Linux kernel on Power8 processors has a conflicti |
 | linux_kernel | [CVE-2021-20194](https://security-tracker.debian.org/tracker/CVE-2021-20194) | High |  | [] | There is a vulnerability in the linux kernel versions higher |
 | linux_kernel | [CVE-2021-20265](https://security-tracker.debian.org/tracker/CVE-2021-20265) | Medium |  | [] | A flaw was found in the way memory resources were freed in t |
 | linux_kernel | [CVE-2021-3564](https://security-tracker.debian.org/tracker/CVE-2021-3564) | Medium |  | [] | A flaw double-free memory corruption in the Linux kernel HCI |
 | linux_kernel | [CVE-2021-3714](https://security-tracker.debian.org/tracker/CVE-2021-3714) | Medium |  | [] | A flaw was found in the Linux kernels memory deduplication m |
 | linux_kernel | [CVE-2021-3759](https://security-tracker.debian.org/tracker/CVE-2021-3759) | Medium |  | [] | A memory overflow vulnerability was found in the Linux kerne |
 | linux_kernel | [CVE-2021-3864](https://security-tracker.debian.org/tracker/CVE-2021-3864) | High |  | [] | A flaw was found in the way the dumpable flag setting was ha |
-| linux_kernel | [CVE-2021-4218](https://security-tracker.debian.org/tracker/CVE-2021-4218) | Medium |  | [] | A flaw was found in the Linux kernel’s implementation of r |
 | linux_kernel | [CVE-2022-0286](https://security-tracker.debian.org/tracker/CVE-2022-0286) | Medium |  | [] | A flaw was found in the Linux kernel. A null pointer derefer |
 | linux_kernel | [CVE-2022-0400](https://security-tracker.debian.org/tracker/CVE-2022-0400) | High |  | [] | An out-of-bounds read vulnerability was discovered in linux  |
 | linux_kernel | [CVE-2022-1247](https://security-tracker.debian.org/tracker/CVE-2022-1247) | High |  | [] | An issue found in linux-kernel that leads to a race conditio |
@@ -67,7 +59,6 @@
 | linux_kernel | [CVE-2023-3773](https://security-tracker.debian.org/tracker/CVE-2023-3773) | Medium |  | [] | A flaw was found in the Linux kernel’s IP framework for tr |
 | linux_kernel | [CVE-2023-39179](https://security-tracker.debian.org/tracker/CVE-2023-39179) | High |  | [] | A flaw was found within the handling of SMB2 read requests i |
 | linux_kernel | [CVE-2023-39180](https://security-tracker.debian.org/tracker/CVE-2023-39180) | High |  | [] | A flaw was found within the handling of SMB2_READ commands i |
-| linux_kernel | [CVE-2023-4155](https://security-tracker.debian.org/tracker/CVE-2023-4155) | Medium |  | [] | A flaw was found in KVM AMD Secure Encrypted Virtualization  |
 | linux_kernel | [CVE-2023-52904](https://security-tracker.debian.org/tracker/CVE-2023-52904) | Medium |  | [] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2023-6176](https://security-tracker.debian.org/tracker/CVE-2023-6176) | Medium |  | [] | A null pointer dereference flaw was found in the Linux kerne |
 | linux_kernel | [CVE-2023-6238](https://security-tracker.debian.org/tracker/CVE-2023-6238) | Medium |  | [] | A buffer overflow vulnerability was found in the NVM Express |
