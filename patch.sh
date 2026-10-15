@@ -610,6 +610,7 @@ cc33xx_drivers () {
 
 	#exit 2
 	#start_cleanup
+	#https://www.ti.com/tool/download/CC33XX-LINUX-MPU/1.0.2.10
 	dir 'drivers/cc33xx/1.0.2.10'
 
 	#exit 2
