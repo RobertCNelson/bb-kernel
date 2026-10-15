@@ -4,14 +4,20 @@ TARGET_FILE="version.sh"
 
 CURRENT_LINE=$(grep "^BUILD=" "$TARGET_FILE")
 
-BASE_VERSION=$(echo "$CURRENT_LINE" | sed 's/\..*//; s/.*[^0-9]*\([0-9]\+\).*/\1/')
+VALUE=${CURRENT_LINE#*=}
+
+BEFORE_DOT=${VALUE%%.*}
+
+BASE_VERSION=$(echo "$BEFORE_DOT" | sed 's/[^0-9]*//g')
 
 NEW_BASE=$((BASE_VERSION + 1))
 
-PREFIX=$(echo "$CURRENT_LINE" | sed 's/[0-9].*//')
-NEW_LINE="${PREFIX}${NEW_BASE}"
+PREFIX_PART=${BEFORE_DOT%$BASE_VERSION*}
 
-sed -i "s/^BUILD=.*/$NEW_LINE/" "$TARGET_FILE"
+NEW_LINE="BUILD=${PREFIX_PART}${NEW_BASE}"
+
+echo "$NEW_LINE" > "$TARGET_FILE.tmp"
+sed "s|^BUILD=.*|${NEW_LINE}|" "$TARGET_FILE" > "$TARGET_FILE.tmp" && mv "$TARGET_FILE.tmp" "$TARGET_FILE"
 
 echo "RELEASE TRIGGERED"
 echo "Old: $CURRENT_LINE"
