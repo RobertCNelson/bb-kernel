@@ -12,8 +12,14 @@ if [ -e ${DIR}/version.sh ]; then
 
 	FILE="known_vulnerabilities.md"
 
-	KERNEL=$(grep "Kernel Version:" "$FILE" | awk '{print $3}')
-	DATE=$(grep "Date:" "$FILE" | awk '{print $2}')
+	KERNEL=$(grep "Kernel Version:" "$FILE" | awk '{print $4}')
+	
+	DATE=$(grep "Date:" "$FILE" | awk '{print $3}')
+
+	if [ -z "$KERNEL" ] || [ -z "$DATE" ]; then
+		echo "Error: Could not parse Kernel or Date from $FILE"
+		exit 1
+	fi
 
 	MSG="Vulnerabilities: $KERNEL | $DATE"
 
