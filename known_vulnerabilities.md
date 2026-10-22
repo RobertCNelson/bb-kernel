@@ -2,7 +2,7 @@
 
 - Name: unknown
 - Type: cpe
-- Date: 2026-10-15T12:02:05.114318466-05:00
+- Date: 2026-10-22T15:50:46.102355986-05:00
 - Kernel Version: 6.6.158
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
@@ -68,7 +68,6 @@
 | linux_kernel | [CVE-2023-39179](https://security-tracker.debian.org/tracker/CVE-2023-39179) | High |  | [] | A flaw was found within the handling of SMB2 read requests i |
 | linux_kernel | [CVE-2023-39180](https://security-tracker.debian.org/tracker/CVE-2023-39180) | High |  | [] | A flaw was found within the handling of SMB2_READ commands i |
 | linux_kernel | [CVE-2023-4155](https://security-tracker.debian.org/tracker/CVE-2023-4155) | Medium |  | [] | A flaw was found in KVM AMD Secure Encrypted Virtualization  |
-| linux_kernel | [CVE-2023-50431](https://security-tracker.debian.org/tracker/CVE-2023-50431) | Medium | fixed | [6.8] | sec_attest_info in drivers/accel/habanalabs/common/habanalab |
 | linux_kernel | [CVE-2023-52485](https://security-tracker.debian.org/tracker/CVE-2023-52485) | Medium | fixed | [6.7.3] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2023-52585](https://security-tracker.debian.org/tracker/CVE-2023-52585) | Medium | fixed | [5.4.277 5.10.218 5.15.160 6.1.92 6.6.32 6.7.4 6.7.4] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2023-52586](https://security-tracker.debian.org/tracker/CVE-2023-52586) | High | fixed | [6.7.4] | In the Linux kernel, the following vulnerability has been re |
@@ -91,7 +90,6 @@
 | linux_kernel | [CVE-2023-6915](https://security-tracker.debian.org/tracker/CVE-2023-6915) | Medium | fixed | [6.7] | A Null pointer dereference problem was found in ida_free in  |
 | linux_kernel | [CVE-2023-6931](https://security-tracker.debian.org/tracker/CVE-2023-6931) | High | fixed | [6.7] | A heap out-of-bounds write vulnerability in the Linux kernel |
 | linux_kernel | [CVE-2024-0565](https://security-tracker.debian.org/tracker/CVE-2024-0565) | High | fixed | [6.7] | An out-of-bounds memory read flaw was found in receive_encry |
-| linux_kernel | [CVE-2024-0607](https://security-tracker.debian.org/tracker/CVE-2024-0607) | Medium | fixed | [6.7] | A flaw was found in the Netfilter subsystem in the Linux ker |
 | linux_kernel | [CVE-2024-1151](https://security-tracker.debian.org/tracker/CVE-2024-1151) | Medium |  | [] | A vulnerability was reported in the Open vSwitch sub-compone |
 | linux_kernel | [CVE-2024-23848](https://security-tracker.debian.org/tracker/CVE-2024-23848) | Medium |  | [] | In the Linux kernel through 6.7.1, there is a use-after-free |
 | linux_kernel | [CVE-2024-23849](https://security-tracker.debian.org/tracker/CVE-2024-23849) | Medium |  | [] | In rds_recv_track_latency in net/rds/af_rds.c in the Linux k |
@@ -545,6 +543,7 @@
 | linux_kernel | [CVE-2025-71289](https://security-tracker.debian.org/tracker/CVE-2025-71289) | Medium | fixed | [6.19.6] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2025-71313](https://security-tracker.debian.org/tracker/CVE-2025-71313) | Medium | fixed | [6.19.4] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2025-71315](https://security-tracker.debian.org/tracker/CVE-2025-71315) | Medium | fixed | [6.18.34] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-100072](https://security-tracker.debian.org/tracker/CVE-2026-100072) | High | fixed | [7.2.6] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-100074](https://security-tracker.debian.org/tracker/CVE-2026-100074) | Medium | fixed | [6.18.52 7.2.6] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-100076](https://security-tracker.debian.org/tracker/CVE-2026-100076) | Medium | fixed | [6.18.52 7.2.6] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-100077](https://security-tracker.debian.org/tracker/CVE-2026-100077) | Medium | fixed | [6.18.52 7.2.6] | In the Linux kernel, the following vulnerability has been re |
@@ -857,6 +856,9 @@
 | linux_kernel | [CVE-2026-98078](https://security-tracker.debian.org/tracker/CVE-2026-98078) | Medium | fixed | [6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98109](https://security-tracker.debian.org/tracker/CVE-2026-98109) | Medium | fixed | [6.5 6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98115](https://security-tracker.debian.org/tracker/CVE-2026-98115) | High | fixed | [6.7 6.11 7.2.7] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-98126](https://security-tracker.debian.org/tracker/CVE-2026-98126) | Medium | fixed | [6.6.160 6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-98127](https://security-tracker.debian.org/tracker/CVE-2026-98127) | Medium | fixed | [6.6.160 6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-98128](https://security-tracker.debian.org/tracker/CVE-2026-98128) | Medium | fixed | [6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98131](https://security-tracker.debian.org/tracker/CVE-2026-98131) | Medium | fixed | [7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98134](https://security-tracker.debian.org/tracker/CVE-2026-98134) | Medium | fixed | [7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98156](https://security-tracker.debian.org/tracker/CVE-2026-98156) | High | fixed | [6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
