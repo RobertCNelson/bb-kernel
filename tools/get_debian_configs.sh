@@ -10,17 +10,17 @@ SELECTED_DISTRO="sid"
 
 case "$SELECTED_DISTRO" in
 	forky)
-		KERNEL_BRANCH="7.1"
-		KERNEL_TAG="7.1.13-1"
+		KERNEL_BRANCH="7.2"
+		KERNEL_TAG="7.2.11-1"
 		;;
 	sid)
 		KERNEL_BRANCH="7.2"
-		KERNEL_TAG="7.2.9-1"
+		KERNEL_TAG="7.2.11-1"
 		;;
 	exp)
 		KERNEL_BRANCH="7.3"
 		#KERNEL_TAG="7.2.3-1~exp1"
-		KERNEL_TAG="7.3~rc6-1~exp1"
+		KERNEL_TAG="7.3~rc7-1~exp1"
 		;;
 	*)
 		echo "Error: Invalid selection. Choose 'forky', 'sid', or 'exp'."
