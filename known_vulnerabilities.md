@@ -2,7 +2,7 @@
 
 - Name: unknown
 - Type: cpe
-- Date: 2026-10-15T12:05:58.874567132-05:00
+- Date: 2026-10-22T15:52:37.915037178-05:00
 - Kernel Version: 6.1.189
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
@@ -212,7 +212,7 @@
 | linux_kernel | [CVE-2023-7192](https://security-tracker.debian.org/tracker/CVE-2023-7192) | Medium | fixed | [6.3] | A memory leak problem was found in ctnetlink_create_conntrac |
 | linux_kernel | [CVE-2024-0340](https://security-tracker.debian.org/tracker/CVE-2024-0340) | Medium | fixed | [6.4] | A vulnerability was found in vhost_new_msg in drivers/vhost/ |
 | linux_kernel | [CVE-2024-0565](https://security-tracker.debian.org/tracker/CVE-2024-0565) | High | fixed | [6.7] | An out-of-bounds memory read flaw was found in receive_encry |
-| linux_kernel | [CVE-2024-0607](https://security-tracker.debian.org/tracker/CVE-2024-0607) | Medium | fixed | [6.7] | A flaw was found in the Netfilter subsystem in the Linux ker |
+| linux_kernel | [CVE-2024-0607](https://security-tracker.debian.org/tracker/CVE-2024-0607) | Medium | fixed | [6.6.3] | A flaw was found in the Netfilter subsystem in the Linux ker |
 | linux_kernel | [CVE-2024-0639](https://security-tracker.debian.org/tracker/CVE-2024-0639) | Medium |  | [] | A denial of service vulnerability due to a deadlock was foun |
 | linux_kernel | [CVE-2024-0641](https://security-tracker.debian.org/tracker/CVE-2024-0641) | Medium | fixed | [6.6] | A denial of service vulnerability was found in tipc_crypto_k |
 | linux_kernel | [CVE-2024-0775](https://security-tracker.debian.org/tracker/CVE-2024-0775) | High | fixed | [6.4] | A use-after-free flaw was found in the __ext4_remount in fs/ |
@@ -940,6 +940,7 @@
 | linux_kernel | [CVE-2025-71289](https://security-tracker.debian.org/tracker/CVE-2025-71289) | Medium | fixed | [6.19.6] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2025-71313](https://security-tracker.debian.org/tracker/CVE-2025-71313) | Medium | fixed | [6.19.4] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2025-71315](https://security-tracker.debian.org/tracker/CVE-2025-71315) | Medium | fixed | [6.18.34] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-100072](https://security-tracker.debian.org/tracker/CVE-2026-100072) | High | fixed | [7.2.6] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-100076](https://security-tracker.debian.org/tracker/CVE-2026-100076) | Medium | fixed | [6.18.52 7.2.6] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-100077](https://security-tracker.debian.org/tracker/CVE-2026-100077) | Medium | fixed | [6.18.52 7.2.6] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-22996](https://security-tracker.debian.org/tracker/CVE-2026-22996) | Medium | fixed | [6.12.67 6.18.7] | In the Linux kernel, the following vulnerability has been re |
@@ -1392,6 +1393,9 @@
 | linux_kernel | [CVE-2026-64400](https://security-tracker.debian.org/tracker/CVE-2026-64400) | High | fixed | [5.16 6.2 7.1.4] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-64424](https://security-tracker.debian.org/tracker/CVE-2026-64424) | High | fixed | [6.12.96 6.18.39 7.1.4] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98078](https://security-tracker.debian.org/tracker/CVE-2026-98078) | Medium | fixed | [6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-98126](https://security-tracker.debian.org/tracker/CVE-2026-98126) | Medium | fixed | [6.6.160 6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-98127](https://security-tracker.debian.org/tracker/CVE-2026-98127) | Medium | fixed | [6.6.160 6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-98128](https://security-tracker.debian.org/tracker/CVE-2026-98128) | Medium | fixed | [6.12.111 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98131](https://security-tracker.debian.org/tracker/CVE-2026-98131) | Medium | fixed | [7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98156](https://security-tracker.debian.org/tracker/CVE-2026-98156) | High | fixed | [6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98161](https://security-tracker.debian.org/tracker/CVE-2026-98161) | Medium | fixed | [6.18.52 7.2.6] | In the Linux kernel, the following vulnerability has been re |
