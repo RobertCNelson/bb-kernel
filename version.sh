@@ -13,7 +13,7 @@ branch_prefix="am33x-v"
 branch_postfix=""
 
 #Changes
-#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v7.3-rc1
+#https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/Documentation/process/changes.rst?h=v7.4-rc1
 #
 #Cross Compilers
 #https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/
@@ -37,7 +37,7 @@ KERNEL_TAG=${KERNEL_REL}
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/x.y/
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}8
+BUILD=${build_prefix}0
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
