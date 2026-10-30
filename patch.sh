@@ -344,7 +344,9 @@ beagleboard_dtbs () {
 		device="k3-am62-pocketbeagle2-pru0-out" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-spi2-eth-wiz-click" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-cpts-genf-csi1" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-cpts-hw1tspush-gpio13" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-cpts-hw1tspush-gpio13-genf-csi1" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-400000" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-ads1115" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-rtc-rv3028" ; k3_dtbo_makefile_append
@@ -402,7 +404,6 @@ beagleboard_dtbs () {
 		device="k3-j721e-beagleboneai64-spi-mcspi7-cs0" ; k3_dtbo_makefile_append
 
 		#K3 Devices
-		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
 		device="k3-am625-sancloud-bbe-2.dtb" ; k3_dtb_makefile_append
 		device="k3-am62l3-beaglebadge.dtb" ; k3_dtb_makefile_append
 
@@ -548,13 +549,49 @@ cc33xx_drivers () {
 	${git} "${DIR}/patches/drivers/cc33xx/v5_20241107/v5_20241107_michael_nemanov_wifi_cc33xx_add_driver_for_new_ti_cc33xx_wireless_device_family.mbx"
 
 	#exit 2
+	#git checkout origin/ti-linux-6.18.y -b tmp
+	#cd KERNEL/
+	#mkdir -p drivers/net/wireless/ti/cc33xx/
+	#cp -rv ~/linux-ti/drivers/net/wireless/ti/cc33xx/* drivers/net/wireless/ti/cc33xx/
+	#git add drivers/net/wireless/ti/cc33xx/
+	#git commit -a -m 'wifi: cc33xx: update driver to match cc33xx SDK 1.0.2.10' -s
+
+	#cp -v ~/linux-ti/drivers/bluetooth/Makefile drivers/bluetooth/
+	#cp -v ~/linux-ti/drivers/bluetooth/Kconfig drivers/bluetooth/
+	#cp -rv ~/linux-ti/drivers/bluetooth/btti_* drivers/bluetooth/
+	#git add drivers/bluetooth/
+	#git commit -a -m 'bluetooth: cc33xx: update driver to match cc33xx SDK 1.0.2.10' -s
+	#git format-patch -2 -o ../patches/drivers/cc33xx/1.0.2.10/
+
+	#exit 2
 	#start_cleanup
 	#https://www.ti.com/tool/download/CC33XX-LINUX-MPU/1.0.2.10
 	dir 'drivers/cc33xx/1.0.2.10'
+
+	#exit 2
+	#wget https://raw.githubusercontent.com/TexasInstruments-Sandbox/cc33xx-linux-mpu-ports/refs/heads/main/ti-linux-6.18.y/0001-drivers-cc33xx-forwardport-ti-linux-6.18.y-to-1.0.2..patch
+	#git am 0001-drivers-cc33xx-forwardport-ti-linux-6.18.y-to-1.0.2..patch
+
+	#cd KERNEL/
+	#cp -rv ~/linux-ti/drivers/net/wireless/ti/cc33xx/* drivers/net/wireless/ti/cc33xx/
+	#git add drivers/net/wireless/ti/cc33xx/
+	#git commit -a -m 'wifi: cc33xx: update driver to match cc33xx SDK 1.0.2.17' -s
+
+	#cp -rv ~/linux-ti/drivers/bluetooth/btti_* drivers/bluetooth/
+	#git add drivers/bluetooth/
+	#git commit -a -m 'bluetooth: cc33xx: update driver to match cc33xx SDK 1.0.2.17' -s
+	#git format-patch -2 -o ../patches/drivers/cc33xx/1.0.2.17/
+
+	#exit 2
+	#start_cleanup
+	#https://www.ti.com/tool/download/CC33XX-LINUX-MPU/1.0.2.17
+	dir 'drivers/cc33xx/1.0.2.17'
+
+	#exit 2
 	cc33xx_firmware
 
 	#exit 2
-#	dir 'drivers/cc33xx/fixes'
+	dir 'drivers/cc33xx/fixes'
 }
 
 drivers () {
