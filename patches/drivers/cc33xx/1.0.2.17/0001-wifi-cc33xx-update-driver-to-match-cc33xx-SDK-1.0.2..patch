@@ -1,0 +1,2374 @@
+From bda6e9fdb96e790296326cd129bbd949f119c053 Mon Sep 17 00:00:00 2001
+From: Robert Nelson <robertcnelson@gmail.com>
+Date: Fri, 23 Oct 2026 20:44:36 -0500
+Subject: [PATCH 1/2] wifi: cc33xx: update driver to match cc33xx SDK 1.0.2.17
+
+Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
+---
+ drivers/net/wireless/ti/cc33xx/Makefile   |   2 +-
+ drivers/net/wireless/ti/cc33xx/acx.c      | 160 +++++-
+ drivers/net/wireless/ti/cc33xx/acx.h      |  74 ++-
+ drivers/net/wireless/ti/cc33xx/boot.c     |   4 +-
+ drivers/net/wireless/ti/cc33xx/cc33xx.h   |  19 +-
+ drivers/net/wireless/ti/cc33xx/cc33xx_i.h |  13 +-
+ drivers/net/wireless/ti/cc33xx/cmd.c      |  49 +-
+ drivers/net/wireless/ti/cc33xx/cmd.h      |   1 -
+ drivers/net/wireless/ti/cc33xx/conf.h     |   1 +
+ drivers/net/wireless/ti/cc33xx/event.c    |  73 +++
+ drivers/net/wireless/ti/cc33xx/init.c     |   9 +-
+ drivers/net/wireless/ti/cc33xx/main.c     | 277 ++++++++--
+ drivers/net/wireless/ti/cc33xx/rx.c       | 415 +++++++++++++++
+ drivers/net/wireless/ti/cc33xx/rx.h       |  22 +
+ drivers/net/wireless/ti/cc33xx/sysfs.c    | 594 ++++++++++++++++++++++
+ drivers/net/wireless/ti/cc33xx/sysfs.h    |  14 +
+ 16 files changed, 1615 insertions(+), 112 deletions(-)
+ create mode 100644 drivers/net/wireless/ti/cc33xx/sysfs.c
+ create mode 100644 drivers/net/wireless/ti/cc33xx/sysfs.h
+
+diff --git a/drivers/net/wireless/ti/cc33xx/Makefile b/drivers/net/wireless/ti/cc33xx/Makefile
+index caefe742ae6b..960896af51f5 100644
+--- a/drivers/net/wireless/ti/cc33xx/Makefile
++++ b/drivers/net/wireless/ti/cc33xx/Makefile
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: GPL-2.0
+ 
+ cc33xx-objs		= main.o cmd.o io.o event.o tx.o rx.o ps.o acx.o \
+-					boot.o init.o scan.o debugfs.o
++					boot.o init.o scan.o debugfs.o sysfs.o
+ 
+ cc33xx_spi-objs 	= spi.o
+ cc33xx_sdio-objs	= sdio.o
+diff --git a/drivers/net/wireless/ti/cc33xx/acx.c b/drivers/net/wireless/ti/cc33xx/acx.c
+index ffb998acb5c4..185cac91d462 100644
+--- a/drivers/net/wireless/ti/cc33xx/acx.c
++++ b/drivers/net/wireless/ti/cc33xx/acx.c
+@@ -498,6 +498,23 @@ int cc33xx_acx_init_get_fw_versions(struct cc33xx *cc)
+ 	return 0;
+ }
+ 
++int cc33xx_acx_get_slow_clock_type(struct cc33xx *cc)
++{
++	struct acx_slow_clk_type *acx;
++	int ret = 0;
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx)
++		ret = -ENOMEM;
++
++	ret = cc33xx_cmd_interrogate(cc, GET_SLOW_CLK_SOURCE, acx,
++			sizeof(struct acx_header), sizeof(struct acx_slow_clk_type));
++	cc->is_ext_slw_clk = acx->is_ext_slw_clk;
++
++	kfree(acx);
++	return ret;
++}
++
+ int cc33xx_acx_set_ht_information(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 				  u16 ht_operation_mode, u32 he_oper_params,
+ 				  u16 he_oper_nss_set)
+@@ -659,6 +676,67 @@ int cc33xx_acx_get_tx_rate(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ }
+ 
+ #ifdef CONFIG_PM
++/* Configure ARP IP - send IP to add, or 0.0.0.0 to remove */
++int cc33xx_acx_arp_ip_config(struct cc33xx *cc, u8 role_id, __be32 ip_addr)
++{
++	struct acx_arp_ip_cfg *acx;
++	int ret;
++
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	acx->role_id = role_id;
++
++	if (ip_addr) {
++		memcpy(acx->address, &ip_addr, ACX_IPV4_ADDR_LENGTH);
++		cc33xx_debug(DEBUG_ACX,
++			     "acx arp ip filter: SETTING role=%d, IP=%pI4", role_id, &ip_addr);
++	} else {
++		memset(acx->address, 0, ACX_IPV4_ADDR_LENGTH);
++		cc33xx_debug(DEBUG_ACX,
++			     "acx arp ip filter: CLEARING role=%d, IP=0.0.0.0", role_id);
++	}
++
++	ret = cc33xx_cmd_configure(cc, ACX_ARP_IP_CFG, acx, sizeof(*acx));
++	if (ret < 0) {
++		cc33xx_warning("acx arp ip filter failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(acx);
++	return ret;
++}
++
++/* Enable/disable ARP offload feature */
++int cc33xx_acx_arp_offload(struct cc33xx *cc, bool enable)
++{
++	struct acx_arp_offload *acx;
++	int ret;
++
++	cc33xx_debug(DEBUG_ACX, "acx arp offload enable: %d", enable);
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx)
++		return -ENOMEM;
++
++	acx->enable = enable;
++
++	ret = cc33xx_cmd_configure(cc, ACX_ARP_OFFLOAD_ENABLE, acx, sizeof(*acx));
++	if (ret < 0) {
++		cc33xx_warning("acx arp offload failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(acx);
++	return ret;
++}
++
+ /* Set the global behaviour of RX filters - On/Off + default action */
+ int cc33xx_acx_default_rx_filter_enable(struct cc33xx *cc, bool enable,
+ 					enum rx_filter_action action)
+@@ -689,10 +767,12 @@ int cc33xx_acx_default_rx_filter_enable(struct cc33xx *cc, bool enable,
+ static int cc33xx_rx_filter_get_fields_size(struct cc33xx_rx_filter *filter)
+ {
+ 	int i, fields_size = 0;
++	u8 data_len;
+ 
+ 	for (i = 0; i < filter->num_fields; i++) {
+-		fields_size += filter->fields[i].len - sizeof(u8 *)
+-					+ sizeof(struct cc33xx_rx_filter_field);
++		data_len = (filter->fields[i].flags & CC33XX_RX_FILTER_FLAG_MASKED) ?
++		           filter->fields[i].len * 2 : filter->fields[i].len;
++		fields_size += RX_FILTER_FIELD_OVERHEAD + data_len;
+ 	}
+ 
+ 	return fields_size;
+@@ -703,6 +783,7 @@ static void cc33xx_rx_filter_flatten_fields(struct cc33xx_rx_filter *filter,
+ {
+ 	int i;
+ 	struct cc33xx_rx_filter_field *field;
++	u8 data_len;
+ 
+ 	for (i = 0; i < filter->num_fields; i++) {
+ 		field = (struct cc33xx_rx_filter_field *)buf;
+@@ -711,9 +792,10 @@ static void cc33xx_rx_filter_flatten_fields(struct cc33xx_rx_filter *filter,
+ 		field->flags = filter->fields[i].flags;
+ 		field->len = filter->fields[i].len;
+ 
+-		memcpy(&field->pattern, filter->fields[i].pattern, field->len);
++		data_len = (filter->fields[i].flags & CC33XX_RX_FILTER_FLAG_MASKED) ?
++		           filter->fields[i].len * 2 : filter->fields[i].len;
+ 		buf += sizeof(struct cc33xx_rx_filter_field) - sizeof(u8 *);
+-		buf += field->len;
++		buf += data_len;
+ 	}
+ }
+ 
+@@ -767,6 +849,7 @@ int cc33xx_acx_set_rx_filter(struct cc33xx *cc, u8 index, bool enable,
+  */
+ int cc33xx_acx_set_peer_cap(struct cc33xx *cc,
+ 			    struct ieee80211_sta_ht_cap *ht_cap,
++				struct ieee80211_sta_vht_cap *vht_cap,
+ 			    struct ieee80211_sta_he_cap *he_cap,
+ 			    struct cc33xx_vif *wlvif, bool allow_ht_operation,
+ 			    u32 rate_set, u8 hlid)
+@@ -802,6 +885,8 @@ int cc33xx_acx_set_peer_cap(struct cc33xx *cc,
+ 	acx->supported_rates = cpu_to_le32(rate_set);
+ 
+ 	acx->role_id = wlvif->role_id;
++	acx->vht_capabilities = cpu_to_le32(vht_cap->cap);
++	acx->vht_supported = vht_cap->vht_supported;
+ 	acx->has_he = he_cap->has_he;
+ 	memcpy(acx->mac_cap_info, he_cap->he_cap_elem.mac_cap_info, 6);
+ 	cap_info = he_cap->he_cap_elem.phy_cap_info;
+@@ -848,6 +933,39 @@ int cc33xx_acx_set_antenna_select(struct cc33xx *cc, u8 selection)
+ 	return ret;
+ }
+ 
++int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *cc, struct acx_phy_regdomain_tx_control_params *params)
++{
++	struct acx_phy_regdomain_tx_control_params *acx;
++	int ret;
++
++	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
++	if (!acx) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	acx->bitmask = params->bitmask;
++	acx->country_code = params->country_code;
++	acx->reg_domain   = params->reg_domain;
++
++	memcpy(acx->ble_ch_lim_1M, params->ble_ch_lim_1M, sizeof(u8) * BLE_LIM_CHANNELS_COUNT);
++	memcpy(acx->ble_ch_lim_2M, params->ble_ch_lim_2M, sizeof(u8) * BLE_LIM_CHANNELS_COUNT);
++
++	memcpy(acx->per_channel_power_limit, params->per_channel_power_limit, sizeof(u8) * REG_RULES_COUNT);
++
++
++	ret = cc33xx_cmd_configure(cc, PHY_REGDOMAIN_TX_POWER_PARAMS,
++				   acx, sizeof(*acx));
++	if (ret < 0) {
++		cc33xx_warning("acx regdoamin_and_tx_control_params failed: %d", ret);
++		goto out;
++	}
++
++out:
++	kfree(acx);
++	return ret;
++}
++
+ int cc33xx_acx_set_tsf(struct cc33xx *cc, u64 tsf_val)
+ {
+ 	struct debug_set_tsf *set_tsf_cmd;
+@@ -1090,6 +1208,40 @@ int cc33xx_acx_antenna_diversity_select_default_antenna(struct cc33xx *cc, u8 de
+ 	return ret;
+ }
+ 
++int cc33xx_acx_cqm_rssi_config(struct cc33xx *cc, struct cc33xx_vif *wlvif, bool enable, s8 threshold, u8 hysteresis)
++{
++	struct acx_cqm_rssi_config *cqm_params;
++	int ret = 0;
++	int role_id = wlvif->role_id;
++
++	cc33xx_debug(DEBUG_CMD, "CQM config: role=%u, enable=%d, threshold=%d dBm, hysteresis=%d",
++		     role_id, enable, threshold, hysteresis);
++
++	if (wlvif && enable) {
++		wlvif->last_rssi_event = -1;
++		cc33xx_info("CQM: Reset last_rssi_event for role %u", role_id);
++	}
++
++	cqm_params = kzalloc(sizeof(*cqm_params), GFP_KERNEL);
++	if (!cqm_params) {
++		cc33xx_error("CQM: Failed to allocate command buffer");
++		return -ENOMEM;
++	}
++
++	cqm_params->role_id = role_id;
++	cqm_params->enable = enable;
++	cqm_params->threshold_dbm = threshold;
++	cqm_params->hysteresis_db = hysteresis;
++
++	ret = cc33xx_cmd_configure(cc, CQM_RSSI_CONFIG, cqm_params, sizeof(*cqm_params));
++	if (ret < 0) {
++		cc33xx_error("CQM: Failed to send configure command: %d", ret);
++	}
++
++	kfree(cqm_params);
++	return ret;
++}
++
+ int cc33xx_acx_statistics(struct cc33xx *cc, void *stats)
+ {
+ 	int ret;
+diff --git a/drivers/net/wireless/ti/cc33xx/acx.h b/drivers/net/wireless/ti/cc33xx/acx.h
+index ce55867e1db6..bf6e4afee101 100644
+--- a/drivers/net/wireless/ti/cc33xx/acx.h
++++ b/drivers/net/wireless/ti/cc33xx/acx.h
+@@ -400,6 +400,7 @@ struct cc33xx_acx_fw_tsf_information {
+ } __packed;
+ 
+ #define ACX_RATE_MGMT_ALL_PARAMS 0xff
++#define ACX_IPV4_ADDR_LENGTH 4
+ 
+ struct acx_default_rx_filter {
+ 	struct acx_header header;
+@@ -414,6 +415,18 @@ struct acx_default_rx_filter {
+ 	u8 padding;
+ } __packed;
+ 
++struct acx_arp_ip_cfg {
++	struct acx_header header;
++	u8 role_id;
++	u8 address[ACX_IPV4_ADDR_LENGTH];
++	u8 padding[3];
++} __packed;
++
++struct acx_arp_offload {
++	struct acx_header header;
++	u8 enable;
++	u8 padding[3];
++} __packed;
+ struct acx_rx_filter_cfg {
+ 	struct acx_header header;
+ 
+@@ -451,7 +464,7 @@ enum cfg {
+ 	DOT11_GROUP_ADDRESS_TBL			= 7,
+ 	BA_SESSION_RX_SETUP_CFG			= 8,
+ 	ACX_SLEEP_AUTH				= 9,
+-	STATIC_CALIBRATION_CFG			= 10,
++	RESERVED				= 10,
+ 	AP_RATES_CFG				= 11,
+ 	WAKE_UP_CONDITIONS_CFG			= 12,
+ 	SET_ANTENNA_SELECT_CFG			= 13,
+@@ -474,6 +487,10 @@ enum cfg {
+ 	ENABLE_CHANNEL_UTILIZATION_NEXT_SCAN = 30,
+ 	SET_SEED_CFG			= 31,
+ 	RESET_STATS			= 32,
++	PHY_REGDOMAIN_TX_POWER_PARAMS = 33,
++	CQM_RSSI_CONFIG			= 34,
++	ACX_ARP_IP_CFG			= 35,
++	ACX_ARP_OFFLOAD_ENABLE		= 36,
+ 
+ 	LAST_CFG_VALUE,
+ 	MAX_DOT11_CFG = LAST_CFG_VALUE,
+@@ -503,6 +520,7 @@ enum cmd_debug {
+ 	TRIGGER_FW_ASSERT,
+ 	BURST_MODE_CFG,
+ 	THERMAL_PROTECTION_CFG,
++	OVERRIDE_TEMPERATURE,
+ 
+ 	LAST_DEBUG_VALUE,
+ 
+@@ -527,6 +545,8 @@ enum interrogate_opt {
+ 	GET_STATISTICS = 13,
+ 	GET_SP_VERSIONS_INTR = 14,
+ 	GET_LINK_INACTIVITY = 15,
++	// RESERVED = 16,
++	GET_SLOW_CLK_SOURCE = 17,
+ 	LAST_IE_VALUE,
+ 	MAX_DOT11_IE = LAST_IE_VALUE,
+ 
+@@ -543,6 +563,8 @@ struct cc33xx_acx_peer_cap {
+ 
+ 	u8 role_id;
+ 
++	u8 pading_0[3];
++
+ 	/* rates supported by the remote peer */
+ 	__le32 supported_rates;
+ 
+@@ -556,6 +578,16 @@ struct cc33xx_acx_peer_cap {
+ 	/* This is the minimal spacing required when sending A-MPDUs to the AP*/
+ 	u8 ampdu_min_spacing;
+ 
++	u8 padding_1[2];
++
++	/* bitmask of capability bits supported by the peer */
++	__le32 	vht_capabilities;
++
++	/* VHT peer support */
++	bool vht_supported;
++
++	u8 padding_2[3];
++
+ 	/* HE capabilities */
+ 	u8 mac_cap_info[8];
+ 
+@@ -568,8 +600,6 @@ struct cc33xx_acx_peer_cap {
+ 	u8 dcm_max_constelation;
+ 
+ 	u8 er_upper_supported;
+-
+-	u8 padding;
+ } __packed;
+ 
+ struct acx_antenna_select {
+@@ -579,6 +609,21 @@ struct acx_antenna_select {
+ 	u8 padding[3];
+ } __packed;
+ 
++#define BLE_LIM_CHANNELS_COUNT (40)
++#define REG_RULES_COUNT		   (520)
++
++struct acx_phy_regdomain_tx_control_params {
++	struct acx_header header;
++
++	u8  bitmask;
++	u32 country_code;
++	u8  reg_domain;
++	u8  ble_ch_lim_1M[BLE_LIM_CHANNELS_COUNT];
++	u8  ble_ch_lim_2M[BLE_LIM_CHANNELS_COUNT];
++	u8  per_channel_power_limit[REG_RULES_COUNT];
++	u8 	padding[2];
++} __packed;
++
+ struct debug_set_tsf {
+ 	struct debug_header header;
+ 
+@@ -669,6 +714,13 @@ struct acx_diversity_status {
+ 	u8 padding[3];
+ } __packed;
+ 
++struct acx_slow_clk_type {
++	struct acx_header header;
++
++	u8 is_ext_slw_clk;
++	u8 padding[3];
++} __packed;
++
+ struct acx_diversity_rssi_threshold {
+ 	struct acx_header header;
+ 
+@@ -683,6 +735,15 @@ struct acx_diversity_default_antenna {
+ 	u8 padding[3];
+ } __packed;
+ 
++struct acx_cqm_rssi_config {
++	struct acx_header header;
++
++	u8 role_id;
++	u8 enable;
++	s8 threshold_dbm;
++	u8 hysteresis_db;
++} __packed;
++
+ struct reset_decrypt_count_cfg {
+ 	u8 role_id;
+ 	u8 padding[3];
+@@ -761,12 +822,15 @@ int cc33xx_acx_get_tx_rate(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 			   struct station_info *sinfo);
+ int cc33xx_acx_average_rssi(struct cc33xx *cc,
+ 			    struct cc33xx_vif *wlvif, s8 *avg_rssi);
++int cc33xx_acx_arp_ip_config(struct cc33xx *cc, u8 role_id, __be32 ip_addr);
++int cc33xx_acx_arp_offload(struct cc33xx *cc, bool enable);
+ int cc33xx_acx_default_rx_filter_enable(struct cc33xx *cc, bool enable,
+ 					enum rx_filter_action action);
+ int cc33xx_acx_set_rx_filter(struct cc33xx *cc, u8 index, bool enable,
+ 			     struct cc33xx_rx_filter *filter);
+ int cc33xx_acx_set_peer_cap(struct cc33xx *cc,
+ 			    struct ieee80211_sta_ht_cap *ht_cap,
++			    struct ieee80211_sta_vht_cap *vht_cap,
+ 			    struct ieee80211_sta_he_cap *he_cap,
+ 			    struct cc33xx_vif *wlvif, bool allow_ht_operation,
+ 			    u32 rate_set, u8 hlid);
+@@ -776,10 +840,13 @@ int cc33xx_acx_trigger_fw_assert(struct cc33xx *cc);
+ int cc33xx_acx_burst_mode_cfg(struct cc33xx *cc, u8 burst_disable);
+ int cc33xx_acx_get_antenna_diversity_status(struct cc33xx *cc);
+ int cc33xx_acx_set_antenna_diversity_status(struct cc33xx *cc, u8 enable);
++int cc33xx_acx_get_slow_clock_type(struct cc33xx *cc);
+ int cc33xx_acx_antenna_diversity_get_rssi_threshold(struct cc33xx *cc, s8 *threshold);
+ int cc33xx_acx_antenna_diversity_set_rssi_threshold(struct cc33xx *cc, s8 rssi_threshold);
+ int cc33xx_acx_antenna_diversity_get_default_antenna(struct cc33xx *cc);
+ int cc33xx_acx_antenna_diversity_select_default_antenna(struct cc33xx *cc, u8 default_antenna);
++int cc33xx_acx_cqm_rssi_config(struct cc33xx *cc, struct cc33xx_vif *wlvif,
++			       bool enable, s8 threshold, u8 hysteresis);
+ int cc33xx_acx_twt_setup(struct cc33xx *wl,
+ 			 u32 min_wake_duration_usec,
+ 			 u32 min_wake_interval_mantissa,
+@@ -790,6 +857,7 @@ int cc33xx_acx_twt_setup(struct cc33xx *wl,
+ int cc33xx_acx_twt_terminate(struct cc33xx *wl);
+ int cc33xx_acx_twt_resume(struct cc33xx *wl);
+ int cc33xx_acx_twt_suspend(struct cc33xx *wl);
++int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *cc, struct acx_phy_regdomain_tx_control_params *params);
+ int cc33xx_acx_statistics(struct cc33xx *cc, void *stats);
+ int cc33xx_acx_clear_statistics(struct cc33xx *cc);
+ 
+diff --git a/drivers/net/wireless/ti/cc33xx/boot.c b/drivers/net/wireless/ti/cc33xx/boot.c
+index bb4fbe527bec..955998b40c53 100644
+--- a/drivers/net/wireless/ti/cc33xx/boot.c
++++ b/drivers/net/wireless/ti/cc33xx/boot.c
+@@ -153,7 +153,7 @@ static int wait_for_boot_irq(struct cc33xx *cc, u32 boot_irq_mask,
+ 		return -2;
+ 	}
+ 
+-	if (boot_irq_mask != pending_irqs) {
++	if (!(boot_irq_mask & pending_irqs)) {
+ 		cc33xx_error("Unexpected IRQ received @ boot: 0x%x",
+ 			     pending_irqs);
+ 		return -3;
+@@ -311,8 +311,6 @@ int cc33xx_init_fw(struct cc33xx *cc)
+ {
+ 	int ret;
+ 
+-	cc->max_cmd_size = CC33XX_CMD_MAX_SIZE;
+-
+ 	ret = fw_download_alloc(cc);
+ 	if (ret < 0)
+ 		return ret;
+diff --git a/drivers/net/wireless/ti/cc33xx/cc33xx.h b/drivers/net/wireless/ti/cc33xx/cc33xx.h
+index 3fd71853b3c1..adc314a6ec2b 100644
+--- a/drivers/net/wireless/ti/cc33xx/cc33xx.h
++++ b/drivers/net/wireless/ti/cc33xx/cc33xx.h
+@@ -47,6 +47,12 @@ struct cc33xx_stats {
+ 	unsigned int excessive_retries;
+ };
+ 
++struct cc33xx_wowlan_search {
++	bool enabled;
++	int filter_count;
++	struct cc33xx_rx_filter *active_filters[CC33XX_MAX_RX_FILTERS];
++};
++
+ struct cc33xx_ant_diversity {
+ 	u8 diversity_enable;
+ 	s8 rssi_threshold;
+@@ -217,6 +223,9 @@ struct cc33xx {
+ 
+ 	bool keep_device_power;
+ 
++	/* WoWLAN search pattern state */
++	struct cc33xx_wowlan_search wowlan_search;
++
+ 	/* AP-mode - links indexed by HLID. The global and broadcast links
+ 	 * are always active.
+ 	 */
+@@ -266,6 +275,9 @@ struct cc33xx {
+ 	/*ble_enable value - 1=enabled, 0=disabled. */
+ 	int ble_enable;
+ 
++	/* WoWLAN ARP offload: if true, FW will handle incoming ARP requests during suspend */
++	bool wowlan_arp_offload;
++
+ 	/*fw_crash_logs, allocated upon successfully receiving FW Logs after general error */
+ 	u8  *fw_crash_logs;
+ 
+@@ -284,17 +296,12 @@ struct cc33xx {
+ 	 */
+ 	u8 sta_role_idx;
+ 
+-	u16 max_cmd_size;
+-
+ 	struct completion nvs_loading_complete;
+ 	struct completion command_complete;
+ 
+ 	/* dynamic fw traces */
+ 	u32 dynamic_fw_traces;
+ 
+-	/* buffer for sending commands to FW */
+-	u8 cmd_buf[CC33XX_CMD_BUFFER_SIZE];
+-
+ 	/* number of keys requiring extra spare mem-blocks */
+ 	int extra_spare_key_count;
+ 
+@@ -310,6 +317,8 @@ struct cc33xx {
+ 
+ 	u8 antenna_selection;
+ 
++	u8 is_ext_slw_clk;
++
+ 	/* burst mode cfg */
+ 	u8 burst_disable;
+ 
+diff --git a/drivers/net/wireless/ti/cc33xx/cc33xx_i.h b/drivers/net/wireless/ti/cc33xx/cc33xx_i.h
+index 0f2159f8895b..637e5b64bf48 100644
+--- a/drivers/net/wireless/ti/cc33xx/cc33xx_i.h
++++ b/drivers/net/wireless/ti/cc33xx/cc33xx_i.h
+@@ -178,11 +178,11 @@ struct cc33xx_link {
+ 	u64 total_freed_pkts;
+ };
+ 
+-#define CC33XX_MAX_RX_FILTERS 5
+-#define CC33XX_RX_FILTER_MAX_FIELDS 8
++#define CC33XX_MAX_RX_FILTERS 7
++#define CC33XX_RX_FILTER_MAX_FIELDS 7
+ 
+ #define CC33XX_RX_FILTER_ETH_HEADER_SIZE 14
+-#define CC33XX_RX_FILTER_MAX_FIELDS_SIZE 95
++#define CC33XX_RX_FILTER_MAX_FIELDS_SIZE 98
+ #define RX_FILTER_FIELD_OVERHEAD				\
+ 	(sizeof(struct cc33xx_rx_filter_field) - sizeof(u8 *))
+ #define CC33XX_RX_FILTER_MAX_PATTERN_SIZE			\
+@@ -190,6 +190,11 @@ struct cc33xx_link {
+ 
+ #define CC33XX_RX_FILTER_FLAG_IP_HEADER           0
+ #define CC33XX_RX_FILTER_FLAG_ETHERNET_HEADER     BIT(1)
++#define CC33XX_RX_FILTER_FLAG_SEARCH_ANYWHERE     BIT(2)
++#define CC33XX_RX_FILTER_FLAG_MASKED              BIT(3)
++
++#define CC33XX_CQM_RSSI_MIN_DBM		-110
++#define CC33XX_CQM_RSSI_MAX_DBM		17
+ 
+ struct ieee80211_header {
+ 	__le16 frame_ctl;
+@@ -326,6 +331,8 @@ struct cc33xx_vif {
+ 
+ 	int rssi_thold;
+ 	int last_rssi_event;
++	bool cqm_enabled;
++	u32 cqm_rssi_hyst;
+ 
+ 	/* save the current encryption type for auto-arp config */
+ 	u8 encryption_type;
+diff --git a/drivers/net/wireless/ti/cc33xx/cmd.c b/drivers/net/wireless/ti/cc33xx/cmd.c
+index 06ba8110e231..23d4a18db087 100644
+--- a/drivers/net/wireless/ti/cc33xx/cmd.c
++++ b/drivers/net/wireless/ti/cc33xx/cmd.c
+@@ -20,42 +20,32 @@ static void init_cmd_header(struct cc33xx_cmd_header *header,
+ 	header->NAB_header.opcode = cpu_to_le16(id);
+ }
+ 
+-int cc33xx_set_max_buffer_size(struct cc33xx *cc, enum buffer_size max_buffer_size)
+-{
+-	switch (max_buffer_size) {
+-	case INI_MAX_BUFFER_SIZE:
+-		/* INI FILE PAYLOAD SIZE + INI CMD PARAM + INT */
+-		cc->max_cmd_size = CC33XX_INI_CMD_MAX_SIZE;
+-		cc->max_cmd_size += sizeof(struct cc33xx_cmd_ini_params_download);
+-		cc->max_cmd_size += sizeof(u32);
+-		break;
+-
+-	case CMD_MAX_BUFFER_SIZE:
+-		cc->max_cmd_size = CC33XX_CMD_MAX_SIZE;
+-		break;
+-
+-	default:
+-		cc33xx_warning("max_buffer_size invalid, not changing buffer size");
+-		break;
+-	}
+-
+-	return 0;
+-}
+-
+ static int send_buffer(struct cc33xx *cc, int cmd_box_addr,
+ 		       void *buf, size_t len)
+ {
+-	size_t max_cmd_size_align;
++	void *staging_buf;
++	size_t transfer_size;
++	u16 opcode = 0;
++	int ret;
+ 
+-	memcpy(cc->cmd_buf, buf, len);
++	if (len >= sizeof(struct cc33xx_cmd_header))
++		opcode = le16_to_cpu(((struct cc33xx_cmd_header *)buf)->id);
+ 
+-	memset(cc->cmd_buf + len, 0, (CC33XX_CMD_BUFFER_SIZE) - len);
++	if (opcode == CMD_CONTAINER_DOWNLOAD)
++		transfer_size = __ALIGN_MASK(len, CC33XX_BUS_BLOCK_SIZE * 2 - 1);
++	else
++		transfer_size = __ALIGN_MASK(len, CC33XX_BUS_BLOCK_SIZE - 1);
++
++	staging_buf = kzalloc(transfer_size, GFP_KERNEL);
++	if (!staging_buf)
++		return -ENOMEM;
+ 
+-	max_cmd_size_align = __ALIGN_MASK(cc->max_cmd_size,
+-					  CC33XX_BUS_BLOCK_SIZE * 2 - 1);
++	memcpy(staging_buf, buf, len);
++	ret = cc33xx_write(cc, cmd_box_addr, staging_buf, transfer_size,
++			   true);
++	kfree(staging_buf);
+ 
+-	return cc33xx_write(cc, cmd_box_addr, cc->cmd_buf,
+-			    max_cmd_size_align, true);
++	return ret;
+ }
+ 
+ /* send command to firmware
+@@ -79,7 +69,6 @@ static int __cc33xx_cmd_send(struct cc33xx *cc, u16 id, void *buf,
+ 	}
+ 
+ 	if (WARN_ON(len < sizeof(*cmd))		||
+-	    WARN_ON(len > cc->max_cmd_size)	||
+ 	    WARN_ON(len % 4 != 0))
+ 		return -EIO;
+ 
+diff --git a/drivers/net/wireless/ti/cc33xx/cmd.h b/drivers/net/wireless/ti/cc33xx/cmd.h
+index 27bae1ff4df5..bfdac3f0baa1 100644
+--- a/drivers/net/wireless/ti/cc33xx/cmd.h
++++ b/drivers/net/wireless/ti/cc33xx/cmd.h
+@@ -15,7 +15,6 @@ enum buffer_size {
+ 	CMD_MAX_BUFFER_SIZE
+ };
+ 
+-int cc33xx_set_max_buffer_size(struct cc33xx *cc, enum buffer_size max_buffer_size);
+ int cc33xx_cmd_send(struct cc33xx *cc, u16 id, void *buf,
+ 		    size_t len, size_t res_len);
+ int cc33xx_cmd_role_enable(struct cc33xx *cc, u8 *addr,
+diff --git a/drivers/net/wireless/ti/cc33xx/conf.h b/drivers/net/wireless/ti/cc33xx/conf.h
+index 135144810f31..a2e1a5ef5e70 100644
+--- a/drivers/net/wireless/ti/cc33xx/conf.h
++++ b/drivers/net/wireless/ti/cc33xx/conf.h
+@@ -899,6 +899,7 @@ struct cc33xx_mac_conf {
+ 	u8 ps_mode;
+ 	u8 ps_scheme;
+ 	u8 he_enable;
++	u8 vht_enable;
+ 	u8 ap_max_num_stations;
+ 	u8 fw_defrag;
+ 	u16 rx_memblks_override;
+diff --git a/drivers/net/wireless/ti/cc33xx/event.c b/drivers/net/wireless/ti/cc33xx/event.c
+index 46f12be78686..33926da97c7c 100644
+--- a/drivers/net/wireless/ti/cc33xx/event.c
++++ b/drivers/net/wireless/ti/cc33xx/event.c
+@@ -11,6 +11,13 @@
+ 
+ #define CC33XX_WAIT_EVENT_FAST_POLL_COUNT 20
+ 
++struct cc33xx_rssi_snr_trigger_event {
++	u8 role_id;
++	u8 event_type;
++	s8 rssi_dbm;
++	u8 padding;
++} __packed;
++
+ struct cc33xx_event_mailbox {
+ 	__le32 events_vector;
+ 
+@@ -68,6 +75,10 @@ struct cc33xx_event_mailbox {
+ 	/* time sync low msb*/
+ 	__le16 time_sync_tsf_low_msb;
+ 
++	/* RSSI/SNR Trigger events - separate event for each STA role */
++	struct cc33xx_rssi_snr_trigger_event rssi_snr_trigger0;
++	struct cc33xx_rssi_snr_trigger_event rssi_snr_trigger1;
++
+ 	/* radar detect */
+ 	u8 radar_channel;
+ 	u8 radar_type;
+@@ -311,6 +322,58 @@ static void cc33xx_event_beacon_loss(struct cc33xx *cc,
+ 	}
+ }
+ 
++static void cc33xx_event_rssi_trigger(struct cc33xx *cc, struct cc33xx_rssi_snr_trigger_event *evt)
++{
++	struct cc33xx_vif *wlvif = NULL;
++	struct ieee80211_vif *vif;
++	enum nl80211_cqm_rssi_threshold_event event_type;
++
++	cc33xx_debug(DEBUG_EVENT, "CQM: RSSI event: role=%u, type=%s, rssi=%d dBm", evt->role_id, evt->event_type ? "HIGH" : "LOW", evt->rssi_dbm);
++
++	if (evt->role_id >= CC33XX_MAX_ROLES)
++		return;
++
++	cc33xx_for_each_wlvif(cc, wlvif) {
++		if (wlvif->role_id == evt->role_id)
++			break;
++	}
++
++	if (!wlvif || wlvif->role_id != evt->role_id) {
++		cc33xx_error("CQM: RSSI event for unknown role %u", evt->role_id);
++		return;
++	}
++
++	if (wlvif->role_id == CC33XX_INVALID_ROLE_ID) {
++		cc33xx_error("CQM: RSSI event for invalid role");
++		return;
++	}
++
++	if (!wlvif->cqm_enabled) {
++		cc33xx_warning("CQM: RSSI event received but monitoring not enabled for role %u", evt->role_id);
++		return;
++	}
++
++	vif = cc33xx_wlvif_to_vif(wlvif);
++	if (!vif) {
++		cc33xx_warning("CQM: VIF is NULL for role %u", evt->role_id);
++		return;
++	}
++
++	event_type = evt->event_type ? NL80211_CQM_RSSI_THRESHOLD_EVENT_HIGH :
++				NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW;
++
++	if (event_type == wlvif->last_rssi_event) {
++		cc33xx_debug(DEBUG_EVENT, "CQM: Duplicate %s event filtered (role %u)", evt->event_type ? "HIGH" : "LOW", evt->role_id);
++		return;
++	}
++
++	ieee80211_cqm_rssi_notify(vif, event_type, evt->rssi_dbm, GFP_KERNEL);
++
++	wlvif->last_rssi_event = event_type;
++
++	cc33xx_debug(DEBUG_EVENT, "CQM: RSSI event notification sent to mac80211 (role %u)", evt->role_id);
++}
++
+ void process_deferred_events(struct cc33xx *cc)
+ {
+ 	struct event_node *event_node, *tmp;
+@@ -360,6 +423,16 @@ void process_deferred_events(struct cc33xx *cc)
+ 		if (vector & REMAIN_ON_CHANNEL_COMPLETE_EVENT_ID)
+ 			cc33xx_event_roc_complete(cc);
+ 
++		if (vector & RSSI_SNR_TRIGGER_0_EVENT_ID) {
++			cc33xx_debug(DEBUG_EVENT, "RSSI_SNR_TRIGGER_0_EVENT_ID");
++			cc33xx_event_rssi_trigger(cc, &event_data->rssi_snr_trigger0);
++		}
++
++		if (vector & RSSI_SNR_TRIGGER_1_EVENT_ID) {
++			cc33xx_debug(DEBUG_EVENT, "RSSI_SNR_TRIGGER_1_EVENT_ID");
++			cc33xx_event_rssi_trigger(cc, &event_data->rssi_snr_trigger1);
++		}
++
+ 		kfree(event_node);
+ 	}
+ }
+diff --git a/drivers/net/wireless/ti/cc33xx/init.c b/drivers/net/wireless/ti/cc33xx/init.c
+index ff1fab1e0104..5a1de77af726 100644
+--- a/drivers/net/wireless/ti/cc33xx/init.c
++++ b/drivers/net/wireless/ti/cc33xx/init.c
+@@ -63,8 +63,8 @@ static void cc33xx_set_ba_policies(struct cc33xx *cc, struct cc33xx_vif *wlvif)
+ 	cc->ba_rx_session_count = 0;
+ 
+ 	/* BA is supported in STA/AP modes */
+-	wlvif->ba_support = (wlvif->bss_type != BSS_TYPE_AP_BSS &&
+-				wlvif->bss_type != BSS_TYPE_STA_BSS);
++	wlvif->ba_support = (wlvif->bss_type == BSS_TYPE_AP_BSS ||
++				wlvif->bss_type == BSS_TYPE_STA_BSS);
+ }
+ 
+ /* vif-specifc initialization */
+@@ -199,15 +199,13 @@ int cc33xx_download_ini_params_and_wait(struct cc33xx *cc)
+ 	size_t command_size = ALIGN((sizeof(*cmd) + sizeof(cc->conf)), 4);
+ 	int ret;
+ 
+-	cc33xx_set_max_buffer_size(cc, INI_MAX_BUFFER_SIZE);
+-
+ 	cc33xx_debug(DEBUG_ACX,
+ 		     "Downloading INI configurations to FW, payload Length: %zu",
+ 		     sizeof(cc->conf));
+ 
+ 	cmd = kzalloc(command_size, GFP_KERNEL);
+ 	if (!cmd) {
+-		cc33xx_set_max_buffer_size(cc, CMD_MAX_BUFFER_SIZE);
++		cc33xx_error("INI Params Download: process failed due to memory allocation failure");
+ 		return -ENOMEM;
+ 	}
+ 
+@@ -225,7 +223,6 @@ int cc33xx_download_ini_params_and_wait(struct cc33xx *cc)
+ 		cc33xx_debug(DEBUG_BOOT, "INI Params downloaded successfully");
+ 	}
+ 
+-	cc33xx_set_max_buffer_size(cc, CMD_MAX_BUFFER_SIZE);
+ 	kfree(cmd);
+ 	return ret;
+ }
+diff --git a/drivers/net/wireless/ti/cc33xx/main.c b/drivers/net/wireless/ti/cc33xx/main.c
+index bc39a3243383..c7f3d25fdfea 100644
+--- a/drivers/net/wireless/ti/cc33xx/main.c
++++ b/drivers/net/wireless/ti/cc33xx/main.c
+@@ -333,6 +333,8 @@ static struct ieee80211_supported_band cc33xx_band_2ghz = {
+ 	.n_channels = ARRAY_SIZE(cc33xx_channels_2ghz),
+ 	.bitrates = cc33xx_rates,
+ 	.n_bitrates = ARRAY_SIZE(cc33xx_rates),
++	.iftype_data = iftype_data_2ghz,
++	.n_iftype_data = ARRAY_SIZE(iftype_data_2ghz),
+ };
+ 
+ static struct ieee80211_supported_band cc33xx_band_2ghz_non_he = {
+@@ -513,9 +515,29 @@ static struct ieee80211_supported_band cc33xx_band_5ghz = {
+ 			.tx_highest = cpu_to_le16(7),
+ 		},
+ 	},
++	.iftype_data = iftype_data_5ghz,
++	.n_iftype_data = ARRAY_SIZE(iftype_data_5ghz),
+ };
+ 
+-static struct ieee80211_supported_band cc33xx_band_5ghz_non_he = {
++static struct ieee80211_supported_band cc33xx_band_5ghz_vht_only = {
++	.channels = cc33xx_channels_5ghz,
++	.n_channels = ARRAY_SIZE(cc33xx_channels_5ghz),
++	.bitrates = cc33xx_rates_5ghz,
++	.n_bitrates = ARRAY_SIZE(cc33xx_rates_5ghz),
++	.vht_cap = {
++		.vht_supported = true,
++		.cap = (IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991 |
++			(1 << IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_SHIFT)),
++		.vht_mcs = {
++			.rx_mcs_map = cpu_to_le16(0xfffc),
++			.rx_highest = 7,
++			.tx_mcs_map = cpu_to_le16(0xfffc),
++			.tx_highest = 7,
++		},
++	},
++};
++
++static struct ieee80211_supported_band cc33xx_band_5ghz_non_he_non_vht = {
+ 	.channels = cc33xx_channels_5ghz,
+ 	.n_channels = ARRAY_SIZE(cc33xx_channels_5ghz),
+ 	.bitrates = cc33xx_rates_5ghz,
+@@ -552,6 +574,40 @@ static int cc33xx_set_authorized(struct cc33xx *cc, struct cc33xx_vif *wlvif)
+ 	return 0;
+ }
+ 
++static void cc33xx_regdomain_config(struct cc33xx *cc)
++{
++	int ret = 0;
++
++	if (!(cc->quirks & CC33XX_QUIRK_REGDOMAIN_CONF))
++		return;
++
++	mutex_lock(&cc->mutex);
++
++	if (unlikely(cc->state != CC33XX_STATE_ON))
++		goto out;
++
++	if (ret < 0) {
++		cc33xx_queue_recovery_work(cc);
++		goto out;
++	}
++
++out:
++	mutex_unlock(&cc->mutex);
++}
++
++static void cc33xx_reg_notify(struct wiphy *wiphy,
++			      struct regulatory_request *request)
++{
++	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
++	struct cc33xx *cc = hw->priv;
++
++	/* copy the current dfs region */
++	if (request)
++		cc->dfs_region = request->dfs_region;
++
++	cc33xx_regdomain_config(cc);
++}
++
+ /* cc->mutex must be taken */
+ void cc33xx_rearm_tx_watchdog_locked(struct cc33xx *cc)
+ {
+@@ -841,12 +897,22 @@ static int general_error_event_get_log(struct cc33xx *cc,
+ {
+ 	int ret = 0;
+ 	u8 *read_buffer;
+-	const size_t buffer_size = 5000;
++	size_t buffer_size = 5000;
+ 	unsigned long end_time = jiffies + msecs_to_jiffies(CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC);
+ 	u8 is_general_error = 0;
+ 	u32 is_timeout = 0;
+ 	void *pfw_crash_logs;
+ 
++	if (cc->max_transaction_len) { /* Used in SPI interface */
++		const int spi_alignment = sizeof (u32) - 1;
++		buffer_size = __ALIGN_MASK(buffer_size,
++							spi_alignment);
++	} else { /* SDIO */
++		const int sdio_alignment = CC33XX_BUS_BLOCK_SIZE-1;
++		buffer_size = __ALIGN_MASK(buffer_size,
++							sdio_alignment);
++	}
++
+ 	read_buffer = kmalloc(buffer_size, GFP_KERNEL);
+ 	if (!read_buffer)
+ 		return -ENOMEM;
+@@ -1490,7 +1556,12 @@ static int cc33xx_validate_wowlan_pattern(struct cfg80211_pkt_pattern *p)
+ 	return 0;
+ }
+ 
+-static void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter)
++struct cc33xx_rx_filter *cc33xx_rx_filter_alloc(void)
++{
++	return kzalloc(sizeof(struct cc33xx_rx_filter), GFP_KERNEL);
++}
++
++void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter)
+ {
+ 	int i;
+ 
+@@ -1503,7 +1574,7 @@ static void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter)
+ 	kfree(filter);
+ }
+ 
+-static int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter,
++int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter,
+ 					u16 offset, u8 flags,
+ 					const u8 *pattern, u8 len)
+ {
+@@ -2681,6 +2752,24 @@ static int cc33xx_set_ssid(struct cc33xx *cc, struct cc33xx_vif *wlvif)
+ 	return 0;
+ }
+ 
++/* cc33xx firmware only supports up to HT40. For wider channel widths
++ * (VHT/HE 80/160/320 MHz), cc33xx_get_chandef_type() would hit WARN_ON(1).
++ * Fall back to HT20 for any width beyond 40 MHz.
++ */
++static enum nl80211_channel_type
++cc33xx_get_chandef_type(const struct cfg80211_chan_def *chandef)
++{
++	switch (chandef->width) {
++	case NL80211_CHAN_WIDTH_20_NOHT:
++		return NL80211_CHAN_NO_HT;
++	case NL80211_CHAN_WIDTH_20:
++		return NL80211_CHAN_HT20;
++	default:
++		return chandef->center_freq1 > chandef->chan->center_freq ?
++			NL80211_CHAN_HT40PLUS : NL80211_CHAN_HT40MINUS;
++	}
++}
++
+ static int cc33xx_set_assoc(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 			    struct ieee80211_bss_conf *bss_conf,
+ 			    struct ieee80211_sta *sta,
+@@ -2689,7 +2778,7 @@ static int cc33xx_set_assoc(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 	int ret;
+ 
+ 	wlvif->aid = vif->cfg.aid;
+-	wlvif->channel_type = cfg80211_get_chandef_type(&bss_conf->chanreq.oper);
++	wlvif->channel_type = cc33xx_get_chandef_type(&bss_conf->chanreq.oper);
+ 	wlvif->beacon_int = bss_conf->beacon_int;
+ 	wlvif->wmm_enabled = bss_conf->qos;
+ 
+@@ -3677,6 +3766,61 @@ static int cc33xx_clear_bssid(struct cc33xx *cc, struct cc33xx_vif *wlvif)
+ 	return 0;
+ }
+ 
++static int cc33xx_configure_cqm(struct cc33xx *cc, struct cc33xx_vif *wlvif, s32 rssi_thold, u32 rssi_hyst)
++{
++	int ret;
++	int role_id = wlvif->role_id;
++
++	if (unlikely(cc->state != CC33XX_STATE_ON)) {
++		cc33xx_warning("CQM: Cannot configure, FW not running (state=%d)", cc->state);
++		return -EAGAIN;
++	}
++
++	if (role_id >= CC33XX_MAX_ROLES) {
++		cc33xx_error("CQM: Invalid role_id %u", role_id);
++		return -EINVAL;
++	}
++
++	if (rssi_thold == 0) {
++		if (!wlvif->cqm_enabled) {
++			cc33xx_debug(DEBUG_CMD, "CQM: Already disabled, ignoring");
++			return 0;
++		}
++
++		ret = cc33xx_acx_cqm_rssi_config(cc, wlvif, false, 0, 0);
++		if (ret < 0) {
++			cc33xx_error("CQM: Failed to disable: %d", ret);
++			return ret;
++		}
++
++		wlvif->cqm_enabled = false;
++		wlvif->rssi_thold = 0;
++		wlvif->cqm_rssi_hyst = 0;
++
++		return ret;
++	}
++
++	if (rssi_thold < CC33XX_CQM_RSSI_MIN_DBM || rssi_thold > CC33XX_CQM_RSSI_MAX_DBM) {
++		cc33xx_error("CQM: Invalid threshold %d dBm (range: %d to +%d)",
++					 rssi_thold, CC33XX_CQM_RSSI_MIN_DBM, CC33XX_CQM_RSSI_MAX_DBM);
++		return -EINVAL;
++	}
++
++	cc33xx_debug(DEBUG_CMD, "CQM: Enabling for role %u: threshold=%d dBm, hysteresis=%u dB", wlvif->role_id, rssi_thold, rssi_hyst);
++
++	ret = cc33xx_acx_cqm_rssi_config(cc, wlvif, true, (s8)rssi_thold, rssi_hyst);
++	if (ret < 0) {
++		cc33xx_error("CQM: Failed to enable: %d", ret);
++		return ret;
++	}
++
++	wlvif->cqm_enabled = true;
++	wlvif->rssi_thold = rssi_thold;
++	wlvif->cqm_rssi_hyst = rssi_hyst;
++
++	return ret;
++}
++
+ static void cc33xx_sta_set_he(struct cc33xx *cc, struct cc33xx_vif *wlvif, bool has_he)
+ {
+ 	struct cc33xx_vif *wlvif_itr;
+@@ -3715,6 +3859,7 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
+ 	struct ieee80211_sta *sta = NULL;
+ 	bool sta_exists = false;
+ 	struct ieee80211_sta_ht_cap sta_ht_cap;
++	struct ieee80211_sta_vht_cap sta_vht_cap;
+ 	struct ieee80211_sta_he_cap sta_he_cap;
+ 
+ 	if (is_ibss) {
+@@ -3751,8 +3896,11 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
+ 	if (changed & BSS_CHANGED_IDLE && !is_ibss)
+ 		cc33xx_sta_handle_idle(cc, wlvif, vif->cfg.idle);
+ 
+-	if (changed & BSS_CHANGED_CQM)
+-		wlvif->rssi_thold = bss_conf->cqm_rssi_thold;
++	if (changed & BSS_CHANGED_CQM) {
++		ret = cc33xx_configure_cqm(cc, wlvif, bss_conf->cqm_rssi_thold, bss_conf->cqm_rssi_hyst);
++		if (ret < 0)
++			cc33xx_error("CQM: Configuration failed: %d", ret);
++	}
+ 
+ 	if (changed & (BSS_CHANGED_BSSID | BSS_CHANGED_HT | BSS_CHANGED_ASSOC)) {
+ 		rcu_read_lock();
+@@ -3768,6 +3916,7 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
+ 					(rx_mask[1] << HW_MIMO_RATES_OFFSET);
+ 			}
+ 			sta_ht_cap = sta->deflink.ht_cap;
++			sta_vht_cap = sta->deflink.vht_cap;
+ 			sta_he_cap = sta->deflink.he_cap;
+ 			sta_exists = true;
+ 		}
+@@ -3869,7 +4018,7 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
+ 						NL80211_CHAN_WIDTH_20_NOHT;
+ 		cc33xx_debug(DEBUG_CMD, "cc33xx_hw_set_peer_cap %x",
+ 			     wlvif->rate_set);
+-		ret = cc33xx_acx_set_peer_cap(cc, &sta_ht_cap, &sta_he_cap,
++		ret = cc33xx_acx_set_peer_cap(cc, &sta_ht_cap, &sta_vht_cap, &sta_he_cap,
+ 					      wlvif, enabled, wlvif->rate_set,
+ 					      wlvif->sta.hlid);
+ 		if (ret < 0) {
+@@ -3894,28 +4043,39 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
+ 	if ((changed & BSS_CHANGED_ARP_FILTER) ||
+ 	    (!is_ibss && (changed & BSS_CHANGED_QOS))) {
+ 		__be32 addr = vif->cfg.arp_addr_list[0];
+-
++		bool ip_changed = false;
+ 		wlvif->sta.qos = bss_conf->qos;
+ 		WARN_ON(wlvif->bss_type != BSS_TYPE_STA_BSS);
+ 
+ 		if (vif->cfg.arp_addr_cnt == 1 && vif->cfg.assoc) {
+-			wlvif->ip_addr = addr;
+-			/* The template should have been configured only upon
+-			 * association. however, it seems that the correct ip
+-			 * isn't being set (when sending), so we have to
+-			 * reconfigure the template upon every ip change.
+-			 */
+-			if (ret < 0) {
+-				cc33xx_warning("build arp rsp failed: %d", ret);
+-				goto out;
++			if (wlvif->ip_addr != addr) {
++				cc33xx_debug(DEBUG_MAC80211,
++					     "ARP filter: role_id=%d IP CHANGED old=%pI4 -> new=%pI4 (total STAs=%d)",
++					     wlvif->role_id, &wlvif->ip_addr, &addr, cc->sta_count);
++				wlvif->ip_addr = addr;
++				ip_changed = true;
+ 			}
+ 
+ 		} else {
+-			wlvif->ip_addr = 0;
++			if (wlvif->ip_addr != 0) {
++				cc33xx_debug(DEBUG_MAC80211,
++					     "ARP filter: role_id=%d CLEARING IP old=%pI4 (assoc=%d, arp_addr_cnt=%d)",
++					     wlvif->role_id, &wlvif->ip_addr, vif->cfg.assoc, vif->cfg.arp_addr_cnt);
++				wlvif->ip_addr = 0;
++				ip_changed = true;
++			}
+ 		}
+ 
+-		if (ret < 0)
+-			goto out;
++		/* Send IP configuration to firmware only if IP changed */
++		if (ip_changed && cc->state == CC33XX_STATE_ON) {
++			ret = cc33xx_acx_arp_ip_config(cc, wlvif->role_id, wlvif->ip_addr);
++			if (ret < 0) {
++				cc33xx_warning("ARP filter FAILED: role_id=%d, %s IP, ret=%d",
++					       wlvif->role_id,
++					       wlvif->ip_addr ? "configure" : "clear", ret);
++			}
++
++		}
+ 	}
+ 
+ out:
+@@ -3977,7 +4137,7 @@ static int cc33xx_op_add_chanctx(struct ieee80211_hw *hw,
+ {
+ 	cc33xx_debug(DEBUG_MAC80211, "mac80211 add chanctx %d (type %d)",
+ 		     ieee80211_frequency_to_channel(ctx->def.chan->center_freq),
+-		     cfg80211_get_chandef_type(&ctx->def));
++		     cc33xx_get_chandef_type(&ctx->def));
+ 	return 0;
+ }
+ 
+@@ -3986,7 +4146,7 @@ static void cc33xx_op_remove_chanctx(struct ieee80211_hw *hw,
+ {
+ 	cc33xx_debug(DEBUG_MAC80211, "mac80211 remove chanctx %d (type %d)",
+ 		     ieee80211_frequency_to_channel(ctx->def.chan->center_freq),
+-		     cfg80211_get_chandef_type(&ctx->def));
++		     cc33xx_get_chandef_type(&ctx->def));
+ }
+ 
+ static void cc33xx_op_change_chanctx(struct ieee80211_hw *hw,
+@@ -3999,7 +4159,7 @@ static void cc33xx_op_change_chanctx(struct ieee80211_hw *hw,
+ 
+ 	cc33xx_debug(DEBUG_MAC80211,
+ 		     "mac80211 change chanctx %d (type %d) changed 0x%x",
+-		     channel, cfg80211_get_chandef_type(&ctx->def), changed);
++		     channel, cc33xx_get_chandef_type(&ctx->def), changed);
+ 
+ 	mutex_lock(&cc->mutex);
+ 
+@@ -4045,7 +4205,7 @@ static int cc33xx_op_assign_vif_chanctx(struct ieee80211_hw *hw,
+ 
+ 	wlvif->band = ctx->def.chan->band;
+ 	wlvif->channel = channel;
+-	wlvif->channel_type = cfg80211_get_chandef_type(&ctx->def);
++	wlvif->channel_type = cc33xx_get_chandef_type(&ctx->def);
+ 
+ 	/* update default rates according to the band */
+ 	cc33xx_set_band_rate(cc, wlvif);
+@@ -4097,7 +4257,7 @@ static int cc33xx_switch_vif_chan(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+ 
+ 	wlvif->band = new_ctx->def.chan->band;
+ 	wlvif->channel = channel;
+-	wlvif->channel_type = cfg80211_get_chandef_type(&new_ctx->def);
++	wlvif->channel_type = cc33xx_get_chandef_type(&new_ctx->def);
+ 
+ 	if (wlvif->bss_type != BSS_TYPE_AP_BSS)
+ 		return 0;
+@@ -5231,45 +5391,48 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
+ 		cc->hw->wiphy->iftype_ext_capab = he_iftypes_ext_capa;
+ 		cc->hw->wiphy->num_iftype_ext_capab =
+ 			ARRAY_SIZE(he_iftypes_ext_capa);
+-	} else {
+-		cc33xx_band_2ghz.iftype_data = NULL;
+-		cc33xx_band_2ghz.n_iftype_data = 0;
+ 
+-		cc33xx_band_5ghz.iftype_data = NULL;
+-		cc33xx_band_5ghz.n_iftype_data = 0;
+-	}
+-
+-	/* We keep local copies of the band structs because we need to
+-	 * modify them on a per-device basis.
+-	 */
+-	if (!cc->disable_wifi6 && cc->conf.mac.he_enable) {
++		/* We keep local copies of the band structs because we need to
++		* modify them on a per-device basis.
++		*/
+ 		memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz,
+-		       sizeof(cc33xx_band_2ghz));
++			sizeof(cc33xx_band_2ghz));
+ 		memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
+-		       &cc->ht_cap[NL80211_BAND_2GHZ],
+-		       sizeof(*cc->ht_cap));
++			&cc->ht_cap[NL80211_BAND_2GHZ],
++			sizeof(*cc->ht_cap));
+ 
+ 		memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz,
+-		       sizeof(cc33xx_band_5ghz));
++			sizeof(cc33xx_band_5ghz));
+ 		memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
+-		       &cc->ht_cap[NL80211_BAND_5GHZ],
+-		       sizeof(*cc->ht_cap));
++			&cc->ht_cap[NL80211_BAND_5GHZ],
++			sizeof(*cc->ht_cap));
+ 	} else {
+-		memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz_non_he,
+-		       sizeof(cc33xx_band_2ghz_non_he));
+-		memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
+-		       &cc->ht_cap[NL80211_BAND_2GHZ],
+-		       sizeof(*cc->ht_cap));
++		cc33xx_band_2ghz.iftype_data = NULL;
++		cc33xx_band_2ghz.n_iftype_data = 0;
+ 
+-		memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz_non_he,
+-		       sizeof(cc33xx_band_5ghz_non_he));
+-		memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
+-		       &cc->ht_cap[NL80211_BAND_5GHZ],
+-		       sizeof(*cc->ht_cap));
+-	}
++		cc33xx_band_5ghz.iftype_data = NULL;
++		cc33xx_band_5ghz.n_iftype_data = 0;
+ 
+-	ieee80211_set_sband_iftype_data(&cc->bands[NL80211_BAND_2GHZ], iftype_data_2ghz);
+-	ieee80211_set_sband_iftype_data(&cc->bands[NL80211_BAND_5GHZ], iftype_data_5ghz);
++		memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz_non_he,
++		sizeof(cc33xx_band_2ghz_non_he));
++	    memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
++		&cc->ht_cap[NL80211_BAND_2GHZ],
++		sizeof(*cc->ht_cap));
++
++		if (cc->conf.mac.vht_enable) {
++			memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz_vht_only,
++			sizeof(cc33xx_band_5ghz_vht_only));
++			memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
++			&cc->ht_cap[NL80211_BAND_5GHZ],
++			sizeof(*cc->ht_cap));
++		} else {
++			memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz_non_he_non_vht,
++			sizeof(cc33xx_band_5ghz_non_he_non_vht));
++			memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
++			&cc->ht_cap[NL80211_BAND_5GHZ],
++			sizeof(*cc->ht_cap));
++		}
++	}
+ 
+ 	cc->hw->wiphy->bands[NL80211_BAND_2GHZ] = &cc->bands[NL80211_BAND_2GHZ];
+ 
+@@ -5286,6 +5449,8 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
+ 	cc->hw->offchannel_tx_hw_queue = cc->hw->queues - 1;
+ 	cc->hw->max_rates = 1;
+ 
++	cc->hw->wiphy->reg_notifier = cc33xx_reg_notify;
++
+ 	/* allowed interface combinations */
+ 	cc->hw->wiphy->iface_combinations = cc33xx_iface_combinations;
+ 	cc->hw->wiphy->n_iface_combinations = ARRAY_SIZE(cc33xx_iface_combinations);
+diff --git a/drivers/net/wireless/ti/cc33xx/rx.c b/drivers/net/wireless/ti/cc33xx/rx.c
+index 34cea549648e..463c3a7c3ec5 100644
+--- a/drivers/net/wireless/ti/cc33xx/rx.c
++++ b/drivers/net/wireless/ti/cc33xx/rx.c
+@@ -337,6 +337,421 @@ int cc33xx_rx(struct cc33xx *cc, u8 *rx_buf_ptr, u16 rx_buf_len)
+ 	return 0;
+ }
+ 
++int cc33xx_parse_wowlan_hex_string(const char *input, u8 *pattern, u8 *mask,
++					size_t max_len, bool *has_mask)
++{
++	size_t byte_count = 0;
++	const char *p = input;
++	int val1, val2;
++
++	*has_mask = false;
++
++	while (*p != '\0' && byte_count < max_len) {
++		while (*p == ' ' || *p == '\t')
++			p++;
++
++		if (*p == '\0')
++			break;
++
++		if (*p == '-' || (*p == 'x' && p[1] == 'x')) {
++			pattern[byte_count] = 0x00;
++			mask[byte_count] = 0x00;
++			byte_count++;
++			*has_mask = true;
++
++			if (*p == 'x') {
++				p += 2;
++			} else {
++				p++;
++				if (*p == '-')
++					p++;
++			}
++
++			if (*p != '\0' && *p != ':' && *p != ' ' && *p != '\t')
++				return -EINVAL;
++
++			if (*p == ':')
++				p++;
++			continue;
++		}
++
++		val1 = hex_to_bin(*p);
++		if (val1 < 0)
++			return -EINVAL;
++
++		p++;
++
++		if (*p != '\0' && *p != ':' && *p != ' ' && *p != '\t') {
++			val2 = hex_to_bin(*p);
++			if (val2 < 0)
++				return -EINVAL;
++			p++;
++			pattern[byte_count] = (val1 << 4) | val2;
++		} else {
++			pattern[byte_count] = val1;
++		}
++
++		mask[byte_count] = 0xFF;
++		byte_count++;
++
++		if (*p == ':')
++			p++;
++	}
++
++	if (byte_count == max_len) {
++		while (*p == ' ' || *p == '\t')
++			p++;
++
++		if (*p != '\0') {
++			cc33xx_warning("Pattern exceeds maximum size (%zu bytes)\n",
++			       max_len);
++			return -EINVAL;
++		}
++	}
++
++	if (byte_count == 0)
++		return -EINVAL;
++
++	return byte_count;
++}
++
++int cc33xx_parse_wowlan_search_pattern(char *input,
++					u8 *header_bytes, int *header_len,
++					u8 *header_mask, bool *header_has_mask,
++					u8 *payload_bytes, int *payload_len,
++					u8 *payload_mask, bool *payload_has_mask,
++					u16 *payload_offset, bool *search_mode)
++{
++	char *header_text, *payload_text, *offset_str, *plus_sign, *pipe;
++	int ret, parsed_bytes;
++
++	*header_len = 0;
++	*payload_len = 0;
++	*header_has_mask = false;
++	*payload_has_mask = false;
++	*payload_offset = 0;
++	*search_mode = true;
++
++	/* Parse mode flag: -f for fixed, -s for search mode (default) */
++	if (input[0] == '-' && input[1] == 'f' &&
++	    (input[2] == ' ' || input[2] == '\t')) {
++		*search_mode = false;
++		input += 2;
++		while (*input == ' ' || *input == '\t')
++			input++;
++	} else if (input[0] == '-' && input[1] == 's' &&
++	           (input[2] == ' ' || input[2] == '\t')) {
++		input += 2;
++		while (*input == ' ' || *input == '\t')
++			input++;
++	}
++
++	/* Parse format: [header bytes]|[offset+][payload pattern] */
++	plus_sign = strchr(input, '+');
++	pipe = strchr(input, '|');
++
++	if (plus_sign && !pipe) {
++		cc33xx_error("Offset '+' requires '|' separator with 14-byte header");
++		return -EINVAL;
++	}
++
++	header_text = input;
++
++	if (pipe) {
++		char *str;
++
++		/* Split at pipe: header | payload */
++		*pipe = '\0';
++		payload_text = pipe + 1;
++
++		parsed_bytes = 1;
++		str = header_text;
++		while (*str) {
++			if (*str == ':')
++				parsed_bytes++;
++			str++;
++		}
++
++		if (parsed_bytes != CC33XX_RX_FILTER_ETH_HEADER_SIZE) {
++			cc33xx_error("Header pattern part must be exactly %d bytes when searching for pattern in payload, got %d bytes",
++				     CC33XX_RX_FILTER_ETH_HEADER_SIZE, parsed_bytes);
++			return -EINVAL;
++		}
++	} else {
++		payload_text = NULL;
++	}
++
++	ret = cc33xx_parse_wowlan_hex_string(header_text, header_bytes,
++					     header_mask,
++					     CC33XX_RX_FILTER_ETH_HEADER_SIZE,
++					     header_has_mask);
++	if (ret < 0) {
++		cc33xx_error("Invalid header format");
++		return ret;
++	}
++	*header_len = ret;
++
++	/* Parse payload if present */
++	if (payload_text && strlen(payload_text) > 0) {
++		plus_sign = strchr(payload_text, '+');
++		if (plus_sign) {
++			*plus_sign = '\0';
++			offset_str = payload_text;
++			payload_text = plus_sign + 1;
++
++			ret = kstrtou16(offset_str, 10, payload_offset);
++			if (ret < 0) {
++				cc33xx_error("Invalid payload offset '%s'", offset_str);
++				return -EINVAL;
++			}
++		}
++
++		if (strlen(payload_text) > 0) {
++			ret = cc33xx_parse_wowlan_hex_string(payload_text, payload_bytes,
++							     payload_mask,
++							     CC33XX_RX_FILTER_MAX_PATTERN_SIZE,
++							     payload_has_mask);
++			if (ret < 0) {
++				cc33xx_error("Invalid payload pattern format");
++				return ret;
++			}
++			*payload_len = ret;
++		}
++	}
++
++	return 0;
++}
++
++int cc33xx_add_wowlan_search_pattern(struct cc33xx *cc, char *input)
++{
++	struct cc33xx_rx_filter *filter;
++	u8 header_bytes[CC33XX_RX_FILTER_ETH_HEADER_SIZE * 2];
++	u8 payload_bytes[CC33XX_RX_FILTER_MAX_PATTERN_SIZE * 2];
++	u8 *header_mask = header_bytes + CC33XX_RX_FILTER_ETH_HEADER_SIZE;
++	u8 *payload_mask = payload_bytes + CC33XX_RX_FILTER_MAX_PATTERN_SIZE;
++	u8 field_buffer[CC33XX_RX_FILTER_MAX_PATTERN_SIZE * 2];
++	const u8 *field_data;
++	int header_len, payload_len;
++	bool header_has_mask, payload_has_mask;
++	bool search_mode;
++	u16 payload_offset;
++	u8 flags, len;
++	u16 offset;
++	int ret, i, j;
++	int field_num = 0;
++
++	if (cc->wowlan_search.filter_count >= CC33XX_MAX_RX_FILTERS) {
++		cc33xx_error("Maximum filters reached (%d/%d)",
++			     cc->wowlan_search.filter_count, CC33XX_MAX_RX_FILTERS);
++		return -ENOSPC;
++	}
++
++	/* Parse pattern string into header and payload components */
++	ret = cc33xx_parse_wowlan_search_pattern(input,
++						  header_bytes, &header_len,
++						  header_mask, &header_has_mask,
++						  payload_bytes, &payload_len,
++						  payload_mask, &payload_has_mask,
++						  &payload_offset, &search_mode);
++	if (ret < 0)
++		return ret;
++
++	filter = cc33xx_rx_filter_alloc();
++	if (!filter) {
++		cc33xx_error("Failed to allocate rx filter");
++		return -ENOMEM;
++	}
++
++	filter->action = FILTER_SIGNAL;
++
++	/* Process header: split into multiple fields at wildcard boundaries */
++	if (header_len > 0) {
++		i = 0;
++		while (i < header_len) {
++			if (header_has_mask && header_mask[i] == 0x00) {
++				i++;
++				continue;
++			}
++
++			for (j = i; j < header_len; j++) {
++				if (header_has_mask && header_mask[j] == 0x00)
++					break;
++			}
++
++			/* Create field for this contiguous sequence */
++			offset = i;
++			len = j - i;
++			flags = CC33XX_RX_FILTER_FLAG_ETHERNET_HEADER;
++			if (header_has_mask) {
++				/* Masked: send [pattern][mask] format */
++				flags |= CC33XX_RX_FILTER_FLAG_MASKED;
++				memcpy(field_buffer, &header_bytes[i], len);
++				memcpy(field_buffer + len, &header_mask[i], len);
++				field_data = field_buffer;
++			} else {
++				/* Unmasked: send pattern only */
++				field_data = &header_bytes[i];
++			}
++
++			ret = cc33xx_rx_filter_alloc_field(filter, offset, flags,
++							   field_data, len);
++
++			if (ret < 0) {
++				cc33xx_error("Failed to add header field %d", field_num);
++				cc33xx_rx_filter_free(filter);
++				return ret;
++			}
++
++			field_num++;
++			i = j;
++		}
++	}
++
++	/* Process payload: add single field with search-anywhere flag (if search mode) */
++	if (payload_len > 0) {
++		flags = 0;
++		if (search_mode)
++			flags |= CC33XX_RX_FILTER_FLAG_SEARCH_ANYWHERE;
++
++		if (payload_has_mask) {
++			/* Masked: send [pattern][mask] format */
++			flags |= CC33XX_RX_FILTER_FLAG_MASKED;
++			memcpy(field_buffer, payload_bytes, payload_len);
++			memcpy(field_buffer + payload_len, payload_mask, payload_len);
++			field_data = field_buffer;
++		} else {
++			/* Unmasked: send pattern only */
++			field_data = payload_bytes;
++		}
++
++		ret = cc33xx_rx_filter_alloc_field(filter, payload_offset, flags,
++						   field_data, payload_len);
++
++		if (ret < 0) {
++			cc33xx_error("Failed to add payload field");
++			cc33xx_rx_filter_free(filter);
++			return ret;
++		}
++
++		field_num++;
++	}
++
++	cc->wowlan_search.active_filters[cc->wowlan_search.filter_count] = filter;
++	cc->wowlan_search.filter_count++;
++
++	return 0;
++}
++
++int cc33xx_clear_wowlan_search_patterns(struct cc33xx *cc)
++{
++	int ret;
++
++	ret = cc33xx_rx_filter_clear_all(cc);
++	if (ret < 0) {
++		cc33xx_error("Failed to clear RX filters: %d", ret);
++		goto out;
++	}
++
++	ret = cc33xx_acx_default_rx_filter_enable(cc, 0, FILTER_SIGNAL);
++	if (ret < 0)
++		cc33xx_error("Failed to reset default RX filter: %d", ret);
++
++	/* Disable ARP offload since rx filtering is disabled */
++	ret = cc33xx_acx_arp_offload(cc, false);
++	if (ret)
++		cc33xx_warning("Failed to disable ARP offload: %d", ret);
++
++out:
++	cc33xx_free_wowlan_patterns_memory(cc);
++	return ret;
++}
++
++
++int cc33xx_set_wowlan_search_mode(struct cc33xx *cc, bool enable)
++{
++	struct cc33xx_vif *wlvif = NULL;
++	int ret = 0;
++
++	cc33xx_for_each_wlvif_sta(cc, wlvif) {
++		break;
++	}
++
++	if (!wlvif)
++		return -EINVAL;
++
++	if (enable) {
++		struct cfg80211_wowlan *wowlan_config;
++
++		wowlan_config = kzalloc(sizeof(*wowlan_config), GFP_KERNEL);
++		if (!wowlan_config) {
++			return -ENOMEM;
++		}
++
++		cc->hw->wiphy->wowlan_config = wowlan_config;
++		cc->keep_device_power = true;
++
++		ret = cc33xx_acx_wake_up_conditions(cc, wlvif,
++						    cc->conf.core.suspend_wake_up_event,
++						    cc->conf.core.suspend_listen_interval);
++		if (ret < 0) {
++			cc33xx_error("Failed to configure wake-up conditions: %d", ret);
++			cc->keep_device_power = false;
++			kfree(wowlan_config);
++			cc->hw->wiphy->wowlan_config = NULL;
++			return ret;
++		}
++
++		cc->wowlan_search.enabled = true;
++	} else {
++		/* Disable: try hardware operation first, then always clean up software state */
++		ret = cc33xx_acx_wake_up_conditions(cc, wlvif,
++						    cc->conf.core.wake_up_event,
++						    cc->conf.core.listen_interval);
++		if (ret < 0)
++			cc33xx_error("Failed to restore wake-up conditions: %d", ret);
++
++		/* Always clean up software state, even if hardware operation failed */
++		cc->wowlan_search.enabled = false;
++
++		cc33xx_clear_wowlan_search_patterns(cc);
++
++
++		if (cc->hw->wiphy->wowlan_config) {
++			kfree(cc->hw->wiphy->wowlan_config);
++			cc->hw->wiphy->wowlan_config = NULL;
++		}
++
++		cc->keep_device_power = false;
++	}
++
++	return ret;
++}
++
++void cc33xx_free_wowlan_patterns_memory(struct cc33xx *cc)
++{
++	int i;
++
++	for (i = 0; i < cc->wowlan_search.filter_count; i++) {
++		if (cc->wowlan_search.active_filters[i]) {
++			cc33xx_rx_filter_free(cc->wowlan_search.active_filters[i]);
++			cc->wowlan_search.active_filters[i] = NULL;
++		}
++	}
++	cc->wowlan_search.filter_count = 0;
++}
++
++int cc33xx_is_wowlan_search_enabled(struct cc33xx *cc)
++{
++	return cc->wowlan_search.enabled && (cc->wowlan_search.filter_count > 0);
++}
++
++int cc33xx_get_wowlan_search_filters(struct cc33xx *cc, struct cc33xx_rx_filter ***filters_out)
++{
++	if (filters_out)
++		*filters_out = cc->wowlan_search.active_filters;
++	return cc->wowlan_search.filter_count;
++}
++
+ #ifdef CONFIG_PM
+ int cc33xx_rx_filter_enable(struct cc33xx *cc, int index, bool enable,
+ 			    struct cc33xx_rx_filter *filter)
+diff --git a/drivers/net/wireless/ti/cc33xx/rx.h b/drivers/net/wireless/ti/cc33xx/rx.h
+index 523a35288d15..8b8420fd6cca 100644
+--- a/drivers/net/wireless/ti/cc33xx/rx.h
++++ b/drivers/net/wireless/ti/cc33xx/rx.h
+@@ -6,6 +6,9 @@
+ #ifndef __RX_H__
+ #define __RX_H__
+ 
++struct cc33xx;
++struct cc33xx_rx_filter;
++
+ /* RX Descriptor flags:
+  *
+  * Bits 0-1 - band
+@@ -84,5 +87,24 @@ int cc33xx_rx(struct cc33xx *cc, u8 *rx_buf_ptr, u16 rx_buf_len);
+ int cc33xx_rx_filter_enable(struct cc33xx *cc, int index, bool enable,
+ 			    struct cc33xx_rx_filter *filter);
+ int cc33xx_rx_filter_clear_all(struct cc33xx *cc);
++void cc33xx_flush_deferred_work(struct cc33xx *cc);
++void cc33xx_free_wowlan_patterns_memory(struct cc33xx *cc);
++int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter, u16 offset,
++				 u8 flags, const u8 *pattern, u8 len);
++struct cc33xx_rx_filter *cc33xx_rx_filter_alloc(void);
++int cc33xx_clear_wowlan_search_patterns(struct cc33xx *cc);
++int cc33xx_set_wowlan_search_mode(struct cc33xx *cc, bool enable);
++void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter);
++int cc33xx_get_wowlan_search_filters(struct cc33xx *cc, struct cc33xx_rx_filter ***filters_out);
++int cc33xx_parse_wowlan_hex_string(const char *input, u8 *pattern, u8 *mask,
++				   size_t max_len, bool *has_mask);
++int cc33xx_parse_wowlan_search_pattern(char *input,
++					u8 *header_bytes, int *header_len,
++					u8 *header_mask, bool *header_has_mask,
++					u8 *payload_bytes, int *payload_len,
++					u8 *payload_mask, bool *payload_has_mask,
++					u16 *payload_offsett, bool *search_mode);
++int cc33xx_is_wowlan_search_enabled(struct cc33xx *cc);
++int cc33xx_add_wowlan_search_pattern(struct cc33xx *cc, char *input);
+ 
+ #endif /* __RX_H__ */
+diff --git a/drivers/net/wireless/ti/cc33xx/sysfs.c b/drivers/net/wireless/ti/cc33xx/sysfs.c
+new file mode 100644
+index 000000000000..d9461d671a2c
+--- /dev/null
++++ b/drivers/net/wireless/ti/cc33xx/sysfs.c
+@@ -0,0 +1,594 @@
++#include <linux/device.h>
++#include <linux/kstrtox.h>
++#include "rx.h"
++#include "debug.h"
++#include "cc33xx.h"
++#include "sysfs.h"
++#include "acx.h"
++
++static ssize_t ble_enable_show(struct device *dev,
++				  struct device_attribute *attr,
++				  char *buf)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	ssize_t len;
++
++	mutex_lock(&cc->mutex);
++	len = sysfs_emit(buf, "%d\n", cc->ble_enable);
++	mutex_unlock(&cc->mutex);
++
++	return len;
++}
++
++static ssize_t ble_enable_store(struct device *dev,
++				   struct device_attribute *attr,
++				   const char *buf, size_t count)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	int ret;
++	unsigned long value;
++
++	ret = kstrtoul(buf, 10, &value);
++	if (value != 1) {
++		cc33xx_warning("illegal value in ble_enable (only value allowed is is 1)");
++		cc33xx_warning("ble_enable cant be disabled after being enabled.");
++		return -EINVAL;
++	}
++
++	if (value == cc->ble_enable) {
++		cc33xx_warning("ble_enable is already %d",cc->ble_enable);
++		return -EINVAL;
++	}
++
++	mutex_lock(&cc->mutex);
++
++	if (unlikely(cc->state != CC33XX_STATE_ON)) {
++		/* this will show up on "read" in case we are off */
++		cc->ble_enable = value;
++		goto out;
++	}
++
++	cc33xx_ble_enable(cc, value);
++out:
++	mutex_unlock(&cc->mutex);
++	return count;
++}
++static DEVICE_ATTR_RW(ble_enable);
++
++static ssize_t slow_clock_type_show(struct device *dev,
++				  struct device_attribute *attr,
++				  char *buf)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	ssize_t len;
++
++	cc33xx_acx_get_slow_clock_type(cc);
++
++	len = sysfs_emit(buf, "%d\n", cc->is_ext_slw_clk);
++
++	return len;
++}
++
++static ssize_t slow_clock_type_store(struct device *dev,
++				   struct device_attribute *attr,
++				   const char *buf, size_t count)
++{
++	return 0;
++}
++static DEVICE_ATTR_RW(slow_clock_type);
++
++static ssize_t cc33xx_sysfs_read_fwlog(struct file *filp, struct kobject *kobj,
++				       const struct bin_attribute *bin_attr,
++				       char *buffer, loff_t pos, size_t count)
++{
++	struct device *dev = container_of(kobj, struct device, kobj);
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	ssize_t len;
++	int ret;
++
++	ret = mutex_lock_interruptible(&cc->mutex);
++	if (ret < 0)
++		return -ERESTARTSYS;
++
++	/* Check if the fwlog is still valid */
++	if (cc->fwlog_size < 0) {
++		mutex_unlock(&cc->mutex);
++		return 0;
++	}
++
++	/* Seeking is not supported - old logs are not kept. Disregard pos. */
++	len = min_t(size_t, count, cc->fwlog_size);
++	cc->fwlog_size -= len;
++	memcpy(buffer, cc->fwlog, len);
++
++	/* Make room for new messages */
++	memmove(cc->fwlog, cc->fwlog + len, cc->fwlog_size);
++
++	mutex_unlock(&cc->mutex);
++
++	return len;
++}
++
++static const struct bin_attribute fwlog_attr = {
++	.attr = { .name = "fwlog", .mode = 0400 },
++	.read = cc33xx_sysfs_read_fwlog,
++};
++
++static ssize_t regdomain_txControl_param_show(struct device *dev,
++				  struct device_attribute *attr,
++				  char *buf)
++{
++	return 0;
++}
++
++static ssize_t regdomain_txControl_param_store(struct device *dev,
++				   struct device_attribute *attr,
++				   const char *buf, size_t count)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	struct acx_phy_regdomain_tx_control_params params;
++	int ret = 0;
++	char* buffer;
++	char * pToken;
++	int converted_token = 0;
++
++	buffer = kzalloc(count, GFP_KERNEL);
++	if (!buffer) {
++		ret = -ENOMEM;
++		cc33xx_warning("error in regdomain and tx control params set (memory): %d", ret);
++		return ret;
++	}
++
++	strncpy(buffer, buf, count);
++	if(-EFAULT == ret){
++		cc33xx_warning("error in regdomain and tx control params set: %d", ret);
++		kfree(buffer);
++		return ret;
++	}
++
++	pToken = strsep(&buffer, " ");
++
++	ret = kstrtoint(pToken, 10, &converted_token);
++	if (ret < 0)
++	{
++		ret = -EINVAL;
++		kfree(buffer);
++		cc33xx_warning("error in bitmask value parsing");
++		return ret;
++    }
++
++	params.bitmask = converted_token;
++
++
++	pToken = strsep(&buffer, " ");
++
++	ret = kstrtoint(pToken, 10, &converted_token);
++	if (ret < 0)
++	{
++		ret = -EINVAL;
++		kfree(buffer);
++		cc33xx_warning("error in reg_domain value parsing");
++		return ret;
++    }
++
++	params.reg_domain = converted_token;
++
++	pToken = strsep(&buffer, " ");
++
++	for(int i = 0; i < BLE_LIM_CHANNELS_COUNT ; i++)
++	{
++		ret = kstrtoint(pToken, 10, &converted_token);
++		if (ret < 0)
++		{
++			ret = -EINVAL;
++			kfree(buffer);
++			cc33xx_warning("error in ble_ch_lim_1M value parsing");
++			return ret;
++		}
++
++		params.ble_ch_lim_1M[i] = converted_token;
++
++		pToken = strsep(&buffer, " ");
++	}
++
++	for(int i = 0; i < BLE_LIM_CHANNELS_COUNT ;i++)
++	{
++
++		ret = kstrtoint(pToken, 10, &converted_token);
++
++		if (ret < 0)
++		{
++			ret = -EINVAL;
++			kfree(buffer);
++			cc33xx_warning("error in ble_ch_lim_2M value parsing");
++			return ret;
++		}
++
++		params.ble_ch_lim_2M[i] = converted_token;
++
++		pToken = strsep(&buffer, " ");
++	}
++
++	ret = kstrtoint(pToken, 10, &converted_token);
++	if (ret < 0)
++	{
++		ret = -EINVAL;
++		kfree(buffer);
++		cc33xx_warning("error in country_code value parsing");
++		return ret;
++	}
++
++	params.country_code = converted_token;
++
++	pToken = strsep(&buffer, " ");
++
++	for(int i = 0; i < REG_RULES_COUNT ; i++)
++	{
++		ret = kstrtoint(pToken, 10, &converted_token);
++		if (ret < 0)
++		{
++			ret = -EINVAL;
++			kfree(buffer);
++			cc33xx_warning("error in country_code value parsing");
++			return ret;
++		}
++
++		params.per_channel_power_limit[i] = converted_token;
++
++		pToken = strsep(&buffer, " ");
++	}
++
++	kfree(buffer);
++
++	ret = cc33xx_acx_set_regdoamin_and_tx_control_params(cc,&params);
++
++
++	mutex_lock(&cc->mutex);
++
++	if (unlikely(cc->state != CC33XX_STATE_ON)) {
++		goto out;
++	}
++
++
++
++out:
++	mutex_unlock(&cc->mutex);
++	return count;
++}
++
++static DEVICE_ATTR_RW(regdomain_txControl_param);
++
++
++static ssize_t wowlan_arp_offload_show(struct device *dev,
++					struct device_attribute *attr,
++					char *buf)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	ssize_t len;
++
++	if (!cc)
++		return sysfs_emit(buf, "Device not ready\n");
++
++	mutex_lock(&cc->mutex);
++	len = sysfs_emit(buf, "Current state: %s\n\n",
++			 cc->wowlan_arp_offload ? "ENABLED" : "DISABLED");
++	mutex_unlock(&cc->mutex);
++
++	len += sysfs_emit_at(buf, len, "Usage:\n");
++	len += sysfs_emit_at(buf, len, "  echo 1 > wowlan_arp_offload    # Enable WoWLAN ARP offload\n");
++	len += sysfs_emit_at(buf, len, "  echo 0 > wowlan_arp_offload    # Disable WoWLAN ARP offload\n");
++
++	return len;
++}
++
++static ssize_t wowlan_arp_offload_store(struct device *dev,
++					 struct device_attribute *attr,
++					 const char *buf, size_t count)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	unsigned int value;
++	int ret;
++
++	ret = kstrtouint(buf, 10, &value);
++	if (ret < 0)
++		return ret;
++
++	if (value != 0 && value != 1) {
++		cc33xx_warning("invalid WoWLAN ARP offload value %u (must be 0 or 1)", value);
++		return -EINVAL;
++	}
++
++	mutex_lock(&cc->mutex);
++
++	cc->wowlan_arp_offload = value;
++	cc33xx_info("WoWLAN ARP offload %s (will take effect on next suspend)\n",
++		    cc->wowlan_arp_offload ? "enabled" : "disabled");
++
++	mutex_unlock(&cc->mutex);
++
++	return count;
++}
++
++static DEVICE_ATTR_RW(wowlan_arp_offload);
++
++static ssize_t wowlan_pattern_clear_store(struct device *dev,
++					  struct device_attribute *attr,
++					  const char *buf, size_t count)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	int ret;
++	unsigned int clear_flag;
++
++	ret = kstrtouint(buf, 10, &clear_flag);
++	if (ret < 0)
++		return ret;
++
++	if (clear_flag != 1) {
++		cc33xx_error("Invalid value %u: must be 1 to clear patterns", clear_flag);
++		return -EINVAL;
++	}
++
++	ret = mutex_lock_interruptible(&cc->mutex);
++	if (ret < 0)
++	return -ERESTARTSYS;
++
++	if (unlikely(cc->state != CC33XX_STATE_ON)) {
++		cc33xx_error("Device not ready for pattern clear");
++		ret = -EAGAIN;
++		goto out_unlock;
++	}
++
++	ret = cc33xx_clear_wowlan_search_patterns(cc);
++	if (ret < 0)
++		goto out_unlock;
++
++	mutex_unlock(&cc->mutex);
++	return count;
++
++out_unlock:
++	mutex_unlock(&cc->mutex);
++	return ret;
++}
++
++static ssize_t wowlan_pattern_clear_show(struct device *dev,
++					 struct device_attribute *attr,
++					 char *buf)
++{
++	return sysfs_emit(buf, "Write 1 to clear all WoWLAN patterns\n");
++}
++
++static DEVICE_ATTR_RW(wowlan_pattern_clear);
++
++static ssize_t wowlan_mode_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	unsigned int enable;
++	int ret;
++
++	ret = kstrtouint(buf, 10, &enable);
++	if (ret < 0)
++		return ret;
++
++	if (enable != 0 && enable != 1) {
++		cc33xx_error("Invalid value %u: must be 0 (disable) or 1 (enable)", enable);
++		return -EINVAL;
++	}
++
++	ret = mutex_lock_interruptible(&cc->mutex);
++	if (ret < 0)
++	return -ERESTARTSYS;
++
++	if (unlikely(cc->state != CC33XX_STATE_ON)) {
++		cc33xx_error("Device not ready (state: %d)", cc->state);
++		ret = -EAGAIN;
++		goto out;
++	}
++
++	ret = cc33xx_set_wowlan_search_mode(cc, enable != 0);
++	if (ret < 0)
++		goto out;
++
++	mutex_unlock(&cc->mutex);
++	return count;
++
++out:
++	mutex_unlock(&cc->mutex);
++	return ret;
++}
++
++static ssize_t wowlan_mode_show(struct device *dev,
++				struct device_attribute *attr,
++				char *buf)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	ssize_t len;
++
++	if (!cc)
++		return sysfs_emit(buf, "Device not ready\n");
++
++	len = sysfs_emit(buf, "Current mode: %s\n\n",
++			 cc->wowlan_search.enabled ? "ENABLED" : "DISABLED");
++	len += sysfs_emit_at(buf, len, "Usage:\n");
++	len += sysfs_emit_at(buf, len, "  echo 1 > wowlan_mode    # Enable WoWLAN\n");
++	len += sysfs_emit_at(buf, len, "  echo 0 > wowlan_mode    # Disable WoWLAN\n");
++
++	return len;
++}
++
++static DEVICE_ATTR_RW(wowlan_mode);
++
++static ssize_t wowlan_pattern_search_store(struct device *dev,
++					   struct device_attribute *attr,
++					   const char *buf, size_t count)
++{
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	char *input;
++	int ret;
++
++	if (unlikely(cc->state != CC33XX_STATE_ON)) {
++		cc33xx_error("Device not ready for adding pattern");
++		return -EAGAIN;
++	}
++
++	input = kzalloc(count + 1, GFP_KERNEL);
++	if (!input)
++		return -ENOMEM;
++
++	memcpy(input, buf, count);
++	input[count] = '\0';
++
++	if (count > 0 && input[count - 1] == '\n')
++		input[count - 1] = '\0';
++
++	ret = mutex_lock_interruptible(&cc->mutex);
++	if (ret < 0) {
++		ret = -ERESTARTSYS;
++		goto out_free;
++	}
++
++	ret = cc33xx_add_wowlan_search_pattern(cc, input);
++	mutex_unlock(&cc->mutex);
++
++	if (ret < 0)
++		goto out_free;
++
++	kfree(input);
++	return count;
++
++out_free:
++	kfree(input);
++	return ret;
++}
++
++static ssize_t wowlan_pattern_search_show(struct device *dev,
++					  struct device_attribute *attr,
++					  char *buf)
++{
++	ssize_t len;
++	struct cc33xx_rx_filter *filter;
++	struct cc33xx_rx_filter_field *field;
++	struct cc33xx *cc = dev_get_drvdata(dev);
++	int i, j, k;
++	u16 offset;
++	bool has_mask;
++
++	if (!cc)
++		return sysfs_emit(buf, "Device not ready\n");
++
++	if (mutex_lock_interruptible(&cc->mutex))
++		return -ERESTARTSYS;
++
++	len = sysfs_emit(buf, "Active filters: %d/%d\n",
++			 cc->wowlan_search.filter_count, CC33XX_MAX_RX_FILTERS);
++
++	if (cc->wowlan_search.filter_count > 0) {
++		len += sysfs_emit_at(buf, len, "\n");
++		for (i = 0; i < cc->wowlan_search.filter_count; i++) {
++			filter = cc->wowlan_search.active_filters[i];
++			if (!filter || filter->num_fields == 0)
++				continue;
++
++			for (j = 0; j < filter->num_fields; j++) {
++				field = &filter->fields[j];
++				offset = le16_to_cpu(field->offset);
++				has_mask = field->flags & CC33XX_RX_FILTER_FLAG_MASKED;
++
++				len += sysfs_emit_at(buf, len, "  [%d] offset=%d: ", i, offset);
++
++				for (k = 0; k < field->len; k++) {
++					len += sysfs_emit_at(buf, len, "%02x%s",
++							     field->pattern[k],
++							     k < field->len - 1 ? ":" : "");
++				}
++
++				if (has_mask)
++					len += sysfs_emit_at(buf, len, " (masked)");
++
++				len += sysfs_emit_at(buf, len, "\n");
++			}
++		}
++	}
++
++	mutex_unlock(&cc->mutex);
++
++	len += sysfs_emit_at(buf, len, "\nWoWLAN Pattern Matching - Wake device on specific packet patterns\n\n");
++	len += sysfs_emit_at(buf, len, "Mode:\n");
++	len += sysfs_emit_at(buf, len, "  -s (default)  - Search mode (sliding window, pattern found anywhere from offset)\n");
++	len += sysfs_emit_at(buf, len, "  -f            - Fixed mode (payload matches at exact offset)\n");
++	len += sysfs_emit_at(buf, len, "  Note: Header (first 14 bytes) is always matched at fixed positions\n\n");
++	len += sysfs_emit_at(buf, len, "Format:\n");
++	len += sysfs_emit_at(buf, len, "  Header only:     [14-byte Ethernet header]\n");
++	len += sysfs_emit_at(buf, len, "  Header+Payload: [-s|-f] [14-byte header]|[offset+][payload]\n\n");
++	len += sysfs_emit_at(buf, len, "Pattern syntax:\n");
++	len += sysfs_emit_at(buf, len, "  AA:BB:CC    - Match specific bytes (hex)\n");
++	len += sysfs_emit_at(buf, len, "  -           - Wildcard (match any byte)\n");
++	len += sysfs_emit_at(buf, len, "  |           - Separator between header and payload\n");
++	len += sysfs_emit_at(buf, len, "  N+          - Start payload at byte N (search/fixed mode)\n\n");
++	len += sysfs_emit_at(buf, len, "Ethernet header (14 bytes): dst_MAC(6):src_MAC(6):EtherType(2)\n\n");
++	len += sysfs_emit_at(buf, len, "Examples:\n");
++	len += sysfs_emit_at(buf, len, "  1. Match destination MAC:\n");
++	len += sysfs_emit_at(buf, len, "     echo \"4d:41:47:49:43:55:-:-:-:-:-:-:-:-\" > wowlan_pattern_search\n\n");
++	len += sysfs_emit_at(buf, len, "  2. Match source MAC:\n");
++	len += sysfs_emit_at(buf, len, "     echo \"-:-:-:-:-:-:00:0a:cd:48:0b:7a:-:-\" > wowlan_pattern_search\n\n");
++	len += sysfs_emit_at(buf, len, "  3. Match EtherType 0x0806 (ARP) with payload pattern (search mode):\n");
++	len += sysfs_emit_at(buf, len, "     echo \"-s -:-:-:-:-:-:-:-:-:-:-:-:08:06|10+01:02:03\" > wowlan_pattern_search\n\n");
++	len += sysfs_emit_at(buf, len, "  4. Match payload anywhere (search mode):\n");
++	len += sysfs_emit_at(buf, len, "     echo \"-:-:-:-:-:-:-:-:-:-:-:-:-:-|31:32:-:34:35:36\" > wowlan_pattern_search\n\n");
++	len += sysfs_emit_at(buf, len, "  5. Match EtherType 0x0806 (ARP) at fixed payload offset:\n");
++	len += sysfs_emit_at(buf, len, "     echo \"-f -:-:-:-:-:-:-:-:-:-:-:-:08:06|10+01:02:03\" > wowlan_pattern_search\n\n");
++	len += sysfs_emit_at(buf, len, "Limits: Max %d filters, Max %d byte pattern\n",
++			     CC33XX_MAX_RX_FILTERS, CC33XX_RX_FILTER_MAX_PATTERN_SIZE);
++	len += sysfs_emit_at(buf, len, "Clear:  echo 1 > wowlan_pattern_clear\n");
++
++	return len;
++}
++
++static DEVICE_ATTR_RW(wowlan_pattern_search);
++
++int cc33xx_sysfs_init(struct cc33xx *cc)
++{
++	int ret;
++
++	ret = device_create_file(cc->dev, &dev_attr_ble_enable);
++	if (ret < 0)
++		cc33xx_error("failed to create sysfs file ble_enable");
++
++	ret = device_create_file(cc->dev, &dev_attr_slow_clock_type);
++	if (ret < 0)
++		cc33xx_error("failed to create sysfs file slow_clock_type");
++
++	ret = device_create_file(cc->dev, &dev_attr_regdomain_txControl_param);
++	if (ret < 0)
++		cc33xx_error("failed to create sysfs file regdomain_txControl_param");
++
++	ret = device_create_file(cc->dev, &dev_attr_wowlan_arp_offload);
++	if (ret < 0)
++		cc33xx_error("failed to create sysfs file wowlan_arp_offload");
++
++	ret = device_create_file(cc->dev, &dev_attr_wowlan_pattern_clear);
++	if (ret < 0)
++		cc33xx_error("failed to create sysfs file wowlan_pattern_clear");
++
++	ret = device_create_file(cc->dev, &dev_attr_wowlan_pattern_search);
++	if (ret < 0)
++		cc33xx_error("failed to create sysfs file wowlan_pattern_search");
++
++	ret = device_create_file(cc->dev, &dev_attr_wowlan_mode);
++	if (ret < 0)
++		cc33xx_error("failed to create sysfs file wowlan_mode");
++
++	/* Create sysfs file for the FW log */
++	ret = device_create_bin_file(cc->dev, &fwlog_attr);
++	if (ret < 0) {
++		cc33xx_error("failed to create sysfs file fwlog");
++	}
++
++	return ret;
++}
++
++void cc33xx_sysfs_free(struct cc33xx *cc)
++{
++	device_remove_file(cc->dev, &dev_attr_ble_enable);
++}
+diff --git a/drivers/net/wireless/ti/cc33xx/sysfs.h b/drivers/net/wireless/ti/cc33xx/sysfs.h
+new file mode 100644
+index 000000000000..2bb0bace8cba
+--- /dev/null
++++ b/drivers/net/wireless/ti/cc33xx/sysfs.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * This file is part of wlcore
++ *
++ * Copyright (C) 2013 Texas Instruments Inc.
++ */
++
++#ifndef _CC33XX_SYSFS_H_
++#define _CC33XX_SYSFS_H_
++
++int cc33xx_sysfs_init(struct cc33xx *cc);
++void cc33xx_sysfs_free(struct cc33xx *cc);
++
++#endif
+\ No newline at end of file
+-- 
+2.55.0
+
