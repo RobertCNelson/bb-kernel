@@ -6,16 +6,16 @@
 #https://packages.debian.org/source/sid/linux
 
 # SELECT DISTRO: (forky, sid, or exp)
-SELECTED_DISTRO="exp"
+SELECTED_DISTRO="sid"
 
 case "$SELECTED_DISTRO" in
 	forky)
 		KERNEL_BRANCH="7.2"
-		KERNEL_TAG="7.2.12-1"
+		KERNEL_TAG="7.2.15-1"
 		;;
 	sid)
-		KERNEL_BRANCH="7.2"
-		KERNEL_TAG="7.2.12-1"
+		KERNEL_BRANCH="7.3"
+		KERNEL_TAG="7.3.3-1"
 		;;
 	exp)
 		KERNEL_BRANCH="7.3"

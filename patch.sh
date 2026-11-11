@@ -344,6 +344,7 @@ beagleboard_dtbs () {
 		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-mspm0swd" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-pru0-out" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-spi2-esp32" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-spi2-eth-wiz-click" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-cpts-genf-csi1" ; k3_dtbo_makefile_append
@@ -528,7 +529,7 @@ backports () {
 
 	dir 'drivers/ti/uio_revert'
 
-	backport_tag="v6.6.161"
+	backport_tag="v6.6.162"
 
 	subsystem="uio"
 	#regenerate="enable"
