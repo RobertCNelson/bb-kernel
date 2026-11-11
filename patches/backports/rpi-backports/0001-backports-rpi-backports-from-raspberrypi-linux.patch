@@ -1,20 +1,20 @@
-From 9feb43a8c6eaf1705b4363be6ea8c23c2c3d5dd3 Mon Sep 17 00:00:00 2001
+From 380ae11cf989e6e0b794c3af8d9cd1fde0eff1f0 Mon Sep 17 00:00:00 2001
 From: Robert Nelson <robertcnelson@gmail.com>
-Date: Fri, 30 Oct 2026 13:29:46 -0500
+Date: Wed, 11 Nov 2026 12:34:18 -0600
 Subject: [PATCH] backports rpi-backports from raspberrypi-linux
 
-Reference: rpi-7.3.y
+Reference: rpi-7.4.y
 Signed-off-by: Robert Nelson <robertcnelson@gmail.com>
 ---
- drivers/gpu/drm/panel/panel-ilitek-ili9881c.c | 724 +++++++++++++++++-
+ drivers/gpu/drm/panel/panel-ilitek-ili9881c.c | 715 ++++++++++++++++++
  drivers/input/touchscreen/edt-ft5x06.c        | 124 ++-
  drivers/input/touchscreen/goodix.c            |  13 +-
  drivers/input/touchscreen/goodix.h            |   3 +
  drivers/regulator/rpi-panel-v2-regulator.c    |   6 +-
- 5 files changed, 852 insertions(+), 18 deletions(-)
+ 5 files changed, 844 insertions(+), 17 deletions(-)
 
 diff --git a/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c b/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c
-index c3d5ab67121d..412fad12c22f 100644
+index 7bf38e96678a..cd4d29c3de9f 100644
 --- a/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c
 +++ b/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c
 @@ -1,6 +1,9 @@
@@ -504,30 +504,7 @@ index c3d5ab67121d..412fad12c22f 100644
  static const struct drm_display_mode rpi_5inch_default_mode = {
  	.clock		= 83333,
  
-@@ -2600,7 +3066,11 @@ static int ili9881c_dsi_probe(struct mipi_dsi_device *dsi)
- 	dsi->format = MIPI_DSI_FMT_RGB888;
- 	dsi->lanes = ctx->desc->lanes;
- 
--	return mipi_dsi_attach(dsi);
-+	ret = mipi_dsi_attach(dsi);
-+	if (ret)
-+		drm_panel_remove(&ctx->panel);
-+
-+	return ret;
- }
- 
- static void ili9881c_dsi_remove(struct mipi_dsi_device *dsi)
-@@ -2609,6 +3079,9 @@ static void ili9881c_dsi_remove(struct mipi_dsi_device *dsi)
- 
- 	mipi_dsi_detach(dsi);
- 	drm_panel_remove(&ctx->panel);
-+
-+	gpiod_set_value_cansleep(ctx->reset, 1);
-+	regulator_disable(ctx->power);
- }
- 
- static const struct ili9881c_desc lhr050h41_desc = {
-@@ -2670,6 +3143,22 @@ static const struct ili9881c_desc am8001280g_desc = {
+@@ -2664,6 +3130,22 @@ static const struct ili9881c_desc am8001280g_desc = {
  		      MIPI_DSI_CLOCK_NON_CONTINUOUS | MIPI_DSI_MODE_LPM,
  };
  
@@ -550,7 +527,7 @@ index c3d5ab67121d..412fad12c22f 100644
  static const struct ili9881c_desc rpi_5inch_desc = {
  	.init = rpi_5inch_init,
  	.init_length = ARRAY_SIZE(rpi_5inch_init),
-@@ -2704,6 +3193,236 @@ static const struct ili9881c_desc waveshare_7inch_a_desc = {
+@@ -2698,6 +3180,236 @@ static const struct ili9881c_desc waveshare_7inch_a_desc = {
  	.lanes = 2,
  };
  
@@ -787,7 +764,7 @@ index c3d5ab67121d..412fad12c22f 100644
  static const struct of_device_id ili9881c_of_match[] = {
  	{ .compatible = "bananapi,lhr050h41", .data = &lhr050h41_desc },
  	{ .compatible = "bestar,bsd1218-a101kl68", .data = &bsd1218_a101kl68_desc },
-@@ -2713,7 +3432,10 @@ static const struct of_device_id ili9881c_of_match[] = {
+@@ -2707,7 +3419,10 @@ static const struct of_device_id ili9881c_of_match[] = {
  	{ .compatible = "wanchanglong,w552946aaa", .data = &w552946aaa_desc },
  	{ .compatible = "wanchanglong,w552946aba", .data = &w552946aba_desc },
  	{ .compatible = "waveshare,7.0-dsi-touch-a", .data = &waveshare_7inch_a_desc },
@@ -799,7 +776,7 @@ index c3d5ab67121d..412fad12c22f 100644
  	{ .compatible = "raspberrypi,dsi-7inch", &rpi_7inch_desc },
  	{ }
 diff --git a/drivers/input/touchscreen/edt-ft5x06.c b/drivers/input/touchscreen/edt-ft5x06.c
-index d6c3d033b83d..198ab46a79b2 100644
+index 32eed64e2c49..01828856a2f7 100644
 --- a/drivers/input/touchscreen/edt-ft5x06.c
 +++ b/drivers/input/touchscreen/edt-ft5x06.c
 @@ -69,6 +69,7 @@
@@ -988,7 +965,7 @@ index d6c3d033b83d..198ab46a79b2 100644
  	}
  
  	input = devm_input_allocate_device(&client->dev);
-@@ -1308,17 +1387,28 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
+@@ -1307,17 +1386,28 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
  		return error;
  	}
  
@@ -1027,7 +1004,7 @@ index d6c3d033b83d..198ab46a79b2 100644
  	}
  
  	error = input_register_device(input);
-@@ -1340,6 +1430,10 @@ static void edt_ft5x06_ts_remove(struct i2c_client *client)
+@@ -1339,6 +1429,10 @@ static void edt_ft5x06_ts_remove(struct i2c_client *client)
  {
  	struct edt_ft5x06_ts_data *tsdata = i2c_get_clientdata(client);
  
@@ -1039,7 +1016,7 @@ index d6c3d033b83d..198ab46a79b2 100644
  }
  
 diff --git a/drivers/input/touchscreen/goodix.c b/drivers/input/touchscreen/goodix.c
-index 03efc0c792c2..a76da8e79939 100644
+index 1c9e88e3c7aa..4b0d3d45e6cf 100644
 --- a/drivers/input/touchscreen/goodix.c
 +++ b/drivers/input/touchscreen/goodix.c
 @@ -299,6 +299,14 @@ static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
