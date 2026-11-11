@@ -342,6 +342,7 @@ beagleboard_dtbs () {
 		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-mspm0swd" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-pru0-out" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-spi2-esp32" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-spi2-eth-wiz-click" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-cpts-genf-csi1" ; k3_dtbo_makefile_append
@@ -380,6 +381,9 @@ beagleboard_dtbs () {
 		device="k3-am67a-beagley-ai-spidev0" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-uart-ttyama0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-extts2-p8_15" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-extts2-p8_15-perout0-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-perout0-p8_19" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap1" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap2" ; k3_dtbo_makefile_append
@@ -402,6 +406,7 @@ beagleboard_dtbs () {
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs1-no-miso" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi7-cs0" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-uart-uart2" ; k3_dtbo_makefile_append
 
 		#K3 Devices
 		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
@@ -561,7 +566,7 @@ backports () {
 
 	dir 'drivers/ti/uio_revert'
 
-	backport_tag="v6.6.156"
+	backport_tag="v6.6.162"
 
 	subsystem="uio"
 	#regenerate="enable"
