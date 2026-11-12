@@ -145,10 +145,10 @@ wireless_regdb () {
 		cp -v ../src/wireless-regdb-master-${WIRELESS_REGDB}/regulatory.db.p7s ./firmware/
 		${git_bin} add -f ./firmware/regulatory.*
 
-		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${WIRELESS_REGDB}" -s
+		${git_bin} commit -a -m 'Add wireless-regdb regulatory database file' -m "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/log/?h=master-${WIRELESS_REGDB}" -s
 
 		${git_bin} format-patch -1 -o ../patches/external/wireless_regdb/
-		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/tag/?h=master-${WIRELESS_REGDB}" > ../patches/external/git/WIRELESS_REGDB
+		echo "WIRELESS_REGDB: https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/log/?h=master-${WIRELESS_REGDB}" > ../patches/external/git/WIRELESS_REGDB
 
 		rm -rf ../src/ || true
 
@@ -357,8 +357,12 @@ beagleboard_dtbs () {
 		device="k3-am62-pocketbeagle2-leds-off" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-mspm0swd" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-pru0-out" ; k3_dtbo_makefile_append
+		device="k3-am62-pocketbeagle2-spi2-esp32" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-spi2-eth-wiz-click" ; k3_dtbo_makefile_append
 		device="k3-am62-pocketbeagle2-techlab-cape" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-cpts-genf-csi1" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-cpts-hw1tspush-gpio13" ; k3_dtbo_makefile_append
+		device="k3-am67a-beagley-ai-cpts-hw1tspush-gpio13-genf-csi1" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-400000" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-ads1115" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-i2c1-rtc-rv3028" ; k3_dtbo_makefile_append
@@ -392,6 +396,9 @@ beagleboard_dtbs () {
 		device="k3-am67a-beagley-ai-spidev0" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-uart-ttyama0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-extts2-p8_15" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-extts2-p8_15-perout0-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-perout0-p8_19" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap1" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap2" ; k3_dtbo_makefile_append
@@ -414,6 +421,7 @@ beagleboard_dtbs () {
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs1-no-miso" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi7-cs0" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-uart-uart2" ; k3_dtbo_makefile_append
 
 		#K3 Devices
 		device="k3-am6232-pocketbeagle2.dtb" ; k3_dtb_makefile_append
@@ -571,6 +579,7 @@ backports () {
 		cp -v ~/linux-rpi/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c ./drivers/gpu/drm/panel/
 		cp -v ~/linux-rpi/drivers/input/touchscreen/edt-ft5x06.c ./drivers/input/touchscreen/
 		cp -v ~/linux-rpi/drivers/input/touchscreen/goodix.c ./drivers/input/touchscreen/
+		cp -v ~/linux-rpi/drivers/input/touchscreen/goodix.h ./drivers/input/touchscreen/
 		cp -v ~/linux-rpi/drivers/regulator/rpi-panel-v2-regulator.c ./drivers/regulator/
 
 		post_rpibackports
@@ -580,7 +589,7 @@ backports () {
 
 	dir 'drivers/ti/uio_revert'
 
-	backport_tag="v6.6.156"
+	backport_tag="v6.6.162"
 
 	subsystem="uio"
 	#regenerate="enable"
@@ -614,7 +623,6 @@ drivers () {
 	dir 'drivers/davinci-mcasp'
 
 	dir 'drivers/tilcdc-4.12.x/'
-	dir 'drivers/tilcdc/'
 
 	dir 'drivers/it66121_drm_connector'
 	dir 'drivers/it66122'
