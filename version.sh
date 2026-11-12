@@ -37,7 +37,7 @@ KERNEL_TAG=${KERNEL_REL}.116
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.12/
 kernel_rt=".116-rt22"
 #Kernel Build
-BUILD=${build_prefix}73.3
+BUILD=${build_prefix}74
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
