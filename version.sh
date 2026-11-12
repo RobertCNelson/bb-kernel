@@ -33,11 +33,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=6.1
-KERNEL_TAG=${KERNEL_REL}.189
+KERNEL_TAG=${KERNEL_REL}.191
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.1/
-kernel_rt=".189-rt69"
+kernel_rt=".191-rt71"
 #Kernel Build
-BUILD=${build_prefix}56.1
+BUILD=${build_prefix}56.2
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
