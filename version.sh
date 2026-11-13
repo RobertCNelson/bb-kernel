@@ -27,6 +27,7 @@ toolchain_version="15"
 #Wireless:
 #https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git
 WIRELESS_REGDB="2026-09-03"
+#regenerate_wireless_regdb=enable
 
 #Kernel
 linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
@@ -37,10 +38,18 @@ KERNEL_TAG=${KERNEL_REL}.63
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/x.y/
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}63
+BUILD=${build_prefix}63.1
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=xross
+
+# Patch Updates:
+BeagleBoard_DeviceTrees_branch="v6.18.x"
+#regenerate_BeagleBoard_DeviceTrees=enable
+rpi_backports="rpi-6.18.y"
+#regenerate_rpi_backports=enable
+uio_backports="v6.6.162"
+#regenerate_uio_backports=enable
 #
