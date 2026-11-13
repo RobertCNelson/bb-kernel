@@ -126,8 +126,7 @@ rt () {
 
 wireless_regdb () {
 	#https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
+	if [ "x${regenerate_wireless_regdb}" = "xenable" ] ; then
 		cd ../
 		if [ -d ./src ] ; then
 			rm -rf ./src || true
@@ -237,11 +236,10 @@ regenerate_arm64_dtbo_list () {
 }
 
 beagleboard_dtbs () {
-	branch="v7.4.x"
+	branch="${BeagleBoard_DeviceTrees_branch}"
 	https_repo="https://github.com/beagleboard/BeagleBoard-DeviceTrees.git"
 	work_dir="BeagleBoard-DeviceTrees"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
+	if [ "x${regenerate_BeagleBoard_DeviceTrees}" = "xenable" ] ; then
 		cd ../
 		if [ -d ./${work_dir} ] ; then
 			rm -rf ./${work_dir} || true
@@ -508,11 +506,10 @@ post_rpibackports () {
 }
 
 backports () {
-	backport_tag="rpi-7.4.y"
+	backport_tag="${rpi_backports}"
 
 	subsystem="rpi-backports"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
+	if [ "x${regenerate_rpi_backports}" = "xenable" ] ; then
 		pre_rpibackports
 
 		cp -v ~/linux-rpi/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c ./drivers/gpu/drm/panel/
@@ -528,11 +525,10 @@ backports () {
 
 	dir 'drivers/ti/uio_revert'
 
-	backport_tag="v6.6.162"
+	backport_tag="${uio_backports}"
 
 	subsystem="uio"
-	#regenerate="enable"
-	if [ "x${regenerate}" = "xenable" ] ; then
+	if [ "x${regenerate_uio_backports}" = "xenable" ] ; then
 		pre_backports
 
 		cp -v ~/linux-src/drivers/uio/uio_pruss.c ./drivers/uio/
