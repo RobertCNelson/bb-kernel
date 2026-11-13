@@ -1,8 +1,8 @@
 # Vulnerability Report
 
-- Name: unknown
+- Name: linux:linux_kernel
 - Type: cpe
-- Date: 2026-11-11T15:21:36.273313941-06:00
+- Date: 2026-11-13 15:40:34 +0000 UTC
 - Kernel Version: 7.3.4
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
