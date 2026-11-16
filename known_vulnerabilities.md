@@ -2,8 +2,8 @@
 
 - Name: linux:linux_kernel
 - Type: cpe
-- Date: 2026-11-13 15:40:34 +0000 UTC
-- Kernel Version: 7.4-rc2
+- Date: 2026-11-16 06:30:54 +0000 UTC
+- Kernel Version: 7.4-rc3
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
 |---------|------------------|----------|-------|-------------------------|---------|
