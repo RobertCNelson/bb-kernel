@@ -1,14 +1,13 @@
 # Vulnerability Report
 
-- Name: unknown
+- Name: linux:linux_kernel
 - Type: cpe
-- Date: 2026-11-11T18:50:48.395399506-06:00
+- Date: 2026-11-17 06:20:58 +0000 UTC
 - Kernel Version: 6.12.116
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
 |---------|------------------|----------|-------|-------------------------|---------|
 | linux_kernel | [CVE-2016-0774](https://security-tracker.debian.org/tracker/CVE-2016-0774) | Medium |  | [] | The (1) pipe_read and (2) pipe_write implementations in fs/p |
-| linux_kernel | [CVE-2016-3695](https://security-tracker.debian.org/tracker/CVE-2016-3695) | Medium |  | [] | The einj_error_inject function in drivers/acpi/apei/einj.c i |
 | linux_kernel | [CVE-2016-3699](https://security-tracker.debian.org/tracker/CVE-2016-3699) | High |  | [] | The Linux kernel, as used in Red Hat Enterprise Linux 7.2 an |
 | linux_kernel | [CVE-2017-1000255](https://security-tracker.debian.org/tracker/CVE-2017-1000255) | Medium |  | [] | On Linux running on PowerPC hardware (Power8 or later) a use |
 | linux_kernel | [CVE-2017-1000377](https://security-tracker.debian.org/tracker/CVE-2017-1000377) | Medium |  | [] | An issue was discovered in the size of the default stack gua |
@@ -28,7 +27,6 @@
 | linux_kernel | [CVE-2020-1749](https://security-tracker.debian.org/tracker/CVE-2020-1749) | High |  | [] | A flaw was found in the Linux kernel's implementation of som |
 | linux_kernel | [CVE-2020-27815](https://security-tracker.debian.org/tracker/CVE-2020-27815) | High | fixed | [4.9.249 4.14.213 4.19.164 5.4.86 5.10.4] | A flaw was found in the JFS filesystem code in the Linux Ker |
 | linux_kernel | [CVE-2020-8834](https://security-tracker.debian.org/tracker/CVE-2020-8834) | Medium |  | [] | KVM in the Linux kernel on Power8 processors has a conflicti |
-| linux_kernel | [CVE-2021-20194](https://security-tracker.debian.org/tracker/CVE-2021-20194) | High |  | [] | There is a vulnerability in the linux kernel versions higher |
 | linux_kernel | [CVE-2021-20265](https://security-tracker.debian.org/tracker/CVE-2021-20265) | Medium |  | [] | A flaw was found in the way memory resources were freed in t |
 | linux_kernel | [CVE-2021-3564](https://security-tracker.debian.org/tracker/CVE-2021-3564) | Medium |  | [] | A flaw double-free memory corruption in the Linux kernel HCI |
 | linux_kernel | [CVE-2021-3714](https://security-tracker.debian.org/tracker/CVE-2021-3714) | Medium |  | [] | A flaw was found in the Linux kernels memory deduplication m |
@@ -37,7 +35,6 @@
 | linux_kernel | [CVE-2021-4218](https://security-tracker.debian.org/tracker/CVE-2021-4218) | Medium |  | [] | A flaw was found in the Linux kernel’s implementation of r |
 | linux_kernel | [CVE-2022-0286](https://security-tracker.debian.org/tracker/CVE-2022-0286) | Medium |  | [] | A flaw was found in the Linux kernel. A null pointer derefer |
 | linux_kernel | [CVE-2022-0400](https://security-tracker.debian.org/tracker/CVE-2022-0400) | High |  | [] | An out-of-bounds read vulnerability was discovered in linux  |
-| linux_kernel | [CVE-2022-1247](https://security-tracker.debian.org/tracker/CVE-2022-1247) | High |  | [] | An issue found in linux-kernel that leads to a race conditio |
 | linux_kernel | [CVE-2022-2308](https://security-tracker.debian.org/tracker/CVE-2022-2308) | Medium |  | [] | A flaw was found in vDPA with VDUSE backend. There are curre |
 | linux_kernel | [CVE-2022-2663](https://security-tracker.debian.org/tracker/CVE-2022-2663) | Medium |  | [] | An issue was found in the Linux kernel in nf_conntrack_irc w |
 | linux_kernel | [CVE-2022-3435](https://security-tracker.debian.org/tracker/CVE-2022-3435) | Medium |  | [] | A vulnerability classified as problematic has been found in  |
@@ -73,7 +70,6 @@
 | linux_kernel | [CVE-2023-6238](https://security-tracker.debian.org/tracker/CVE-2023-6238) | Medium |  | [] | A buffer overflow vulnerability was found in the NVM Express |
 | linux_kernel | [CVE-2023-6240](https://security-tracker.debian.org/tracker/CVE-2023-6240) | Medium |  | [] | A Marvin vulnerability side-channel leakage was found in the |
 | linux_kernel | [CVE-2023-6535](https://security-tracker.debian.org/tracker/CVE-2023-6535) | High |  | [] | A flaw was found in the Linux kernel's NVMe driver. This iss |
-| linux_kernel | [CVE-2023-6610](https://security-tracker.debian.org/tracker/CVE-2023-6610) | High |  | [] | An out-of-bounds read vulnerability was found in smb2_dump_d |
 | linux_kernel | [CVE-2023-6679](https://security-tracker.debian.org/tracker/CVE-2023-6679) | Medium |  | [] | A null pointer dereference vulnerability was found in dpll_p |
 | linux_kernel | [CVE-2024-52560](https://security-tracker.debian.org/tracker/CVE-2024-52560) | Medium | fixed | [6.13.4] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2024-57995](https://security-tracker.debian.org/tracker/CVE-2024-57995) | High | fixed | [6.13.2] | In the Linux kernel, the following vulnerability has been re |
@@ -423,6 +419,8 @@
 | linux_kernel | [CVE-2026-64388](https://security-tracker.debian.org/tracker/CVE-2026-64388) | High | fixed | [7.1.4] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-64389](https://security-tracker.debian.org/tracker/CVE-2026-64389) | High | fixed | [6.18.40 7.1.4] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-64400](https://security-tracker.debian.org/tracker/CVE-2026-64400) | High | fixed | [5.16 6.2 7.1.4] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-89637](https://security-tracker.debian.org/tracker/CVE-2026-89637) | Critical | fixed | [6.18.51 7.2.4 7.3] | In the Linux kernel, the following vulnerability has been re |
+| linux_kernel | [CVE-2026-89675](https://security-tracker.debian.org/tracker/CVE-2026-89675) | Critical | fixed | [6.18.51 7.2.4 7.3] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98049](https://security-tracker.debian.org/tracker/CVE-2026-98049) | Medium | fixed | [7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98053](https://security-tracker.debian.org/tracker/CVE-2026-98053) | Medium | fixed | [6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |
 | linux_kernel | [CVE-2026-98062](https://security-tracker.debian.org/tracker/CVE-2026-98062) | Medium | fixed | [6.13 6.18.53 7.2.7] | In the Linux kernel, the following vulnerability has been re |

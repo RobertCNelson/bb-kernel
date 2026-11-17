@@ -37,10 +37,18 @@ KERNEL_TAG=${KERNEL_REL}.116
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.12/
 kernel_rt=".116-rt22"
 #Kernel Build
-BUILD=${build_prefix}74
+BUILD=${build_prefix}74.1
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
 
 DISTRO=xross
+
+# Patch Updates:
+BeagleBoard_DeviceTrees_branch="v6.12.x"
+#regenerate_BeagleBoard_DeviceTrees=enable
+rpi_backports="rpi-6.12.y"
+#regenerate_rpi_backports=enable
+uio_backports="v6.6.162"
+#regenerate_uio_backports=enable
 #
