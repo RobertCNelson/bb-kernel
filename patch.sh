@@ -381,6 +381,9 @@ beagleboard_dtbs () {
 		device="k3-am67a-beagley-ai-spidev0" ; k3_dtbo_makefile_append
 		device="k3-am67a-beagley-ai-uart-ttyama0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-BBORG_MOTOR" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-extts2-p8_15" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-extts2-p8_15-perout0-p8_19" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-cpts-perout0-p8_19" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap1" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-ecap2" ; k3_dtbo_makefile_append
@@ -403,6 +406,7 @@ beagleboard_dtbs () {
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs0" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi6-cs1-no-miso" ; k3_dtbo_makefile_append
 		device="k3-j721e-beagleboneai64-spi-mcspi7-cs0" ; k3_dtbo_makefile_append
+		device="k3-j721e-beagleboneai64-uart-uart2" ; k3_dtbo_makefile_append
 
 		#K3 Devices
 		device="k3-am625-sancloud-bbe-2.dtb" ; k3_dtb_makefile_append

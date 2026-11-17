@@ -2,8 +2,8 @@
 
 - Name: linux:linux_kernel
 - Type: cpe
-- Date: 2026-11-13 15:40:34 +0000 UTC
-- Kernel Version: 7.3.4
+- Date: 2026-11-17 06:20:58 +0000 UTC
+- Kernel Version: 7.3.5
 
 | Package | Vulnerability ID | Severity | Fixed | Fixed in Kernel Version | Summary |
 |---------|------------------|----------|-------|-------------------------|---------|
