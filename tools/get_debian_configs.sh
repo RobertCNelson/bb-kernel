@@ -10,12 +10,12 @@ SELECTED_DISTRO="forky"
 
 case "$SELECTED_DISTRO" in
 	forky)
-		KERNEL_BRANCH="7.2"
-		KERNEL_TAG="7.2.15-1"
+		KERNEL_BRANCH="7.3"
+		KERNEL_TAG="7.3.4-1"
 		;;
 	sid)
 		KERNEL_BRANCH="7.3"
-		KERNEL_TAG="7.3.3-1"
+		KERNEL_TAG="7.3.4-1"
 		;;
 	exp)
 		KERNEL_BRANCH="7.3"
