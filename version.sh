@@ -34,11 +34,11 @@ linux_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/li
 linux_stable_repo="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux.git"
 #
 KERNEL_REL=7.4
-KERNEL_TAG=${KERNEL_REL}-rc3
+KERNEL_TAG=${KERNEL_REL}-rc4
 #https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/x.y/
 kernel_rt=".X-rtY"
 #Kernel Build
-BUILD=${build_prefix}3
+BUILD=${build_prefix}3.1
 
 #git branch
 BRANCH="${branch_prefix}${KERNEL_REL}${branch_postfix}"
@@ -50,6 +50,6 @@ BeagleBoard_DeviceTrees_branch="v7.4.x"
 #regenerate_BeagleBoard_DeviceTrees=enable
 rpi_backports="rpi-7.4.y"
 #regenerate_rpi_backports=enable
-uio_backports="v6.6.162"
+uio_backports="v6.6.163"
 #regenerate_uio_backports=enable
 #
